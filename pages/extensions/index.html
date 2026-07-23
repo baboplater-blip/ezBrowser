@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>확장</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --warn: #B45309; --ok: #15803D;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C;
+          --warn: #F59E0B; --ok: #4ADE80; }
+      }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif; }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 24px 32px; }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      .lead { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+      .install-bar { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+        padding: 14px 16px; margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .install-bar .url-row { flex: 1 1 100%; display: flex; gap: 6px; }
+      .install-bar input { flex: 1; height: 30px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--fg); padding: 0 10px; font-size: 12px; }
+      .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 18px;
+        text-align: center; color: var(--muted); font-size: 12px; transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+        margin-bottom: 20px; }
+      .drop-zone.active { border-color: var(--accent); color: var(--accent);
+        background: rgba(52,120,246,.08); }
+      .ext-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+        padding: 14px 16px; margin-bottom: 10px; }
+      .ext-card.disabled { opacity: 0.6; }
+      .ext-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+      .ext-icon { width: 36px; height: 36px; flex-shrink: 0; border-radius: 6px; background: var(--hover);
+        display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted); }
+      .ext-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
+      .ext-info { flex: 1; min-width: 0; }
+      .ext-name { font-weight: 600; font-size: 14px; }
+      .ext-version { color: var(--muted); font-size: 11px; font-family: 'Menlo', monospace; }
+      .desc { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+      .id-line { font-family: 'Menlo', monospace; font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+      .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+      .toggle { width: 36px; height: 20px; background: var(--hover); border-radius: 10px;
+        position: relative; cursor: pointer; flex-shrink: 0; }
+      .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+        background: white; border-radius: 50%; transition: transform 0.15s ease; }
+      .toggle.on { background: var(--accent); }
+      .toggle.on::after { transform: translateX(16px); }
+      button.btn { height: 28px; padding: 0 12px; border-radius: 14px;
+        border: 1px solid var(--border); background: var(--card); color: inherit;
+        cursor: pointer; font-size: 11px; }
+      button.btn:hover { border-color: var(--accent); color: var(--accent); }
+      button.btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+      button.btn.danger { color: var(--danger); }
+      button.btn.danger:hover { border-color: var(--danger); }
+      .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+      .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        padding: 10px 18px; border-radius: 22px; background: rgba(0,0,0,.85); color: white;
+        font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .15s ease; z-index: 9; }
+      .toast.show { opacity: 1; }
+      .toast.error { background: var(--danger); }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>확장</h1>
+      <div class="lead">크롬 확장(.crx) 호환 — 드래그하거나 URL 로 설치하세요. (MV2/MV3 핵심 API 지원)</div>
+
+      <div class="install-bar">
+        <button class="btn primary" id="btn-crx">.crx 파일 선택…</button>
+        <button class="btn" id="btn-unpacked">unpacked 폴더 추가</button>
+        <div class="url-row">
+          <input id="url-input" type="text" placeholder="https://chromewebstore.google.com/detail/...  또는  https://.../foo.crx" />
+          <button class="btn" id="btn-url">URL 설치</button>
+        </div>
+      </div>
+
+      <div class="drop-zone" id="drop">
+        여기에 <strong>.crx</strong> 파일을 드래그해서 떨어뜨리면 설치됩니다.
+      </div>
+
+      <div id="list"></div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script>
+      let exts = []
+      function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
+
+      function toast(msg, isError) {
+        const t = document.getElementById('toast')
+        t.textContent = msg
+        t.classList.toggle('error', !!isError)
+        t.classList.add('show')
+        clearTimeout(toast._t)
+        toast._t = setTimeout(() => t.classList.remove('show'), 2400)
+      }
+
+      async function reload() {
+        if (!window.internalAPI || !window.internalAPI.extensions) {
+          document.getElementById('list').innerHTML =
+            '<div class="empty-state">internalAPI.extensions 미주입 — 패키지 빌드 후 다시 시도하세요.</div>'
+          return
+        }
+        exts = await window.internalAPI.extensions.list()
+        render()
+      }
+
+      function render() {
+        const el = document.getElementById('list')
+        if (exts.length === 0) {
+          el.innerHTML = '<div class="empty-state">설치된 확장이 없습니다.<br><br>.crx 파일을 드래그하거나 위쪽 URL 칸에 웹스토어 주소를 붙여넣어 보세요.</div>'
+          return
+        }
+        el.innerHTML = exts.map((e) => {
+          const icon = e.iconDataUrl
+            ? `<img src="${e.iconDataUrl}" alt="">`
+            : (e.name ? e.name.slice(0,1).toUpperCase() : '⌬')
+          return '<div class="ext-card ' + (e.enabled ? '' : 'disabled') + '">'
+            + '<div class="ext-head">'
+            +   '<div class="ext-icon">' + icon + '</div>'
+            +   '<div class="ext-info">'
+            +     '<div class="ext-name">' + escape(e.name) + '</div>'
+            +     '<div class="ext-version">v' + escape(e.version) + '</div>'
+            +   '</div>'
+            +   '<div class="toggle ' + (e.enabled ? 'on' : '') + '" data-toggle="' + e.id + '" title="' + (e.enabled ? '비활성화' : '활성화') + '"></div>'
+            + '</div>'
+            + (e.description ? '<div class="desc">' + escape(e.description) + '</div>' : '')
+            + '<div class="id-line">' + escape(e.id) + '</div>'
+            + '<div class="actions">'
+            +   (e.hasAction ? '<button class="btn" data-action="' + e.id + '">▶ 실행</button>' : '')
+            +   (e.hasOptions ? '<button class="btn" data-options="' + e.id + '">⚙ 옵션</button>' : '')
+            +   (e.homepageUrl ? '<button class="btn" data-home="' + escape(e.homepageUrl) + '">🏠 홈</button>' : '')
+            +   '<button class="btn danger" data-remove="' + e.id + '">삭제</button>'
+            + '</div>'
+            + '</div>'
+        }).join('')
+        bind()
+      }
+
+      function bind() {
+        document.querySelectorAll('[data-toggle]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.toggle
+            const enabled = !el.classList.contains('on')
+            const r = await window.internalAPI.extensions.setEnabled(id, enabled)
+            if (!r.ok) toast(r.error || '실패', true)
+          })
+        })
+        document.querySelectorAll('[data-action]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const r = await window.internalAPI.extensions.invokeAction(el.dataset.action)
+            if (!r.ok) toast(r.error || '실패', true)
+          })
+        })
+        document.querySelectorAll('[data-options]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const r = await window.internalAPI.extensions.openOptions(el.dataset.options)
+            if (!r.ok) toast(r.error || '실패', true)
+          })
+        })
+        document.querySelectorAll('[data-home]').forEach((el) => {
+          el.addEventListener('click', () => {
+            window.internalAPI.navigate(el.dataset.home)
+          })
+        })
+        document.querySelectorAll('[data-remove]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.remove
+            const ext = exts.find((e) => e.id === id)
+            if (!ext) return
+            if (!confirm('"' + ext.name + '" 확장을 삭제할까요?')) return
+            const r = await window.internalAPI.extensions.remove(id)
+            if (!r.ok) toast(r.error || '실패', true)
+            else toast('삭제됨')
+          })
+        })
+      }
+
+      document.getElementById('btn-crx').addEventListener('click', async () => {
+        const r = await window.internalAPI.extensions.installFromCrx()
+        if (!r.ok && r.error !== 'canceled') toast(r.error || '설치 실패', true)
+        else if (r.ok) toast('설치됨')
+      })
+      document.getElementById('btn-unpacked').addEventListener('click', async () => {
+        const r = await window.internalAPI.extensions.importLocal()
+        if (!r.ok && r.error !== 'canceled') toast(r.error || '실패', true)
+        else if (r.ok) toast('추가됨')
+      })
+      document.getElementById('btn-url').addEventListener('click', async () => {
+        const url = document.getElementById('url-input').value.trim()
+        if (!url) return
+        document.getElementById('btn-url').disabled = true
+        toast('다운로드 중…')
+        const r = await window.internalAPI.extensions.installFromUrl(url)
+        document.getElementById('btn-url').disabled = false
+        if (r.ok) {
+          toast('설치됨')
+          document.getElementById('url-input').value = ''
+        } else {
+          toast(r.error || '설치 실패', true)
+        }
+      })
+
+      const drop = document.getElementById('drop')
+      function setActive(on) { drop.classList.toggle('active', on) }
+      drop.addEventListener('dragover', (e) => { e.preventDefault(); setActive(true) })
+      drop.addEventListener('dragleave', () => setActive(false))
+      drop.addEventListener('drop', async (e) => {
+        e.preventDefault(); setActive(false)
+        const files = Array.from(e.dataTransfer?.files || [])
+        for (const f of files) {
+          const p = f.path || ''
+          if (!p) continue
+          if (!/\.(crx|zip)$/i.test(p)) { toast('CRX 파일만 지원합니다: ' + f.name, true); continue }
+          const r = await window.internalAPI.extensions.installFromCrx(p)
+          if (r.ok) toast('설치됨: ' + f.name)
+          else toast(r.error || '실패: ' + f.name, true)
+        }
+      })
+
+      if (window.internalAPI && window.internalAPI.extensions) {
+        window.internalAPI.extensions.onChanged(() => reload())
+      }
+      reload()
+    </script>
+  </body>
+</html>

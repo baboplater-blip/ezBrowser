@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>단축키</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --warn: #B45309; --ok: #15803D; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9;
+          --hover: #25252C; --warn: #F59E0B; --ok: #4ADE80; }
+      }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif; }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 24px 32px; }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      h2 { margin: 24px 0 10px; font-size: 14px; text-transform: uppercase;
+        color: var(--muted); letter-spacing: 0.5px; }
+      .lead { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+      .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+      .toolbar input { flex: 1; height: 32px; min-width: 220px;
+        border-radius: 16px; padding: 0 14px; border: 1px solid var(--border);
+        background: var(--card); color: var(--fg); font-size: 13px; outline: none; }
+      .toolbar input:focus { border-color: var(--accent); }
+      .btn { height: 32px; padding: 0 14px; border-radius: 16px;
+        border: 1px solid var(--border); background: var(--card); color: inherit;
+        cursor: pointer; font-size: 12px; }
+      .btn:hover { border-color: var(--accent); color: var(--accent); }
+      .btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+      .btn.danger { color: var(--danger); }
+      .conflict-banner {
+        background: rgba(180, 83, 9, 0.12); border: 1px solid var(--warn); color: var(--warn);
+        padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 12px;
+      }
+      .conflict-banner ul { margin: 6px 0 0; padding-left: 20px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border);
+        vertical-align: middle; font-size: 13px; }
+      th { color: var(--muted); font-weight: 500; font-size: 11px;
+        text-transform: uppercase; letter-spacing: 0.5px; }
+      tr.conflict { background: rgba(180, 83, 9, 0.08); }
+      td.action { font-family: 'Menlo', monospace; font-size: 11px; color: var(--muted); width: 40%; }
+      td.action .label { color: var(--fg); font-family: inherit; font-size: 13px; }
+      td.category { color: var(--muted); font-size: 11px; width: 15%; }
+      td.key { width: 35%; }
+      td.actions { width: 10%; text-align: right; }
+      .kbd {
+        display: inline-block; padding: 4px 10px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+        font-family: 'Menlo', monospace; font-size: 11px; cursor: pointer;
+        transition: border-color .1s, background .1s;
+      }
+      .kbd.empty { color: var(--muted); font-style: italic; border-style: dashed; }
+      .kbd:hover { border-color: var(--accent); color: var(--accent); }
+      .kbd.recording {
+        background: rgba(52,120,246,.15); border-color: var(--accent); color: var(--accent);
+        animation: pulse 1s ease-in-out infinite alternate;
+      }
+      @keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
+      .icon-btn { width: 26px; height: 26px; padding: 0; font-size: 13px; line-height: 1;
+        border: 1px solid var(--border); background: var(--card); color: var(--muted);
+        border-radius: 6px; cursor: pointer; }
+      .icon-btn:hover { color: var(--danger); border-color: var(--danger); }
+      .footer-tip {
+        margin-top: 20px; padding: 10px 14px; background: var(--card);
+        border: 1px solid var(--border); border-radius: 8px;
+        font-size: 11px; color: var(--muted);
+      }
+      .footer-tip code { background: var(--bg); padding: 1px 4px; border-radius: 3px;
+        font-family: 'Menlo', monospace; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>단축키</h1>
+      <div class="lead">모든 액션의 키 바인딩을 자유롭게 변경하세요. 충돌 시 노란 줄로 표시됩니다.</div>
+
+      <div class="toolbar">
+        <input id="filter" placeholder="액션 또는 키로 검색…" />
+        <button class="btn danger" id="reset">기본값으로 복원</button>
+      </div>
+
+      <div id="conflict-banner"></div>
+
+      <h2>액션 목록</h2>
+      <table>
+        <thead><tr><th>액션</th><th>분류</th><th>키</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <div class="footer-tip">
+        키 셀을 클릭하면 녹화 모드 — 원하는 키 조합을 누르세요. <code>Esc</code> 는 녹화 취소.
+        삭제는 ✕ 버튼.
+      </div>
+    </div>
+    <script>
+      let actions = []
+      let keymap = { version: 1, bindings: [] }
+      let conflicts = []
+      let filter = ''
+      let recordingId = null
+
+      function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
+
+      function api() {
+        if (!window.internalAPI || !window.internalAPI.keymap || !window.internalAPI.actions) return null
+        return window.internalAPI
+      }
+
+      function bindingsByAction(actionId) {
+        return keymap.bindings.filter((b) => b.action === actionId)
+      }
+
+      async function reload() {
+        const a = api()
+        if (!a) {
+          document.querySelector('.wrap').innerHTML = '<h1>단축키</h1><div class="lead">internalAPI 미주입</div>'
+          return
+        }
+        actions = await a.actions.list()
+        const km = await a.keymap.get()
+        keymap = km.keymap
+        conflicts = km.conflicts || []
+        render()
+      }
+
+      function describeKey(input) {
+        const parts = []
+        if (input.ctrlKey || input.metaKey) parts.push(navigator.platform.includes('Mac') && input.metaKey ? 'Cmd' : 'Ctrl')
+        if (input.shiftKey) parts.push('Shift')
+        if (input.altKey) parts.push('Alt')
+        const k = input.key
+        if (k === ' ') parts.push('Space')
+        else if (k.length === 1) parts.push(k.toUpperCase())
+        else parts.push(k)
+        return parts.join('+')
+      }
+      function isModifierKey(k) {
+        return k === 'Control' || k === 'Shift' || k === 'Alt' || k === 'Meta' || k === 'CapsLock'
+      }
+
+      function render() {
+        // 충돌 배너
+        const banner = document.getElementById('conflict-banner')
+        if (conflicts.length === 0) banner.innerHTML = ''
+        else {
+          banner.innerHTML = `<div class="conflict-banner">
+            ⚠ ${conflicts.length}개의 키 충돌
+            <ul>${conflicts.map((c) => `<li><code>${escape(c.key)}</code> (${escape(c.when)}) — ${c.actions.map(escape).join(', ')}</li>`).join('')}</ul>
+          </div>`
+        }
+
+        const rows = document.getElementById('rows')
+        const conflictKeys = new Set(conflicts.map((c) => `${c.key}::${c.when}`))
+        const q = filter.toLowerCase()
+        const filtered = actions.filter((a) => {
+          if (!q) return true
+          const label = (window.bbLabels && window.bbLabels[a.labelKey]) || a.id
+          const bindings = bindingsByAction(a.id)
+          const text = (a.id + ' ' + a.category + ' ' + label + ' ' + bindings.map((b) => b.key).join(' ')).toLowerCase()
+          return text.includes(q)
+        })
+        rows.innerHTML = filtered.map((a) => {
+          const label = (window.bbLabels && window.bbLabels[a.labelKey]) || a.id
+          const bindings = bindingsByAction(a.id)
+          const conflictRow = bindings.some((b) => conflictKeys.has(`${b.key}::${b.when || a.when || 'global'}`))
+          const keyHtml = bindings.length === 0
+            ? `<span class="kbd empty" data-record="${escape(a.id)}">키 없음 — 클릭하여 추가</span>`
+            : bindings.map((b, idx) => `
+              <span class="kbd ${recordingId === a.id + ':' + idx ? 'recording' : ''}"
+                data-record="${escape(a.id)}" data-binding-idx="${idx}">${escape(b.key)}</span>
+              <button class="icon-btn" data-clear="${escape(a.id)}" data-binding-idx="${idx}" title="삭제">✕</button>
+            `).join(' ') + ` <span class="kbd empty" data-record="${escape(a.id)}" data-binding-idx="-1">+</span>`
+          return `<tr class="${conflictRow ? 'conflict' : ''}">
+            <td class="action"><div class="label">${escape(label)}</div>${escape(a.id)}</td>
+            <td class="category">${escape(a.category)}</td>
+            <td class="key">${keyHtml}</td>
+            <td class="actions"></td>
+          </tr>`
+        }).join('')
+        bind()
+      }
+
+      function startRecording(actionId, bindingIdx) {
+        recordingId = bindingIdx >= 0 ? `${actionId}:${bindingIdx}` : actionId
+        render()
+        const onKey = async (e) => {
+          if (e.key === 'Escape') {
+            recordingId = null
+            window.removeEventListener('keydown', onKey, true)
+            render()
+            return
+          }
+          if (isModifierKey(e.key)) return
+          e.preventDefault()
+          e.stopPropagation()
+          const key = describeKey(e)
+          const action = actions.find((a) => a.id === actionId)
+          if (!action) return
+          const when = action.when || 'global'
+          // 기존 binding 업데이트 또는 추가
+          const newBindings = [...keymap.bindings]
+          if (bindingIdx >= 0) {
+            const idxInArr = []
+            let count = 0
+            for (let i = 0; i < newBindings.length; i += 1) {
+              if (newBindings[i].action === actionId) idxInArr.push({ at: i, count: count++ })
+            }
+            const target = idxInArr.find((x) => x.count === bindingIdx)
+            if (target) newBindings[target.at] = { action: actionId, key, when }
+          } else {
+            newBindings.push({ action: actionId, key, when })
+          }
+          await api().keymap.set({ version: keymap.version, bindings: newBindings })
+          recordingId = null
+          window.removeEventListener('keydown', onKey, true)
+          await reload()
+        }
+        window.addEventListener('keydown', onKey, true)
+      }
+
+      function clearBinding(actionId, bindingIdx) {
+        let count = 0
+        const newBindings = keymap.bindings.filter((b) => {
+          if (b.action !== actionId) return true
+          const drop = count === bindingIdx
+          count += 1
+          return !drop
+        })
+        return api().keymap.set({ version: keymap.version, bindings: newBindings })
+      }
+
+      function bind() {
+        document.querySelectorAll('[data-record]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const id = el.dataset.record
+            const idx = parseInt(el.dataset.bindingIdx ?? '-1', 10)
+            startRecording(id, idx)
+          })
+        })
+        document.querySelectorAll('[data-clear]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.clear
+            const idx = parseInt(el.dataset.bindingIdx ?? '0', 10)
+            await clearBinding(id, idx)
+            await reload()
+          })
+        })
+      }
+
+      document.getElementById('filter').addEventListener('input', (e) => {
+        filter = e.target.value.trim()
+        render()
+      })
+      document.getElementById('reset').addEventListener('click', async () => {
+        if (!confirm('모든 키 바인딩을 기본값으로 되돌릴까요?')) return
+        await api().keymap.reset()
+        await reload()
+      })
+
+      // 액션 label key → 표시 텍스트 매핑은 가장 마지막에 비동기 로드 (i18n 사용 시 보강 가능)
+      // 현재는 액션 id 의 끝부분을 사용
+      window.bbLabels = {}
+      reload()
+    </script>
+  </body>
+</html>

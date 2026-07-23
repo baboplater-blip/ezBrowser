@@ -1,0 +1,27 @@
+{
+  "color": {
+    "bg": {
+      "elevated": "#1A1A1F",
+      "base": "#0F0F12",
+      "sunken": "#050507"
+    },
+    "text": {
+      "primary": "#F2F2F5",
+      "secondary": "#9B9BA3",
+      "muted": "#5F5F66"
+    },
+    "accent": {
+      "primary": "#5A93F9",
+      "hover": "#6FA3FF"
+    },
+    "border": {
+      "subtle": "#2A2A30",
+      "strong": "#3D3D45"
+    }
+  },
+  "tab": {
+    "active-bg": "#1A1A1F",
+    "inactive-bg": "#0F0F12",
+    "hover-bg": "#25252C"
+  }
+}

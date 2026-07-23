@@ -1,0 +1,202 @@
+{
+  "app": {
+    "name": "ezBrowser",
+    "tagline": "A light and free browser"
+  },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "tab": "Tab",
+    "bookmarks": "Bookmarks",
+    "tools": "Tools",
+    "help": "Help"
+  },
+  "action": {
+    "tab": {
+      "new": "New Tab",
+      "close": "Close Tab",
+      "restore": "Restore Closed Tab",
+      "next": "Next Tab",
+      "prev": "Previous Tab",
+      "reader": "Reader Mode",
+      "duplicate": "Duplicate Tab",
+      "pin": "Pin Tab",
+      "goto": "Go to Tab",
+      "search": "Search Tabs",
+      "recentClosed": "Recently Closed Tabs",
+      "mute": "Toggle Tab Mute",
+      "muteOthers": "Mute Other Tabs",
+      "unmuteAll": "Unmute All Tabs",
+      "move": {
+        "next": {
+          "workspace": "Move Tab to Next Workspace"
+        },
+        "prev": {
+          "workspace": "Move Tab to Previous Workspace"
+        }
+      }
+    },
+    "ai": {
+      "open": "AI Assistant",
+      "summarize": "Summarize Page",
+      "collectors": "Feed Collectors",
+      "write": "Blog Writer"
+    },
+    "omnibox": {
+      "focus": "Focus Address Bar"
+    },
+    "page": {
+      "reload": "Reload",
+      "stop": "Stop",
+      "print": "Print",
+      "printPdf": "Save as PDF",
+      "zoom": {
+        "in": "Zoom In",
+        "out": "Zoom Out",
+        "reset": "Reset Zoom"
+      }
+    },
+    "find": {
+      "toggle": "Find in Page"
+    },
+    "window": {
+      "incognito": "New Incognito Window",
+      "new": "New Window",
+      "close": "Close Window"
+    },
+    "history": {
+      "open": "History",
+      "clear": "Clear browsing history"
+    },
+    "downloads": {
+      "open": "Downloads",
+      "openPage": "Downloads Page"
+    },
+    "bookmark": {
+      "add": "Add/remove bookmark",
+      "list": "Bookmark manager",
+      "bar": {
+        "toggle": "Toggle Bookmark Bar"
+      }
+    },
+    "devtools": {
+      "toggle": "Toggle DevTools"
+    },
+    "nav": {
+      "back": "Back",
+      "forward": "Forward"
+    },
+    "palette": {
+      "open": "Command Palette"
+    },
+    "userchrome": {
+      "reload": "Reload userChrome",
+      "edit": "Edit userChrome.css"
+    },
+    "userscript": {
+      "toggle": "Userscript Panel"
+    },
+    "sidepanel": {
+      "left": {
+        "toggle": "Toggle Left Sidepanel"
+      },
+      "right": {
+        "toggle": "Toggle Right Sidepanel"
+      }
+    },
+    "screenshot": {
+      "area": "Capture Area",
+      "viewport": "Capture Viewport"
+    },
+    "translate": {
+      "page": "Translate Page"
+    },
+    "darkmode": {
+      "toggle": "Toggle Force Dark Mode",
+      "toggleSite": "Toggle Dark Mode for This Site",
+      "followSystem": "Follow System Dark Mode"
+    },
+    "tabbar": {
+      "cycle": "Cycle Tab Bar Position (Top→Left→Right)"
+    },
+    "gesture": {
+      "exec": "Mouse Gesture"
+    },
+    "quickSearch": {
+      "open": "Search Selected Text"
+    },
+    "qrcode": {
+      "show": "Show QR Code"
+    },
+    "pane": {
+      "split": {
+        "h": "Split Left/Right",
+        "v": "Split Top/Bottom"
+      },
+      "unsplit": "Unsplit",
+      "focus": {
+        "next": "Focus Next Pane"
+      }
+    },
+    "workspace": {
+      "next": "Next Workspace",
+      "prev": "Previous Workspace",
+      "new": "New Workspace",
+      "switch": "Switch Workspace"
+    },
+    "app": {
+      "quit": "Quit"
+    },
+    "help": {
+      "report": "Send Feedback"
+    },
+    "readlater": {
+      "add": "Add/Remove Read Later",
+      "open": "Open Read Later"
+    },
+    "sitedata": {
+      "clear": "Clear Site Data"
+    },
+    "autofill": {
+      "page": "Autofill My Info"
+    },
+    "settings": {
+      "open": "Open Settings"
+    },
+    "policy": {
+      "open": "Site Policies"
+    },
+    "macros": {
+      "open": "Automation Macros"
+    },
+    "mods": {
+      "open": "Mods"
+    },
+    "memory": {
+      "open": "AI Memory"
+    },
+    "extensions": {
+      "open": "Extensions"
+    },
+    "adblock": {
+      "openPage": "Ad Blocker",
+      "toggleSite": "Toggle Ad Block for This Site"
+    },
+    "perf": {
+      "open": "Performance"
+    },
+    "keymap": {
+      "open": "Keyboard Shortcuts"
+    },
+    "update": {
+      "check": "Check for Updates"
+    },
+    "password": {
+      "open": "Passwords"
+    }
+  },
+  "omnibox": {
+    "placeholder": "Search or enter URL"
+  }
+}

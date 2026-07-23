@@ -1,0 +1,202 @@
+{
+  "app": {
+    "name": "ezBrowser",
+    "tagline": "가볍고 자유로운 브라우저"
+  },
+  "menu": {
+    "file": "파일",
+    "edit": "편집",
+    "view": "보기",
+    "tab": "탭",
+    "bookmarks": "북마크",
+    "tools": "도구",
+    "help": "도움말"
+  },
+  "action": {
+    "tab": {
+      "new": "새 탭",
+      "close": "탭 닫기",
+      "restore": "마지막 탭 복원",
+      "next": "다음 탭",
+      "prev": "이전 탭",
+      "reader": "리더 모드",
+      "duplicate": "탭 복제",
+      "pin": "탭 고정",
+      "goto": "탭으로 이동",
+      "search": "탭 검색",
+      "recentClosed": "최근 닫은 탭",
+      "mute": "탭 음소거 토글",
+      "muteOthers": "다른 탭 모두 음소거",
+      "unmuteAll": "전체 탭 음소거 해제",
+      "move": {
+        "next": {
+          "workspace": "탭을 다음 스페이스로"
+        },
+        "prev": {
+          "workspace": "탭을 이전 스페이스로"
+        }
+      }
+    },
+    "ai": {
+      "open": "AI 어시스턴트",
+      "summarize": "이 페이지 요약",
+      "collectors": "자동 수집 관리",
+      "write": "블로그 글쓰기"
+    },
+    "omnibox": {
+      "focus": "주소창으로 이동"
+    },
+    "page": {
+      "reload": "새로고침",
+      "stop": "중지",
+      "print": "인쇄",
+      "printPdf": "PDF로 저장",
+      "zoom": {
+        "in": "확대",
+        "out": "축소",
+        "reset": "기본 배율"
+      }
+    },
+    "find": {
+      "toggle": "페이지에서 찾기"
+    },
+    "window": {
+      "incognito": "시크릿 창",
+      "new": "새 창",
+      "close": "창 닫기"
+    },
+    "history": {
+      "open": "방문 기록",
+      "clear": "방문 기록 삭제"
+    },
+    "downloads": {
+      "open": "다운로드",
+      "openPage": "다운로드 페이지"
+    },
+    "bookmark": {
+      "add": "북마크 추가/제거",
+      "list": "북마크 관리자",
+      "bar": {
+        "toggle": "북마크 바 표시 전환"
+      }
+    },
+    "devtools": {
+      "toggle": "개발자 도구"
+    },
+    "nav": {
+      "back": "뒤로",
+      "forward": "앞으로"
+    },
+    "palette": {
+      "open": "명령 팔레트"
+    },
+    "userchrome": {
+      "reload": "userChrome 다시 로드",
+      "edit": "userChrome.css 편집"
+    },
+    "userscript": {
+      "toggle": "Userscript 패널"
+    },
+    "sidepanel": {
+      "left": {
+        "toggle": "왼쪽 사이드패널 토글"
+      },
+      "right": {
+        "toggle": "오른쪽 사이드패널 토글"
+      }
+    },
+    "screenshot": {
+      "area": "영역 캡처",
+      "viewport": "화면 캡처"
+    },
+    "translate": {
+      "page": "페이지 번역"
+    },
+    "darkmode": {
+      "toggle": "다크 모드 강제 전환",
+      "toggleSite": "이 사이트 다크 모드 전환",
+      "followSystem": "OS 다크 모드 따라가기"
+    },
+    "tabbar": {
+      "cycle": "탭바 위치 순환 (상→좌→우)"
+    },
+    "gesture": {
+      "exec": "마우스 제스처"
+    },
+    "quickSearch": {
+      "open": "선택 텍스트로 검색"
+    },
+    "qrcode": {
+      "show": "QR 코드 보기"
+    },
+    "pane": {
+      "split": {
+        "h": "좌우 분할",
+        "v": "상하 분할"
+      },
+      "unsplit": "분할 해제",
+      "focus": {
+        "next": "다음 분할창 포커스"
+      }
+    },
+    "workspace": {
+      "next": "다음 워크스페이스",
+      "prev": "이전 워크스페이스",
+      "new": "새 워크스페이스",
+      "switch": "워크스페이스 전환"
+    },
+    "app": {
+      "quit": "종료"
+    },
+    "help": {
+      "report": "피드백 보내기"
+    },
+    "readlater": {
+      "add": "읽기 목록에 추가/제거",
+      "open": "읽기 목록 열기"
+    },
+    "sitedata": {
+      "clear": "이 사이트 데이터 삭제"
+    },
+    "autofill": {
+      "page": "내 정보 자동 채우기"
+    },
+    "settings": {
+      "open": "설정 열기"
+    },
+    "policy": {
+      "open": "사이트 정책"
+    },
+    "macros": {
+      "open": "자동화 매크로"
+    },
+    "mods": {
+      "open": "확장 모드(Mod)"
+    },
+    "memory": {
+      "open": "AI 기억"
+    },
+    "extensions": {
+      "open": "확장 프로그램"
+    },
+    "adblock": {
+      "openPage": "광고 차단 설정",
+      "toggleSite": "이 사이트 광고 차단 전환"
+    },
+    "perf": {
+      "open": "성능·메모리"
+    },
+    "keymap": {
+      "open": "단축키 설정"
+    },
+    "update": {
+      "check": "업데이트 확인"
+    },
+    "password": {
+      "open": "비밀번호 관리"
+    }
+  },
+  "omnibox": {
+    "placeholder": "검색하거나 URL 입력"
+  }
+}

@@ -1,0 +1,40 @@
+node_modules/
+dist/
+out/
+*.log
+.env.local
+.env.*.local
+
+# Electron build artifacts
+app/main/dist/
+app/preload/dist/
+dist-renderer/
+
+# Generated
+app/renderer/design/tokens.gen.css
+app/renderer/design/tokens.gen.ts
+app/main/storage/oss-licenses.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Signing keys (NEVER commit)
+*.p12
+*.pfx
+*.key
+build/sign.local.js
+
+# ── 하네스/테스트 산출물 (소스 아님) ──
+app/dist/
+smoke-out*/
+verify-out/
+logs/
+설치파일/
+resources/brand/
+*.tmp

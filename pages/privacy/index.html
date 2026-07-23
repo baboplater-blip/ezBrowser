@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+    <title>개인정보 처리방침</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6; --ok: #1E9E54; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --ok: #34C172; } }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; line-height: 1.7; }
+      .wrap { max-width: 760px; margin: 0 auto; padding: 44px 28px 90px; }
+      h1 { font-size: 26px; margin: 0 0 4px; }
+      .upd { color: var(--muted); font-size: 12px; margin: 0 0 28px; }
+      .hero { background: color-mix(in srgb, var(--ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+        border-radius: 12px; padding: 18px 20px; margin-bottom: 30px; font-size: 14px; }
+      .hero b { color: var(--ok); }
+      h2 { font-size: 17px; margin: 30px 0 10px; }
+      p { font-size: 14px; margin: 0 0 12px; }
+      .muted { color: var(--muted); font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0 16px; }
+      th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      th { color: var(--muted); font-weight: 500; }
+      td.f { font-weight: 500; white-space: nowrap; }
+      ul { padding-left: 20px; }
+      li { font-size: 14px; margin-bottom: 6px; }
+      code { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>개인정보 처리방침</h1>
+      <p class="upd">ezBrowser · 최종 수정일 2026-06-21</p>
+
+      <div class="hero">
+        <b>요약: ezBrowser 는 당신을 추적하지 않습니다.</b><br />
+        방문 기록·북마크·비밀번호·설정 등 모든 개인 데이터는 <b>오직 이 컴퓨터에만</b> 저장됩니다.
+        우리(개발자)에게 전송되는 데이터는 <b>없습니다.</b> 사용 통계·텔레메트리·광고 식별자를 수집하지 않습니다.
+      </div>
+
+      <h2>1. 로컬에만 저장되는 데이터</h2>
+      <p>아래 데이터는 당신의 컴퓨터(<code>사용자 데이터 폴더</code>)에만 보관되며 외부로 나가지 않습니다.</p>
+      <ul>
+        <li>방문 기록·북마크·읽기 목록·다운로드 목록</li>
+        <li>설정·단축키·워크스페이스·탭 그룹·세션(열린 탭)</li>
+        <li>저장된 비밀번호 — 운영체제의 보안 저장소(Windows DPAPI / macOS Keychain / Linux libsecret)로 <b>암호화</b>되어 저장됩니다. 평문으로 디스크에 남지 않습니다.</li>
+        <li>쿠키·사이트 데이터 — 일반 브라우저와 동일하게 사이트별로 저장되며, 자물쇠 메뉴·설정에서 삭제할 수 있습니다.</li>
+      </ul>
+
+      <h2>2. 외부로 나가는 통신 (기능에 필요한 최소한)</h2>
+      <p>아래는 해당 <b>기능을 사용할 때만</b> 발생하는 외부 요청입니다. 각 기능은 설정에서 끌 수 있습니다.</p>
+      <table>
+        <thead><tr><th>기능</th><th>전송 대상</th><th>전송 내용</th></tr></thead>
+        <tbody>
+          <tr><td class="f">검색어 자동완성</td><td>선택한 검색엔진(Google/Naver/Bing 등)</td><td>주소창에 입력 중인 글자</td></tr>
+          <tr><td class="f">웹 검색</td><td>선택한 검색엔진</td><td>검색어 (일반 브라우저와 동일)</td></tr>
+          <tr><td class="f">페이지 번역</td><td>Google 번역 공개 엔드포인트</td><td>번역할 페이지의 텍스트</td></tr>
+          <tr><td class="f">날씨 위젯</td><td>Open-Meteo · ipapi.co</td><td>대략적 위치(IP 기반) 또는 직접 입력한 좌표</td></tr>
+          <tr><td class="f">뉴스 위젯</td><td>Google News RSS</td><td>선택한 뉴스 주제 (개인정보 없음)</td></tr>
+          <tr><td class="f">환율 위젯</td><td>Frankfurter (ECB)</td><td>선택한 통화 코드 (개인정보 없음)</td></tr>
+          <tr><td class="f">자동 업데이트</td><td>GitHub Releases</td><td>현재 버전 확인 요청 (개인정보 없음)</td></tr>
+          <tr><td class="f">파비콘·검색 제안 아이콘</td><td>해당 사이트 / Google favicon</td><td>표시할 사이트의 도메인</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">이 외에 개발자가 운영하는 분석 서버나 광고 네트워크로의 전송은 없습니다. 위 서드파티 서비스는 각자의 개인정보 정책을 따릅니다.</p>
+
+      <h2>3. 광고·트래커 차단</h2>
+      <p>ezBrowser 는 기본적으로 광고와 추적기를 차단합니다(EasyList·EasyPrivacy·한국 KR 필터). 이는 당신을 추적하려는 제3자 스크립트를 막아 오히려 개인정보를 보호합니다.</p>
+
+      <h2>4. 시크릿 창</h2>
+      <p>시크릿 창의 방문 기록·쿠키·세션은 메모리에만 보관되며 창을 닫으면 삭제됩니다.</p>
+
+      <h2>5. 데이터 내보내기·삭제</h2>
+      <p>모든 데이터는 당신의 것입니다. <code>설정 → 데이터 관리</code>에서 전체를 내보내거나 가져올 수 있고, 방문 기록·사이트 데이터는 언제든 삭제할 수 있습니다.</p>
+
+      <h2>6. 문의</h2>
+      <p class="muted">이 방침은 제품 변경에 따라 갱신될 수 있으며, 변경 시 이 페이지에 반영됩니다.</p>
+    </div>
+  </body>
+</html>

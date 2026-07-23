@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 기억</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #FAF9F6; --fg: #1A1A1A; --muted: #888; --card: #fff; --border: #e3e3e0; --accent: #3478F6; --danger: #C82A38; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0F0F12; --fg: #EDEDEF; --muted: #8a8a90; --card: #1a1a1f; --border: #2a2a30; } }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Pretendard, "Apple SD Gothic Neo", sans-serif; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
+    h1 { font-size: 22px; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+    .desc { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0 0 20px; }
+    textarea {
+      width: 100%; min-height: 340px; padding: 16px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--card); color: var(--fg); font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 13px; line-height: 1.6; resize: vertical; outline: none;
+    }
+    textarea:focus { border-color: var(--accent); }
+    .bar { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+    .btn { padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: inherit; cursor: pointer; font-size: 13px; }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+    .btn.primary:hover { opacity: 0.9; color: #fff; }
+    .btn.danger:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .status { color: var(--muted); font-size: 12px; margin-left: auto; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.6; }
+    .hint code { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+  
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🧠 AI 기억</h1>
+    <p class="desc">
+      AI 가 당신에 대해 기억하는 내용입니다. 챗·에이전트가 답할 때 이 내용을 참고하므로, 매번 다시 설명할 필요가 없습니다.
+      자유롭게 편집하세요 — 마크다운으로 저장됩니다. 모든 내용은 이 기기에만 저장됩니다.
+    </p>
+    <textarea id="mem" placeholder="예:&#10;- 내 이름은 홍길동&#10;- 나는 개발자이고 TypeScript 를 주로 씀&#10;- 답변은 존댓말로, 간결하게 선호"></textarea>
+    <div class="bar">
+      <button class="btn primary" id="save">저장</button>
+      <button class="btn danger" id="clear">전체 지우기</button>
+      <span class="status" id="status"></span>
+    </div>
+    <p class="hint">
+      에이전트가 작업 중 <code>remember</code> 하면 여기에 자동으로 쌓입니다. 설정 → ✨ AI 에서 기억 기능을 끌 수 있습니다.
+    </p>
+  </div>
+  <script>
+    const ta = document.getElementById('mem')
+    const statusEl = document.getElementById('status')
+    let saved = ''
+    function setStatus(t) { statusEl.textContent = t; if (t) setTimeout(() => { if (statusEl.textContent === t) statusEl.textContent = '' }, 2000) }
+
+    async function load() {
+      if (!window.internalAPI || !window.internalAPI.ai) { statusEl.textContent = 'internalAPI 미주입'; return }
+      saved = (await window.internalAPI.ai.memoryGet()) || ''
+      ta.value = saved
+    }
+    document.getElementById('save').addEventListener('click', async () => {
+      await window.internalAPI.ai.memorySet(ta.value)
+      saved = ta.value
+      setStatus('저장됨 ✓')
+    })
+    document.getElementById('clear').addEventListener('click', async () => {
+      if (!confirm('AI 가 기억하는 내용을 모두 지울까요?')) return
+      await window.internalAPI.ai.memoryClear()
+      ta.value = ''; saved = ''
+      setStatus('지웠습니다')
+    })
+    // 다른 창(또는 에이전트 remember)으로 바뀌면 반영 — 단, 편집 중이면 덮어쓰지 않음
+    if (window.internalAPI && window.internalAPI.ai && window.internalAPI.ai.onMemoryChanged) {
+      window.internalAPI.ai.onMemoryChanged((text) => {
+        if (ta.value === saved) { ta.value = text || ''; saved = ta.value; setStatus('업데이트됨') }
+      })
+    }
+    load()
+  </script>
+</body>
+</html>

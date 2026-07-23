@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>ezBrowser 시작</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --soft: rgba(52,120,246,.08); }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9;
+          --hover: #25252C; --soft: rgba(90,147,249,.10); }
+      }
+      html, body { margin: 0; padding: 0; height: 100%;
+        background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
+      .stage {
+        min-height: 100vh; box-sizing: border-box;
+        display: flex; flex-direction: column; align-items: center;
+        padding: 8vh 24px 32px;
+      }
+      .logo { font-size: 32px; font-weight: 700; letter-spacing: -1px; }
+      .tag { color: var(--muted); font-size: 13px; margin-top: 4px; }
+      .progress-bar {
+        margin-top: 32px;
+        display: flex; gap: 8px;
+      }
+      .dot {
+        width: 28px; height: 4px; border-radius: 2px;
+        background: var(--border);
+      }
+      .dot.active { background: var(--accent); }
+      .step {
+        margin-top: 32px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+        padding: 32px 36px; max-width: 560px; width: 92vw;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      }
+      .step-illust { display: block; margin: -6px auto 18px; max-width: 100%; width: 440px;
+        max-height: 220px; object-fit: contain; }
+      .step h2 { margin: 0 0 8px; font-size: 20px; }
+      .step .desc { color: var(--muted); font-size: 13px; margin-bottom: 22px; line-height: 1.5; }
+      .choice-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+      }
+      .choice {
+        padding: 12px 14px; border-radius: 10px;
+        background: var(--bg); border: 2px solid var(--border);
+        cursor: pointer; text-align: left;
+        transition: border-color .12s, background .12s;
+      }
+      .choice:hover { border-color: var(--accent); background: var(--soft); }
+      .choice.selected { border-color: var(--accent); background: var(--soft); }
+      .choice .title { font-size: 14px; font-weight: 600; }
+      .choice .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+      .toggle-row {
+        display: flex; align-items: center; gap: 14px;
+        padding: 12px 0; border-bottom: 1px solid var(--border);
+      }
+      .toggle-row:last-child { border-bottom: none; }
+      .toggle-row .info { flex: 1; }
+      .toggle-row .label { font-size: 14px; font-weight: 500; }
+      .toggle-row .help { color: var(--muted); font-size: 12px; margin-top: 2px; }
+      .toggle { width: 40px; height: 22px; background: var(--hover); border-radius: 11px;
+        position: relative; cursor: pointer; flex-shrink: 0; transition: background .12s; }
+      .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+        background: white; border-radius: 50%; transition: transform .15s ease; }
+      .toggle.on { background: var(--accent); }
+      .toggle.on::after { transform: translateX(18px); }
+      .shortcut-list {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px;
+      }
+      .shortcut-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+      .shortcut-row kbd {
+        display: inline-block; padding: 2px 6px;
+        background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+        font-family: 'Menlo', monospace; font-size: 11px;
+      }
+      .actions {
+        margin-top: 28px;
+        display: flex; gap: 10px; justify-content: space-between; align-items: center;
+      }
+      .btn {
+        height: 38px; padding: 0 22px; border-radius: 19px;
+        border: 1px solid var(--border); background: var(--card); color: inherit;
+        cursor: pointer; font-size: 13px;
+      }
+      .btn:hover { border-color: var(--accent); color: var(--accent); }
+      .btn.primary { background: var(--accent); color: white; border-color: var(--accent);
+        padding: 0 28px; font-weight: 600; }
+      .btn.primary:hover { background: #2E6EE3; border-color: #2E6EE3; color: white; }
+      .skip { color: var(--muted); font-size: 12px; cursor: pointer; background: none; border: none; }
+      .skip:hover { color: var(--fg); }
+      .src-list { display: flex; flex-direction: column; gap: 8px; }
+      .src { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+        border: 2px solid var(--border); border-radius: 10px; cursor: pointer; background: var(--bg);
+        transition: border-color .12s, background .12s; }
+      .src:hover { border-color: var(--accent); background: var(--soft); }
+      .src.selected { border-color: var(--accent); background: var(--soft); }
+      .src .info { flex: 1; }
+      .src .b { font-size: 14px; font-weight: 600; }
+      .src .p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+      .src .tags { font-size: 11px; color: var(--muted); }
+      .imp-opts { margin-top: 16px; }
+      .imp-empty { font-size: 13px; color: var(--muted); padding: 22px; text-align: center;
+        border: 1px dashed var(--border); border-radius: 10px; }
+      .imp-result { font-size: 13px; padding: 12px 14px; border-radius: 10px; margin-top: 14px; line-height: 1.55; }
+      .imp-result.ok { background: rgba(30,158,84,.14); color: #1E9E54; }
+      .imp-result.err { background: rgba(200,42,56,.14); color: #C82A38; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="logo">ezBrowser</div>
+      <div class="tag">가볍고 자유로운 브라우저</div>
+
+      <div class="progress-bar" id="dots"></div>
+
+      <div class="step" id="step"></div>
+
+      <div class="actions" id="actions"></div>
+    </div>
+    <script>
+      const TOTAL = 5
+      let stepIdx = 0
+      let state = {
+        searchEngine: 'google',
+        theme: 'system',
+        forcePageDark: false,
+        pageDarkFollowSystem: true,
+        adblock: true,
+        mouseGestures: true,
+        quickSearch: true,
+        hoverTranslate: false,
+        // 데이터 가져오기
+        importSources: null,   // null = 미로드, [] = 없음
+        selectedSource: null,
+        importBookmarks: true,
+        importHistory: true,
+        importing: false,
+        importResult: null,    // { ok, bookmarks, history, errors } 또는 문자열 에러
+      }
+
+      function api() { return window.internalAPI }
+
+      function renderDots() {
+        const el = document.getElementById('dots')
+        el.innerHTML = ''
+        for (let i = 0; i < TOTAL; i++) {
+          const d = document.createElement('div')
+          d.className = 'dot' + (i <= stepIdx ? ' active' : '')
+          el.appendChild(d)
+        }
+      }
+
+      function choice(value, title, sub, currentField) {
+        const selected = state[currentField] === value
+        return `<div class="choice ${selected ? 'selected' : ''}" data-field="${currentField}" data-value="${value}">
+          <div class="title">${title}</div>
+          <div class="sub">${sub}</div>
+        </div>`
+      }
+      function toggleRow(field, label, help) {
+        const on = state[field] === true
+        return `<div class="toggle-row">
+          <div class="info">
+            <div class="label">${label}</div>
+            <div class="help">${help}</div>
+          </div>
+          <div class="toggle ${on ? 'on' : ''}" data-toggle="${field}"></div>
+        </div>`
+      }
+
+      function renderImport() {
+        if (state.importSources === null) {
+          return '<div class="imp-empty">설치된 브라우저를 찾는 중…</div>'
+        }
+        if (state.importSources.length === 0) {
+          return '<div class="imp-empty">가져올 수 있는 브라우저(크롬·엣지·Brave·웨일)를 찾지 못했어요. 건너뛰어도 됩니다.</div>'
+        }
+        let html = '<div class="src-list">'
+        for (const s of state.importSources) {
+          const sel = state.selectedSource === s.id
+          const tags = [s.hasBookmarks ? '북마크' : null, s.hasHistory ? '방문기록' : null].filter(Boolean).join(' · ')
+          html += `<div class="src ${sel ? 'selected' : ''}" data-source="${s.id}">
+            <div class="info"><div class="b">${s.browser}</div><div class="p">${s.profile}</div></div>
+            <div class="tags">${tags}</div></div>`
+        }
+        html += '</div>'
+        if (state.selectedSource) {
+          html += `<div class="imp-opts">
+            <div class="toggle-row" style="border:none;padding:8px 0;">
+              <div class="info"><div class="label">북마크 가져오기</div></div>
+              <div class="toggle ${state.importBookmarks ? 'on' : ''}" data-toggle="importBookmarks"></div>
+            </div>
+            <div class="toggle-row" style="border:none;padding:8px 0;">
+              <div class="info"><div class="label">방문 기록 가져오기</div></div>
+              <div class="toggle ${state.importHistory ? 'on' : ''}" data-toggle="importHistory"></div>
+            </div>
+            <button class="btn primary" id="runImport" style="margin-top:10px;width:100%;" ${state.importing ? 'disabled' : ''}>
+              ${state.importing ? '가져오는 중…' : '선택한 데이터 가져오기'}</button>
+          </div>`
+        }
+        if (state.importResult) {
+          const r = state.importResult
+          if (typeof r === 'string') {
+            html += `<div class="imp-result err">${r}</div>`
+          } else if (r.errors && r.errors.length && !r.bookmarks && !r.history) {
+            html += `<div class="imp-result err">${r.errors.join(' ')}</div>`
+          } else {
+            let msg = `✓ 북마크 ${r.bookmarks}개, 방문 기록 ${r.history}개를 가져왔어요.`
+            if (r.errors && r.errors.length) msg += ' ' + r.errors.join(' ')
+            html += `<div class="imp-result ok">${msg}</div>`
+          }
+        }
+        return html
+      }
+
+      async function loadImportSources() {
+        try {
+          const a = api()
+          state.importSources = a ? await a.importer.sources() : []
+        } catch (e) {
+          state.importSources = []
+        }
+        if (stepIdx === 1) renderStep()
+      }
+
+      async function runImport() {
+        if (!state.selectedSource || state.importing) return
+        state.importing = true
+        state.importResult = null
+        renderStep()
+        try {
+          const a = api()
+          state.importResult = await a.importer.run(state.selectedSource, {
+            bookmarks: state.importBookmarks,
+            history: state.importHistory,
+          })
+        } catch (e) {
+          state.importResult = '가져오기에 실패했어요: ' + (e && e.message ? e.message : e)
+        }
+        state.importing = false
+        renderStep()
+      }
+
+      let importLoadStarted = false
+      function renderStep() {
+        // 가져오기 단계 진입 시 소스 1회 로드
+        if (stepIdx === 1 && state.importSources === null && !importLoadStarted) {
+          importLoadStarted = true
+          void loadImportSources()
+        }
+        const step = document.getElementById('step')
+        const actions = document.getElementById('actions')
+        if (stepIdx === 0) {
+          step.innerHTML = `
+            <h2>기본 검색 엔진</h2>
+            <div class="desc">주소창에서 검색어를 입력했을 때 사용할 검색 엔진을 선택하세요. 나중에 설정에서 바꿀 수 있습니다.</div>
+            <div class="choice-grid">
+              ${choice('google', 'Google', '검색·이미지·뉴스', 'searchEngine')}
+              ${choice('naver', 'Naver', '한국어 검색에 강함', 'searchEngine')}
+              ${choice('bing', 'Bing', 'AI 답변 통합', 'searchEngine')}
+              ${choice('ddg', 'DuckDuckGo', '추적 없음', 'searchEngine')}
+            </div>`
+        } else if (stepIdx === 1) {
+          step.innerHTML = `
+            <h2>데이터 가져오기</h2>
+            <div class="desc">쓰던 브라우저의 북마크와 방문 기록을 그대로 옮겨올 수 있어요. 방문 기록을 가져오려면 해당 브라우저를 먼저 완전히 종료하세요.</div>
+            ${renderImport()}`
+        } else if (stepIdx === 2) {
+          step.innerHTML = `
+            <h2>테마</h2>
+            <div class="desc">외피 UI 색상과 페이지 다크 모드를 어떻게 처리할지 선택하세요.</div>
+            <div class="choice-grid">
+              ${choice('system', '시스템 따름', 'OS 다크/라이트 동기화', 'theme')}
+              ${choice('light', '라이트', '항상 밝게', 'theme')}
+              ${choice('dark', '다크', '항상 어둡게', 'theme')}
+              ${choice('dark-with-page', '다크 + 페이지 다크', '모든 사이트도 강제 다크', 'theme')}
+            </div>`
+        } else if (stepIdx === 3) {
+          step.innerHTML = `
+            <h2>편리 기능</h2>
+            <div class="desc">기본 ON 권장 — 언제든 끌 수 있습니다.</div>
+            ${toggleRow('adblock', '광고·트래커 차단', 'EasyList + EasyPrivacy + 한국 KR 필터')}
+            ${toggleRow('mouseGestures', '마우스 제스처', '우클릭 드래그 — ← 뒤로, → 앞으로, ↑ 새로고침, ↓ 새 탭')}
+            ${toggleRow('quickSearch', '빠른 검색', '텍스트 선택 시 부유 검색 버튼')}
+            ${toggleRow('hoverTranslate', '호버 단어 번역', 'Alt 누른 채 단어 위 마우스 → 번역 팝업')}`
+        } else if (stepIdx === 4) {
+          step.innerHTML = `
+            <h2>핵심 단축키</h2>
+            <div class="desc">이 단축키만 외워도 80%는 활용할 수 있습니다. 모든 키는 <code style="background:var(--bg);padding:1px 4px;border-radius:3px;">browser://keymap</code> 에서 재바인딩 가능.</div>
+            <div class="shortcut-list">
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>T</kbd> <span>새 탭</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>W</kbd> <span>탭 닫기</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>L</kbd> <span>주소창 포커스</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> <span>명령 팔레트</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>\\</kbd> <span>좌우 분할</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>-</kbd> <span>상하 분할</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> <span>확장 관리</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> <span>페이지 다크 토글</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> <span>이 사이트 다크</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> <span>이 사이트 광고차단</span></div>
+            </div>`
+        }
+
+        // 단계별 일러스트 (resources/brand → pages/welcome 로 최적화 배치)
+        const ILLUST = ['onboarding-1.png', 'onboarding-2.png', 'mascot.png', 'onboarding-4.png', 'onboarding-5.png']
+        const illust = ILLUST[stepIdx]
+        if (illust) step.innerHTML = `<img class="step-illust" src="${illust}" alt="" />` + step.innerHTML
+
+        actions.innerHTML = `
+          <button class="skip" id="skip">건너뛰기</button>
+          <div style="display:flex;gap:10px;">
+            ${stepIdx > 0 ? '<button class="btn" id="prev">‹ 이전</button>' : ''}
+            <button class="btn primary" id="next">${stepIdx === TOTAL - 1 ? '✓ 시작하기' : '다음 ›'}</button>
+          </div>`
+        bind()
+      }
+
+      function bind() {
+        document.querySelectorAll('[data-field]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const f = el.dataset.field
+            const v = el.dataset.value
+            state[f] = v
+            renderStep()
+          })
+        })
+        document.querySelectorAll('[data-toggle]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const f = el.dataset.toggle
+            state[f] = !state[f]
+            renderStep()
+          })
+        })
+        document.querySelectorAll('[data-source]').forEach((el) => {
+          el.addEventListener('click', () => {
+            state.selectedSource = el.dataset.source
+            state.importResult = null
+            renderStep()
+          })
+        })
+        const runBtn = document.getElementById('runImport')
+        if (runBtn) runBtn.addEventListener('click', runImport)
+        const prev = document.getElementById('prev')
+        if (prev) prev.addEventListener('click', () => { stepIdx -= 1; renderDots(); renderStep() })
+        const next = document.getElementById('next')
+        if (next) next.addEventListener('click', async () => {
+          if (stepIdx < TOTAL - 1) { stepIdx += 1; renderDots(); renderStep(); return }
+          await finish()
+        })
+        const skip = document.getElementById('skip')
+        if (skip) skip.addEventListener('click', async () => { await finish() })
+      }
+
+      async function finish() {
+        const a = api()
+        if (a) {
+          // 검색 엔진
+          await a.settings.set('search.defaultEngine', state.searchEngine).catch(() => {})
+          // 테마
+          if (state.theme === 'dark-with-page') {
+            await a.settings.set('appearance.theme', 'dark').catch(() => {})
+            await a.settings.set('appearance.forcePageDark', true).catch(() => {})
+          } else {
+            await a.settings.set('appearance.theme', state.theme).catch(() => {})
+            await a.settings.set('appearance.forcePageDark', state.forcePageDark).catch(() => {})
+          }
+          await a.settings.set('appearance.pageDarkFollowSystem', state.pageDarkFollowSystem).catch(() => {})
+          // 편리 기능
+          await a.settings.set('adblock.enabled', state.adblock).catch(() => {})
+          await a.settings.set('freedom.mouseGestures', state.mouseGestures).catch(() => {})
+          await a.settings.set('freedom.quickSearch', state.quickSearch).catch(() => {})
+          await a.settings.set('freedom.hoverTranslate', state.hoverTranslate).catch(() => {})
+          // 완료 플래그
+          await a.settings.set('setup.completed', true).catch(() => {})
+          await a.settings.set('setup.completedAt', Date.now()).catch(() => {})
+        }
+        location.href = 'browser://newtab'
+      }
+
+      renderDots()
+      renderStep()
+    </script>
+  </body>
+</html>

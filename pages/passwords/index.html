@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>비밀번호 관리</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --warn: #C8862A;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C; --warn: #E5A53D; }
+      }
+      html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
+      .wrap { max-width: 880px; margin: 0 auto; padding: 24px; }
+      header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+      header h1 { font-size: 22px; margin: 0; flex: 1; font-weight: 600; }
+      header .hint { font-size: 11px; color: var(--muted); }
+
+      .search-box {
+        width: 100%; box-sizing: border-box;
+        padding: 8px 12px;
+        border: 1px solid var(--border); border-radius: 8px;
+        background: var(--card); color: inherit; font-size: 13px;
+        margin-bottom: 16px;
+      }
+      .search-box:focus { outline: none; border-color: var(--accent); }
+
+      .alert {
+        padding: 10px 14px; border-radius: 8px;
+        margin-bottom: 12px; font-size: 12px;
+        background: var(--card); border: 1px solid var(--warn);
+        color: var(--warn);
+      }
+
+      .list {
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        overflow: hidden;
+      }
+      .item {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto auto auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      .item:last-child { border-bottom: none; }
+      .item:hover { background: var(--hover); }
+      .item .origin { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .item .username { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .item .pw { font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px; color: var(--accent); min-width: 100px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+      .btn {
+        padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: inherit; cursor: pointer; font-size: 11px;
+      }
+      .btn:hover { border-color: var(--accent); color: var(--accent); }
+      .btn.danger { color: var(--danger); }
+      .btn.danger:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+      .empty {
+        padding: 60px 24px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .empty code { background: var(--card); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>비밀번호 관리</h1>
+        <span class="hint">safeStorage 로 OS 단위 암호화 (Windows DPAPI · macOS Keychain · Linux libsecret)</span>
+      </header>
+      <div id="alert"></div>
+      <input class="search-box" id="search" placeholder="도메인 또는 사용자명 검색…" />
+      <div id="list" class="list"><div class="empty">로딩 중…</div></div>
+    </div>
+    <script>
+      let entries = []
+      let revealed = new Set()
+      let query = ''
+
+      function escape(s) { return String(s ?? '').replace(/</g, '&lt;') }
+
+      async function reload() {
+        if (!window.internalAPI) {
+          document.getElementById('list').innerHTML = '<div class="empty">internalAPI 미주입</div>'
+          return
+        }
+        const available = await window.internalAPI.password.available()
+        const alertEl = document.getElementById('alert')
+        if (!available) {
+          alertEl.innerHTML = '<div class="alert">⚠ 현재 시스템에서 safeStorage 가 동작하지 않습니다. 새 비밀번호 저장은 비활성화됩니다. (보통 Linux 에서 libsecret 미설치 시 발생)</div>'
+        } else {
+          alertEl.innerHTML = ''
+        }
+        entries = await window.internalAPI.password.list()
+        render()
+      }
+
+      function filtered() {
+        if (!query.trim()) return entries
+        const q = query.toLowerCase()
+        return entries.filter((e) =>
+          e.origin.toLowerCase().includes(q) || e.username.toLowerCase().includes(q),
+        )
+      }
+
+      function render() {
+        const list = document.getElementById('list')
+        const items = filtered()
+        if (items.length === 0) {
+          list.innerHTML = entries.length === 0
+            ? '<div class="empty">저장된 비밀번호가 없습니다.<br/>웹사이트에서 로그인하면 자동으로 저장됩니다.</div>'
+            : '<div class="empty">검색 결과 없음</div>'
+          return
+        }
+        list.innerHTML = items.map(function(e) {
+          const isRevealed = revealed.has(e.id)
+          const pwCell = isRevealed
+            ? '<span class="pw" id="pw-' + e.id + '">…</span>'
+            : '<span class="pw">••••••••</span>'
+          return '<div class="item">'
+            + '<div class="origin">' + escape(e.origin) + '</div>'
+            + '<div class="username">' + escape(e.username) + '</div>'
+            + pwCell
+            + '<button class="btn" data-reveal="' + e.id + '">' + (isRevealed ? '숨기기' : '보기') + '</button>'
+            + '<button class="btn" data-copy="' + e.id + '">복사</button>'
+            + '<button class="btn danger" data-remove="' + e.id + '">삭제</button>'
+            + '</div>'
+        }).join('')
+
+        list.querySelectorAll('[data-reveal]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            const id = btn.dataset.reveal
+            if (revealed.has(id)) {
+              revealed.delete(id)
+              render()
+              return
+            }
+            const plain = await window.internalAPI.password.reveal(id)
+            if (plain === null) {
+              alert('복호화에 실패했습니다.')
+              return
+            }
+            revealed.add(id)
+            render()
+            const el = document.getElementById('pw-' + id)
+            if (el) el.textContent = plain
+          })
+        })
+        list.querySelectorAll('[data-copy]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            const id = btn.dataset.copy
+            const plain = await window.internalAPI.password.reveal(id)
+            if (plain === null) { alert('복호화 실패'); return }
+            try {
+              await navigator.clipboard.writeText(plain)
+              const orig = btn.textContent
+              btn.textContent = '복사됨 ✓'
+              setTimeout(function() { btn.textContent = orig }, 1200)
+            } catch (e) {
+              alert('클립보드 접근 실패')
+            }
+          })
+        })
+        list.querySelectorAll('[data-remove]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            const id = btn.dataset.remove
+            const e = entries.find(function(x) { return x.id === id })
+            if (!e) return
+            if (!confirm('"' + e.origin + '" 의 "' + e.username + '" 비밀번호를 삭제할까요?')) return
+            await window.internalAPI.password.remove(id)
+          })
+        })
+      }
+
+      document.getElementById('search').addEventListener('input', function(e) {
+        query = e.target.value
+        render()
+      })
+
+      if (window.internalAPI) {
+        window.internalAPI.password.onChanged(function(list) {
+          entries = list
+          // revealed 셋의 무효 항목 제거
+          const ids = new Set(list.map(function(e) { return e.id }))
+          revealed = new Set(Array.from(revealed).filter(function(id) { return ids.has(id) }))
+          render()
+        })
+      }
+      reload()
+    </script>
+  </body>
+</html>

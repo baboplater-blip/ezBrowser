@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>사이트 정책</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --warn: #C8862A;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C;
+          --warn: #E5A53D; }
+      }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
+      .wrap { display: flex; flex-direction: column; height: 100%; }
+      header { padding: 20px 24px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+      header h1 { font-size: 20px; margin: 0; flex: 1; }
+      header .hint { font-size: 11px; color: var(--muted); margin-left: 8px; }
+      button.btn { height: 30px; padding: 0 14px; border-radius: 15px;
+        border: 1px solid var(--border); background: var(--card); color: inherit;
+        cursor: pointer; font-size: 12px; }
+      button.btn:hover { border-color: var(--accent); color: var(--accent); }
+      button.btn.primary { background: var(--accent); color: white; border-color: transparent; }
+      button.btn.primary:hover { opacity: 0.9; color: white; }
+      button.btn.danger { color: var(--danger); }
+      button.btn.danger:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+      main { flex: 1; display: flex; min-height: 0; }
+      aside { width: 320px; border-right: 1px solid var(--border); padding: 12px; overflow-y: auto; }
+      .rule-item {
+        padding: 10px 12px; border-radius: 8px; margin-bottom: 6px;
+        cursor: pointer; border: 1px solid transparent;
+      }
+      .rule-item:hover { background: var(--hover); }
+      .rule-item.selected { background: var(--hover); border-color: var(--accent); }
+      .rule-item .name { font-weight: 500; font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+      .rule-item .toggle { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); }
+      .rule-item .toggle.on { background: var(--accent); color: white; border-color: transparent; }
+      .rule-item .match { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .empty-side { padding: 32px 8px; text-align: center; color: var(--muted); font-size: 12px; }
+
+      section.editor { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 16px 22px; overflow-y: auto; }
+      .editor-bar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+      .editor-bar .name-input { flex: 1; min-width: 180px; height: 32px; padding: 0 10px;
+        border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: inherit; font-size: 14px; font-weight: 500; }
+      .editor-bar .name-input:focus { outline: none; border-color: var(--accent); }
+
+      .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+      .field > label { font-size: 12px; font-weight: 500; color: var(--muted); }
+      .field input[type=text], .field textarea {
+        padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+        background: var(--card); color: inherit; font-size: 12px;
+        font-family: inherit;
+      }
+      .field input[type=text]:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+      .field textarea { resize: vertical; min-height: 60px; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; line-height: 1.5; }
+      .field .hint { font-size: 11px; color: var(--muted); }
+
+      .toggle-row { display: flex; flex-wrap: wrap; gap: 8px; }
+      .toggle-chip {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 10px; border: 1px solid var(--border); border-radius: 14px;
+        background: var(--card); cursor: pointer; font-size: 12px;
+        user-select: none;
+      }
+      .toggle-chip:hover { border-color: var(--accent); }
+      .toggle-chip.on { background: var(--accent); color: white; border-color: transparent; }
+      .toggle-chip input { display: none; }
+
+      .header-pair { display: flex; gap: 6px; margin-bottom: 4px; }
+      .header-pair input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--card); color: inherit; font-size: 12px; font-family: 'Consolas', monospace; }
+      .header-pair input:focus { outline: none; border-color: var(--accent); }
+      .header-pair .key { flex: 0 0 180px; }
+      .header-pair button { padding: 0 8px; height: 28px; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--card); color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; }
+      .header-pair button:hover { color: var(--danger); border-color: var(--danger); }
+      .perm-row { display: grid; grid-template-columns: 160px 1fr; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+      .perm-label { color: var(--muted); }
+      .perm-decision { display: flex; gap: 4px; }
+      .perm-decision button {
+        flex: 1;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--muted);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+      }
+      .perm-decision button.selected.default { background: var(--bg); color: var(--fg); border-color: var(--border); }
+      .perm-decision button.selected.allow { background: #30A46C; color: white; border-color: transparent; }
+      .perm-decision button.selected.deny { background: var(--danger); color: white; border-color: transparent; }
+      .add-row { margin-top: 4px; }
+      .add-row button { padding: 4px 10px; border: 1px dashed var(--border); border-radius: 6px;
+        background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; }
+      .add-row button:hover { color: var(--accent); border-color: var(--accent); }
+
+      .stub {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 12px;
+        color: var(--muted); font-size: 13px;
+      }
+      .stub code { background: var(--card); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; }
+
+      .action-bar { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+      .danger-zone { font-size: 11px; color: var(--warn); margin-bottom: 8px; padding: 8px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; line-height: 1.5; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>사이트 정책</h1>
+        <span class="hint">사이트별 UA · 헤더 · CSP · 쿠키 · 권한 · JS 후킹</span>
+        <button id="export-btn" class="btn" title="모든 룰을 JSON 으로 내보내기">내보내기</button>
+        <button id="import-btn" class="btn" title="JSON 파일에서 룰 가져오기">가져오기</button>
+        <input id="import-file" type="file" accept="application/json" style="display:none;" />
+        <button id="new-btn" class="btn primary">+ 새 룰</button>
+      </header>
+      <main>
+        <aside id="list-aside">
+          <div class="empty-side">로딩 중…</div>
+        </aside>
+        <section class="editor" id="editor-section">
+          <div class="stub" id="stub">
+            <div>왼쪽 목록에서 룰을 선택하거나 새로 만드세요.</div>
+            <div>각 룰은 <code>@match</code>(URL 패턴) 와 적용할 변경 사항으로 구성됩니다.</div>
+          </div>
+          <div id="editor-content" style="display:none;flex-direction:column;min-height:0;">
+            <div class="editor-bar">
+              <input id="name-input" class="name-input" placeholder="룰 이름 (예: 콕콕 사이트 UA 변경)" />
+              <button id="enabled-btn" class="btn">활성</button>
+              <button id="save-btn" class="btn primary">저장</button>
+              <button id="delete-btn" class="btn danger">삭제</button>
+            </div>
+
+            <div class="field">
+              <label>URL 패턴 (한 줄에 하나, <code>*</code> 와일드카드)</label>
+              <textarea id="match-area" placeholder="*://*.example.com/*&#10;*://example.org/*"></textarea>
+              <div class="hint">Chrome match pattern 단순 형식 — <code>*</code>=모든 텍스트, 매치 시 룰 적용.</div>
+            </div>
+
+            <div class="field">
+              <label>User-Agent 덮어쓰기 (비우면 OFF)</label>
+              <input id="ua-input" type="text" placeholder="Mozilla/5.0 (X11; Linux x86_64) ..." />
+            </div>
+
+            <div class="field">
+              <label>요청 헤더 설정 (set/overwrite)</label>
+              <div id="req-set-list"></div>
+              <div class="add-row"><button id="req-set-add">+ 헤더 추가</button></div>
+            </div>
+
+            <div class="field">
+              <label>요청 헤더 제거 (헤더 이름, 한 줄에 하나)</label>
+              <textarea id="req-remove-area" placeholder="Referer&#10;Accept-Language"></textarea>
+            </div>
+
+            <div class="field">
+              <label>응답 헤더 설정 (set/overwrite)</label>
+              <div id="res-set-list"></div>
+              <div class="add-row"><button id="res-set-add">+ 헤더 추가</button></div>
+            </div>
+
+            <div class="field">
+              <label>응답 헤더 제거</label>
+              <textarea id="res-remove-area" placeholder="X-Frame-Options&#10;Content-Security-Policy"></textarea>
+            </div>
+
+            <div class="field">
+              <label>빠른 토글</label>
+              <div class="toggle-row">
+                <label class="toggle-chip" id="chip-csp"><input type="checkbox" id="chk-csp" /> CSP 완전 제거</label>
+                <label class="toggle-chip" id="chip-cookies"><input type="checkbox" id="chk-cookies" /> 쿠키 차단</label>
+                <label class="toggle-chip" id="chip-js"><input type="checkbox" id="chk-js" /> JS 차단</label>
+                <label class="toggle-chip" id="chip-images"><input type="checkbox" id="chk-images" /> 이미지 차단</label>
+              </div>
+              <div class="hint">CSP 제거는 외부 스크립트가 막힐 때 우회용. 쿠키 차단은 요청 Cookie · 응답 Set-Cookie 둘 다 제거.</div>
+            </div>
+
+            <div class="field">
+              <label>사이트별 권한 (기본 → 허용/거부 명시)</label>
+              <div id="permissions-grid"></div>
+              <div class="hint">'기본' 은 전역 화이트리스트 (media · geolocation · notifications · clipboard-read · fullscreen · pointerLock) 적용. 한 룰이라도 '거부' 면 즉시 거부.</div>
+            </div>
+
+            <div class="field">
+              <label>고급: 페이지 컨텍스트 JS (dom-ready 시 실행, escape hatch)</label>
+              <div class="danger-zone">⚠ 이 JS 는 매칭된 모든 사이트에서 실행됩니다. 신중히 작성하세요.</div>
+              <textarea id="js-area" style="min-height: 100px;" placeholder="// 예) document.querySelectorAll('.ad').forEach(el => el.remove())"></textarea>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      const listAside = document.getElementById('list-aside')
+      const stub = document.getElementById('stub')
+      const editorContent = document.getElementById('editor-content')
+      const nameInput = document.getElementById('name-input')
+      const matchArea = document.getElementById('match-area')
+      const uaInput = document.getElementById('ua-input')
+      const reqSetList = document.getElementById('req-set-list')
+      const reqSetAdd = document.getElementById('req-set-add')
+      const reqRemoveArea = document.getElementById('req-remove-area')
+      const resSetList = document.getElementById('res-set-list')
+      const resSetAdd = document.getElementById('res-set-add')
+      const resRemoveArea = document.getElementById('res-remove-area')
+      const chkCsp = document.getElementById('chk-csp')
+      const chkCookies = document.getElementById('chk-cookies')
+      const chkJs = document.getElementById('chk-js')
+      const chkImages = document.getElementById('chk-images')
+      const chipCsp = document.getElementById('chip-csp')
+      const chipCookies = document.getElementById('chip-cookies')
+      const chipJs = document.getElementById('chip-js')
+      const chipImages = document.getElementById('chip-images')
+      const jsArea = document.getElementById('js-area')
+      const newBtn = document.getElementById('new-btn')
+      const saveBtn = document.getElementById('save-btn')
+      const deleteBtn = document.getElementById('delete-btn')
+      const enabledBtn = document.getElementById('enabled-btn')
+      const exportBtn = document.getElementById('export-btn')
+      const importBtn = document.getElementById('import-btn')
+      const importFile = document.getElementById('import-file')
+      const permissionsGrid = document.getElementById('permissions-grid')
+
+      const PERMS = [
+        { key: 'media', label: '카메라·마이크 (media)' },
+        { key: 'geolocation', label: '위치' },
+        { key: 'notifications', label: '알림' },
+        { key: 'clipboard-read', label: '클립보드 읽기' },
+        { key: 'fullscreen', label: '전체 화면' },
+        { key: 'pointerLock', label: '포인터 락' },
+      ]
+      let currentPermissions = {}
+
+      let policies = []
+      let currentId = null
+      let currentEnabled = true
+      let currentCreatedAt = null
+
+      function showEditor() { stub.style.display = 'none'; editorContent.style.display = 'flex' }
+      function showStub() { stub.style.display = ''; editorContent.style.display = 'none' }
+      function escape(s) { return String(s ?? '').replace(/</g, '&lt;') }
+
+      function renderList() {
+        if (!policies.length) {
+          listAside.innerHTML = '<div class="empty-side">룰이 없습니다.<br/>위 "+ 새 룰" 로 시작하세요.</div>'
+          return
+        }
+        listAside.innerHTML = policies.map(function(p) {
+          const sel = p.id === currentId ? 'selected' : ''
+          const toggle = p.enabled ? '<span class="toggle on">ON</span>' : '<span class="toggle">OFF</span>'
+          const matchPreview = p.match && p.match.length ? p.match[0] + (p.match.length > 1 ? ' 외 ' + (p.match.length - 1) : '') : '(매치 없음)'
+          return '<div class="rule-item ' + sel + '" data-id="' + p.id + '">'
+            + '<div class="name">' + toggle + ' ' + escape(p.name) + '</div>'
+            + '<div class="match">' + escape(matchPreview) + '</div>'
+            + '</div>'
+        }).join('')
+        listAside.querySelectorAll('.rule-item').forEach(function(el) {
+          el.addEventListener('click', function() { selectRule(el.dataset.id) })
+        })
+      }
+
+      function renderHeaderList(container, pairs) {
+        container.innerHTML = ''
+        pairs.forEach(function(h, idx) {
+          const row = document.createElement('div')
+          row.className = 'header-pair'
+          const keyInput = document.createElement('input')
+          keyInput.className = 'key'
+          keyInput.placeholder = 'Header-Name'
+          keyInput.value = h.name || ''
+          keyInput.addEventListener('input', function() { pairs[idx].name = keyInput.value })
+          const valInput = document.createElement('input')
+          valInput.placeholder = 'value'
+          valInput.value = h.value || ''
+          valInput.addEventListener('input', function() { pairs[idx].value = valInput.value })
+          const rmBtn = document.createElement('button')
+          rmBtn.textContent = '×'
+          rmBtn.title = '제거'
+          rmBtn.addEventListener('click', function() {
+            pairs.splice(idx, 1)
+            renderHeaderList(container, pairs)
+          })
+          row.appendChild(keyInput)
+          row.appendChild(valInput)
+          row.appendChild(rmBtn)
+          container.appendChild(row)
+        })
+      }
+
+      let reqSetPairs = []
+      let resSetPairs = []
+
+      function syncChipState() {
+        chipCsp.classList.toggle('on', chkCsp.checked)
+        chipCookies.classList.toggle('on', chkCookies.checked)
+        chipJs.classList.toggle('on', chkJs.checked)
+        chipImages.classList.toggle('on', chkImages.checked)
+      }
+      [chkCsp, chkCookies, chkJs, chkImages].forEach(function(c) {
+        c.addEventListener('change', syncChipState)
+      })
+
+      reqSetAdd.addEventListener('click', function() {
+        reqSetPairs.push({ name: '', value: '' })
+        renderHeaderList(reqSetList, reqSetPairs)
+      })
+      resSetAdd.addEventListener('click', function() {
+        resSetPairs.push({ name: '', value: '' })
+        renderHeaderList(resSetList, resSetPairs)
+      })
+
+      function renderPermissions() {
+        permissionsGrid.innerHTML = PERMS.map(function(p) {
+          const cur = currentPermissions[p.key] || 'default'
+          return '<div class="perm-row">'
+            + '<div class="perm-label">' + escape(p.label) + '</div>'
+            + '<div class="perm-decision">'
+            +   '<button class="' + (cur === 'default' ? 'selected default' : '') + '" data-perm="' + p.key + '" data-decision="default">기본</button>'
+            +   '<button class="' + (cur === 'allow' ? 'selected allow' : '') + '" data-perm="' + p.key + '" data-decision="allow">허용</button>'
+            +   '<button class="' + (cur === 'deny' ? 'selected deny' : '') + '" data-perm="' + p.key + '" data-decision="deny">거부</button>'
+            + '</div>'
+            + '</div>'
+        }).join('')
+        permissionsGrid.querySelectorAll('button[data-perm]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const key = btn.dataset.perm
+            const decision = btn.dataset.decision
+            if (decision === 'default') delete currentPermissions[key]
+            else currentPermissions[key] = decision
+            renderPermissions()
+          })
+        })
+      }
+
+      function loadIntoEditor(full) {
+        currentId = full.id
+        currentEnabled = full.enabled
+        currentCreatedAt = full.createdAt || null
+        nameInput.value = full.name
+        matchArea.value = (full.match || []).join('\n')
+        uaInput.value = full.userAgent || ''
+        reqSetPairs = (full.reqHeadersSet || []).map(function(h) { return { name: h.name, value: h.value } })
+        resSetPairs = (full.resHeadersSet || []).map(function(h) { return { name: h.name, value: h.value } })
+        renderHeaderList(reqSetList, reqSetPairs)
+        renderHeaderList(resSetList, resSetPairs)
+        reqRemoveArea.value = (full.reqHeadersRemove || []).join('\n')
+        resRemoveArea.value = (full.resHeadersRemove || []).join('\n')
+        chkCsp.checked = !!full.stripCsp
+        chkCookies.checked = !!full.blockCookies
+        chkJs.checked = !!full.blockJs
+        chkImages.checked = !!full.blockImages
+        jsArea.value = full.customJs || ''
+        currentPermissions = (full.permissions && typeof full.permissions === 'object') ? Object.assign({}, full.permissions) : {}
+        renderPermissions()
+        enabledBtn.textContent = full.enabled ? '활성 ✓' : '비활성'
+        enabledBtn.classList.toggle('primary', full.enabled)
+        syncChipState()
+        showEditor()
+      }
+
+      async function selectRule(id) {
+        const full = await window.internalAPI.policy.get(id)
+        if (!full) return
+        loadIntoEditor(full)
+        renderList()
+      }
+
+      function emptyRule() {
+        return {
+          id: undefined,
+          name: '새 사이트 정책',
+          enabled: true,
+          match: ['*://*.example.com/*'],
+          userAgent: '',
+          reqHeadersSet: [],
+          reqHeadersRemove: [],
+          resHeadersSet: [],
+          resHeadersRemove: [],
+          stripCsp: false,
+          blockCookies: false,
+          blockJs: false,
+          blockImages: false,
+          customJs: '',
+          permissions: {},
+          createdAt: null,
+        }
+      }
+
+      newBtn.addEventListener('click', function() {
+        currentId = null
+        currentCreatedAt = null
+        currentEnabled = true
+        loadIntoEditor(emptyRule())
+        renderList()
+        nameInput.focus()
+        nameInput.select()
+      })
+
+      function collectFromForm() {
+        return {
+          id: currentId || undefined,
+          name: nameInput.value.trim() || '이름 없는 룰',
+          enabled: currentEnabled,
+          match: matchArea.value.split('\n').map(function(s) { return s.trim() }).filter(Boolean),
+          userAgent: uaInput.value.trim(),
+          reqHeadersSet: reqSetPairs.filter(function(h) { return h.name.trim() }),
+          reqHeadersRemove: reqRemoveArea.value.split('\n').map(function(s) { return s.trim() }).filter(Boolean),
+          resHeadersSet: resSetPairs.filter(function(h) { return h.name.trim() }),
+          resHeadersRemove: resRemoveArea.value.split('\n').map(function(s) { return s.trim() }).filter(Boolean),
+          stripCsp: chkCsp.checked,
+          blockCookies: chkCookies.checked,
+          blockJs: chkJs.checked,
+          blockImages: chkImages.checked,
+          customJs: jsArea.value,
+          permissions: Object.assign({}, currentPermissions),
+        }
+      }
+
+      // ===== Import / Export =====
+      exportBtn.addEventListener('click', async function() {
+        const summaries = await window.internalAPI.policy.list()
+        const fullRules = []
+        for (const s of summaries) {
+          const r = await window.internalAPI.policy.get(s.id)
+          if (r) fullRules.push(r)
+        }
+        const payload = { version: 1, exportedAt: new Date().toISOString(), rules: fullRules }
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'browserbuild-policies-' + Date.now() + '.json'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      })
+
+      importBtn.addEventListener('click', function() { importFile.click() })
+      importFile.addEventListener('change', async function(e) {
+        const file = e.target.files && e.target.files[0]
+        if (!file) return
+        try {
+          const text = await file.text()
+          const data = JSON.parse(text)
+          const rules = Array.isArray(data) ? data : (Array.isArray(data.rules) ? data.rules : null)
+          if (!rules) { alert('JSON 형식이 올바르지 않습니다. {rules:[...]} 또는 배열이어야 합니다.'); return }
+          const overwrite = confirm(rules.length + '개 룰을 가져옵니다.\n\n[확인] 기존 룰은 유지하고 추가\n[취소] 가져오기 취소')
+          if (!overwrite) { importFile.value = ''; return }
+          let okCount = 0
+          for (const r of rules) {
+            try {
+              // id 충돌 방지: import 시 새 id 부여 (백엔드 normalizeRule 이 자동 처리)
+              const payload = Object.assign({}, r)
+              delete payload.id
+              await window.internalAPI.policy.save(payload)
+              okCount += 1
+            } catch (err) { console.warn('rule import failed', err) }
+          }
+          alert(okCount + '개 룰을 가져왔습니다.')
+        } catch (err) {
+          alert('가져오기 실패: ' + (err && err.message ? err.message : err))
+        }
+        importFile.value = ''
+      })
+
+      saveBtn.addEventListener('click', async function() {
+        const payload = collectFromForm()
+        if (payload.match.length === 0) return alert('URL 패턴을 한 줄 이상 입력하세요.')
+        const saved = await window.internalAPI.policy.save(payload)
+        currentId = saved.id
+        currentCreatedAt = saved.createdAt
+      })
+
+      deleteBtn.addEventListener('click', async function() {
+        if (!currentId) { showStub(); return }
+        if (!confirm('이 룰을 삭제할까요?')) return
+        await window.internalAPI.policy.remove(currentId)
+        currentId = null
+        showStub()
+      })
+
+      enabledBtn.addEventListener('click', async function() {
+        if (!currentId) {
+          currentEnabled = !currentEnabled
+          enabledBtn.textContent = currentEnabled ? '활성 ✓' : '비활성'
+          enabledBtn.classList.toggle('primary', currentEnabled)
+          return
+        }
+        const next = !currentEnabled
+        await window.internalAPI.policy.setEnabled(currentId, next)
+        currentEnabled = next
+        enabledBtn.textContent = next ? '활성 ✓' : '비활성'
+        enabledBtn.classList.toggle('primary', next)
+      })
+
+      async function reload() {
+        if (!window.internalAPI) { listAside.innerHTML = '<div class="empty-side">internalAPI 미주입</div>'; return }
+        policies = await window.internalAPI.policy.list()
+        renderList()
+      }
+
+      if (window.internalAPI) {
+        window.internalAPI.policy.onChanged(function(list) {
+          policies = list
+          renderList()
+        })
+      }
+      reload()
+    </script>
+  </body>
+</html>

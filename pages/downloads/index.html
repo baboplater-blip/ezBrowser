@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>다운로드</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --ok: #15803D; --warn: #B45309;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C;
+          --ok: #4ADE80; --warn: #F59E0B; }
+      }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif; }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 24px 32px; }
+      h1 { margin: 0 0 8px; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+      .filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+      .filter { padding: 4px 12px; border-radius: 14px; border: 1px solid var(--border);
+        background: var(--card); color: var(--muted); cursor: pointer; font-size: 12px;
+        user-select: none; }
+      .filter.active { background: var(--accent); color: white; border-color: var(--accent); }
+      .search-box { margin-left: auto; }
+      .search-box input { height: 28px; border-radius: 14px; border: 1px solid var(--border);
+        background: var(--card); color: var(--fg); padding: 0 12px; font-size: 12px; min-width: 220px; }
+      .summary { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+      .download-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 12px 16px; margin-bottom: 8px; transition: border-color 0.15s; }
+      .download-card.active { border-color: var(--accent); }
+      .download-card.failed { border-color: var(--danger); }
+      .row { display: flex; align-items: center; gap: 12px; }
+      .icon { width: 32px; height: 32px; flex-shrink: 0; border-radius: 6px; background: var(--hover);
+        display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--muted); }
+      .info { flex: 1; min-width: 0; }
+      .name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .meta { color: var(--muted); font-size: 11px; margin-top: 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+      .source { font-family: 'Menlo', monospace; font-size: 10px; }
+      .state-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; flex-shrink: 0;
+        background: var(--hover); color: var(--muted); }
+      .state-badge.active { background: rgba(52,120,246,.15); color: var(--accent); }
+      .state-badge.done { background: rgba(21,128,61,.15); color: var(--ok); }
+      .state-badge.failed { background: rgba(200,42,56,.12); color: var(--danger); }
+      .state-badge.paused { background: rgba(180,83,9,.15); color: var(--warn); }
+      .state-badge.seeding { background: rgba(168,85,247,.18); color: #C084FC; }
+      .progress { height: 4px; background: var(--hover); border-radius: 2px; overflow: hidden;
+        margin-top: 8px; }
+      .progress-bar { height: 100%; background: var(--accent); transition: width 0.2s ease; }
+      .progress-bar.done { background: var(--ok); }
+      .progress-bar.failed { background: var(--danger); }
+      .actions { display: flex; gap: 6px; flex-shrink: 0; }
+      button.btn { height: 26px; padding: 0 10px; border-radius: 13px;
+        border: 1px solid var(--border); background: var(--card); color: inherit;
+        cursor: pointer; font-size: 11px; }
+      button.btn:hover { border-color: var(--accent); color: var(--accent); }
+      button.btn.danger { color: var(--danger); }
+      button.btn.danger:hover { border-color: var(--danger); }
+      .empty-state { text-align: center; padding: 80px 20px; color: var(--muted); }
+      .empty-illust { display: block; width: 200px; max-width: 55%; margin: 0 auto 14px; opacity: .92; }
+      .error-msg { color: var(--danger); font-size: 11px; margin-top: 4px;
+        background: rgba(200,42,56,.08); padding: 4px 8px; border-radius: 4px; }
+      .torrent-detail { margin-top: 8px; font-size: 11px; color: var(--muted);
+        background: var(--hover); padding: 6px 10px; border-radius: 6px; }
+      .torrent-detail .files { margin-top: 4px; }
+      .torrent-detail .file-row { display: flex; gap: 6px; align-items: center; font-size: 10px;
+        padding: 2px 0; }
+      .torrent-detail .file-row input { margin: 0; }
+      .clear-btn { margin-left: 8px; font-size: 11px; color: var(--muted); cursor: pointer;
+        background: none; border: none; }
+      .clear-btn:hover { color: var(--danger); }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>다운로드</h1>
+      <div class="filter-bar">
+        <span class="filter active" data-filter="all">전체</span>
+        <span class="filter" data-filter="active">진행 중</span>
+        <span class="filter" data-filter="done">완료</span>
+        <span class="filter" data-filter="failed">실패</span>
+        <span class="filter" data-filter="torrent">토렌트</span>
+        <div class="search-box">
+          <input id="q" type="text" placeholder="파일명·도메인 검색…" />
+        </div>
+      </div>
+      <div class="summary" id="summary"></div>
+      <div id="list"></div>
+    </div>
+    <script>
+      let downloads = []
+      let filter = 'all'
+      let query = ''
+
+      function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
+      function formatBytes(n) {
+        if (!n || n <= 0) return '0 B'
+        const units = ['B','KB','MB','GB','TB']
+        let i = 0; let v = n
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1 }
+        return v.toFixed(v >= 100 || i === 0 ? 0 : v >= 10 ? 1 : 2) + ' ' + units[i]
+      }
+      function formatSpeed(n) {
+        if (!n || n <= 0) return ''
+        return formatBytes(n) + '/s'
+      }
+      function formatEta(received, total, speed) {
+        if (!speed || speed <= 0 || !total || received >= total) return ''
+        const rem = (total - received) / speed
+        if (rem < 60) return Math.round(rem) + '초'
+        if (rem < 3600) return Math.round(rem / 60) + '분'
+        return (rem / 3600).toFixed(1) + '시간'
+      }
+      function domainOf(url) {
+        try { return new URL(url).hostname } catch { return '' }
+      }
+      function iconFor(d) {
+        if (d.kind === 'torrent') return '🌊'
+        if (d.kind === 'video') return '🎬'
+        const ext = (d.filename || '').toLowerCase().split('.').pop()
+        if (['mp4','mkv','avi','mov','webm'].includes(ext)) return '🎬'
+        if (['mp3','wav','flac','ogg','m4a'].includes(ext)) return '🎵'
+        if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return '🖼'
+        if (['zip','rar','7z','tar','gz'].includes(ext)) return '📦'
+        if (['pdf'].includes(ext)) return '📄'
+        if (['doc','docx','xls','xlsx','ppt','pptx'].includes(ext)) return '📝'
+        if (['exe','msi','dmg','deb','rpm','appimage'].includes(ext)) return '⚙'
+        return '📥'
+      }
+      function stateBadge(state) {
+        const lab = { active:'진행', paused:'일시정지', done:'완료', failed:'실패', cancelled:'취소', queued:'대기', metadata:'메타데이터', seeding:'시드 중' }[state] || state
+        return `<span class="state-badge ${state}">${lab}</span>`
+      }
+
+      async function reload() {
+        if (!window.internalAPI || !window.internalAPI.downloads) {
+          document.getElementById('list').innerHTML =
+            '<div class="empty-state">internalAPI.downloads 미주입 — 패키지 빌드 후 다시 시도하세요.</div>'
+          return
+        }
+        downloads = await window.internalAPI.downloads.list()
+        render()
+      }
+
+      function passesFilter(d) {
+        if (query) {
+          const q = query.toLowerCase()
+          const hay = (d.filename + ' ' + (d.url || '') + ' ' + (d.sourceTabUrl || '')).toLowerCase()
+          if (!hay.includes(q)) return false
+        }
+        if (filter === 'all') return true
+        if (filter === 'active') return d.state === 'active' || d.state === 'paused' || d.state === 'queued' || d.state === 'metadata' || d.state === 'seeding'
+        if (filter === 'done') return d.state === 'done'
+        if (filter === 'failed') return d.state === 'failed' || d.state === 'cancelled'
+        if (filter === 'torrent') return d.kind === 'torrent'
+        return true
+      }
+
+      function render() {
+        const filtered = downloads.filter(passesFilter)
+        const sum = document.getElementById('summary')
+        const totals = downloads.reduce((acc, d) => {
+          acc.total += 1
+          if (d.state === 'active' || d.state === 'paused') acc.active += 1
+          if (d.state === 'done') acc.done += 1
+          if (d.kind === 'torrent') acc.tor += 1
+          return acc
+        }, { total:0, active:0, done:0, tor:0 })
+        sum.textContent = `전체 ${totals.total}개 · 진행 ${totals.active} · 완료 ${totals.done}` + (totals.tor ? ` · 토렌트 ${totals.tor}` : '')
+
+        const el = document.getElementById('list')
+        if (filtered.length === 0) {
+          el.innerHTML = '<div class="empty-state"><img class="empty-illust" src="empty.png" alt="">표시할 다운로드가 없습니다.</div>'
+          return
+        }
+        el.innerHTML = filtered.map((d) => {
+          const pct = d.totalBytes > 0 ? Math.min(100, (d.receivedBytes / d.totalBytes) * 100) : 0
+          const isDone = d.state === 'done'
+          const isFailed = d.state === 'failed' || d.state === 'cancelled'
+          const eta = formatEta(d.receivedBytes, d.totalBytes, d.speed)
+          const speed = formatSpeed(d.speed)
+          const meta = [
+            d.totalBytes > 0
+              ? `${formatBytes(d.receivedBytes)} / ${formatBytes(d.totalBytes)}`
+              : `${formatBytes(d.receivedBytes)}`,
+            d.totalBytes > 0 ? `${pct.toFixed(1)}%` : '',
+            speed,
+            eta,
+            d.sourceTabUrl ? domainOf(d.sourceTabUrl) : '',
+          ].filter(Boolean).join(' · ')
+
+          let actions = ''
+          if (d.kind === 'torrent') {
+            if (d.state === 'active' || d.state === 'metadata' || d.state === 'seeding') {
+              actions += `<button class="btn" data-pause="${d.id}">⏸ 일시정지</button>`
+            } else if (d.state === 'paused') {
+              actions += `<button class="btn" data-resume="${d.id}">▶ 재개</button>`
+            }
+            if (d.state !== 'done' && d.state !== 'failed' && d.state !== 'cancelled') {
+              actions += `<button class="btn" data-open="${d.id}">📂 폴더</button>`
+            }
+            actions += `<button class="btn danger" data-torrent-remove="${d.id}">삭제</button>`
+          } else {
+            if (d.state === 'active') actions += `<button class="btn" data-pause="${d.id}">⏸ 일시정지</button>`
+            if (d.state === 'paused') actions += `<button class="btn" data-resume="${d.id}">▶ 재개</button>`
+            if (isDone) actions += `<button class="btn" data-open="${d.id}">📂 폴더</button>`
+            if (d.state === 'active' || d.state === 'paused' || d.state === 'queued') {
+              actions += `<button class="btn danger" data-cancel="${d.id}">취소</button>`
+            }
+          }
+
+          const tdetail = (d.kind === 'torrent' && d.torrent) ? `
+            <div class="torrent-detail">
+              피어 ${d.torrent.peers} · 업로드 ${formatBytes(d.torrent.uploadedBytes)} · ↑${formatSpeed(d.torrent.uploadSpeed)} · 비율 ${d.torrent.ratio.toFixed(2)}
+              ${Array.isArray(d.torrent.files) && d.torrent.files.length > 1 ? `<div class="files">${d.torrent.files.map((f, i) => `
+                <label class="file-row">
+                  <input type="checkbox" ${f.selected ? 'checked' : ''} data-torrent-file="${d.id}:${i}" />
+                  <span>${escape(f.name)} · ${formatBytes(f.length)}</span>
+                </label>`).join('')}</div>` : ''}
+            </div>` : ''
+
+          return `<div class="download-card ${d.state === 'active' ? 'active' : ''} ${isFailed ? 'failed' : ''}">
+            <div class="row">
+              <div class="icon">${iconFor(d)}</div>
+              <div class="info">
+                <div class="name" title="${escape(d.savePath || d.filename)}">${escape(d.filename)}</div>
+                <div class="meta"><span>${meta}</span></div>
+                ${d.error ? `<div class="error-msg">⚠ ${escape(d.error)}</div>` : ''}
+              </div>
+              ${stateBadge(d.state)}
+              <div class="actions">${actions}</div>
+            </div>
+            ${(!isFailed && (d.totalBytes > 0 || d.state === 'active')) ? `<div class="progress"><div class="progress-bar ${isDone ? 'done' : isFailed ? 'failed' : ''}" style="width: ${pct}%;"></div></div>` : ''}
+            ${tdetail}
+          </div>`
+        }).join('')
+        bind()
+      }
+
+      function bind() {
+        document.querySelectorAll('[data-pause]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.pause
+            const d = downloads.find((x) => x.id === id)
+            if (d && d.kind === 'torrent') await window.internalAPI.torrent.pause(id)
+            else await window.internalAPI.downloads.pause(id)
+          })
+        })
+        document.querySelectorAll('[data-resume]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.resume
+            const d = downloads.find((x) => x.id === id)
+            if (d && d.kind === 'torrent') await window.internalAPI.torrent.resume(id)
+            else await window.internalAPI.downloads.resume(id)
+          })
+        })
+        document.querySelectorAll('[data-cancel]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            await window.internalAPI.downloads.cancel(el.dataset.cancel)
+          })
+        })
+        document.querySelectorAll('[data-open]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            await window.internalAPI.downloads.openFolder(el.dataset.open)
+          })
+        })
+        document.querySelectorAll('[data-torrent-remove]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.torrentRemove
+            const d = downloads.find((x) => x.id === id)
+            if (!d) return
+            const deleteFiles = confirm(`"${d.filename}" 토렌트를 삭제할까요?\n\n확인: 파일도 함께 삭제\n취소: 토렌트 항목만 삭제 (파일 유지)`)
+            await window.internalAPI.torrent.remove(id, deleteFiles)
+          })
+        })
+        document.querySelectorAll('[data-torrent-file]').forEach((el) => {
+          el.addEventListener('change', async () => {
+            const [id] = el.dataset.torrentFile.split(':')
+            const d = downloads.find((x) => x.id === id)
+            if (!d || !d.torrent) return
+            const indices = d.torrent.files.map((f, i) => {
+              const node = document.querySelector(`[data-torrent-file="${id}:${i}"]`)
+              return node && node.checked ? i : null
+            }).filter((v) => v !== null)
+            await window.internalAPI.torrent.setFiles(id, indices)
+          })
+        })
+      }
+
+      document.querySelectorAll('.filter').forEach((el) => {
+        el.addEventListener('click', () => {
+          document.querySelectorAll('.filter').forEach((f) => f.classList.remove('active'))
+          el.classList.add('active')
+          filter = el.dataset.filter
+          render()
+        })
+      })
+      document.getElementById('q').addEventListener('input', (e) => {
+        query = e.target.value.trim()
+        render()
+      })
+
+      if (window.internalAPI && window.internalAPI.downloads) {
+        window.internalAPI.downloads.onUpdate((list) => {
+          downloads = list
+          render()
+        })
+      }
+      reload()
+      // 1초마다 가벼운 새로고침으로 속도·ETA 갱신 (백엔드 broadcast 가 충분히 잦지 않은 경우 대비)
+      setInterval(reload, 1500)
+    </script>
+  </body>
+</html>

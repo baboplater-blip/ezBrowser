@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>메모리·성능</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --ok: #2E8B57; --warn: #B45309;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C;
+          --ok: #5DD3A0; --warn: #F59E0B; }
+      }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif; font-size: 13px; }
+      .wrap { max-width: 1000px; margin: 0 auto; padding: 22px 30px 40px; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      .sub { color: var(--muted); margin-bottom: 18px; font-size: 12px; }
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+      .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 12px 14px; }
+      .stat .label { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+      .stat .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      .stat .unit { font-size: 11px; color: var(--muted); margin-left: 3px; }
+      .stat.budget-ok { border-color: var(--ok); }
+      .stat.budget-warn { border-color: var(--warn); }
+      .stat.budget-over { border-color: var(--danger); }
+      .row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+      button.btn { background: var(--card); border: 1px solid var(--border); color: inherit;
+        height: 28px; padding: 0 14px; border-radius: 14px; cursor: pointer; font-size: 12px; }
+      button.btn:hover { border-color: var(--accent); color: var(--accent); }
+      button.btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+      table { width: 100%; border-collapse: collapse; background: var(--card);
+        border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+      th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--border);
+        font-size: 12px; font-variant-numeric: tabular-nums; }
+      th { background: var(--hover); font-weight: 500; color: var(--muted); font-size: 11px; }
+      tr:last-child td { border-bottom: none; }
+      td.num { text-align: right; }
+      .section { margin-top: 22px; }
+      h3 { font-size: 14px; margin: 0 0 8px; }
+      .info-line { font-size: 11px; color: var(--muted); }
+      code { background: var(--hover); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+      .budget-line { display: flex; justify-content: space-between; padding: 6px 12px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+        margin-bottom: 4px; font-size: 12px; }
+      .budget-line .met { color: var(--ok); }
+      .budget-line .over { color: var(--danger); }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>📊 메모리·성능</h1>
+      <div class="sub">실시간 프로세스별 메모리·CPU 와 백그라운드 탭 슬립 상태. 1초마다 갱신.</div>
+      <div id="content"><div class="info-line">로딩 중…</div></div>
+    </div>
+    <script>
+      let timer = null
+
+      function fmtMs(ms) {
+        if (ms < 1000) return ms + 'ms'
+        const s = Math.floor(ms / 1000)
+        if (s < 60) return s + '초'
+        const m = Math.floor(s / 60)
+        if (m < 60) return m + '분 ' + (s % 60) + '초'
+        const h = Math.floor(m / 60)
+        return h + '시간 ' + (m % 60) + '분'
+      }
+
+      function escape(s) { return String(s ?? '').replace(/</g, '&lt;') }
+
+      async function reload() {
+        if (!window.internalAPI) {
+          document.getElementById('content').innerHTML = '<div class="info-line">internalAPI 미주입</div>'
+          return
+        }
+        const m = await window.internalAPI.system.metrics()
+        if (!m) return
+        render(m)
+      }
+
+      function render(m) {
+        const memBudget = 250  // CLAUDE.md 의 빈 창 RSS 한도 250MB
+        const memClass = m.totals.memoryMB <= memBudget ? 'budget-ok'
+                       : m.totals.memoryMB <= memBudget * 2 ? 'budget-warn' : 'budget-over'
+        const html = ''
+          + '<div class="grid">'
+          + statBox('전체 메모리', m.totals.memoryMB.toLocaleString(), 'MB', memClass)
+          + statBox('프로세스', m.totals.processCount, '개')
+          + statBox('평균 CPU', m.totals.avgCpu, '%')
+          + statBox('가동 시간', fmtMs(m.uptime.appMs), '')
+          + '</div>'
+
+          + '<div class="grid">'
+          + statBox('탭 (총)', m.tabs.total, '개')
+          + statBox('활성', m.tabs.active, '개')
+          + statBox('💤 슬립', m.tabs.discarded, '개')
+          + statBox('슬립 임계', Math.round(m.sleep.thresholdMs / 60000), '분')
+          + '</div>'
+
+          + '<div class="row">'
+          + '<button class="btn primary" id="sweep">💤 지금 비활성 탭 슬립</button>'
+          + '<button class="btn" id="refresh">↻ 새로고침</button>'
+          + (m.sleep.enabled
+              ? '<span class="info-line" style="align-self:center;">자동 슬립 ON (' + Math.round(m.sleep.thresholdMs / 60000) + '분)</span>'
+              : '<span class="info-line" style="align-self:center;color:var(--warn);">자동 슬립 OFF — 설정에서 활성화</span>')
+          + '</div>'
+
+          + '<div class="section">'
+          + '<h3>1원칙 #1 — 가벼움 예산 (CLAUDE.md)</h3>'
+          + budgetLine('빈 창 RSS', '≤ 250MB', m.totals.memoryMB + ' MB', m.totals.memoryMB <= 250)
+          + budgetLine('휴식 시 CPU', '≤ 0.5%', m.totals.avgCpu + ' %', m.totals.avgCpu <= 0.5)
+          + budgetLine('백그라운드 슬립', '30분 비활성 → discard', m.sleep.enabled ? '✓ 활성' : '✗ 비활성', m.sleep.enabled)
+          + '</div>'
+
+          + '<div class="section">'
+          + '<h3>프로세스별 (' + m.processes.length + '개)</h3>'
+          + '<table>'
+          + '<thead><tr><th>PID</th><th>타입</th><th class="num">메모리 (MB)</th><th class="num">CPU %</th></tr></thead>'
+          + '<tbody>'
+          + m.processes.map((p) =>
+              '<tr><td>' + p.pid + '</td><td>' + escape(p.type) + (p.name ? ' · ' + escape(p.name) : '') + '</td>'
+              + '<td class="num">' + p.memoryMB.toLocaleString() + '</td>'
+              + '<td class="num">' + p.cpu + '</td></tr>'
+            ).join('')
+          + '</tbody></table></div>'
+
+          + '<div class="section">'
+          + '<h3>환경</h3>'
+          + '<table><tbody>'
+          + envRow('앱 버전', m.app.version)
+          + envRow('Electron', m.app.electronVersion)
+          + envRow('Chromium', m.app.chromeVersion)
+          + envRow('Node', m.app.nodeVersion)
+          + envRow('플랫폼', m.app.platform + ' ' + m.app.arch)
+          + '</tbody></table></div>'
+
+        document.getElementById('content').innerHTML = html
+        document.getElementById('sweep').addEventListener('click', async () => {
+          const r = await window.internalAPI.system.sweepTabSleep()
+          alert('비활성 탭 ' + r.discarded + '개 슬립 (스킵: ' + r.skipped + '개)')
+          reload()
+        })
+        document.getElementById('refresh').addEventListener('click', reload)
+      }
+
+      function statBox(label, value, unit, cls) {
+        return '<div class="stat ' + (cls || '') + '">'
+          + '<div class="label">' + label + '</div>'
+          + '<div class="value">' + value + (unit ? '<span class="unit">' + unit + '</span>' : '') + '</div>'
+          + '</div>'
+      }
+
+      function budgetLine(name, target, current, met) {
+        return '<div class="budget-line">'
+          + '<span>' + name + ' <span class="info-line">— 목표: ' + target + '</span></span>'
+          + '<span class="' + (met ? 'met' : 'over') + '">' + (met ? '✓ ' : '⚠ ') + current + '</span>'
+          + '</div>'
+      }
+
+      function envRow(k, v) {
+        return '<tr><td style="color:var(--muted);width:30%;">' + k + '</td><td><code>' + escape(v) + '</code></td></tr>'
+      }
+
+      reload()
+      timer = setInterval(reload, 1000)
+      window.addEventListener('beforeunload', () => { if (timer) clearInterval(timer) })
+    </script>
+  </body>
+</html>

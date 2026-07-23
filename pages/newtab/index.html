@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>새 탭</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --soft: rgba(52,120,246,.08); }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9;
+          --hover: #25252C; --soft: rgba(90,147,249,.10); }
+      }
+      html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
+      .wrap {
+        display: flex; flex-direction: column; align-items: center;
+        padding: 8vh 24px 32px; min-height: 100%; box-sizing: border-box;
+      }
+      .clock {
+        font-size: 64px; font-weight: 200; letter-spacing: -2px;
+        margin: 0; line-height: 1; font-feature-settings: 'tnum' 1;
+      }
+      .date { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
+      .greet { font-size: 14px; color: var(--muted); margin-top: 4px; }
+      .search { width: 600px; max-width: 92vw; margin: 32px 0 32px; position: relative; }
+      input.q {
+        width: 100%; height: 50px; padding: 0 56px 0 22px; box-sizing: border-box;
+        border: 1px solid var(--border); border-radius: 25px;
+        background: var(--card); color: inherit; font-size: 15px; outline: none;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        transition: border-color .15s, box-shadow .15s;
+      }
+      input.q:focus { border-color: var(--accent); box-shadow: 0 2px 14px rgba(52,120,246,.18); }
+      .search .ico {
+        position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
+        color: var(--muted); pointer-events: none;
+      }
+      .grid-row { width: 760px; max-width: 92vw; margin-top: 24px; }
+      .section-head {
+        display: flex; align-items: center; justify-content: space-between;
+        margin: 0 4px 10px;
+      }
+      .section-title {
+        font-size: 11px; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.5px;
+      }
+      .section-action {
+        font-size: 11px; color: var(--accent); text-decoration: none;
+      }
+      .top-grid {
+        display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;
+      }
+      @media (max-width: 760px) { .top-grid { grid-template-columns: repeat(4, 1fr); } }
+      @media (max-width: 480px) { .top-grid { grid-template-columns: repeat(3, 1fr); } }
+      .site {
+        display: flex; flex-direction: column; align-items: center;
+        padding: 16px 8px 12px; border-radius: 14px;
+        background: var(--card); border: 1px solid var(--border);
+        cursor: pointer; text-decoration: none; color: inherit;
+        transition: transform .12s ease, border-color .12s ease, background .12s ease;
+        position: relative;
+      }
+      .site:hover { border-color: var(--accent); background: var(--soft); }
+      @media (hover: hover) and (pointer: fine) { .site:hover { transform: translateY(-2px); } }
+      .site .ico {
+        width: 42px; height: 42px; border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--bg); color: var(--accent);
+        font-size: 20px; font-weight: 600; margin-bottom: 9px;
+        overflow: hidden;
+      }
+      .site .ico img { width: 26px; height: 26px; }
+      .site .lbl {
+        font-size: 11px; max-width: 100%;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .site .host { font-size: 10px; color: var(--muted); margin-top: 1px; }
+      .empty { text-align: center; padding: 32px; color: var(--muted); font-size: 12px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+      .empty-illust { display: block; width: 160px; max-width: 50%; margin: 0 auto 12px; opacity: .92; }
+      .quick-row {
+        display: flex; gap: 10px; flex-wrap: wrap;
+      }
+      .quick-chip {
+        padding: 6px 12px; border-radius: 14px;
+        background: var(--card); border: 1px solid var(--border);
+        font-size: 12px; color: inherit; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 6px;
+        transition: border-color .12s, background .12s;
+      }
+      .quick-chip:hover { border-color: var(--accent); background: var(--soft); }
+      .quick-chip img { width: 14px; height: 14px; }
+      .recent-list {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+      }
+      @media (max-width: 760px) { .recent-list { grid-template-columns: 1fr; } }
+      .recent-item {
+        background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+        padding: 8px 12px; font-size: 12px; color: inherit; text-decoration: none;
+        display: flex; align-items: center; gap: 8px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .recent-item:hover { border-color: var(--accent); background: var(--soft); }
+      .recent-item .host { color: var(--muted); font-size: 10px; flex-shrink: 0; }
+      .footer-tips {
+        margin-top: 36px; padding: 12px 16px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        max-width: 720px; width: 92vw; box-sizing: border-box;
+        font-size: 11px; color: var(--muted);
+        display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+      }
+      .footer-tips kbd {
+        display: inline-block; padding: 1px 6px; margin: 0 2px;
+        background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+        font-family: 'Menlo', monospace; font-size: 10px; color: var(--fg);
+      }
+      /* 법적 고지 링크 (구글 홈처럼 하단에) */
+      .footer-legal {
+        margin-top: 14px; display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+        font-size: 12px;
+      }
+      .footer-legal a {
+        color: var(--muted); text-decoration: none;
+      }
+      .footer-legal a:hover { color: var(--accent); }
+      .workspace-bar {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 4px 10px; border-radius: 10px;
+        background: var(--soft); color: var(--accent);
+        font-size: 11px; margin-top: 6px;
+      }
+      .workspace-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+      /* ── 위젯 (날씨 · 뉴스) ── */
+      .widget-row { width: 760px; max-width: 92vw; margin-top: 24px;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 640px) { .widget-row { grid-template-columns: 1fr; } }
+      .widget {
+        background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 18px 20px; box-sizing: border-box; min-height: 140px;
+      }
+      .widget-head {
+        display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+      }
+      .widget-head .t { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+      .widget-head .a { font-size: 11px; color: var(--accent); text-decoration: none; cursor: pointer; }
+      .wx-main { display: flex; align-items: center; gap: 14px; }
+      .wx-icon { font-size: 46px; line-height: 1; }
+      .wx-temp { font-size: 38px; font-weight: 300; letter-spacing: -1px; line-height: 1; font-feature-settings: 'tnum' 1; }
+      .wx-meta { display: flex; flex-direction: column; gap: 2px; }
+      .wx-place { font-size: 13px; font-weight: 500; }
+      .wx-desc { font-size: 12px; color: var(--muted); }
+      .wx-days { display: flex; gap: 14px; margin-top: 14px; }
+      .wx-day { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); }
+      .wx-day .d-ico { font-size: 18px; }
+      .wx-day .d-t { color: var(--fg); font-feature-settings: 'tnum' 1; }
+      .news-list { display: flex; flex-direction: column; gap: 2px; }
+      .news-item {
+        display: block; font-size: 12.5px; color: inherit; text-decoration: none;
+        padding: 5px 0; border-bottom: 1px solid var(--border);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        line-height: 1.35;
+      }
+      .news-item:last-child { border-bottom: none; }
+      .news-item:hover { color: var(--accent); }
+      .news-item .src { color: var(--muted); font-size: 10px; margin-left: 6px; }
+      .widget .ph { color: var(--muted); font-size: 12px; padding: 8px 0; }
+
+      /* 2번째 위젯 행: 메모 · 할 일 · 환율 */
+      .widget-row2 { width: 760px; max-width: 92vw; margin-top: 12px;
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+      @media (max-width: 760px) { .widget-row2 { grid-template-columns: 1fr 1fr; } }
+      @media (max-width: 480px) { .widget-row2 { grid-template-columns: 1fr; } }
+      .widget.compact { min-height: 132px; padding: 14px 16px; display: flex; flex-direction: column; }
+      .memo-area {
+        flex: 1; width: 100%; box-sizing: border-box; resize: none; border: none; outline: none;
+        background: transparent; color: inherit; font: inherit; font-size: 12.5px; line-height: 1.5;
+        min-height: 80px;
+      }
+      .memo-area::placeholder { color: var(--muted); }
+      .save-hint { font-size: 10px; color: var(--muted); height: 12px; margin-top: 4px; }
+      .todo-add {
+        width: 100%; box-sizing: border-box; height: 30px; padding: 0 10px; margin-bottom: 8px;
+        border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: inherit;
+        font-size: 12px; outline: none;
+      }
+      .todo-add:focus { border-color: var(--accent); }
+      .todo-list { flex: 1; overflow-y: auto; max-height: 120px; display: flex; flex-direction: column; gap: 2px; }
+      .todo-item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 3px 0; }
+      .todo-item .box {
+        width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--border);
+        cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        font-size: 11px; color: #fff; line-height: 1;
+      }
+      .todo-item.done .box { background: var(--accent); border-color: var(--accent); }
+      .todo-item.done .txt { color: var(--muted); text-decoration: line-through; }
+      .todo-item .txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+      .todo-item .del { color: var(--muted); cursor: pointer; opacity: 0; font-size: 13px; flex-shrink: 0; }
+      .todo-item:hover .del { opacity: 1; }
+      .todo-item .del:hover { color: #E5484D; }
+      .fx-list { display: flex; flex-direction: column; gap: 6px; }
+      .fx-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 13px; }
+      .fx-row .code { color: var(--muted); font-size: 11px; }
+      .fx-row .val { font-feature-settings: 'tnum' 1; font-weight: 500; }
+      .fx-base { font-size: 10px; color: var(--muted); margin-top: 8px; }
+      .rl-list { display: flex; flex-direction: column; gap: 2px; }
+      .rl-w-item {
+        display: flex; align-items: center; gap: 8px; font-size: 12.5px;
+        color: inherit; text-decoration: none; padding: 5px 0;
+        border-bottom: 1px solid var(--border);
+        overflow: hidden;
+      }
+      .rl-w-item:last-child { border-bottom: none; }
+      .rl-w-item:hover .rl-w-title { color: var(--accent); }
+      .rl-w-item img { width: 15px; height: 15px; flex: 0 0 15px; border-radius: 3px; }
+      .rl-w-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .rl-w-done {
+        flex: 0 0 auto; border: none; background: transparent; color: var(--muted);
+        cursor: pointer; font-size: 13px; opacity: 0; border-radius: 4px; width: 20px; height: 20px;
+      }
+      .rl-w-item:hover .rl-w-done { opacity: 1; }
+      .rl-w-done:hover { background: var(--soft); color: var(--accent); }
+
+      /* 바로가기 (speed dial) 편집 */
+      .site .actions {
+        position: absolute; top: 4px; right: 4px; display: none; gap: 2px;
+      }
+      .site:hover .actions { display: flex; }
+      .site .act {
+        width: 18px; height: 18px; border-radius: 5px; border: none;
+        background: var(--hover); color: var(--muted); cursor: pointer;
+        font-size: 10px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0;
+      }
+      .site .act:hover { background: var(--accent); color: #fff; }
+      .site .act.rm:hover { background: #E5484D; }
+      .site.dragging { opacity: .4; }
+      .site.drop-before { box-shadow: -2px 0 0 var(--accent); }
+      .site.drop-after { box-shadow: 2px 0 0 var(--accent); }
+      .site.add {
+        border-style: dashed; color: var(--muted); justify-content: center;
+      }
+      .site.add .ico { background: transparent; color: var(--muted); }
+      .site.add:hover { color: var(--accent); }
+      .sc-modal {
+        position: fixed; inset: 0; background: rgba(0,0,0,.35);
+        display: none; align-items: center; justify-content: center; z-index: 50;
+      }
+      .sc-modal.open { display: flex; }
+      .sc-dialog {
+        background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 20px; width: 340px; max-width: 90vw; box-shadow: 0 12px 40px rgba(0,0,0,.25);
+      }
+      .sc-dialog h3 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+      .sc-dialog label { display: block; font-size: 11px; color: var(--muted); margin: 10px 0 4px; }
+      .sc-dialog input {
+        width: 100%; box-sizing: border-box; height: 36px; padding: 0 12px;
+        border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: inherit;
+        font-size: 13px; outline: none;
+      }
+      .sc-dialog input:focus { border-color: var(--accent); }
+      .sc-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+      .sc-btn {
+        height: 34px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border);
+        background: var(--card); color: inherit; font-size: 13px; cursor: pointer;
+      }
+      .sc-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .sc-btn:hover { border-color: var(--accent); }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1 class="clock" id="clock">--:--</h1>
+      <div class="date" id="date">불러오는 중…</div>
+      <div class="greet" id="greet"></div>
+      <div class="workspace-bar" id="ws-bar" style="display:none;"></div>
+
+      <form class="search" id="search-form">
+        <input id="q" class="q" placeholder="검색하거나 URL · 명령 입력  (Ctrl+Shift+P = 명령 팔레트)" autofocus autocomplete="off" />
+        <span class="ico">🔍</span>
+      </form>
+
+      <div class="widget-row" id="widget-row" style="display:none;">
+        <div class="widget" id="wx-card" style="display:none;">
+          <div class="widget-head">
+            <span class="t">날씨</span>
+            <span class="a" id="wx-refresh">새로고침</span>
+          </div>
+          <div id="wx-body"><div class="ph">불러오는 중…</div></div>
+        </div>
+        <div class="widget" id="news-card" style="display:none;">
+          <div class="widget-head">
+            <span class="t" id="news-title">뉴스</span>
+            <a class="a" href="https://news.google.com/?hl=ko&gl=KR&ceid=KR:ko">더 보기 →</a>
+          </div>
+          <div id="news-body"><div class="ph">불러오는 중…</div></div>
+        </div>
+      </div>
+
+      <div class="widget-row2" id="widget-row2" style="display:none;">
+        <div class="widget compact" id="memo-card" style="display:none;">
+          <div class="widget-head"><span class="t">메모</span></div>
+          <textarea class="memo-area" id="memo-area" placeholder="여기에 자유롭게 메모하세요…"></textarea>
+          <div class="save-hint" id="memo-hint"></div>
+        </div>
+        <div class="widget compact" id="todo-card" style="display:none;">
+          <div class="widget-head"><span class="t">할 일</span></div>
+          <input class="todo-add" id="todo-add" placeholder="할 일 추가 후 Enter" autocomplete="off" />
+          <div class="todo-list" id="todo-list"></div>
+        </div>
+        <div class="widget compact" id="fx-card" style="display:none;">
+          <div class="widget-head">
+            <span class="t">환율</span>
+            <span class="a" id="fx-refresh">새로고침</span>
+          </div>
+          <div id="fx-body"><div class="ph">불러오는 중…</div></div>
+        </div>
+        <div class="widget compact" id="rl-card" style="display:none;">
+          <div class="widget-head">
+            <span class="t">읽기 목록</span>
+            <span class="a" id="rl-count"></span>
+          </div>
+          <div id="rl-body"><div class="ph">불러오는 중…</div></div>
+        </div>
+      </div>
+
+      <div class="grid-row" id="shortcut-row" style="display:none;">
+        <div class="section-head">
+          <div class="section-title">바로가기</div>
+          <a class="section-action" id="sc-add-link">+ 추가</a>
+        </div>
+        <div class="top-grid" id="shortcut-grid"></div>
+      </div>
+
+      <div class="grid-row" id="bookmark-row" style="display:none;">
+        <div class="section-head">
+          <div class="section-title">북마크 바</div>
+          <a class="section-action" href="browser://bookmarks">전체 관리 →</a>
+        </div>
+        <div class="quick-row" id="bookmark-row-list"></div>
+      </div>
+
+      <div class="grid-row">
+        <div class="section-head">
+          <div class="section-title">자주 가는 사이트</div>
+          <a class="section-action" href="browser://history">방문 기록 →</a>
+        </div>
+        <div class="top-grid" id="top-grid"></div>
+      </div>
+
+      <div class="grid-row" id="recent-row" style="display:none;">
+        <div class="section-head">
+          <div class="section-title">최근 방문</div>
+        </div>
+        <div class="recent-list" id="recent-list"></div>
+      </div>
+
+      <div class="footer-tips">
+        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> 명령 팔레트</span>
+        <span><kbd>Ctrl</kbd>+<kbd>\</kbd> 분할 화면</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> 확장</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> 사이트 다크</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> 사이트 광고차단</span>
+      </div>
+
+      <div class="footer-legal">
+        <a href="browser://settings">설정</a>
+        <a href="browser://privacy">개인정보처리방침</a>
+        <a href="browser://terms">약관</a>
+        <a href="browser://licenses">오픈소스 라이선스</a>
+      </div>
+    </div>
+
+    <div class="sc-modal" id="sc-modal">
+      <div class="sc-dialog">
+        <h3 id="sc-modal-title">바로가기 추가</h3>
+        <label for="sc-name">이름</label>
+        <input id="sc-name" placeholder="예: 유튜브" autocomplete="off" />
+        <label for="sc-url">주소</label>
+        <input id="sc-url" placeholder="예: youtube.com" autocomplete="off" />
+        <div class="sc-actions">
+          <button class="sc-btn" id="sc-cancel">취소</button>
+          <button class="sc-btn primary" id="sc-save">저장</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      function pad(n) { return n.toString().padStart(2, '0') }
+      function tickClock() {
+        const now = new Date()
+        const h = now.getHours()
+        const m = now.getMinutes()
+        document.getElementById('clock').textContent = `${pad(h)}:${pad(m)}`
+        const days = ['일','월','화','수','목','금','토']
+        const month = now.getMonth() + 1
+        const date = now.getDate()
+        document.getElementById('date').textContent = `${now.getFullYear()}년 ${month}월 ${date}일 · ${days[now.getDay()]}요일`
+        const greet = h < 5 ? '늦은 밤이에요' : h < 12 ? '좋은 아침이에요' : h < 18 ? '좋은 오후에요' : '편안한 저녁이에요'
+        document.getElementById('greet').textContent = greet
+      }
+      tickClock()
+      setInterval(tickClock, 1000 * 30)
+
+      const form = document.getElementById('search-form')
+      const q = document.getElementById('q')
+      form.addEventListener('submit', (e) => {
+        e.preventDefault()
+        const v = q.value.trim()
+        if (!v) return
+        const url = /^[a-z]+:\/\//i.test(v) ? v
+          : /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}`
+          : `https://www.google.com/search?q=${encodeURIComponent(v)}`
+        location.href = url
+      })
+
+      function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
+      function letter(s) { const t = (s || '?').trim(); return t.charAt(0).toUpperCase() || '?' }
+      function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } }
+      function faviconUrl(u) {
+        try { return `https://www.google.com/s2/favicons?domain=${new URL(u).hostname}&sz=64` } catch { return '' }
+      }
+
+      async function loadTop() {
+        const grid = document.getElementById('top-grid')
+        if (!window.internalAPI) {
+          grid.innerHTML = '<div class="empty">internalAPI 미주입</div>'
+          return
+        }
+        const sites = await window.internalAPI.history.topSites(12)
+        if (!sites || sites.length === 0) {
+          grid.outerHTML = '<div class="empty"><img class="empty-illust" src="empty.png" alt="">아직 방문 이력이 없습니다. 사이트를 둘러보면 여기에 카드가 생깁니다.</div>'
+          return
+        }
+        grid.innerHTML = sites.map((s) => {
+          const host = hostOf(s.url)
+          const title = escape(s.title || host)
+          const fv = faviconUrl(s.url)
+          return `<a class="site" href="${escape(s.url)}">
+            <div class="ico">${fv ? `<img src="${fv}" alt=""/>` : letter(host)}</div>
+            <div class="lbl">${title}</div>
+            <div class="host">${escape(host)}</div>
+          </a>`
+        }).join('')
+      }
+
+      async function loadBookmarks() {
+        if (!window.internalAPI) return
+        try {
+          const tree = await window.internalAPI.bookmarks.list()
+          if (!tree || !tree.flat) return
+          // 폴더 없이 루트에 있는 북마크 우선 (북마크 바)
+          const root = tree.flat.filter((b) => b.folderId == null).slice(0, 10)
+          if (root.length === 0) return
+          const row = document.getElementById('bookmark-row')
+          const list = document.getElementById('bookmark-row-list')
+          row.style.display = ''
+          list.innerHTML = root.map((b) => {
+            const fv = faviconUrl(b.url)
+            return `<a class="quick-chip" href="${escape(b.url)}">${fv ? `<img src="${fv}" alt=""/>` : ''}${escape(b.title || hostOf(b.url))}</a>`
+          }).join('')
+        } catch { /* ignore */ }
+      }
+
+      async function loadRecent() {
+        if (!window.internalAPI) return
+        try {
+          const recent = await window.internalAPI.history.recent(8)
+          if (!recent || recent.length === 0) return
+          const row = document.getElementById('recent-row')
+          const list = document.getElementById('recent-list')
+          row.style.display = ''
+          list.innerHTML = recent.map((h) => {
+            const host = hostOf(h.url)
+            const fv = faviconUrl(h.url)
+            return `<a class="recent-item" href="${escape(h.url)}">
+              ${fv ? `<img src="${fv}" alt="" style="width:14px;height:14px;flex-shrink:0;"/>` : ''}
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${escape(h.title || host)}</span>
+              <span class="host">${escape(host)}</span>
+            </a>`
+          }).join('')
+        } catch { /* ignore */ }
+      }
+
+      async function loadWorkspace() {
+        if (!window.internalAPI || !window.internalAPI.workspace) return
+        try {
+          const state = await window.internalAPI.workspace.state()
+          const ws = state.workspaces.find((w) => w.id === state.activeId)
+          if (!ws) return
+          const colors = { red: '#E5484D', orange: '#F76808', yellow: '#FFB224', green: '#30A46C',
+            blue: '#3478F6', purple: '#8E4EC6', pink: '#E93D82', gray: '#8E8E93' }
+          const bar = document.getElementById('ws-bar')
+          bar.style.display = ''
+          bar.innerHTML = `<span class="workspace-dot" style="background:${colors[ws.color] || colors.gray};"></span>${escape(ws.name)}`
+        } catch { /* ignore */ }
+      }
+
+      const NEWS_TOPIC_LABEL = {
+        headlines: '주요 뉴스', world: '세계', nation: '국내', business: '경제',
+        technology: '기술', entertainment: '연예', sports: '스포츠', science: '과학', health: '건강',
+      }
+
+      function renderWeather(w) {
+        const body = document.getElementById('wx-body')
+        if (!w) { body.innerHTML = '<div class="ph">날씨를 불러올 수 없습니다.</div>'; return }
+        const days = (w.daily || []).map((d) =>
+          `<div class="wx-day"><span>${escape(d.label)}</span><span class="d-ico">${d.icon}</span>`
+          + `<span class="d-t">${d.max}°/${d.min}°</span></div>`).join('')
+        body.innerHTML =
+          `<div class="wx-main">
+             <span class="wx-icon">${w.icon}</span>
+             <span class="wx-temp">${w.temp}${escape(w.unit)}</span>
+             <div class="wx-meta">
+               <span class="wx-place">${escape(w.place)}</span>
+               <span class="wx-desc">${escape(w.desc)} · 바람 ${w.wind}</span>
+             </div>
+           </div>
+           <div class="wx-days">${days}</div>`
+      }
+
+      function renderNews(n) {
+        const body = document.getElementById('news-body')
+        const titleEl = document.getElementById('news-title')
+        if (n && titleEl) titleEl.textContent = '뉴스 · ' + (NEWS_TOPIC_LABEL[n.topic] || '주요 뉴스')
+        if (!n || !n.items || n.items.length === 0) {
+          body.innerHTML = '<div class="ph">뉴스를 불러올 수 없습니다.</div>'; return
+        }
+        body.innerHTML = '<div class="news-list">' + n.items.map((it) =>
+          `<a class="news-item" href="${escape(it.link)}" title="${escape(it.title)}">${escape(it.title)}`
+          + (it.source ? `<span class="src">${escape(it.source)}</span>` : '') + '</a>').join('') + '</div>'
+      }
+
+      function renderFx(f) {
+        const body = document.getElementById('fx-body')
+        if (!f || !f.rates || f.rates.length === 0) {
+          body.innerHTML = '<div class="ph">환율을 불러올 수 없습니다.</div>'; return
+        }
+        const fmt = (v) => v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2)
+        const rows = f.rates.map((r) =>
+          `<div class="fx-row"><span class="code">${escape(r.code)}</span><span class="val">${fmt(r.value)}</span></div>`).join('')
+        body.innerHTML = '<div class="fx-list">' + rows + '</div>'
+          + `<div class="fx-base">기준 1 ${escape(f.base)}${f.date ? ' · ' + escape(f.date) : ''}</div>`
+      }
+
+      // ── 메모 ──
+      let memoTimer = null
+      function initMemo() {
+        const area = document.getElementById('memo-area')
+        const hint = document.getElementById('memo-hint')
+        window.internalAPI.widgets.dataGet('notes').then((v) => { if (typeof v === 'string') area.value = v }).catch(() => {})
+        area.addEventListener('input', () => {
+          hint.textContent = '저장 중…'
+          if (memoTimer) clearTimeout(memoTimer)
+          memoTimer = setTimeout(async () => {
+            try { await window.internalAPI.widgets.dataSet('notes', area.value); hint.textContent = '저장됨 ✓' }
+            catch { hint.textContent = '저장 실패' }
+            setTimeout(() => { hint.textContent = '' }, 1500)
+          }, 500)
+        })
+      }
+
+      // ── 할 일 ──
+      let todos = []
+      function renderTodos() {
+        const list = document.getElementById('todo-list')
+        if (todos.length === 0) { list.innerHTML = '<div class="ph">할 일이 없습니다.</div>'; return }
+        list.innerHTML = todos.map((t) =>
+          `<div class="todo-item${t.done ? ' done' : ''}" data-id="${t.id}">`
+          + `<span class="box">${t.done ? '✓' : ''}</span>`
+          + `<span class="txt">${escape(t.text)}</span>`
+          + '<span class="del">✕</span></div>').join('')
+        list.querySelectorAll('.todo-item').forEach((el) => {
+          const id = el.dataset.id
+          el.querySelector('.box').addEventListener('click', () => {
+            const t = todos.find((x) => String(x.id) === id); if (t) { t.done = !t.done; saveTodos(); renderTodos() }
+          })
+          el.querySelector('.del').addEventListener('click', () => {
+            todos = todos.filter((x) => String(x.id) !== id); saveTodos(); renderTodos()
+          })
+        })
+      }
+      function saveTodos() { window.internalAPI.widgets.dataSet('todos', todos).catch(() => {}) }
+      function initTodo() {
+        window.internalAPI.widgets.dataGet('todos').then((v) => {
+          if (Array.isArray(v)) todos = v.filter((t) => t && typeof t.text === 'string')
+          renderTodos()
+        }).catch(() => renderTodos())
+        const input = document.getElementById('todo-add')
+        input.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return
+          const text = input.value.trim()
+          if (!text) return
+          todos.push({ id: Date.now() + '-' + Math.floor(Math.random() * 1000), text, done: false })
+          input.value = ''
+          saveTodos(); renderTodos()
+        })
+      }
+
+      // ── 읽기 목록 위젯 ──
+      function renderReadLater(items) {
+        const body = document.getElementById('rl-body')
+        const countEl = document.getElementById('rl-count')
+        const unread = (items || []).filter((x) => !x.read)
+        if (countEl) countEl.textContent = unread.length > 0 ? `안 읽음 ${unread.length}` : ''
+        const show = unread.slice(0, 6)
+        if (show.length === 0) {
+          body.innerHTML = '<div class="ph">저장된 페이지가 없습니다. 주소창 옆 📖 로 추가하세요.</div>'
+          return
+        }
+        body.innerHTML = '<div class="rl-list">' + show.map((it) => {
+          const host = hostOf(it.url)
+          const fv = it.favicon || faviconUrl(it.url)
+          return `<a class="rl-w-item" href="${escape(it.url)}" data-id="${escape(it.id)}" title="${escape(it.url)}">
+            ${fv ? `<img src="${fv}" alt=""/>` : ''}
+            <span class="rl-w-title">${escape(it.title || host)}</span>
+            <button class="rl-w-done" data-done="${escape(it.id)}" title="읽음으로 표시">✓</button>
+          </a>`
+        }).join('') + '</div>'
+        body.querySelectorAll('.rl-w-item').forEach((el) => {
+          // 클릭해 열면 읽음 처리
+          el.addEventListener('click', () => {
+            const id = el.dataset.id
+            if (id) window.internalAPI.readlater.setRead(id, true).catch(() => {})
+          })
+        })
+        body.querySelectorAll('[data-done]').forEach((b) => {
+          b.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation()
+            window.internalAPI.readlater.setRead(b.dataset.done, true).catch(() => {})
+          })
+        })
+      }
+
+      async function loadWidgets() {
+        if (!window.internalAPI || !window.internalAPI.widgets) return
+        let cfg = {}
+        try { cfg = (await window.internalAPI.settings.get('widgets')) || {} } catch { /* defaults */ }
+        const showWx = cfg.weatherEnabled !== false
+        const showNews = cfg.newsEnabled !== false
+        if (showWx || showNews) {
+          document.getElementById('widget-row').style.display = ''
+          if (showWx) {
+            document.getElementById('wx-card').style.display = ''
+            window.internalAPI.widgets.weather().then(renderWeather).catch(() => renderWeather(null))
+          }
+          if (showNews) {
+            document.getElementById('news-card').style.display = ''
+            window.internalAPI.widgets.news().then(renderNews).catch(() => renderNews(null))
+          }
+        }
+
+        const showMemo = cfg.notesEnabled !== false
+        const showTodo = cfg.todoEnabled !== false
+        const showFx = cfg.fxEnabled === true
+        const showRl = cfg.readLaterEnabled !== false
+        if (showMemo || showTodo || showFx || showRl) {
+          document.getElementById('widget-row2').style.display = ''
+          if (showMemo) { document.getElementById('memo-card').style.display = ''; initMemo() }
+          if (showTodo) { document.getElementById('todo-card').style.display = ''; initTodo() }
+          if (showFx) {
+            document.getElementById('fx-card').style.display = ''
+            window.internalAPI.widgets.fx().then(renderFx).catch(() => renderFx(null))
+          }
+          if (showRl && window.internalAPI.readlater) {
+            document.getElementById('rl-card').style.display = ''
+            window.internalAPI.readlater.list().then(renderReadLater).catch(() => renderReadLater([]))
+            window.internalAPI.readlater.onChanged(renderReadLater)
+          }
+        }
+      }
+
+      document.getElementById('wx-refresh').addEventListener('click', () => {
+        const body = document.getElementById('wx-body')
+        body.innerHTML = '<div class="ph">불러오는 중…</div>'
+        if (window.internalAPI && window.internalAPI.widgets)
+          window.internalAPI.widgets.weather(true).then(renderWeather).catch(() => renderWeather(null))
+      })
+
+      document.getElementById('fx-refresh').addEventListener('click', () => {
+        const body = document.getElementById('fx-body')
+        body.innerHTML = '<div class="ph">불러오는 중…</div>'
+        if (window.internalAPI && window.internalAPI.widgets)
+          window.internalAPI.widgets.fx(true).then(renderFx).catch(() => renderFx(null))
+      })
+
+      // ── 바로가기 (speed dial) ──
+      let shortcuts = []
+      let scEditId = null   // null = 추가 모드, 값 있으면 편집 모드
+      let scDragIdx = -1
+
+      function normalizeUrl(v) {
+        const s = String(v || '').trim()
+        if (!s) return ''
+        return /^[a-z]+:\/\//i.test(s) ? s : 'https://' + s.replace(/^\/+/, '')
+      }
+      function genId() { return Date.now() + '-' + Math.floor(Math.random() * 10000) }
+      function saveShortcuts() { window.internalAPI.widgets.dataSet('shortcuts', shortcuts).catch(() => {}) }
+
+      function renderShortcuts() {
+        const grid = document.getElementById('shortcut-grid')
+        const tiles = shortcuts.map((s, i) => {
+          const host = hostOf(s.url)
+          const title = escape(s.title || host)
+          const fv = faviconUrl(s.url)
+          return `<a class="site" href="${escape(s.url)}" draggable="true" data-idx="${i}" data-id="${escape(s.id)}">
+            <div class="actions">
+              <button class="act edit" data-edit="${escape(s.id)}" title="편집">✎</button>
+              <button class="act rm" data-rm="${escape(s.id)}" title="삭제">✕</button>
+            </div>
+            <div class="ico">${fv ? `<img src="${fv}" alt=""/>` : letter(host)}</div>
+            <div class="lbl">${title}</div>
+            <div class="host">${escape(host)}</div>
+          </a>`
+        }).join('')
+        const addTile = `<div class="site add" id="sc-add-tile" title="바로가기 추가">
+          <div class="ico">＋</div><div class="lbl">추가</div></div>`
+        grid.innerHTML = tiles + addTile
+
+        grid.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', (e) => {
+          e.preventDefault(); e.stopPropagation(); openScModal(b.dataset.edit)
+        }))
+        grid.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', (e) => {
+          e.preventDefault(); e.stopPropagation()
+          shortcuts = shortcuts.filter((x) => x.id !== b.dataset.rm); saveShortcuts(); renderShortcuts()
+        }))
+        const addTileEl = document.getElementById('sc-add-tile')
+        if (addTileEl) addTileEl.addEventListener('click', () => openScModal(null))
+
+        // 드래그 정렬
+        grid.querySelectorAll('.site[draggable="true"]').forEach((el) => {
+          el.addEventListener('dragstart', (e) => {
+            scDragIdx = Number(el.dataset.idx); el.classList.add('dragging')
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', el.dataset.id) } catch {}
+          })
+          el.addEventListener('dragend', () => {
+            el.classList.remove('dragging')
+            grid.querySelectorAll('.site').forEach((x) => x.classList.remove('drop-before', 'drop-after'))
+          })
+          el.addEventListener('dragover', (e) => {
+            e.preventDefault()
+            const r = el.getBoundingClientRect()
+            const after = e.clientX > r.left + r.width / 2
+            el.classList.toggle('drop-after', after)
+            el.classList.toggle('drop-before', !after)
+          })
+          el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after'))
+          el.addEventListener('drop', (e) => {
+            e.preventDefault()
+            const targetIdx = Number(el.dataset.idx)
+            const r = el.getBoundingClientRect()
+            let to = e.clientX > r.left + r.width / 2 ? targetIdx + 1 : targetIdx
+            if (scDragIdx < 0 || scDragIdx === targetIdx) return
+            const [moved] = shortcuts.splice(scDragIdx, 1)
+            if (scDragIdx < to) to--
+            shortcuts.splice(to, 0, moved)
+            scDragIdx = -1
+            saveShortcuts(); renderShortcuts()
+          })
+        })
+      }
+
+      function openScModal(id) {
+        scEditId = id
+        const sc = id ? shortcuts.find((x) => x.id === id) : null
+        document.getElementById('sc-modal-title').textContent = id ? '바로가기 편집' : '바로가기 추가'
+        document.getElementById('sc-name').value = sc ? sc.title : ''
+        document.getElementById('sc-url').value = sc ? sc.url : ''
+        document.getElementById('sc-modal').classList.add('open')
+        setTimeout(() => document.getElementById('sc-name').focus(), 30)
+      }
+      function closeScModal() { document.getElementById('sc-modal').classList.remove('open'); scEditId = null }
+      function submitScModal() {
+        const name = document.getElementById('sc-name').value.trim()
+        const url = normalizeUrl(document.getElementById('sc-url').value)
+        if (!url) { document.getElementById('sc-url').focus(); return }
+        const title = name || hostOf(url)
+        if (scEditId) {
+          const sc = shortcuts.find((x) => x.id === scEditId)
+          if (sc) { sc.title = title; sc.url = url }
+        } else {
+          shortcuts.push({ id: genId(), title, url })
+        }
+        saveShortcuts(); renderShortcuts(); closeScModal()
+      }
+
+      async function loadShortcuts() {
+        if (!window.internalAPI || !window.internalAPI.widgets) return
+        document.getElementById('shortcut-row').style.display = ''
+        try {
+          const v = await window.internalAPI.widgets.dataGet('shortcuts')
+          if (Array.isArray(v)) shortcuts = v.filter((s) => s && typeof s.url === 'string').map((s) => ({
+            id: s.id || genId(), title: typeof s.title === 'string' ? s.title : '', url: s.url,
+          }))
+        } catch { /* defaults empty */ }
+        renderShortcuts()
+      }
+
+      document.getElementById('sc-add-link').addEventListener('click', (e) => { e.preventDefault(); openScModal(null) })
+      document.getElementById('sc-cancel').addEventListener('click', closeScModal)
+      document.getElementById('sc-save').addEventListener('click', submitScModal)
+      document.getElementById('sc-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'sc-modal') closeScModal()
+      })
+      ;['sc-name', 'sc-url'].forEach((id) => document.getElementById(id).addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitScModal()
+        if (e.key === 'Escape') closeScModal()
+      }))
+
+      loadTop()
+      loadBookmarks()
+      loadRecent()
+      loadWorkspace()
+      loadWidgets()
+      loadShortcuts()
+      if (window.internalAPI) {
+        window.internalAPI.history.onChanged(() => { loadTop(); loadRecent() })
+        if (window.internalAPI.bookmarks) window.internalAPI.bookmarks.onChanged(() => loadBookmarks())
+        if (window.internalAPI.workspace) window.internalAPI.workspace.onChanged(() => loadWorkspace())
+      }
+    </script>
+  </body>
+</html>

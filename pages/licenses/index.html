@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>오픈소스 라이선스</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6; --hover: #EDEDEF; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C; } }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
+      .wrap { max-width: 880px; margin: 0 auto; padding: 40px 28px 80px; }
+      h1 { font-size: 24px; margin: 0 0 6px; }
+      .lead { color: var(--muted); font-size: 13.5px; line-height: 1.7; margin: 0 0 24px; }
+      .core { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 24px; }
+      .core h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+      .core .item { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
+      .core .item:first-of-type { border-top: none; }
+      .core .lic { color: var(--muted); }
+      .bar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+      .bar input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: inherit; font-size: 13px; }
+      .bar .count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+      table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      th { text-align: left; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); }
+      td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+      td a { color: var(--accent); text-decoration: none; }
+      .name { font-weight: 500; }
+      .ver { color: var(--muted); }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>오픈소스 라이선스</h1>
+      <p class="lead">ezBrowser 는 아래의 오픈소스 소프트웨어로 만들어졌습니다. 각 구성요소는 해당 라이선스 조건에 따라 사용됩니다. 핵심 엔진(Chromium·V8·Electron)은 별도의 다중 라이선스(BSD-3-Clause 외)를 따릅니다.</p>
+
+      <div class="core">
+        <h2>핵심 구성요소</h2>
+        <div class="item"><span>Electron <span id="ev" class="ver"></span></span><span class="lic">MIT</span></div>
+        <div class="item"><span>Chromium <span id="cv" class="ver"></span></span><span class="lic">BSD-3-Clause 외</span></div>
+        <div class="item"><span>V8 JavaScript Engine</span><span class="lic">BSD-3-Clause</span></div>
+        <div class="item"><span>Node.js</span><span class="lic">MIT 외</span></div>
+        <div class="item"><span>React</span><span class="lic">MIT</span></div>
+      </div>
+
+      <div class="bar">
+        <input id="q" type="text" placeholder="패키지 이름·라이선스 검색…" />
+        <span class="count" id="count"></span>
+      </div>
+      <table>
+        <thead><tr><th>패키지</th><th>버전</th><th>라이선스</th><th>저장소</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <script>
+      const api = window.internalAPI
+      let all = []
+      const $ = (s) => document.querySelector(s)
+
+      function render(list) {
+        const tb = $('#rows')
+        tb.innerHTML = ''
+        const frag = document.createDocumentFragment()
+        for (const p of list.slice(0, 1000)) {
+          const tr = document.createElement('tr')
+          const repo = p.repository ? `<a href="${p.repository}" target="_blank" rel="noreferrer">링크</a>` : ''
+          tr.innerHTML = `<td class="name">${p.name}</td><td class="ver">${p.version}</td><td>${p.licenses}</td><td>${repo}</td>`
+          frag.appendChild(tr)
+        }
+        tb.appendChild(frag)
+        $('#count').textContent = `${list.length}개 패키지`
+      }
+
+      async function load() {
+        try {
+          const data = await api.system.licenses()
+          if (data.app) {
+            $('#ev').textContent = data.app.electronVersion || ''
+            $('#cv').textContent = data.app.chromeVersion || ''
+          }
+          all = data.packages || []
+          render(all)
+        } catch (e) {
+          $('#rows').innerHTML = '<tr><td colspan="4">라이선스 목록을 불러오지 못했습니다.</td></tr>'
+        }
+      }
+
+      $('#q').addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase()
+        if (!q) { render(all); return }
+        render(all.filter((p) => p.name.toLowerCase().includes(q) || (p.licenses || '').toLowerCase().includes(q)))
+      })
+      load()
+    </script>
+  </body>
+</html>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>매일 자동 수집</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1a1a1a; --muted:#666; --border:#e2e2e2; --card:#fafafa; --accent:#3b6fd4; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#1e1e1e; --fg:#eaeaea; --muted:#9a9a9a; --border:#3a3a3a; --card:#262626; --accent:#5b8def; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); font-size:14px; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 18px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 18px; font-size: 13px; }
+  .card { border:1px solid var(--border); border-radius:10px; background:var(--card); padding:14px; margin-bottom:12px; }
+  .row { display:flex; align-items:center; gap:8px; }
+  .row.between { justify-content: space-between; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  input[type=text], textarea, select { width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); font-size:13px; font-family:inherit; }
+  textarea { resize:vertical; min-height:44px; }
+  .chip { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); cursor:pointer; }
+  .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button { padding:7px 12px; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--fg); cursor:pointer; font-size:13px; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.danger { color:#c0392b; }
+  .tname { font-weight:600; }
+  .tmeta { font-size:12px; color:var(--muted); margin-top:3px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .inline { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .hidden { display:none; }
+  .empty { color:var(--muted); text-align:center; padding:30px; }
+  .digest { white-space:pre-wrap; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px; margin-top:8px; font-size:13px; line-height:1.5; }
+  .adv { font-size:12px; color:var(--accent); cursor:pointer; user-select:none; margin-top:6px; display:inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📥 매일 자동 수집</h1>
+  <p class="sub">지정한 사이트를 매일(또는 주기적으로) 조용히 열어 새 글·항목만 골라 모으고, AI 가 요약 브리핑을 만들어 알림으로 전해줍니다. 재시작해도 유지됩니다. (숨은 창에서 실행 — 작업을 방해하지 않아요.)</p>
+
+  <div class="card">
+    <div class="row between"><b>＋ 새 수집기</b></div>
+    <label>이름</label>
+    <input type="text" id="f-name" placeholder="예: 오늘의 IT 뉴스">
+    <label>소스 URL (한 줄에 하나)</label>
+    <textarea id="f-sources" placeholder="https://news.example.com/tech&#10;https://blog.example.com/feed"></textarea>
+    <div class="grid2">
+      <div>
+        <label>스케줄</label>
+        <select id="f-sched">
+          <option value="daily">매일 정해진 시각</option>
+          <option value="interval">주기적으로 (분)</option>
+        </select>
+      </div>
+      <div id="wrap-time">
+        <label>시각 (HH:MM, 24시간)</label>
+        <input type="text" id="f-time" placeholder="09:00">
+      </div>
+      <div id="wrap-interval" class="hidden">
+        <label>주기 (분)</label>
+        <input type="text" id="f-interval" placeholder="60">
+      </div>
+    </div>
+    <label>키워드 필터 (선택, 쉼표 — 이 단어가 든 항목만)</label>
+    <input type="text" id="f-keyword" placeholder="예: AI, 반도체, 삼성">
+
+    <span class="adv" id="adv-toggle">▸ 고급 (추출 선택자)</span>
+    <div id="adv" class="hidden">
+      <div class="grid2">
+        <div><label>반복 항목 CSS 선택자 (비우면 자동: 제목+링크)</label><input type="text" id="f-rowsel" placeholder=".article-item"></div>
+        <div><label>소스당 최대 수집 수</label><input type="text" id="f-max" placeholder="40"></div>
+      </div>
+      <label>필드 매핑 (JSON, 선택 — 예 {"제목":".title","링크":"a@href"})</label>
+      <input type="text" id="f-fields" placeholder='{"제목":".title","링크":"a@href"}'>
+    </div>
+
+    <div class="row" style="margin-top:10px; gap:14px; flex-wrap:wrap;">
+      <label class="inline"><input type="checkbox" id="f-summarize" checked> AI 요약 브리핑</label>
+      <label class="inline"><input type="checkbox" id="f-notify" checked> 새 항목 시 알림</label>
+      <label class="inline"><input type="checkbox" id="f-webhook"> 웹훅 전송</label>
+      <span style="flex:1"></span>
+      <button class="primary" id="btn-add">추가</button>
+    </div>
+    <div class="tmeta" style="margin-top:6px;">웹훅은 설정 &gt; AI 의 연동 URL 로 JSON 을 보냅니다(구글시트·노션·메일 등).</div>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script>
+  var api = window.internalAPI && window.internalAPI.ai;
+  function el(id){ return document.getElementById(id); }
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function rel(ts){ if(!ts) return '아직 실행 안 됨'; var d=Date.now()-ts; if(d<60000) return '방금'; if(d<3600000) return Math.floor(d/60000)+'분 전'; if(d<86400000) return Math.floor(d/3600000)+'시간 전'; return Math.floor(d/86400000)+'일 전'; }
+
+  function showSched(){
+    var v = el('f-sched').value;
+    el('wrap-time').classList.toggle('hidden', v !== 'daily');
+    el('wrap-interval').classList.toggle('hidden', v !== 'interval');
+  }
+  el('f-sched').addEventListener('change', showSched);
+  el('adv-toggle').addEventListener('click', function(){
+    var a = el('adv'); var open = a.classList.toggle('hidden') === false;
+    el('adv-toggle').textContent = (a.classList.contains('hidden') ? '▸' : '▾') + ' 고급 (추출 선택자)';
+  });
+
+  function schedText(c){
+    if (c.scheduleType === 'daily') return '매일 ' + (c.time || '??:??');
+    return (c.intervalMinutes || 60) + '분마다';
+  }
+
+  function render(list){
+    var box = el('list');
+    box.innerHTML = '';
+    if (!list || !list.length){ box.innerHTML = '<div class="empty">아직 수집기가 없습니다. 위에서 추가하세요.</div>'; return; }
+    list.forEach(function(c){
+      var card = document.createElement('div'); card.className = 'card';
+      var head = document.createElement('div'); head.className = 'row between';
+      var left = document.createElement('div');
+      left.innerHTML = '<div class="tname">' + escapeHtml(c.name) + ' <span class="chip">' + escapeHtml(schedText(c)) + '</span></div>' +
+        '<div class="tmeta">소스 ' + (c.sources ? c.sources.length : 0) + '개' + (c.keyword ? ' · 필터: ' + escapeHtml(c.keyword) : '') + '</div>' +
+        '<div class="tmeta">최근 실행: ' + rel(c.lastRunAt) + (c.lastCount != null ? ' · 새 ' + c.lastCount + '건' : '') + '</div>';
+      var right = document.createElement('div'); right.className = 'row';
+      var runBtn = document.createElement('button'); runBtn.textContent = '지금 수집'; runBtn.className='primary';
+      runBtn.onclick = function(){ runBtn.disabled = true; runBtn.textContent = '수집 중…'; api.collectorRun(c.id).then(function(){ runBtn.disabled=false; runBtn.textContent='지금 수집'; }); };
+      var toggle = document.createElement('button'); toggle.className = 'chip' + (c.enabled ? ' on' : ''); toggle.textContent = c.enabled ? '켜짐' : '꺼짐';
+      toggle.onclick = function(){ api.collectorSetEnabled(c.id, !c.enabled); };
+      var del = document.createElement('button'); del.className = 'danger'; del.textContent = '삭제';
+      del.onclick = function(){ if (confirm('이 수집기를 삭제할까요?')) api.collectorRemove(c.id); };
+      right.appendChild(runBtn); right.appendChild(toggle); right.appendChild(del);
+      head.appendChild(left); head.appendChild(right);
+      card.appendChild(head);
+      if (c.lastDigest){
+        var d = document.createElement('div'); d.className = 'digest'; d.textContent = c.lastDigest;
+        card.appendChild(d);
+      }
+      box.appendChild(card);
+    });
+  }
+
+  el('btn-add').addEventListener('click', function(){
+    var sched = el('f-sched').value;
+    var sources = el('f-sources').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    if (!sources.length){ alert('소스 URL 을 최소 하나 입력하세요.'); return; }
+    var p = {
+      name: el('f-name').value.trim() || '수집기',
+      sources: sources,
+      scheduleType: sched,
+      keyword: el('f-keyword').value.trim(),
+      rowSelector: el('f-rowsel').value.trim(),
+      summarize: el('f-summarize').checked,
+      notify: el('f-notify').checked,
+      webhook: el('f-webhook').checked,
+      enabled: true,
+    };
+    if (sched === 'daily'){ p.time = el('f-time').value.trim(); if(!/^\d{1,2}:\d{2}$/.test(p.time)){ alert('시각을 HH:MM 형식으로 입력하세요.'); return; } }
+    else { p.intervalMinutes = parseInt(el('f-interval').value,10) || 60; }
+    var mx = parseInt(el('f-max').value,10); if (mx) p.maxItems = mx;
+    var fj = el('f-fields').value.trim();
+    if (fj){ try { p.fields = JSON.parse(fj); } catch(e){ alert('필드 매핑 JSON 형식이 올바르지 않습니다.'); return; } }
+    api.collectorAdd(p);
+    el('f-name').value=''; el('f-sources').value=''; el('f-time').value=''; el('f-interval').value=''; el('f-keyword').value=''; el('f-rowsel').value=''; el('f-max').value=''; el('f-fields').value='';
+  });
+
+  function reload(){ if (api && api.collectorList) api.collectorList().then(render); }
+  if (api && api.onCollectorChanged) api.onCollectorChanged(render);
+  if (api && api.onCollectorRan) api.onCollectorRan(function(run){ reload(); });
+  showSched();
+  reload();
+</script>
+</body>
+</html>

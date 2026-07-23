@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(npm install)",
+      "Bash(npm i *)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(npm run package*)",
+      "Bash(npm run licenses)",
+      "Bash(npm run i18n:check)",
+      "Bash(npx vite *)",
+      "Bash(npx tsc *)",
+      "Bash(node build/*)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-Date)",
+      "PowerShell(Get-Process *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(npm run package -- --publish*)",
+      "Bash(gh release create *)",
+      "Bash(electron-builder --publish*)"
+    ]
+  }
+}

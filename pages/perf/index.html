@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>성능</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --ok: #15803D; --warn: #B45309; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C;
+          --ok: #4ADE80; --warn: #F59E0B; }
+      }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif; }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 24px 32px; }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      h2 { margin: 24px 0 10px; font-size: 16px; }
+      .lead { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+      .gate { padding: 14px 16px; border-radius: 12px; margin-bottom: 14px;
+        background: var(--card); border: 1px solid var(--border); }
+      .gate.pass { border-color: var(--ok); background: rgba(21,128,61,.07); }
+      .gate.fail { border-color: var(--danger); background: rgba(200,42,56,.07); }
+      .gate-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+      .gate-issues { font-size: 12px; color: var(--danger); }
+      .gate-issues ul { margin: 4px 0; padding-left: 18px; }
+      .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+      .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 14px; }
+      .stat-card.over { border-color: var(--danger); }
+      .stat-card.warn { border-color: var(--warn); }
+      .stat-label { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+      .stat-value { font-size: 20px; font-weight: 700; }
+      .stat-budget { color: var(--muted); font-size: 11px; }
+      .table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .table th, .table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+      .table th { color: var(--muted); font-weight: 500; font-size: 11px; }
+      .table td.num { text-align: right; font-family: 'Menlo', monospace; }
+      .row-warn { color: var(--warn); }
+      .row-fail { color: var(--danger); }
+      .section { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 14px 18px; margin-bottom: 14px; }
+      .meta { color: var(--muted); font-size: 11px; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>성능 게이트</h1>
+      <div class="lead">콜드 스타트와 빈 창 메모리를 측정해 예산을 초과하지 않는지 감시합니다.</div>
+
+      <div id="gate"></div>
+
+      <div class="stat-grid" id="stats"></div>
+
+      <h2>최근 부팅 기록 (최대 30회)</h2>
+      <div class="section" id="history-section">
+        <div class="meta">아직 기록이 없습니다 — 30초 후 첫 항목이 저장됩니다.</div>
+      </div>
+    </div>
+    <script>
+      function fmtMs(v) { return v == null ? '—' : v < 1000 ? v + 'ms' : (v / 1000).toFixed(2) + 's' }
+      function fmtMB(v) { return v == null ? '—' : v + 'MB' }
+      function fmtDate(t) { try { return new Date(t).toLocaleString() } catch { return '' } }
+
+      function api() { return window.internalAPI && window.internalAPI.perf }
+
+      function gateEvaluate(m, budget) {
+        const issues = []
+        const cold = m.firstWindowReadyMs ?? m.firstTabLoadedMs
+        if (cold != null && cold > budget.coldStartMs) issues.push(`콜드 스타트 ${cold}ms > 예산 ${budget.coldStartMs}ms`)
+        if (m.memoryAt30sMB != null && m.memoryAt30sMB > budget.blankWindowMemoryMB)
+          issues.push(`30초 메모리 ${m.memoryAt30sMB}MB > 예산 ${budget.blankWindowMemoryMB}MB`)
+        return issues
+      }
+
+      async function reload() {
+        if (!api()) {
+          document.querySelector('.wrap').innerHTML = '<h1>성능 게이트</h1><div class="meta">internalAPI.perf 미주입</div>'
+          return
+        }
+        const report = await api().report()
+        const m = report.current
+        const budget = report.budget
+        const issues = gateEvaluate(m, budget)
+
+        const gate = document.getElementById('gate')
+        if (issues.length === 0) {
+          gate.innerHTML = `<div class="gate pass">
+            <div class="gate-title">✓ 모든 성능 예산 충족</div>
+            <div class="meta">콜드 스타트 ≤ ${budget.coldStartMs}ms, 빈 창 메모리 ≤ ${budget.blankWindowMemoryMB}MB</div>
+          </div>`
+        } else {
+          gate.innerHTML = `<div class="gate fail">
+            <div class="gate-title">⚠ 성능 예산 초과</div>
+            <div class="gate-issues"><ul>${issues.map((s) => `<li>${s}</li>`).join('')}</ul></div>
+          </div>`
+        }
+
+        const stats = document.getElementById('stats')
+        const cold = m.firstWindowReadyMs ?? m.firstTabLoadedMs
+        const coldOver = cold != null && cold > budget.coldStartMs
+        const coldWarn = cold != null && cold > budget.coldStartMs * 0.8 && !coldOver
+        const memOver = m.memoryAt30sMB != null && m.memoryAt30sMB > budget.blankWindowMemoryMB
+        const memWarn = m.memoryAt30sMB != null && m.memoryAt30sMB > budget.blankWindowMemoryMB * 0.8 && !memOver
+        stats.innerHTML = `
+          <div class="stat-card ${coldOver ? 'over' : coldWarn ? 'warn' : ''}">
+            <div class="stat-label">콜드 스타트</div>
+            <div class="stat-value">${fmtMs(cold)}</div>
+            <div class="stat-budget">예산 ≤ ${budget.coldStartMs}ms</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">whenReady</div>
+            <div class="stat-value">${fmtMs(m.whenReadyMs)}</div>
+            <div class="stat-budget">초기화 시작점</div>
+          </div>
+          <div class="stat-card ${memOver ? 'over' : memWarn ? 'warn' : ''}">
+            <div class="stat-label">30초 메모리</div>
+            <div class="stat-value">${fmtMB(m.memoryAt30sMB)}</div>
+            <div class="stat-budget">예산 ≤ ${budget.blankWindowMemoryMB}MB</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">현재 메모리</div>
+            <div class="stat-value">${fmtMB(m.memoryNowMB)}</div>
+            <div class="stat-budget">v${m.version} ${m.packaged ? '(packaged)' : '(dev)'}</div>
+          </div>`
+
+        const hist = report.history.slice().reverse()
+        const hsec = document.getElementById('history-section')
+        if (hist.length === 0) {
+          hsec.innerHTML = '<div class="meta">아직 기록이 없습니다 — 30초 후 첫 항목이 저장됩니다.</div>'
+        } else {
+          hsec.innerHTML = `<table class="table">
+            <thead><tr>
+              <th>시각</th><th>버전</th><th>모드</th>
+              <th style="text-align:right;">whenReady</th>
+              <th style="text-align:right;">콜드 스타트</th>
+              <th style="text-align:right;">30초 메모리</th>
+            </tr></thead><tbody>
+            ${hist.map((h) => {
+              const cold = h.firstWindowReadyMs ?? h.firstTabLoadedMs
+              const coldOver = cold != null && cold > budget.coldStartMs
+              const memOver = h.memoryAt30sMB != null && h.memoryAt30sMB > budget.blankWindowMemoryMB
+              const cls = (coldOver || memOver) ? 'row-fail' : ''
+              return `<tr class="${cls}">
+                <td>${fmtDate(h.startedAt)}</td>
+                <td>${h.version}</td>
+                <td>${h.packaged ? 'pkg' : 'dev'}</td>
+                <td class="num">${fmtMs(h.whenReadyMs)}</td>
+                <td class="num">${fmtMs(cold)}</td>
+                <td class="num">${fmtMB(h.memoryAt30sMB)}</td>
+              </tr>`
+            }).join('')}
+            </tbody></table>`
+        }
+      }
+
+      if (api()) {
+        api().onMilestone(() => reload())
+      }
+      reload()
+      setInterval(reload, 5000)
+    </script>
+  </body>
+</html>

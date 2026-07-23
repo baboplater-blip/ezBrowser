@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <title>광고 차단</title>
+    <style>
+      :root { color-scheme: light dark;
+        --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
+        --card: #FFFFFF; --border: #E5E5E8; --accent: #3478F6;
+        --hover: #EDEDEF; --danger: #C82A38; --ok: #15803D; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0F0F12; --fg: #F2F2F5; --muted: #9B9BA3;
+          --card: #1A1A1F; --border: #2A2A30; --accent: #5A93F9; --hover: #25252C;
+          --ok: #4ADE80; }
+      }
+      html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', sans-serif; }
+      .wrap { max-width: 960px; margin: 0 auto; padding: 24px 32px; }
+      h1 { margin: 0 0 4px; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+      h2 { margin: 24px 0 10px; font-size: 16px; }
+      .lead { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+      .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+      .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 16px; text-align: center; }
+      .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+      .stat-label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+      .section { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        padding: 14px 18px; margin-bottom: 14px; }
+      .row { display: flex; align-items: center; gap: 12px; padding: 8px 0;
+        border-bottom: 1px solid var(--border); }
+      .row:last-child { border-bottom: none; }
+      .row .label { flex: 1; font-size: 13px; }
+      .row .help { color: var(--muted); font-size: 11px; }
+      .toggle { width: 36px; height: 20px; background: var(--hover); border-radius: 10px;
+        position: relative; cursor: pointer; flex-shrink: 0; }
+      .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+        background: white; border-radius: 50%; transition: transform 0.15s ease; }
+      .toggle.on { background: var(--accent); }
+      .toggle.on::after { transform: translateX(16px); }
+      select { height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--fg); font-size: 12px; }
+      .table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+      .table th, .table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+      .table th { color: var(--muted); font-weight: 500; font-size: 11px; }
+      .table td.count { text-align: right; font-family: 'Menlo', monospace; }
+      button.btn { height: 26px; padding: 0 10px; border-radius: 13px;
+        border: 1px solid var(--border); background: var(--card); color: inherit;
+        cursor: pointer; font-size: 11px; }
+      button.btn:hover { border-color: var(--accent); color: var(--accent); }
+      button.btn.danger { color: var(--danger); }
+      .site-input { display: flex; gap: 8px; margin-top: 10px; }
+      .site-input input { flex: 1; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+        background: var(--bg); color: var(--fg); padding: 0 10px; font-size: 12px; }
+      .empty-state { text-align: center; padding: 30px; color: var(--muted); font-size: 12px; }
+      .chip { padding: 2px 8px; border-radius: 10px; font-size: 10px;
+        background: var(--hover); color: var(--muted); font-family: 'Menlo', monospace; }
+    
+      /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
+      button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
+      button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>광고 차단</h1>
+      <div class="lead">광고차단 통계와 사이트별·필터별 설정.</div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-label">차단된 요청</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-hosts">0</div>
+          <div class="stat-label">차단 도메인 수</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-allowed">0</div>
+          <div class="stat-label">허용 사이트 수</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="row">
+          <div class="label">광고 차단 사용</div>
+          <div class="toggle" id="enabled-toggle"></div>
+        </div>
+        <div class="row">
+          <div class="label">차단 강도
+            <div class="help">사전 정의된 필터 묶음 — Custom 은 아래 필터 토글에 따름</div>
+          </div>
+          <select id="level-select">
+            <option value="lite">가벼움 (EasyList)</option>
+            <option value="standard">표준 (EasyList + Privacy + KR)</option>
+            <option value="strict">엄격 (+ Annoyance + Social)</option>
+            <option value="custom">사용자 정의</option>
+          </select>
+        </div>
+      </div>
+
+      <h2>필터 (Custom 모드에서 개별 적용)</h2>
+      <div class="section" id="filters"></div>
+
+      <h2>차단 통계 — 도메인 TOP 20</h2>
+      <div class="section" id="top-hosts-section">
+        <div class="empty-state">아직 차단된 요청이 없습니다.</div>
+      </div>
+
+      <h2>허용 사이트 (광고차단 끄기)</h2>
+      <div class="section">
+        <div id="allowed-list"></div>
+        <div class="site-input">
+          <input id="site-input" placeholder="example.com 또는 sub.example.com" />
+          <button class="btn" id="site-add">+ 허용 추가</button>
+        </div>
+      </div>
+
+      <h2>최근 차단된 요청 (최대 50개)</h2>
+      <div class="section" id="recent-section">
+        <div class="empty-state">최근 차단 기록이 없습니다.</div>
+      </div>
+    </div>
+    <script>
+      const FILTERS = [
+        { id: 'easylist', label: 'EasyList', help: 'Adblock Plus 의 기본 영문 광고 필터' },
+        { id: 'easyprivacy', label: 'EasyPrivacy', help: '추적·텔레메트리 차단' },
+        { id: 'kr', label: 'List-KR', help: '한국어 사이트용 필터' },
+        { id: 'fanboyAnnoyance', label: 'Fanboy Annoyance', help: '쿠키 배너·뉴스레터 팝업' },
+        { id: 'fanboySocial', label: 'Fanboy Social', help: '소셜 미디어 위젯' },
+      ]
+      let stats = null
+
+      function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
+      function api() { return window.internalAPI && window.internalAPI.adblock }
+
+      async function reload() {
+        if (!api()) {
+          document.querySelector('.wrap').innerHTML = '<h1>광고 차단</h1><div class="empty-state">internalAPI.adblock 미주입</div>'
+          return
+        }
+        stats = await api().stats()
+        render()
+      }
+
+      function render() {
+        document.getElementById('stat-total').textContent = (stats.totalBlocked || 0).toLocaleString()
+        const hosts = Object.keys(stats.perHost || {}).length
+        const allowed = Object.values(stats.siteOverrides || {}).filter((v) => v === false).length
+        document.getElementById('stat-hosts').textContent = hosts.toLocaleString()
+        document.getElementById('stat-allowed').textContent = allowed.toLocaleString()
+
+        const enabledToggle = document.getElementById('enabled-toggle')
+        enabledToggle.classList.toggle('on', stats.enabled === true)
+        document.getElementById('level-select').value = stats.level || 'standard'
+
+        const filtersEl = document.getElementById('filters')
+        filtersEl.innerHTML = FILTERS.map((f) => {
+          const on = (stats.filters || {})[f.id] === true
+          return `<div class="row">
+            <div class="label">${escape(f.label)}<div class="help">${escape(f.help)}</div></div>
+            <div class="toggle ${on ? 'on' : ''}" data-filter="${f.id}"></div>
+          </div>`
+        }).join('')
+
+        // TOP hosts
+        const hostsEl = document.getElementById('top-hosts-section')
+        const top = Object.entries(stats.perHost || {})
+          .sort((a, b) => b[1] - a[1]).slice(0, 20)
+        if (top.length === 0) hostsEl.innerHTML = '<div class="empty-state">아직 차단된 요청이 없습니다.</div>'
+        else hostsEl.innerHTML = '<table class="table"><thead><tr><th>도메인</th><th style="text-align:right;">차단 수</th></tr></thead><tbody>'
+          + top.map(([h, c]) => `<tr><td>${escape(h)}</td><td class="count">${c.toLocaleString()}</td></tr>`).join('')
+          + '</tbody></table>'
+
+        // allowed list
+        const allowedEl = document.getElementById('allowed-list')
+        const overrides = stats.siteOverrides || {}
+        const allowedHosts = Object.entries(overrides).filter(([, v]) => v === false).map(([k]) => k).sort()
+        if (allowedHosts.length === 0) allowedEl.innerHTML = '<div class="empty-state">허용 사이트가 없습니다.</div>'
+        else allowedEl.innerHTML = allowedHosts.map((h) => `
+          <div class="row">
+            <div class="label"><span class="chip">${escape(h)}</span></div>
+            <button class="btn danger" data-remove-allowed="${escape(h)}">제거</button>
+          </div>`).join('')
+
+        // recent
+        const recentEl = document.getElementById('recent-section')
+        const recent = stats.recent || []
+        if (recent.length === 0) recentEl.innerHTML = '<div class="empty-state">최근 차단 기록이 없습니다.</div>'
+        else recentEl.innerHTML = '<table class="table"><thead><tr><th>시각</th><th>도메인</th><th>요청 URL</th><th>출처</th></tr></thead><tbody>'
+          + recent.slice(0, 50).map((r) => {
+            const ago = Math.max(0, Math.round((Date.now() - r.ts) / 1000))
+            const t = ago < 60 ? ago + '초' : ago < 3600 ? Math.round(ago / 60) + '분' : Math.round(ago / 3600) + '시간'
+            return `<tr>
+              <td>${t} 전</td>
+              <td>${escape(r.host || '?')}</td>
+              <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escape(r.url)}">${escape(r.url)}</td>
+              <td>${escape(r.sourceHost || '')}</td>
+            </tr>`
+          }).join('') + '</tbody></table>'
+
+        bind()
+      }
+
+      function bind() {
+        document.getElementById('enabled-toggle').addEventListener('click', async () => {
+          await api().setEnabled(!(stats && stats.enabled))
+        })
+        document.getElementById('level-select').addEventListener('change', async (e) => {
+          await api().setLevel(e.target.value)
+        })
+        document.querySelectorAll('[data-filter]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const id = el.dataset.filter
+            const enabled = !el.classList.contains('on')
+            await api().setFilter(id, enabled)
+          })
+        })
+        document.querySelectorAll('[data-remove-allowed]').forEach((el) => {
+          el.addEventListener('click', async () => {
+            await api().setSiteAllowed(el.dataset.removeAllowed, false)
+          })
+        })
+        document.getElementById('site-add').addEventListener('click', async () => {
+          const v = document.getElementById('site-input').value.trim()
+          if (!v) return
+          await api().setSiteAllowed(v, true)
+          document.getElementById('site-input').value = ''
+        })
+        document.getElementById('site-input').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') document.getElementById('site-add').click()
+        })
+      }
+
+      if (api()) {
+        api().onChanged(() => reload())
+      }
+      reload()
+      setInterval(reload, 2500)
+    </script>
+  </body>
+</html>

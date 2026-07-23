@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>내 정보 (자동 채우기)</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1a1a1a; --muted:#666; --border:#e2e2e2; --card:#fafafa; --accent:#3b6fd4; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#1e1e1e; --fg:#eaeaea; --muted:#9a9a9a; --border:#3a3a3a; --card:#262626; --accent:#5b8def; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--fg); font-size:14px; }
+  .wrap { max-width:640px; margin:0 auto; padding:24px 18px 60px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 16px; }
+  .warn { background:#8a5a0033; border:1px solid #b9860044; color:var(--fg); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:14px; }
+  .field { margin-bottom:10px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px; }
+  input { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); font-size:13px; }
+  .sens label::after { content:' 🔒'; }
+  .bar { position:sticky; bottom:0; background:var(--bg); border-top:1px solid var(--border); padding:12px 0; display:flex; gap:8px; align-items:center; }
+  button { padding:8px 14px; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--fg); cursor:pointer; font-size:13px; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .saved { color:#2E9E5B; font-size:12px; }
+  .sec-title { font-weight:600; margin:18px 0 8px; font-size:13px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🪪 내 정보 (자동 채우기)</h1>
+  <p class="sub">여기 저장한 정보로 가입·주문·신청 폼을 한 번에 채웁니다. 값은 <b>안전하게 암호화(OS 키체인)되어 저장</b>되고, 자동 채우기는 브라우저가 직접 하며 <b>AI(외부 서버)로 전송되지 않습니다.</b></p>
+  <div id="warn" class="warn" style="display:none">⚠ 이 환경에서는 OS 암호화를 쓸 수 없어 정보가 평문으로 저장됩니다. 민감 정보(카드) 입력은 피하세요.</div>
+
+  <div id="form"></div>
+
+  <div class="bar">
+    <button class="primary" id="save">저장</button>
+    <button id="clear">모두 지우기</button>
+    <span class="saved" id="saved" style="display:none">저장됨 ✓</span>
+  </div>
+</div>
+<script>
+  var api = window.internalAPI && window.internalAPI.ai;
+  var FIELDS = [];
+  function el(id){ return document.getElementById(id); }
+  function render(fields, values){
+    FIELDS = fields;
+    var box = el('form'); box.innerHTML='';
+    var normalTitle = document.createElement('div'); normalTitle.className='sec-title'; normalTitle.textContent='기본 정보'; box.appendChild(normalTitle);
+    var sensAdded = false;
+    fields.forEach(function(f){
+      if (f.sensitive && !sensAdded){ var st=document.createElement('div'); st.className='sec-title'; st.textContent='결제 정보 (선택 — 민감)'; box.appendChild(st); sensAdded=true; }
+      var wrap=document.createElement('div'); wrap.className='field'+(f.sensitive?' sens':'');
+      var lab=document.createElement('label'); lab.textContent=f.label; lab.setAttribute('for','p-'+f.key);
+      var inp=document.createElement('input'); inp.id='p-'+f.key; inp.value=values[f.key]||''; inp.autocomplete='off';
+      if (f.sensitive) inp.type='text';
+      wrap.appendChild(lab); wrap.appendChild(inp); box.appendChild(wrap);
+    });
+  }
+  function collect(){
+    var out={};
+    FIELDS.forEach(function(f){ var v=(el('p-'+f.key)||{}).value; if(v&&v.trim()) out[f.key]=v.trim(); });
+    return out;
+  }
+  el('save').addEventListener('click', function(){
+    api.profileSet(collect()).then(function(){ el('saved').style.display='inline'; setTimeout(function(){ el('saved').style.display='none'; }, 1600); });
+  });
+  el('clear').addEventListener('click', function(){
+    if(!confirm('저장된 내 정보를 모두 지울까요?')) return;
+    api.profileSet({}).then(function(){ load(); });
+  });
+  function load(){
+    if(!api||!api.profileGet) return;
+    api.profileGet().then(function(r){ el('warn').style.display = r.storageAvailable ? 'none':'block'; render(r.fields, r.values||{}); });
+  }
+  if (api && api.onProfileChanged) api.onProfileChanged(load);
+  load();
+</script>
+</body>
+</html>
