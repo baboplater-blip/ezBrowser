@@ -4,12 +4,13 @@ import { OmniboxSuggestions } from './OmniboxSuggestions'
 import { useOmniboxSuggestions } from '../hooks/useOmniboxSuggestions'
 import { ExtensionActions } from './ExtensionActions'
 import { useExtensions } from '../hooks/useExtensions'
+import { Icon, type IconName } from './Icon'
 
-function siteIcon(url?: string): string {
-  if (!url || /^browser:/i.test(url)) return '⚙'
-  if (/^https:/i.test(url)) return '🔒'
-  if (/^http:/i.test(url)) return '⚠'
-  return '🌐'
+function siteIcon(url?: string): IconName {
+  if (!url || /^browser:/i.test(url)) return 'gear'
+  if (/^https:/i.test(url)) return 'lock'
+  if (/^http:/i.test(url)) return 'warning'
+  return 'globe'
 }
 
 interface Props {
@@ -161,16 +162,16 @@ export function Toolbar({
           aria-label={workspaceRailOpen ? '워크스페이스 사이드바 접기' : '워크스페이스 사이드바 펼치기'}
           title={'워크스페이스 사이드바 (좌측) — 색 칩으로 스페이스 전환, + 로 새 스페이스 추가'}
           onClick={onToggleWorkspaceRail}
-        >▦</button>
-        <button className="nav-btn" aria-label="뒤로" disabled={!active?.canGoBack} onClick={back}>‹</button>
-        <button className="nav-btn" aria-label="앞으로" disabled={!active?.canGoForward} onClick={forward}>›</button>
+        ><Icon name="grid" size={16} /></button>
+        <button className="nav-btn" aria-label="뒤로" disabled={!active?.canGoBack} onClick={back}><Icon name="back" size={16} /></button>
+        <button className="nav-btn" aria-label="앞으로" disabled={!active?.canGoForward} onClick={forward}><Icon name="forward" size={16} /></button>
         <button
           className="nav-btn"
           aria-label={active?.loading ? '중지' : '새로고침'}
           onClick={reloadOrStop}
           disabled={!active}
         >
-          {active?.loading ? '×' : '↻'}
+          {active?.loading ? <Icon name="close" size={16} /> : <Icon name="reload" size={16} />}
         </button>
       </div>
       {incognito && (
@@ -184,7 +185,7 @@ export function Toolbar({
           aria-label="사이트 정보"
           title="사이트 정보 · 권한"
           onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onOpenSiteInfo(r.left, r.bottom) }}
-        >{siteIcon(active?.url)}</button>
+        ><Icon name={siteIcon(active?.url)} size={13} /></button>
         <input
           ref={inputRef}
           className="omnibox"
@@ -221,7 +222,7 @@ export function Toolbar({
           title="AI 어시스턴트 (Ctrl+Shift+Space) — 이 페이지 요약·질문"
           onClick={onOpenAi}
         >
-          ✨
+          <Icon name="sparkle" size={16} />
         </button>
         <button
           className={`nav-btn sidepanel-btn ${leftPanelOpen ? 'active' : ''}`}
@@ -229,7 +230,7 @@ export function Toolbar({
           title={'좌측 사이드 패널 (Ctrl+B) — 북마크·이력·메모'}
           onClick={onToggleLeftPanel}
         >
-          ◧
+          <Icon name="panel-left" size={16} />
         </button>
         <button
           className={`nav-btn sidepanel-btn ${rightPanelOpen ? 'active' : ''}`}
@@ -237,7 +238,7 @@ export function Toolbar({
           title={'우측 사이드 패널 (Ctrl+Alt+B) — 북마크·이력·메모'}
           onClick={onToggleRightPanel}
         >
-          ◨
+          <Icon name="panel-right" size={16} />
         </button>
         <button
           className={`nav-btn bookmark-btn ${bookmarked ? 'active' : ''}`}
@@ -246,7 +247,7 @@ export function Toolbar({
           onClick={toggleBookmark}
           disabled={!active}
         >
-          {bookmarked ? '★' : '☆'}
+          {bookmarked ? <Icon name="star-filled" size={16} /> : <Icon name="star" size={16} />}
         </button>
         <button
           className={`nav-btn readlater-btn ${readLaterSaved ? 'active' : ''}`}
@@ -255,7 +256,7 @@ export function Toolbar({
           onClick={toggleReadLater}
           disabled={!active}
         >
-          {readLaterSaved ? '📚' : '📖'}
+          {readLaterSaved ? <Icon name="book" size={16} /> : <Icon name="book-open" size={16} />}
         </button>
         {videoCandidateCount > 0 && (
           <button
@@ -264,7 +265,7 @@ export function Toolbar({
             title={`감지된 동영상 ${videoCandidateCount}개 — 사이드바 열기/닫기`}
             onClick={onToggleVideo}
           >
-            ▶
+            <Icon name="play" size={15} />
             <span className="video-count">{videoCandidateCount}</span>
           </button>
         )}
@@ -275,7 +276,7 @@ export function Toolbar({
           title="다운로드 (Ctrl+J) — 사이드바 열기/닫기"
           onClick={onToggleDownloads}
         >
-          ⬇
+          <Icon name="download" size={16} />
           {activeDownloads > 0 && <span className="video-count">{activeDownloads}</span>}
         </button>
         <button
@@ -284,7 +285,7 @@ export function Toolbar({
           title="명령 팔레트 (Ctrl+Shift+P)"
           onClick={() => window.browserAPI.actions.run('action.palette.open', { windowId, tabId: active?.id })}
         >
-          ⌘
+          <Icon name="command" size={16} />
         </button>
       </div>
     </div>

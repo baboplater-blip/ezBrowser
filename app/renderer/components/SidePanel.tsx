@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import type { Bookmark, BookmarkFolder, BookmarkTree, HistoryEntry, ReadLaterItem, TabSummary } from '../../shared/types'
 import { AiTab } from './AiTab'
+import { Icon } from './Icon'
 
 type Tab = 'ai' | 'bookmarks' | 'history' | 'notes' | 'readlater' | 'briefing'
 const TABS: Tab[] = ['ai', 'bookmarks', 'history', 'notes', 'readlater', 'briefing']
@@ -70,29 +71,29 @@ export const SidePanel = forwardRef<HTMLDivElement, Props>(function SidePanel(
           <button
             className={`sidepanel-tab ${tab === 'ai' ? 'active' : ''}`}
             onClick={() => setTab('ai')} title="AI 어시스턴트"
-          >✨</button>
+          ><Icon name="sparkle" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'bookmarks' ? 'active' : ''}`}
             onClick={() => setTab('bookmarks')} title="북마크"
-          >★</button>
+          ><Icon name="star" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'history' ? 'active' : ''}`}
             onClick={() => setTab('history')} title="방문 기록"
-          >🕘</button>
+          ><Icon name="clock" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'notes' ? 'active' : ''}`}
             onClick={() => setTab('notes')} title="메모"
-          >📝</button>
+          ><Icon name="note" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'readlater' ? 'active' : ''}`}
             onClick={() => setTab('readlater')} title="읽기 목록"
-          >📚</button>
+          ><Icon name="book" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'briefing' ? 'active' : ''}`}
             onClick={() => setTab('briefing')} title="자동 수집 브리핑"
-          >📥</button>
+          ><Icon name="inbox" size={15} /></button>
         </div>
-        <button className="sidepanel-close" onClick={onClose} title="닫기">×</button>
+        <button className="sidepanel-close" onClick={onClose} title="닫기"><Icon name="close" size={13} /></button>
       </div>
       <div className={`sidepanel-body ${tab === 'ai' ? 'sidepanel-body-ai' : ''}`}>
         {tab === 'ai' && (
@@ -139,12 +140,15 @@ function BookmarksTab({ tree, windowId, active }: {
 
   return (
     <>
-      <input
-        className="sidepanel-filter"
-        placeholder="제목·URL 검색"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-      />
+      <div className="sidepanel-filter-wrap">
+        <Icon name="search" size={13} className="sidepanel-filter-ic" />
+        <input
+          className="sidepanel-filter"
+          placeholder="제목·URL 검색"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </div>
       <div className="sidepanel-tree">
         {rootFolders.map((f) => (
           <FolderNode
@@ -269,12 +273,15 @@ function HistoryTab({ windowId, active }: { windowId: string; active: TabSummary
 
   return (
     <>
-      <input
-        className="sidepanel-filter"
-        placeholder="이력 검색"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="sidepanel-filter-wrap">
+        <Icon name="search" size={13} className="sidepanel-filter-ic" />
+        <input
+          className="sidepanel-filter"
+          placeholder="이력 검색"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
       <div className="sidepanel-history">
         {items.length === 0 ? (
           <div className="sidepanel-empty">{query ? '검색 결과 없음' : '아직 방문 기록이 없습니다.'}</div>

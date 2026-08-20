@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TabSummary, TabGroup, TabGroupColor } from '../../shared/types'
 import faviconFallback from '../assets/favicon-fallback.png'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { Icon } from './Icon'
 
 export type TabBarOrientation = 'top' | 'left' | 'right' | 'bottom'
 
@@ -273,8 +274,8 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
             onMouseLeave={cancelPreview}
             title={t.discarded ? `${t.url}\n(잠자는 탭 — 클릭하면 다시 로드)` : t.url}
           >
-            {t.pinned && <span className="tab-pin" aria-hidden>📌</span>}
-            {t.discarded && <span className="tab-sleep" aria-hidden title="잠자는 탭">💤</span>}
+            {t.pinned && <span className="tab-pin" aria-hidden><Icon name="pin" size={12} /></span>}
+            {t.discarded && <span className="tab-sleep" aria-hidden title="잠자는 탭"><Icon name="moon" size={12} /></span>}
             {t.favicon && !t.discarded && <img className="tab-favicon" src={t.favicon} alt="" />}
             {!t.favicon && !t.discarded && t.loading && <span className="tab-spinner" aria-hidden />}
             {!t.favicon && !t.discarded && !t.loading && <img className="tab-favicon" src={faviconFallback} alt="" />}
@@ -285,17 +286,17 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
                 aria-label={t.muted ? '음소거 해제' : '음소거'}
                 title={t.muted ? '음소거됨 — 클릭하여 해제' : '소리 재생 중 — 클릭하여 음소거'}
                 onClick={(e) => { e.stopPropagation(); void window.browserAPI.tabs.setMuted(t.id, !t.muted) }}
-              >{t.muted ? '🔇' : '🔊'}</button>
+              >{t.muted ? <Icon name="volume-mute" size={12} /> : <Icon name="volume" size={12} />}</button>
             )}
             {!t.pinned && (
               <button className="tab-close" aria-label="탭 닫기" onClick={(e) => closeTab(t.id, e)}>
-                ×
+                <Icon name="close" size={10} />
               </button>
             )}
           </div>
         )
       })}
-      <button className="tab-new" aria-label="새 탭" onClick={newTab}>+</button>
+      <button className="tab-new" aria-label="새 탭" onClick={newTab}><Icon name="plus" size={14} /></button>
       {preview && (
         <TabPreviewPopover
           preview={preview}
@@ -502,7 +503,7 @@ function TabPreviewPopover({ preview, tab, orientation, onMouseEnter, onMouseLea
               title={tab.muted ? '음소거 해제' : '음소거'}
               aria-label={tab.muted ? '음소거 해제' : '음소거'}
               onClick={() => void window.browserAPI.tabs.setMuted(tab.id, !tab.muted)}
-            >{tab.muted ? '🔇' : '🔊'}</button>
+            >{tab.muted ? <Icon name="volume-mute" size={13} /> : <Icon name="volume" size={13} />}</button>
           )}
           {!tab.pinned && (
             <button
@@ -510,7 +511,7 @@ function TabPreviewPopover({ preview, tab, orientation, onMouseEnter, onMouseLea
               title="탭 닫기"
               aria-label="탭 닫기"
               onClick={() => { void window.browserAPI.tabs.close(tab.id); onClosed() }}
-            >×</button>
+            ><Icon name="close" size={12} /></button>
           )}
         </div>
       </div>
