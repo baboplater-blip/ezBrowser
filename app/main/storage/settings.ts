@@ -40,6 +40,7 @@ export interface AppSettings {
     accelerator: boolean
     torrentDht: boolean
     torrentMaxSeedRatio: number
+    ytdlpAutoUpdate: boolean
   }
   freedom: {
     userChromeCss: boolean
@@ -116,6 +117,12 @@ export interface AppSettings {
     agentFilesDir: string   // 에이전트가 업로드에 쓸 수 있는 자료 폴더(이 폴더 안 파일만 접근 허용)
     agentMaxSteps: number   // 에이전트 한 작업의 최대 단계 수(복잡한 작업일수록 크게)
     agentVision: 'auto' | 'always' | 'off'  // 화면 인식 — auto=스마트(화면 변화·막힘 때만 캡처, 한도 절약)·always=매 단계·off. 비전 지원 제공자/모델에서만
+    agentAutoApprove: boolean  // true 면 결제·삭제·게시 등 민감 동작도 확인 없이 자동 진행(무인 실행). 위험 — 신뢰하는 작업에만.
+    agentHumanInput: boolean   // true(기본): 실제 마우스 이동·클릭·키 입력(trusted)으로 조작 — 인스타·페북 봇 탐지 회피. false: 빠른 합성 이벤트.
+    // 조작 속도 — 'auto'(기본): 봇 탐지가 실제로 도는 사이트(인스타·틱톡 등)에서만 사람 흉내 타이밍을
+    // 전부 쓰고, 그 외 사이트에서는 같은 실제 입력 이벤트를 빠른 간격으로 보낸다(작업이 몇 배 빨라짐).
+    // 'human': 항상 사람 속도(가장 안전, 느림). 'fast': 항상 빠르게.
+    agentInputMode: 'auto' | 'human' | 'fast'
     webhookUrl: string      // 수집 데이터 연동 — 이 URL 로 JSON POST(Zapier·Make·구글시트 Apps Script 등)
   }
 }
@@ -142,6 +149,7 @@ const DEFAULTS: AppSettings = {
     accelerator: true,
     torrentDht: false,
     torrentMaxSeedRatio: 2.0,
+    ytdlpAutoUpdate: true,
   },
   freedom: {
     userChromeCss: true,
@@ -216,6 +224,9 @@ const DEFAULTS: AppSettings = {
     agentFilesDir: '',
     agentMaxSteps: 25,
     agentVision: 'auto',
+    agentAutoApprove: false,
+    agentHumanInput: true,
+    agentInputMode: 'auto',
     webhookUrl: '',
   },
 }

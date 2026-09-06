@@ -40,15 +40,22 @@ let triggers: AgentTrigger[] = []
 export const triggerEvents = new EventEmitter()
 let saveTimer: NodeJS.Timeout | null = null
 
+function writeNow(): void {
+  try {
+    const tmp = FILE() + '.tmp'
+    writeFileSync(tmp, JSON.stringify(triggers, null, 2), 'utf8')
+    renameSync(tmp, FILE())
+  } catch { /* ignore */ }
+}
 function persist(): void {
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    try {
-      const tmp = FILE() + '.tmp'
-      writeFileSync(tmp, JSON.stringify(triggers, null, 2), 'utf8')
-      renameSync(tmp, FILE())
-    } catch { /* ignore */ }
-  }, 300)
+  saveTimer = setTimeout(writeNow, 300)
+}
+// 발화 사실만은 디바운스 없이 즉시 기록한다 — 발화 직후 앱이 죽으면(크래시·강제 종료) 300ms 저장이 날아가
+// 다음 실행에서 같은 날 같은 작업이 한 번 더 돌아 중복 게시가 된다.
+function persistNow(): void {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  writeNow()
 }
 function emitChanged(): void { triggerEvents.emit('changed', listTriggers()) }
 
@@ -142,8 +149,14 @@ async function runTriggerTask(t: AgentTrigger, tabId: string): Promise<void> {
   const reqId = randomUUID()
   let outcome = ''
   try {
-    await runAgentTask({ reqId, tabId, task: t.task }, (evt) => {
-      if (evt.type === 'confirm') { if (t.autoConfirm) confirmAgentStep(reqId, true); else cancelAgentTask(reqId) }
+    // unattended: 전역 "무인 실행 승인" 토글에 좌우되지 않고 이 트리거의 autoConfirm 만 따른다.
+    // critical(결제·삭제)은 autoConfirm 이어도 자동 승인하지 않는다 — 사용자가 없을 때가 가장 위험하다.
+    await runAgentTask({ reqId, tabId, task: t.task, unattended: true }, (evt) => {
+      if (evt.type === 'confirm') {
+        if (evt.critical) { outcome = `안전 중단: ${String(evt.label ?? '되돌릴 수 없는 동작')}`; cancelAgentTask(reqId) }
+        else if (t.autoConfirm) confirmAgentStep(reqId, true)
+        else cancelAgentTask(reqId)
+      }
       else if (evt.type === 'ask') cancelAgentTask(reqId)
       else if (evt.type === 'done') outcome = String(evt.message ?? '완료')
       else if (evt.type === 'error') outcome = '오류: ' + String(evt.message ?? '')
@@ -179,7 +192,7 @@ function dailyTick(): void {
     if (t.lastFiredDay === day) continue
     if (cur < t.time) continue // "HH:MM" 0 패딩 문자열 비교 — 목표 시각이 아직 안 됨
     t.lastFiredDay = day
-    persist()
+    persistNow() // 크래시로 중복 발화하지 않도록 즉시 기록
     void runDaily(t)
   }
 }
@@ -219,11 +232,35 @@ function watchTick(): void {
     void runWatch(t)
   }
 }
+// 페이지 텍스트를 "의미 있는 변화"만 남도록 정규화한다.
+// 시계·조회수·상대시각·광고 회전처럼 매번 달라지는 값이 그대로 해시에 들어가면, 아무 새 글이 없어도
+// 매 검사마다 해시가 달라져 runOnChange 작업이 무한 재실행된다(같은 글 반복 게시 → 계정 스팸).
+function normalizeForWatch(text: string): string {
+  return text
+    .replace(/\d{1,2}:\d{2}(:\d{2})?/g, ' ')                       // 시:분(:초)
+    .replace(/\d{4}[-./]\d{1,2}[-./]\d{1,2}/g, ' ')                // 날짜
+    .replace(/\d+\s*(초|분|시간|일|주|개월|년)\s*(전|후)/g, ' ')      // 3분 전 / 2시간 전
+    .replace(/\d+\s*(seconds?|minutes?|hours?|days?)\s+ago/gi, ' ')
+    .replace(/[\d,]{2,}\s*(회|명|개|건|views?|comments?|likes?)/gi, ' ') // 조회수·댓글수
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// 변경 감지가 발화한 뒤의 쿨다운 — 연속 발화로 같은 작업이 반복되는 것을 막는다.
+const WATCH_FIRE_COOLDOWN_MS = 30 * 60_000
+const watchLastFire = new Map<string, number>()
+
 async function runWatch(t: AgentTrigger): Promise<void> {
   const text = await backgroundText(t.openUrl ?? '', t.selector)
   if (text == null) { persist(); return }
-  const hash = simpleHash(text)
+  const hash = simpleHash(normalizeForWatch(text))
   if (t.lastValue && t.lastValue !== hash) {
+    const last = watchLastFire.get(t.id) ?? 0
+    if (Date.now() - last < WATCH_FIRE_COOLDOWN_MS) {
+      // 아직 쿨다운 중 — 해시만 갱신하고 이번 변화로는 작업을 돌리지 않는다.
+      t.lastValue = hash; persist(); return
+    }
+    watchLastFire.set(t.id, Date.now())
     if (t.notify) notify(`변경 감지: ${t.name}`, `${t.openUrl} 의 내용이 바뀌었습니다.`)
     if (t.runOnChange) {
       const wid = firstWindowId()

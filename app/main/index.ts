@@ -60,12 +60,32 @@ import {
   recordFirstTabLoaded, recordFirstWindowReady, recordWhenReady,
 } from './features/perf'
 import { nudgeGc } from './features/gc-nudge'
+import { captureBrands } from './features/client-hints'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'browser', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
 let lastFocusedWindowId: string | null = null
+
+// Electron 기본 UA 에서 앱 이름·Electron 토큰만 걷어내 순정 Chrome UA 로 만든다.
+// 예) "... browser-build/0.1.0 Chrome/134.0.6998.205 Electron/35.7.5 Safari/537.36"
+//   → "... Chrome/134.0.6998.205 Safari/537.36"
+// app.userAgentFallback 에 넣으면 이후 만들어지는 모든 세션·창에 적용된다(창 생성보다 먼저 호출할 것).
+export function cleanUserAgent(raw: string, appName: string): string {
+  return raw
+    .replace(new RegExp(`\\s*${appName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/[\\d.]+`, 'ig'), '')
+    .replace(/\s*Electron\/[\d.]+/ig, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function applyCleanUserAgent(): void {
+  try {
+    const ua = cleanUserAgent(app.userAgentFallback, app.getName())
+    if (ua && !/Electron\//i.test(ua)) app.userAgentFallback = ua
+  } catch { /* UA 정규화 실패는 치명적이지 않다 — 기본값으로 진행 */ }
+}
 
 // 시크릿 창의 탭인지 — 방문 기록 등 영속 저장을 건너뛸 때 사용.
 // (CLAUDE.md: "시크릿 세션은 메모리에만 보관, 종료 시 삭제")
@@ -106,6 +126,12 @@ if (!app.requestSingleInstanceLock()) {
       createBrowserWindow()
     }
   })
+
+  // User-Agent 정규화 — Electron 기본 UA 는 "browser-build/0.1.0 ... Electron/35.7.5" 를 그대로 담는다.
+  // 이건 "일반 브라우저가 아님"을 스스로 밝히는 것과 같아, 봇 탐지에 즉시 걸리고(인스타·페북·틱톡)
+  // 일부 사이트는 아예 다른 페이지를 준다. 앱·Electron 토큰만 제거해 순정 Chrome UA 로 맞춘다.
+  // (Chromium 버전은 실제 런타임 값을 쓰므로 Electron 업그레이드 때 자동으로 따라간다.)
+  applyCleanUserAgent()
 
   app.whenReady().then(async () => {
     recordWhenReady()
@@ -235,6 +261,9 @@ if (!app.requestSingleInstanceLock()) {
       // 부팅 시 'startup' 트리거 매크로 실행 (외피 마운트 직후)
       const runStartup = (): void => {
         recordFirstWindowReady()
+        // 클라이언트 힌트(Sec-CH-UA) 헤더에 쓸 브랜드 목록을 실제 렌더러에서 한 번 읽어 캐시한다.
+        // 값을 지어내지 않고 navigator.userAgentData 와 항상 같은 값을 헤더로 내보내기 위함.
+        void captureBrands(ctx.chrome.webContents)
         setTimeout(() => {
           const startupMacros = listStartupMacros()
           for (const macro of startupMacros) {

@@ -244,6 +244,8 @@ const api = {
       ipcRenderer.invoke(IPC.video.ytdlpStatus),
     ytdlpEnsure: (): Promise<{ ok: boolean; path: string | null }> =>
       ipcRenderer.invoke(IPC.video.ytdlpEnsure),
+    ytdlpUpdate: (): Promise<{ ok: boolean; result: 'updated' | 'up-to-date' | 'skipped' | 'failed' }> =>
+      ipcRenderer.invoke(IPC.video.ytdlpUpdate),
     onCandidates: (cb: (payload: { tabId: string; candidates: MediaCandidate[] }) => void) =>
       on(IPC.video.candidatesChanged, cb),
   },

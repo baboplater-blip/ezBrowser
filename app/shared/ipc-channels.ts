@@ -106,6 +106,7 @@ export const IPC = {
     download: 'video:download',
     ytdlpStatus: 'video:ytdlp-status',
     ytdlpEnsure: 'video:ytdlp-ensure',
+    ytdlpUpdate: 'video:ytdlp-update',
     downloadFromOverlay: 'video:download-from-overlay',
   },
   screenshot: {

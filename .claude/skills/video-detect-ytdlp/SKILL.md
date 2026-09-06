@@ -139,6 +139,20 @@ async function ensureYtDlp(): Promise<string> {
 }
 ```
 
+### 최신 유지 (필수 — YouTube 등은 추출 로직이 자주 바뀌어 구버전은 곧 실패)
+
+한 번 받은 바이너리를 방치하면 며칠~몇 주 안에 YouTube 다운로드가 깨진다. 그래서 **설치 후에도
+자동으로 최신 릴리즈를 유지**한다(`app/main/features/video-download/index.ts` 의 `maybeUpdateYtDlp`).
+
+- **버전 추적**: `userData/binaries/yt-dlp.version.json` 에 `{ tag, checkedAt }` 저장.
+- **확인**: GitHub API `repos/yt-dlp/yt-dlp/releases/latest` 의 `tag_name` 과 비교. throttle 12h.
+- **교체**: tag 가 다르면 최신 바이너리를 tmp→rename(atomic)으로 교체. **실행 중 다운로드가 있으면
+  파일 잠금 위험 때문에 보류**(다음 기회에) — `activeYtDlpCount` 로 판별.
+- **트리거**: 부팅 8초 후 1회 + 12h 주기 + 다운로드 시작 시(모두 throttle·비차단).
+- **설정**: `downloads.ytdlpAutoUpdate`(기본 true, 끄면 자동 확인 안 함). 설정 페이지 "지금 최신화"
+  버튼은 `IPC.video.ytdlpUpdate` → `maybeUpdateYtDlp({ force: true })`.
+- **첫 설치는 항상 최신**: `ensureYtDlp` 가 `releases/latest/download` 에서 받으므로 최초부터 최신.
+
 ## 호출
 
 ```ts

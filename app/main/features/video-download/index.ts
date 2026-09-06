@@ -1,7 +1,7 @@
 import { app, dialog, ipcMain, session } from 'electron'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import type { MediaCandidate, DownloadItem } from '../../../shared/types'
@@ -16,6 +16,7 @@ import { downloadDash, DashSeparateAvError } from '../downloads/dash'
 import { onResponseStarted } from '../response-hooks'
 import { getTab, getTabPartition, getWebContentsByTabId } from '../../tabs/tab-service'
 import { putPending, removePending, type HlsPending, type VideoPending } from '../downloads/pending-store'
+import { getSetting } from '../../storage/settings'
 
 const VIDEO_MIME = [/^video\//i, /application\/vnd\.apple\.mpegurl/i, /application\/dash\+xml/i, /application\/x-mpegurl/i]
 const VIDEO_EXT = /\.(m3u8|mpd|mp4|webm|mkv|mov)(\?|$)/i
@@ -307,6 +308,11 @@ export function initVideoDetect(): void {
       /* ignore */
     }
   })
+
+  // 설치된 yt-dlp 를 최신으로 유지 — 부팅 8초 후 백그라운드 확인(throttle 12h),
+  // 이후 하루 한 번 주기 확인. YouTube 등은 추출 로직이 자주 바뀌어 최신 유지가 필수.
+  setTimeout(() => { void maybeUpdateYtDlp() }, 8_000)
+  setInterval(() => { void maybeUpdateYtDlp() }, YT_DLP_UPDATE_INTERVAL_MS)
 }
 
 export function reportSiteCandidate(tabId: string, pageUrl: string): void {
@@ -323,8 +329,19 @@ export function reportSiteCandidate(tabId: string, pageUrl: string): void {
 }
 
 // ====== yt-dlp 통합 ======
+//
+// yt-dlp 는 YouTube 등이 추출 로직을 자주 바꿔 "최신 유지"가 사실상 필수다(구버전은 곧 실패).
+// 그래서 ① 최초 설치는 항상 최신을 받고 ② 설치 후에도 백그라운드로 GitHub 최신 릴리즈를 확인해
+// 새 버전이면 조용히 교체한다. throttle 로 하루 한 번만 확인하고, 실행 중 다운로드가 있으면
+// 파일 잠금 위험 때문에 교체를 미룬다.
 
 const YT_DLP_RELEASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download'
+const YT_DLP_API_LATEST = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest'
+const YT_DLP_UPDATE_INTERVAL_MS = 12 * 60 * 60 * 1000 // 12h
+
+// 실행 중인 yt-dlp 자식 프로세스 수 — 교체 시 파일 잠금(특히 Windows) 회피용
+let activeYtDlpCount = 0
+let ytDlpUpdateInFlight = false
 
 function ytDlpAssetName(): string {
   if (process.platform === 'win32') return 'yt-dlp.exe'
@@ -336,8 +353,64 @@ function ytDlpPath(): string {
   return path.join(app.getPath('userData'), 'binaries', ytDlpAssetName())
 }
 
+function ytDlpVersionPath(): string {
+  return path.join(app.getPath('userData'), 'binaries', 'yt-dlp.version.json')
+}
+
 export function isYtDlpInstalled(): boolean {
   return existsSync(ytDlpPath())
+}
+
+async function readYtDlpState(): Promise<{ tag: string; checkedAt: number }> {
+  try {
+    const j = JSON.parse(await readFile(ytDlpVersionPath(), 'utf8')) as { tag?: unknown; checkedAt?: unknown }
+    return {
+      tag: typeof j.tag === 'string' ? j.tag : '',
+      checkedAt: typeof j.checkedAt === 'number' ? j.checkedAt : 0,
+    }
+  } catch {
+    return { tag: '', checkedAt: 0 }
+  }
+}
+
+async function writeYtDlpState(tag: string): Promise<void> {
+  try {
+    await mkdir(path.dirname(ytDlpVersionPath()), { recursive: true })
+    await writeFile(ytDlpVersionPath(), JSON.stringify({ tag, checkedAt: Date.now() }), 'utf8')
+  } catch { /* ignore */ }
+}
+
+/** GitHub API 로 최신 릴리즈 태그(예: '2024.08.06') 조회. 실패 시 null. */
+async function fetchLatestYtDlpTag(): Promise<string | null> {
+  try {
+    const resp = await fetch(YT_DLP_API_LATEST, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'ezBrowser' },
+    })
+    if (!resp.ok) return null
+    const j = (await resp.json()) as { tag_name?: unknown }
+    return typeof j.tag_name === 'string' && j.tag_name ? j.tag_name : null
+  } catch {
+    return null
+  }
+}
+
+/** 최신 바이너리를 내려받아 target 을 원자적으로(tmp→rename) 교체. */
+async function downloadYtDlpBinary(target: string): Promise<void> {
+  await mkdir(path.dirname(target), { recursive: true })
+  const resp = await fetch(`${YT_DLP_RELEASE}/${ytDlpAssetName()}`)
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const buf = Buffer.from(await resp.arrayBuffer())
+  const tmp = `${target}.tmp`
+  await writeFile(tmp, buf)
+  if (process.platform !== 'win32') await chmod(tmp, 0o755)
+  try {
+    await rename(tmp, target) // 기존 파일 대체(atomic)
+  } catch {
+    // Windows 에서 target 잠김 등으로 rename 실패 시 직접 덮어쓰기 폴백
+    await writeFile(target, buf)
+    if (process.platform !== 'win32') await chmod(target, 0o755)
+    await unlink(tmp).catch(() => { /* ignore */ })
+  }
 }
 
 export async function ensureYtDlp(opts?: { silent?: boolean }): Promise<string | null> {
@@ -351,20 +424,15 @@ export async function ensureYtDlp(opts?: { silent?: boolean }): Promise<string |
       defaultId: 0, cancelId: 1,
       title: 'yt-dlp 가 필요합니다',
       message: '동영상 다운로드를 위해 yt-dlp 를 다운로드합니다.',
-      detail: '약 15 MB. GitHub yt-dlp/yt-dlp 공식 릴리즈에서 받습니다. (옵션 자산 — 한 번만)',
+      detail: '약 15 MB. GitHub yt-dlp/yt-dlp 공식 릴리즈(최신)에서 받습니다. 이후 자동으로 최신 유지됩니다.',
     })
     if (ok.response !== 0) return null
   }
 
-  await mkdir(path.dirname(target), { recursive: true })
   try {
-    const resp = await fetch(`${YT_DLP_RELEASE}/${ytDlpAssetName()}`)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const buf = Buffer.from(await resp.arrayBuffer())
-    await writeFile(target, buf)
-    if (process.platform !== 'win32') {
-      await chmod(target, 0o755)
-    }
+    await downloadYtDlpBinary(target)
+    // 설치본 버전 기록 — 이후 auto-update 가 이 태그와 최신을 비교
+    void fetchLatestYtDlpTag().then((tag) => { if (tag) void writeYtDlpState(tag) })
     return target
   } catch (err) {
     console.error('[video] yt-dlp download failed', err)
@@ -377,6 +445,43 @@ export async function ensureYtDlp(opts?: { silent?: boolean }): Promise<string |
   }
 }
 
+/**
+ * 설치본 yt-dlp 를 GitHub 최신 릴리즈로 유지한다(백그라운드, 조용히).
+ * - 설치 안 됨 → skip(최초 다운로드는 ensureYtDlp 가 최신을 받음)
+ * - throttle: force 아니면 마지막 확인 후 12h 이내면 skip
+ * - 설정 downloads.ytdlpAutoUpdate=false 면(force 아닌 한) skip
+ * - 실행 중 다운로드가 있으면 파일 잠금 위험 → 교체 보류(다음 기회에)
+ */
+export async function maybeUpdateYtDlp(opts?: { force?: boolean }): Promise<'updated' | 'up-to-date' | 'skipped' | 'failed'> {
+  if (ytDlpUpdateInFlight) return 'skipped'
+  const target = ytDlpPath()
+  if (!existsSync(target)) return 'skipped'
+  if (!opts?.force && getSetting('downloads').ytdlpAutoUpdate === false) return 'skipped'
+
+  const state = await readYtDlpState()
+  if (!opts?.force && Date.now() - state.checkedAt < YT_DLP_UPDATE_INTERVAL_MS) return 'skipped'
+
+  ytDlpUpdateInFlight = true
+  try {
+    const latest = await fetchLatestYtDlpTag()
+    if (!latest) return 'failed'
+    if (latest === state.tag) {
+      await writeYtDlpState(latest) // checkedAt 만 갱신 → throttle 리셋
+      return 'up-to-date'
+    }
+    if (activeYtDlpCount > 0) return 'skipped' // 다운로드 중 — 나중에 교체
+    await downloadYtDlpBinary(target)
+    await writeYtDlpState(latest)
+    console.log(`[video] yt-dlp updated → ${latest}`)
+    return 'updated'
+  } catch (err) {
+    console.warn('[video] yt-dlp update check failed', (err as Error).message)
+    return 'failed'
+  } finally {
+    ytDlpUpdateInFlight = false
+  }
+}
+
 function sanitizeName(name: string): string {
   return name.replace(/[\\/:*?"<>|%\n\r\t]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 80)
 }
@@ -384,6 +489,10 @@ function sanitizeName(name: string): string {
 export async function downloadWithYtDlp(url: string, pageUrl: string, opts: { format?: string; title?: string; tabId?: string } = {}): Promise<string | null> {
   const bin = await ensureYtDlp()
   if (!bin) return null
+
+  // 다운로드 계기로 최신 여부 확인(throttle 12h, 비차단). 실제 교체는 실행 중 다운로드가
+  // 없을 때만 일어나므로 지금 시작하는 다운로드의 바이너리를 건드리지 않는다.
+  void maybeUpdateYtDlp()
 
   const id = nextDownloadId('vid')
   const outDir = defaultDownloadDir('videos')
@@ -492,6 +601,9 @@ function runYtDlpProcess(bin: string, p: VideoPending, cookiesPath?: string): vo
   registerExternalDownload(meta)
 
   const child = spawn(bin, args, { windowsHide: true })
+  activeYtDlpCount++
+  let exitCounted = false
+  const decActive = () => { if (!exitCounted) { exitCounted = true; activeYtDlpCount = Math.max(0, activeYtDlpCount - 1) } }
 
   const titleRe = /\[download\] Destination:\s+(.+)/
   let buffer = ''
@@ -551,6 +663,7 @@ function runYtDlpProcess(bin: string, p: VideoPending, cookiesPath?: string): vo
   })
 
   child.on('exit', (code) => {
+    decActive()
     // 완료/종료 — 영속 상태 제거(이어받기 대상에서 빠짐). 비정상 종료(크래시)면 exit 자체가 안 불려 영속 유지.
     removePending(id)
     if (cookiesPath) void unlink(cookiesPath).catch(() => { /* ignore */ })
@@ -569,6 +682,7 @@ function runYtDlpProcess(bin: string, p: VideoPending, cookiesPath?: string): vo
   })
 
   child.on('error', (err) => {
+    decActive()
     removePending(id)
     if (cookiesPath) void unlink(cookiesPath).catch(() => { /* ignore */ })
     updateExternalDownload(id, { state: 'failed', error: err.message })

@@ -5,6 +5,7 @@ import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { HeaderPair, PolicyRule, PolicyRuleSummary } from '../../../shared/types'
 import { DEFAULT_SESSION } from '../../../shared/constants'
+import { applyClientHints } from '../client-hints'
 
 const policies = new Map<string, PolicyRule>()
 let loaded = false
@@ -381,9 +382,13 @@ export function installPolicyOn(ses: Session): void {
 function installOn(ses: Session): void {
   if (installedSessions.has(ses)) return
   installedSessions.add(ses)
+  // 세션당 onBeforeSendHeaders 리스너는 하나만 유효하다(마지막 등록만 살아남는다 — 회귀 #5 계열).
+  // 그래서 클라이언트 힌트 보강도 별도 등록이 아니라 이 디스패처 안에서 처리한다.
+  // 순서: 클라이언트 힌트 먼저 → 사용자 정책 룰이 그 위에 덮어쓸 수 있게(사용자 룰이 항상 최종 결정권).
   ses.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, cb) => {
     try {
-      const next = applyToRequestHeaders(details.url, details.requestHeaders)
+      const withHints = applyClientHints(details.url, details.requestHeaders)
+      const next = applyToRequestHeaders(details.url, withHints)
       cb({ cancel: false, requestHeaders: next })
     } catch (err) {
       console.warn('[policy] onBeforeSendHeaders error', err)

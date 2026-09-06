@@ -29,8 +29,18 @@ export interface RepeatSummary {
   autoConfirm: boolean; status: RepeatJob['status']; nextAt: number | null; lastResult?: string
 }
 
-const MIN_INTERVAL_MS = 2_000
+// 최소 간격 — 예전 2초는 "0.05분·무제한" 같은 설정 하나로 2초마다 같은 글을 계속 게시하는 스팸 머신이 됐다.
+// 계정 활동(게시·댓글·팔로우)은 더 긴 하한을 강제한다.
+const MIN_INTERVAL_MS = 60_000
+const MIN_INTERVAL_PUBLISH_MS = 10 * 60_000
+// 계정 활동 반복은 하루 상한을 둔다(무제한 반복으로 계정이 잠기는 것 방지).
+const MAX_PUBLISH_RUNS_PER_DAY = 24
 const CONFIRM_WAIT_MS = 60_000
+
+// 이 반복이 계정 활동(게시·댓글·팔로우·DM)인가 — 하한 간격·일일 상한 적용 여부.
+function isAccountActivity(task: string): boolean {
+  return /게시|발행|올리|업로드|댓글|답글|좋아요|팔로우|구독|공유|보내|전송|post|publish|upload|comment|follow|like|share|send|dm/i.test(task ?? '')
+}
 
 export const repeatEvents = new EventEmitter()
 const jobs = new Map<string, RepeatJob>()
@@ -63,12 +73,15 @@ async function runOnce(job: RepeatJob): Promise<void> {
   let confirmTimer: NodeJS.Timeout | null = null
   const clearCt = (): void => { if (confirmTimer) { clearTimeout(confirmTimer); confirmTimer = null } }
   try {
-    await runAgentTask({ reqId, tabId, task: job.task }, (evt: AgentEvent) => {
+    // unattended: 전역 "무인 실행 승인" 토글이 아니라 이 반복 작업의 autoConfirm 만 따른다.
+    await runAgentTask({ reqId, tabId, task: job.task, unattended: true }, (evt: AgentEvent) => {
       repeatEvents.emit('event', { scheduleId: job.id, reqId, run: job.doneCount + 1, ...evt })
       switch (evt.type) {
         case 'confirm':
           clearCt()
-          if (job.autoConfirm) confirmAgentStep(reqId, true)
+          // critical(결제·삭제 등 되돌릴 수 없는 것)은 autoConfirm 이어도 자동 승인하지 않고 이번 실행을 중단한다.
+          if (evt.critical) { job.lastResult = `안전 중단: ${String(evt.label ?? '되돌릴 수 없는 동작')}`.slice(0, 200); cancelAgentTask(reqId) }
+          else if (job.autoConfirm) confirmAgentStep(reqId, true)
           else confirmTimer = setTimeout(() => cancelAgentTask(reqId), CONFIRM_WAIT_MS)
           break
         case 'ask':
@@ -76,7 +89,10 @@ async function runOnce(job: RepeatJob): Promise<void> {
           break
         case 'done': job.lastResult = String(evt.message ?? '완료'); clearCt(); break
         case 'error': job.lastResult = '오류: ' + String(evt.message ?? ''); clearCt(); break
-        case 'cancelled': job.lastResult = job.autoConfirm ? '중단됨' : '민감 동작 확인 없음/질문으로 이번 실행 취소'; clearCt(); break
+        // 안전 중단(critical 거부) 사유가 이미 기록돼 있으면 덮어쓰지 않는다.
+        case 'cancelled':
+          if (!job.lastResult?.startsWith('안전 중단')) job.lastResult = job.autoConfirm ? '중단됨' : '민감 동작 확인 없음/질문으로 이번 실행 취소'
+          clearCt(); break
         default: break
       }
     })
@@ -112,10 +128,17 @@ async function tick(job: RepeatJob): Promise<void> {
 export function startRepeat(args: { task: string; windowId: string; tabId: string; intervalMinutes: number; count: number; autoConfirm?: boolean }): RepeatSummary | null {
   const task = String(args.task ?? '').trim()
   if (!task || !args.windowId || !args.tabId) return null
-  const intervalMs = Math.max(MIN_INTERVAL_MS, Math.round((Number(args.intervalMinutes) || 1) * 60_000))
+  const activity = isAccountActivity(task)
+  const floor = activity ? MIN_INTERVAL_PUBLISH_MS : MIN_INTERVAL_MS
+  const intervalMs = Math.max(floor, Math.round((Number(args.intervalMinutes) || 1) * 60_000))
+  // 무제한(0) 이어도 계정 활동이면 하루치 상한으로 잘라 스팸 판정·계정 정지를 막는다.
+  const askedCount = Math.max(0, Math.floor(Number(args.count) || 0))
+  const cappedCount = activity
+    ? (askedCount === 0 ? MAX_PUBLISH_RUNS_PER_DAY : Math.min(askedCount, MAX_PUBLISH_RUNS_PER_DAY))
+    : askedCount
   const job: RepeatJob = {
     id: randomUUID(), task, windowId: args.windowId, tabId: args.tabId,
-    intervalMs, totalCount: Math.max(0, Math.floor(Number(args.count) || 0)),
+    intervalMs, totalCount: cappedCount,
     doneCount: 0, autoConfirm: !!args.autoConfirm, status: 'running', nextAt: null, createdAt: Date.now(),
   }
   jobs.set(job.id, job)

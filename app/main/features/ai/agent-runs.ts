@@ -117,6 +117,19 @@ export function getAgentRun(id: string): AgentRun | null {
   return all().find((r) => r.id === id) ?? null
 }
 
+// 실행 이력은 디스크에 평문으로 남는다. 비밀번호·카드번호·토큰처럼 남으면 안 되는 값은 가린다.
+const CARD_LIKE = /\b(?:\d[ -]?){13,19}\b/g
+const TOKEN_LIKE = /\b(?:sk|pk|ghp|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b|\bBearer\s+[A-Za-z0-9._-]{12,}/gi
+// 공백 없이 이어진 12자 이상 + 숫자·기호가 섞인 문자열 = 비밀번호일 가능성이 높다(URL·이메일은 제외).
+const PASSWORD_LIKE = /(?<![\w./:@-])(?!https?:\/\/|www\.)(?=[^\s]{12,})(?=[^\s]*\d)(?=[^\s]*[^\w\s])(?![^\s]*@)[^\s]{12,}(?![\w./-])/g
+
+function maskSecrets(text: string): string {
+  return String(text ?? '')
+    .replace(TOKEN_LIKE, '[가림: 토큰]')
+    .replace(CARD_LIKE, '[가림: 번호]')
+    .replace(PASSWORD_LIKE, '[가림]')
+}
+
 // 에이전트 이벤트를 사람이 읽는 단계로 변환(AiTab 라이브 트레이스와 동일 매핑).
 type EventLike = { type: string; [k: string]: unknown }
 function deriveStep(evt: EventLike): AgentRunStep | null {
@@ -128,7 +141,8 @@ function deriveStep(evt: EventLike): AgentRunStep | null {
     case 'result': return { icon: evt.ok ? '✔️' : '✖️', text: s('detail'), tone: evt.ok ? 'ok' : 'warn' }
     case 'confirm': return { icon: '⏸️', text: `확인 필요: ${s('label')}`, tone: 'warn' }
     case 'ask': return { icon: '❓', text: s('message') }
-    case 'answer': return { icon: '🗣️', text: `답변: ${s('text')}`, tone: 'muted' }
+    // 사용자 답변은 디스크(ai-agent-runs.json)에 영구 저장된다 → 비밀번호·카드번호가 평문으로 남지 않게 가린다.
+    case 'answer': return { icon: '🗣️', text: `답변: ${maskSecrets(s('text'))}`, tone: 'muted' }
     case 'report': return { icon: '📄', text: `보고서: ${s('title')} (노트 ${s('notes')}개)`, tone: 'ok' }
     case 'done': return { icon: '🏁', text: s('message') || '완료', tone: 'ok' }
     case 'error': return { icon: '❌', text: s('message') || '오류', tone: 'warn' }

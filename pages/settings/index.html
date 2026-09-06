@@ -441,6 +441,17 @@
         html += '</div>'
 
         html += '<div class="section"><h3>고급</h3>'
+        html += row('사람처럼 조작 (봇 탐지 회피)', '에이전트가 <b>실제 마우스 이동 궤적과 trusted 클릭·키 입력</b>으로 조작합니다. 인스타그램·페이스북·유튜브처럼 봇을 감지하는 사이트에서 사람의 조작으로 인식되게 합니다(권장). 끄면 더 빠른 합성 이벤트를 쓰지만 일부 사이트에서 차단될 수 있습니다.', toggleHtml('ai.agentHumanInput', a.agentHumanInput !== false))
+        html += row('조작 속도',
+          '사람 흉내 타이밍(마우스 궤적·타건 간격)은 봇 탐지 회피에 필요하지만 그만큼 느립니다. '
+          + '<b>자동</b>(권장): 인스타·틱톡처럼 봇 탐지가 도는 사이트에서만 사람 속도로, 그 외 사이트는 같은 실제 입력을 빠르게 보냅니다(클릭 약 3배·입력 약 2.5배 빠름). '
+          + '<b>항상 사람 속도</b>: 가장 안전하지만 느립니다. <b>항상 빠르게</b>: 가장 빠르지만 일부 사이트에서 감지될 수 있습니다.',
+          selectHtml('ai.agentInputMode', a.agentInputMode || 'auto', [
+            { value: 'auto', label: '자동 (사이트에 따라)' },
+            { value: 'human', label: '항상 사람 속도' },
+            { value: 'fast', label: '항상 빠르게' },
+          ]))
+        html += row('민감 동작 자동 승인 (무인 실행)', '기본은 <b>결제·구매·송금·삭제처럼 돈이 나가거나 데이터가 사라지는 동작만</b> 확인을 받습니다(검색·로그인·폼 제출·<b>글 게시/발행/업로드는 확인 없이 진행</b> — 자동 발행에 방해되지 않음). 이 옵션을 켜면 그 위험한 동작까지도 <b>확인 없이 자동 진행</b>합니다. 편하지만 위험하니 신뢰하는 작업에만 켜세요.', toggleHtml('ai.agentAutoApprove', a.agentAutoApprove === true))
         html += row('에이전트 최대 단계 수', '한 작업에서 에이전트가 시도하는 최대 단계. 로그인→업로드→게시처럼 긴 작업은 크게(기본 25, 6~80)', inputHtml('ai.agentMaxSteps', a.agentMaxSteps || 25, 'number'))
         html += row('최대 응답 길이 (토큰)', '한 번의 답변에서 생성할 최대 토큰 수', inputHtml('ai.maxTokens', a.maxTokens || 2048, 'number'))
         html += row('페이지 컨텍스트 최대 글자수', '페이지 본문을 몇 글자까지 AI 에 보낼지', inputHtml('ai.maxContextChars', a.maxContextChars || 12000, 'number'))
@@ -558,6 +569,11 @@
           + row('가속 (멀티 커넥션)', '병렬 4 커넥션 (HTTP)', toggleHtml('downloads.accelerator', d.accelerator))
           + row('토렌트 DHT', '익명 P2P 트래커 — 보통 OFF', toggleHtml('downloads.torrentDht', d.torrentDht))
           + row('토렌트 최대 시드 비율', '완료 후 업로드 비율 (1.0~10.0)', inputHtml('downloads.torrentMaxSeedRatio', d.torrentMaxSeedRatio, 'number'))
+          + '</div>'
+          + '<h2>동영상 다운로드 (yt-dlp)</h2>'
+          + '<div class="section">'
+          + row('yt-dlp 자동 최신화', 'YouTube 등은 자주 바뀌어 최신 유지가 필요 — 하루 한 번 확인', toggleHtml('downloads.ytdlpAutoUpdate', d.ytdlpAutoUpdate !== false))
+          + row('지금 최신화', '설치돼 있으면 최신으로 교체, 없으면 최신을 받음', '<button class="btn" id="ytdlp-update-now" type="button">지금 최신화</button><span id="ytdlp-update-status" style="margin-left:8px;color:var(--muted);"></span>')
           + '</div>'
       }
 
@@ -1103,6 +1119,28 @@
           settings.downloads.defaultPath = r.path
           await window.internalAPI.settings.set('downloads.defaultPath', r.path)
           render()
+        })
+
+        const updBtn = document.getElementById('ytdlp-update-now')
+        if (updBtn) updBtn.addEventListener('click', async () => {
+          const status = document.getElementById('ytdlp-update-status')
+          const setStatus = (t) => { if (status) status.textContent = t }
+          updBtn.disabled = true
+          setStatus('확인 중…')
+          try {
+            const r = await window.internalAPI.video.ytdlpUpdate()
+            const msg = {
+              'updated': '최신으로 교체됨 ✓',
+              'up-to-date': '이미 최신입니다 ✓',
+              'skipped': '지금은 교체 불가 (다운로드 중이거나 네트워크 문제)',
+              'failed': '실패 — 네트워크를 확인하세요',
+            }
+            setStatus(msg[r && r.result] || (r && r.ok ? '완료' : '실패'))
+          } catch (e) {
+            setStatus('실패 — ' + (e && e.message ? e.message : '오류'))
+          } finally {
+            updBtn.disabled = false
+          }
         })
       }
 

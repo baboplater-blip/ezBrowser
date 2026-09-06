@@ -185,6 +185,11 @@ const api = {
     pickFolder: (): Promise<{ canceled: boolean; path?: string }> => ipcRenderer.invoke(IPC.downloads.pickFolder),
     onUpdate: (cb: (list: DownloadItem[]) => void) => on(IPC.downloads.update, cb),
   },
+  video: {
+    ytdlpStatus: (): Promise<{ installed: boolean }> => ipcRenderer.invoke(IPC.video.ytdlpStatus),
+    ytdlpUpdate: (): Promise<{ ok: boolean; result: 'updated' | 'up-to-date' | 'skipped' | 'failed' }> =>
+      ipcRenderer.invoke(IPC.video.ytdlpUpdate),
+  },
   torrent: {
     add: (uri: string): Promise<string | null> => ipcRenderer.invoke(IPC.torrent.add, { uri }),
     pause: (id: string): Promise<void> => ipcRenderer.invoke(IPC.torrent.pause, { id }),

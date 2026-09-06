@@ -3,6 +3,7 @@ import { IPC } from '../../shared/ipc-channels'
 import type { MediaCandidate } from '../../shared/types'
 import {
   downloadMedia, downloadStream, downloadWithYtDlp, ensureYtDlp, getCandidates, isYtDlpInstalled,
+  maybeUpdateYtDlp,
 } from '../features/video-download'
 import { getAllWindows, getWindow } from '../windows/window-service'
 import { getTab } from '../tabs/tab-service'
@@ -53,5 +54,15 @@ export function registerVideoIpc(): void {
   ipcMain.handle(IPC.video.ytdlpEnsure, async () => {
     const p = await ensureYtDlp()
     return { ok: !!p, path: p }
+  })
+
+  // 지금 최신화 — 미설치면 최신을 받고(사용자 동의 다이얼로그), 설치돼 있으면 강제 최신 확인·교체.
+  ipcMain.handle(IPC.video.ytdlpUpdate, async () => {
+    if (!isYtDlpInstalled()) {
+      const p = await ensureYtDlp()
+      return { ok: !!p, result: p ? ('updated' as const) : ('failed' as const) }
+    }
+    const result = await maybeUpdateYtDlp({ force: true })
+    return { ok: result !== 'failed', result }
   })
 }
