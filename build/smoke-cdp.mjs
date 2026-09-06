@@ -314,7 +314,12 @@ class CDPSession {
       this.pending.set(id, { resolve, reject })
     })
     this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
+    // 타임아웃 시 pending 엔트리를 반드시 지운다 — 무응답 커맨드(렌더러 컨텍스트 미생성/타깃 스왑)가
+    // 맵에 영구 잔류하면 나중에 도착한 응답이 엉뚱한 대기자를 깨우거나 close 시 대량 reject 를 낳는다.
+    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`).catch((err) => {
+      this.pending.delete(id)
+      throw err
+    })
   }
 
   close() {
@@ -326,6 +331,44 @@ async function connectSession(target, label) {
   const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
   await session.connect()
   return session
+}
+
+/**
+ * 외피 CDP 세션을 **실제로 응답하는 상태로** 확보한다.
+ *
+ * 왜 필요한가 (2026-09-06 실측): /json/list 에 외피 타깃이 나타난 직후 곧바로 Runtime.evaluate 를
+ * 보내면, 렌더러 실행 컨텍스트가 아직 생성되지 않았거나 타깃이 스왑되는 순간에 걸려 **커맨드가
+ * 영영 응답하지 않는다**(CDP 에러도 오지 않음). 앱은 멀쩡한데 하네스만 INFRA 타임아웃으로
+ * 무너져 3회 중 2회가 FAIL 하는 간헐 실패의 원인이었다.
+ *
+ * 대책: 타깃 재발견 → 연결 → Runtime.enable → 짧은 타임아웃(2s) 프로브 evaluate 를
+ * 성공할 때까지 반복한다. 응답이 없으면 그 세션을 버리고 새로 연결한다(스왑된 타깃 대응).
+ */
+async function connectShellSessionReady(port, { totalMs = 45_000, probeMs = 2_000 } = {}) {
+  const deadline = Date.now() + totalMs
+  let attempt = 0
+  let lastErr = null
+  while (Date.now() < deadline) {
+    attempt += 1
+    let session = null
+    try {
+      const target = await waitForShellTarget(port, Math.max(1_000, deadline - Date.now()))
+      session = await connectSession(target, 'chrome-shell')
+      // Runtime.enable 은 실행 컨텍스트 준비를 앞당기고, 응답 자체가 세션 생존 신호가 된다.
+      await session.send('Runtime.enable', {}, probeMs)
+      const probe = await session.send('Runtime.evaluate', {
+        expression: '1+1', returnByValue: true,
+      }, probeMs)
+      if (probe?.result?.value !== 2) throw new Error(`프로브 값 이상: ${JSON.stringify(probe)}`)
+      if (attempt > 1) console.log(`[smoke-cdp] 외피 세션 확보 (재시도 ${attempt}회차)`)
+      return session
+    } catch (err) {
+      lastErr = err
+      try { session?.close() } catch { /* ignore */ }
+      await sleep(500)
+    }
+  }
+  throw new Error(`외피 CDP 세션 확보 실패(${totalMs}ms, ${attempt}회 시도)${lastErr ? ` — 마지막 오류: ${lastErr.message}` : ''}`)
 }
 
 /** Runtime.evaluate 래퍼 — 예외를 throw 로, 값을 returnByValue 로 돌려받는다. */
@@ -1149,10 +1192,8 @@ async function main() {
 
   let infraOk = false
   try {
-    console.log('[smoke-cdp] CDP 외피 타깃 대기 중 (최대 30초)…')
-    const shellTarget = await waitForShellTarget(args.port, 30_000)
-    console.log(`[smoke-cdp] 외피 타깃 발견: ${shellTarget.url}`)
-    ctx.chromeSession = await connectSession(shellTarget, 'chrome-shell')
+    console.log('[smoke-cdp] CDP 외피 타깃 대기 + 응답 확인 중 (최대 45초)…')
+    ctx.chromeSession = await connectShellSessionReady(args.port, { totalMs: 45_000 })
     ctx.state.openSessions.push(ctx.chromeSession)
 
     ctx.windowId = await evaluate(

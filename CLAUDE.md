@@ -1369,3 +1369,11 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **설정 + 수동 버튼**: `downloads.ytdlpAutoUpdate`(기본 true — 끄면 자동 확인 안 함). 설정 "동영상 다운로드 (yt-dlp)" 섹션에 자동 최신화 토글 + **"지금 최신화" 버튼**(`IPC.video.ytdlpUpdate` → `maybeUpdateYtDlp({force:true})`, 미설치면 `ensureYtDlp`). 결과 토스트(교체됨/이미 최신/보류/실패). preload: browserAPI(`video.ytdlpUpdate`) + internalAPI(`video.ytdlpStatus/ytdlpUpdate`, 설정 페이지용).
   - **검증**: typecheck 3/3 무경고 · build 통과(preload internal 50.8kb).
   - **다음 후보**: ① 실사용에서 자동 교체 동작 확인(스테일 바이너리 → 재부팅 후 갱신), ② 업데이트 발생 시 사용자 토스트 알림, ③ `activeYtDlpCount>0` 로 보류된 교체를 다운로드 종료 직후 재시도.
+- 2026-09-06: **auto-dev 임무 A — 위생·안전망 (미커밋 6라운드 검증·커밋 + 스모크 하네스 간헐 실패 fix)**. 코드 기능 변경 0, 검증·하네스·문서만.
+  - **배경**: 묶음 SEC-1~4·SPD-1·YTDLP-1(2026-08-20~25) 분량이 **미커밋(+5190/−3798줄)** 으로 남아 있었고, YTDLP-1 은 게이트 0(typecheck·build)만 통과한 상태였다. 검증 후 체크포인트 커밋으로 유실 위험 제거.
+  - **검증 결과(전부 통과)**: typecheck 3/3 · build(외피 gzip 99KB, 예산 500KB의 20%) · `package:win` NSIS · **smoke-cdp 16/16 ×3회 연속** · **verify-agent-safety A1~A14 14/14** · `probe-fingerprint` "[문제] 없음". → 6라운드 델타에 회귀 없음 확정.
+  - **하네스 버그 fix (`build/smoke-cdp.mjs`)** — 상시 게이트가 **3회 중 2회 INFRA 타임아웃으로 전 시나리오 FAIL** 하던 간헐 실패. 원인: `/json/list` 에 외피 타깃이 나타난 **직후** `Runtime.evaluate` 를 보내면 렌더러 실행 컨텍스트 미생성/타깃 스왑 순간에 걸려 **커맨드가 영영 응답하지 않는다**(CDP 에러조차 오지 않음). 앱은 정상 — 같은 순간 별도 CDP 클라이언트로 프로브하면 21ms 에 응답했다(이것이 앱 버그와 하네스 버그를 가른 결정적 실험).
+    - **fix**: `connectShellSessionReady(port)` 신설 — 타깃 재발견 → 연결 → `Runtime.enable`(실행 컨텍스트 등록을 앞당기고 응답 자체가 세션 생존 신호) → 짧은 타임아웃(2s) 프로브 evaluate 를 성공할 때까지 반복, 실패한 세션은 버리고 **재연결**(타깃 스왑 대응). `CDPSession.send()` 는 타임아웃 시 `pending` 엔트리를 삭제(무응답 커맨드가 맵에 영구 잔류해 늦게 온 응답이 엉뚱한 대기자를 깨우는 것 방지). 패치 후 **3회 연속 16/16**.
+    - **교훈(다른 CDP 하네스에도 적용)**: 타깃이 `/json/list` 에 보이는 것은 **CDP 명령을 받을 준비가 됐다는 뜻이 아니다.** 첫 명령은 반드시 짧은 타임아웃 + 재시도 + 재연결로 감싼다.
+  - **문서**: `docs/auto-dev/RECON.md` 신설(구조·실행법·하네스 전수·3대 함정·지뢰 — 다음 임무가 재정찰 없이 읽는 정찰 지도). `status.md` 의 2개월 드리프트 해소(V6·릴리즈-1·AI-1~16·SEC-1~4·SPD-1·YTDLP-1 구간을 출시 관점 요약으로 반영, 출시 준비도 🔴→🟡, 잔여 차단 = 코드 서명 1건).
+  - **관찰(미수정)**: `settings.downloads.defaultPath` 배선은 V6 에서 해결됐으나 `askEveryTime` 네이티브 다이얼로그는 여전히 자동 검증 불가(사람 조작 필요).
