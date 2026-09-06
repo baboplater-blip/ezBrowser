@@ -31,6 +31,17 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 import { startTestServer } from './smoke-media-server.mjs'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  ensureSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+  waitForTargetByUrlPredicate,
+} from './lib/cdp.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -271,113 +282,6 @@ function activateAppWindow(pid) {
 
 // ── CDP 클라이언트 (의존성 0 — Node 22+ 내장 WebSocket) ──────────────────
 
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-    // 이벤트(msg.method) 는 이번 하네스에서 구독하지 않음 — polling 기반으로 충분.
-  }
-
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1 /* OPEN */) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
-    })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    // 타임아웃 시 pending 엔트리를 반드시 지운다 — 무응답 커맨드(렌더러 컨텍스트 미생성/타깃 스왑)가
-    // 맵에 영구 잔류하면 나중에 도착한 응답이 엉뚱한 대기자를 깨우거나 close 시 대량 reject 를 낳는다.
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`).catch((err) => {
-      this.pending.delete(id)
-      throw err
-    })
-  }
-
-  close() {
-    try { this.ws?.close() } catch { /* ignore */ }
-  }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
-
-/**
- * 외피 CDP 세션을 **실제로 응답하는 상태로** 확보한다.
- *
- * 왜 필요한가 (2026-09-06 실측): /json/list 에 외피 타깃이 나타난 직후 곧바로 Runtime.evaluate 를
- * 보내면, 렌더러 실행 컨텍스트가 아직 생성되지 않았거나 타깃이 스왑되는 순간에 걸려 **커맨드가
- * 영영 응답하지 않는다**(CDP 에러도 오지 않음). 앱은 멀쩡한데 하네스만 INFRA 타임아웃으로
- * 무너져 3회 중 2회가 FAIL 하는 간헐 실패의 원인이었다.
- *
- * 대책: 타깃 재발견 → 연결 → Runtime.enable → 짧은 타임아웃(2s) 프로브 evaluate 를
- * 성공할 때까지 반복한다. 응답이 없으면 그 세션을 버리고 새로 연결한다(스왑된 타깃 대응).
- */
-async function connectShellSessionReady(port, { totalMs = 90_000 } = {}) {
-  const deadline = Date.now() + totalMs
-  // 프로브 대기는 **짧게 시작해 크게 늘린다**. 갓 패키징한 exe 는 첫 실행에서 백신 검사·콜드
-  // 캐시 때문에 외피 렌더러가 CDP 에 붙기까지 오래 걸린다(2026-09-06 실측: 같은 머신에서
-  // 20ms → 16초로 변동). 짧은 타임아웃으로 재연결만 반복하면 **늦게 오는 응답을 매번 버려**
-  // 영원히 실패한다 — 실제로 그렇게 45초를 18번 헛되이 쓴 적이 있다.
-  const schedule = [8_000, 20_000, 30_000, 30_000]
-  let attempt = 0
-  let lastErr = null
-  while (Date.now() < deadline) {
-    const remain = deadline - Date.now()
-    const probeMs = Math.max(2_000, Math.min(schedule[Math.min(attempt, schedule.length - 1)], remain))
-    attempt += 1
-    let session = null
-    try {
-      const target = await waitForShellTarget(port, Math.max(1_000, deadline - Date.now()))
-      session = await connectSession(target, 'chrome-shell')
-      // Runtime.enable 은 실행 컨텍스트 준비를 앞당기고, 응답 자체가 세션 생존 신호가 된다.
-      await session.send('Runtime.enable', {}, probeMs)
-      const probe = await session.send('Runtime.evaluate', {
-        expression: '1+1', returnByValue: true,
-      }, probeMs)
-      if (probe?.result?.value !== 2) throw new Error(`프로브 값 이상: ${JSON.stringify(probe)}`)
-      if (attempt > 1) console.log(`[smoke-cdp] 외피 세션 확보 (재시도 ${attempt}회차)`)
-      return session
-    } catch (err) {
-      lastErr = err
-      try { session?.close() } catch { /* ignore */ }
-      await sleep(500)
-    }
-  }
-  throw new Error(`외피 CDP 세션 확보 실패(${totalMs}ms, ${attempt}회 시도)${lastErr ? ` — 마지막 오류: ${lastErr.message}` : ''}`)
-}
-
 /** Runtime.evaluate 래퍼 — 예외를 throw 로, 값을 returnByValue 로 돌려받는다. */
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 30_000 } = opts
@@ -406,74 +310,6 @@ function callApi(session, apiPath, args = [], opts) {
 }
 
 // ── CDP 타깃 발견 ────────────────────────────────────────────────────────
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-/**
- * 이미 연결한 세션이 **실제로 응답하는지** 확인한다(필요하면 잠깐 기다린다).
- * 갓 만들어진 창의 타깃은 /json/list 에 먼저 나타나고 렌더러 준비는 그 뒤라, 곧바로 보낸
- * 첫 명령이 응답하지 않을 수 있다(2026-09-06 실측: 시크릿 창 시나리오 flake).
- */
-async function ensureSessionReady(session, { totalMs = 45_000, probeMs = 15_000 } = {}) {
-  const deadline = Date.now() + totalMs
-  let lastErr = null
-  while (Date.now() < deadline) {
-    try {
-      await session.send('Runtime.enable', {}, probeMs)
-      const probe = await session.send('Runtime.evaluate', { expression: '1+1', returnByValue: true }, probeMs)
-      if (probe?.result?.value === 2) return true
-    } catch (err) { lastErr = err }
-    await sleep(300)
-  }
-  throw new Error(`세션 응답 확인 실패(${session.label})${lastErr ? ` — ${lastErr.message}` : ''}`)
-}
-
-/** CDP 디버그 포트가 빌 때까지 기다린다(응답이 없으면 비어 있는 것). */
-async function waitForPortFree(port, timeoutMs = 10_000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1500) })
-      if (!res.ok) return true
-    } catch (err) {
-      // **연결 거부**만 "비어 있음"이다. 타임아웃·리셋은 소켓을 쥔 좀비가 응답만 못 하는
-      // 상태일 수 있고, 그때 진행하면 새 앱이 포트를 못 잡아 남의 타깃을 검사하게 된다
-      // (2026-09-06 실측: 이 오판이 전 시나리오 FAIL 의 원인이었다).
-      const code = err?.cause?.code ?? err?.code
-      if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') return true
-    }
-    await sleep(500)
-  }
-  return false
-}
-
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  const found = await pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 500, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-  return found
-}
-
-async function waitForTargetByUrlPredicate(port, predicate, label, timeoutMs = 15_000) {
-  return pollUntil(async () => {
-    const list = await getTargetList(port)
-    return list.find((t) => t.type === 'page' && typeof t.url === 'string' && predicate(t.url)) ?? null
-  }, { timeoutMs, intervalMs: 300, label })
-}
 
 // ── OS 합성 스크린샷 (z-order 검증용) ──────────────────────────────────
 

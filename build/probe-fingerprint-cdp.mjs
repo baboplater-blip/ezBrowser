@@ -16,6 +16,12 @@ import http from 'node:http'
 import https from 'node:https'
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  CDPSession,
+  ensureSessionReady,
+  getTargetList,
+  isShellTarget,
+} from './lib/cdp.mjs'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -37,32 +43,6 @@ async function pollUntil(fn, { timeoutMs = 15000, intervalMs = 300, label = 'con
   throw new Error(`pollUntil timeout: ${label}`)
 }
 
-class CDPSession {
-  constructor(wsUrl, label) { this.wsUrl = wsUrl; this.label = label; this.ws = null; this._id = 0; this.pending = new Map() }
-  async connect(timeoutMs = 10000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => { for (const [, p] of this.pending) p.reject(new Error('ws closed')); this.pending.clear() })
-  }
-  _onMessage(ev) {
-    let msg; try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id); this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error: ${msg.error.message}`)); else resolve(msg.result)
-    }
-  }
-  send(method, params = {}, timeoutMs = 15000) {
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method}`)
-  }
-  close() { try { this.ws?.close() } catch { /* ignore */ } }
-}
 async function evaluate(session, expression) {
   const r = await session.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true })
   if (r.exceptionDetails) throw new Error(`JS exception: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`)
@@ -70,8 +50,6 @@ async function evaluate(session, expression) {
 }
 const lit = (a) => (a === undefined ? 'undefined' : JSON.stringify(a))
 const callApi = (s, p, args = []) => evaluate(s, `window.browserAPI.${p}(${args.map(lit).join(', ')})`)
-async function getTargetList(port) { const r = await fetch(`http://127.0.0.1:${port}/json/list`); return r.json() }
-const isShellTarget = (t) => t.type === 'page' && typeof t.url === 'string' && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
 const shellWindowId = (t) => { try { return new URL(t.url).searchParams.get('windowId') } catch { return null } }
 
 // 요청 헤더를 그대로 기록하는 페이지 서버
@@ -143,7 +121,7 @@ async function main() {
   const report = {}
   try {
     const st = await pollUntil(async () => (await getTargetList(PORT)).find(isShellTarget) ?? null, { timeoutMs: 30000, label: 'shell' })
-    shell = new CDPSession(st.webSocketDebuggerUrl, 'shell'); await shell.connect()
+    shell = new CDPSession(st.webSocketDebuggerUrl, 'shell'); await shell.connect(); await ensureSessionReady(shell)
     const windowId = shellWindowId(st)
     const before = new Set((await getTargetList(PORT)).map((t) => t.id))
     await callApi(shell, 'tabs.create', [windowId, pageUrl])

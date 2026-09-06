@@ -22,6 +22,14 @@ import { createRequire } from 'node:module'
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  CDPSession,
+  connectSession,
+  ensureSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+} from './lib/cdp.mjs'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -44,38 +52,6 @@ async function pollUntil(fn, { timeoutMs = 10000, intervalMs = 300, label = 'con
   throw new Error(`pollUntil timeout: ${label}${lastErr ? ` (마지막 오류: ${lastErr.message})` : ''}`)
 }
 
-// ── CDP 클라이언트 (다른 하네스와 동일) ────────────────────────────────────
-class CDPSession {
-  constructor(wsUrl, label) { this.wsUrl = wsUrl; this.label = label; this.ws = null; this._id = 0; this.pending = new Map(); this.events = [] }
-  async connect(timeoutMs = 10000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => { for (const [, p] of this.pending) p.reject(new Error('ws closed')); this.pending.clear() })
-  }
-  _onMessage(ev) {
-    let msg; try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id); this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`)); else resolve(msg.result)
-      return
-    }
-    // CDP 이벤트 — Electron debugger 의 'message' 시그니처(event, method, params, sessionId)로 전달한다.
-    if (typeof msg.method === 'string') for (const fn of this.events) { try { fn({}, msg.method, msg.params ?? {}, msg.sessionId) } catch { /* ignore */ } }
-  }
-  send(method, params = {}, timeoutMs = 15000) {
-    if (!this.ws || this.ws.readyState !== 1) return Promise.reject(new Error(`CDP not open (${this.label}) ${method}`))
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-  close() { try { this.ws?.close() } catch { /* ignore */ } }
-}
-async function connectSession(target, label) { const s = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id); await s.connect(); return s }
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15000 } = opts
   const r = await session.send('Runtime.evaluate', { expression, awaitPromise, returnByValue, userGesture: true }, timeoutMs)
@@ -84,8 +60,6 @@ async function evaluate(session, expression, opts = {}) {
 }
 const lit = (a) => (a === undefined ? 'undefined' : JSON.stringify(a))
 const callApi = (session, apiPath, args = []) => evaluate(session, `window.browserAPI.${apiPath}(${args.map(lit).join(', ')})`)
-async function getTargetList(port) { const res = await fetch(`http://127.0.0.1:${port}/json/list`); if (!res.ok) throw new Error(`/json/list ${res.status}`); return res.json() }
-const isShellTarget = (t) => t.type === 'page' && typeof t.url === 'string' && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
 const shellWindowId = (t) => { try { return new URL(t.url).searchParams.get('windowId') } catch { return null } }
 
 // ── 테스트 페이지 ──────────────────────────────────────────────────────────
@@ -190,6 +164,10 @@ async function main() {
   const { server, url: pageUrl } = await startPageServer()
   const profileDir = path.join(OUT, 'agent-safety-profile')
   seedProfile(profileDir)
+  if (!(await waitForPortFree(PORT))) {
+    // 좀비 인스턴스가 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+    throw new Error(`디버그 포트 ${PORT} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하세요.`)
+  }
   const child = launchApp(profileDir)
   let shell = null; let content = null
 
@@ -197,6 +175,7 @@ async function main() {
     const shellTarget = await pollUntil(async () => (await getTargetList(PORT)).find(isShellTarget) ?? null,
       { timeoutMs: 30000, intervalMs: 500, label: 'shell target' })
     shell = await connectSession(shellTarget, 'shell')
+    await ensureSessionReady(shell)
     const windowId = shellWindowId(shellTarget)
 
     const before = new Set((await getTargetList(PORT)).map((t) => t.id))

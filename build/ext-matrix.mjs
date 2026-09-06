@@ -23,6 +23,15 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+} from './lib/cdp.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -216,58 +225,6 @@ function seedProfile(profileDir) {
 
 // ── CDP 클라이언트 (의존성 0 — Node 22+ 내장 WebSocket) ──────────────────
 
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-  }
-
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }) })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-
-  close() { try { this.ws?.close() } catch { /* ignore */ } }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
-
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
   const result = await session.send('Runtime.evaluate', {
@@ -286,29 +243,6 @@ function argToLiteral(a) { return a === undefined ? 'undefined' : JSON.stringify
 function callApi(session, apiPath, args = [], opts) {
   const argStr = args.map(argToLiteral).join(', ')
   return evaluate(session, `window.browserAPI.${apiPath}(${argStr})`, opts)
-}
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  const found = await pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 500, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-  return found
 }
 
 async function cdpScreenshot(session, outDir, name) {
@@ -553,6 +487,16 @@ async function main() {
   await cleanupStaleProcess(args.out)
   seedProfile(profileDir)
 
+  if (!(await waitForPortFree(args.port))) {
+
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+
+    throw new Error(`디버그 포트 ${args.port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+
+  }
+
   const { child } = launchApp(args.exe, args.out, args.port, profileDir)
 
   const ctx = {
@@ -566,8 +510,10 @@ async function main() {
   let infraOk = false
   try {
     console.log('[ext-matrix] CDP 외피 타깃 대기 중 (최대 30초)…')
-    const shellTarget = await waitForShellTarget(args.port, 30_000)
-    ctx.chromeSession = await connectSession(shellTarget, 'chrome-shell')
+    ctx.chromeSession = await connectShellSessionReady(args.port, {
+      label: 'chrome-shell',
+      log: (msg) => console.log(`[ext-matrix] ${msg}`),
+    })
     ctx.openSessions.push(ctx.chromeSession)
     ctx.windowId = await evaluate(ctx.chromeSession, `new URL(location.href).searchParams.get('windowId')`)
     if (!ctx.windowId) throw new Error('외피 URL 에서 windowId 를 읽지 못함')

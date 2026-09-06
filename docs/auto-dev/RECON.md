@@ -29,6 +29,7 @@ npm run dev         # vite + electron (cross-env 로 VITE_DEV_SERVER_URL 주입)
 
 | 하네스 | 무엇을 검증 |
 |--------|-------------|
+| **`lib/cdp.mjs`** | **CDP 접속 공통 계층 — 모든 하네스가 공유. 세션·타깃 발견·포트 점유 가드·응답 대기. 접속 문제는 여기서 고치면 전부 반영된다** |
 | **`verify-all.mjs`** | **통합 러너 — 아래 하네스를 한 줄로 묶는다. `npm run verify`(quick) / `npm run verify:full`. 실패 시 비0 종료** |
 | `smoke-cdp.mjs` | 상시 스모크 16종 (탭·omnibox·북마크·설정·팔레트·adblock·워크스페이스 격리·z-order·다운로드·동영상) |
 | `verify-agent-safety-cdp.mjs` | AI 에이전트 안전·조작 A1~A14 (DOM 지문·업로드·드롭존·타이핑 인간화) |

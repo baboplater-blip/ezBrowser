@@ -22,6 +22,16 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+  waitForTargetByUrlPredicate,
+} from './lib/cdp.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -255,62 +265,6 @@ function seedProfile(profileDir, reset) {
 
 // ── CDP 클라이언트 (smoke-cdp.mjs 와 동일) ────────────────────────────────
 
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-  }
-
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
-    })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-
-  close() {
-    try { this.ws?.close() } catch { /* ignore */ }
-  }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
-
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
   const result = await session.send('Runtime.evaluate', {
@@ -334,36 +288,6 @@ function callApi(session, apiPath, args = [], opts) {
 function callInternal(session, apiPath, args = [], opts) {
   const argStr = args.map(argToLiteral).join(', ')
   return evaluate(session, `window.internalAPI.${apiPath}(${argStr})`, opts)
-}
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  const found = await pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 400, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-  return found
-}
-
-async function waitForTargetByUrlPredicate(port, predicate, label, timeoutMs = 15_000) {
-  return pollUntil(async () => {
-    const list = await getTargetList(port)
-    return list.find((t) => t.type === 'page' && typeof t.url === 'string' && predicate(t.url)) ?? null
-  }, { timeoutMs, intervalMs: 300, label })
 }
 
 // ── Windows WMI 를 통한 프로세스별 Private/전체 Working Set 측정 ──────────
@@ -463,11 +387,18 @@ async function measureColdStart(args) {
     await cleanupStaleProcess(args.out)
     seedProfile(args.profileDir, i === 1) // 첫 회차만 프로필 초기화, 이후는 재사용(정상 종료로 current.json 정리됨)
     const t0 = Date.now()
+    if (!(await waitForPortFree(args.port))) {
+      // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+      // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+      throw new Error(`디버그 포트 ${args.port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+    }
     const { child, stdoutPath } = launchApp(args.exe, args.out, args.port, args.profileDir, `-cold${i}`)
     let record = { run: i, ok: false }
     try {
-      const shellTarget = await waitForShellTarget(args.port, 30_000)
-      const chromeSession = await connectSession(shellTarget, `chrome-cold${i}`)
+      const chromeSession = await connectShellSessionReady(args.port, {
+        label: `chrome-cold${i}`,
+        log: (msg) => console.log(`[perf-measure] ${msg}`),
+      })
       const windowId = await evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`)
       if (!windowId) throw new Error('windowId 를 읽지 못함')
 
@@ -529,13 +460,20 @@ async function measureLongSession(args) {
   // 아직 완전히 회수하지 못했을 수 있음 — 다른 포트를 쓰고 약간의 여유를 둔다.
   const longPort = args.port + 1
   await sleep(1500)
+  if (!(await waitForPortFree(longPort))) {
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+    throw new Error(`디버그 포트 ${longPort} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+  }
   const { child, stdoutPath } = launchApp(args.exe, args.out, longPort, args.profileDir, '-long')
   const result = { ok: false }
   let chromeSession = null
   let controlSession = null
   try {
-    const shellTarget = await waitForShellTarget(longPort, 30_000)
-    chromeSession = await connectSession(shellTarget, 'chrome-long')
+    chromeSession = await connectShellSessionReady(longPort, {
+      label: 'chrome-long',
+      log: (msg) => console.log(`[perf-measure] ${msg}`),
+    })
     // 드물게 타깃은 등장했지만 아직 location.href 가 목표 URL 로 커밋되기 전(레이스)일 수 있어 재시도.
     const windowId = await pollUntil(
       () => evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`),
@@ -770,8 +708,20 @@ async function main() {
   }, null, 2))
   console.log(`\n[perf-measure] 결과 저장: ${resultsPath}`)
 
-  const anyFail = budgetRows.some((r) => String(r.판정).includes('FAIL'))
-  return anyFail ? 1 : 0
+  // 판정은 **Private WorkingSet 기준**이다(CLAUDE.md 가벼움 예산 표: Electron 의
+  // `getAppMetrics().workingSetSize` 는 공유 페이지를 중복 집계해 5~7배 과대평가하므로
+  // "판정에 쓰지 말 것"). 그런데 표의 판정 문자열에는 참고용 `WS=FAIL` 이 함께 들어 있어,
+  // 단순 includes('FAIL') 로 보면 **모든 예산을 통과해도 항상 실패**로 끝난다.
+  // 늘 빨간 게이트는 무시당하므로, private 판정만 실패로 센다(WS 는 표에 참고로 남긴다).
+  const failed = budgetRows.filter((r) => {
+    const v = String(r.판정)
+    if (v.includes('private=')) return /private=FAIL/.test(v)
+    return v.includes('FAIL')
+  })
+  if (failed.length) {
+    console.log(`\n[perf-measure] 예산 초과: ${failed.map((r) => r.항목).join(', ')}`)
+  }
+  return failed.length ? 1 : 0
 }
 
 main().then((code) => {

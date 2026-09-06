@@ -87,6 +87,14 @@
 
 ## 최근 라운드 로그 (최신이 위)
 
+### 2026-09-07 — auto-dev 임무 3: CDP 접속 공통 모듈 이식 (하네스 11개)
+- **왜**: 9/6 에 스모크에서 고친 접속 결함(좀비 포트 선점·CDP 응답 지연·pending 잔류)이 **나머지 10개 하네스에 그대로** 남아 있었다. `CDPSession` 은 11개 파일에 복제돼 있었다.
+- **[build/lib/cdp.mjs](build/lib/cdp.mjs) 신설 + 11개 이식**: 중복 약 600줄 제거, 지역 `CDPSession` 0개. 외피 접속 8곳을 `connectShellSessionReady`(프로브 8s→20s→30s, 총 90초)로, 앱 기동 8곳에 포트 점유 가드, 갓 뜬 창·탭 접속 4곳에 `ensureSessionReady`.
+- **검증(전부 실측)**: smoke 16/16 · session-restore 17/17 · dl-matrix 10 PASS/1 SKIP · ext-matrix PASS · stress PASS · fingerprint PASS · agent-safety 14/14 · bench-agent 정상(클릭 159ms, SPD-1 기록치 일치).
+- **⚠ 자동 변환 사고 검출·복구**: 1차 변환기가 **한 줄 함수**를 만나 다음 블록까지 삼켜 압축형 3파일에서 함수들이 조용히 사라졌다(문법 검사는 통과 — 선언 소실은 문법 오류가 아님). **선언 소실 감사**로 3건 전부 검출 → 복원 후 중괄호 깊이 추적 방식으로 재이식, 파손 0. **자동 리팩터링에 문법 검사만으로는 부족하다.**
+- **perf 게이트 판정 버그 수정**: 참고용 WorkingSet 열(CLAUDE.md 가 "판정에 쓰지 말 것"이라 명시) 때문에 **모든 예산 통과에도 항상 exit 1** 이던 것을 private 기준 판정으로 교정.
+- **못 한 것**: 빈 창 RSS private 이 같은 세션에서 **242MB ↔ 254MB**(예산 250MB)로 경계에서 흔들린다 — V4 의 웜/콜드 구간 경계. **예산을 고쳐 통과시키지 않았다**(다음 라운드 과제). `verify-fixes`·`perf-breakdown` 은 이식만 하고 미실행.
+
 ### 2026-09-06 — auto-dev 임무 2: 검증 하네스 통합 러너 (`npm run verify`)
 - **왜**: 하네스가 11개로 흩어져 라운드마다 무엇을 돌릴지 사람이 기억해야 했다(묶음 YTDLP-1 이 게이트 0만 돌고 끝난 원인). **기억에 의존하는 게이트는 게이트가 아니다** → 목록을 코드로 고정.
 - **[build/verify-all.mjs](build/verify-all.mjs) 신설**: `npm run verify`(게이트 0+스모크) / `verify:full`(전 하네스) / `--only` / `--skip-build` / `--list`. 하네스를 **고치지 않고 감싸며** 종료코드(1차)+결과 JSON(2차)으로 판정, **하나라도 실패하면 비0 종료**. 단계별 회수 시계, 통합 결과표, `verify-out/all/verify-all-results.json`.

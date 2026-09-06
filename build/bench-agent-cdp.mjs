@@ -13,6 +13,9 @@ import { createRequire } from 'node:module'
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  CDPSession,
+} from './lib/cdp.mjs'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -30,31 +33,6 @@ async function pollUntil(fn, { timeoutMs = 20000, intervalMs = 300, label = 'x' 
   const s = Date.now()
   while (Date.now() - s < timeoutMs) { try { const v = await fn(); if (v) return v } catch { /* retry */ } await sleep(intervalMs) }
   throw new Error(`pollUntil timeout: ${label}`)
-}
-class CDPSession {
-  constructor(wsUrl, label) { this.wsUrl = wsUrl; this.label = label; this.ws = null; this._id = 0; this.pending = new Map(); this.events = [] }
-  async connect() {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((res, rej) => {
-      this.ws.addEventListener('open', () => res()); this.ws.addEventListener('error', (e) => rej(new Error(String(e?.message))))
-    }), 10000, 'ws')
-    this.ws.addEventListener('message', (ev) => {
-      let m; try { m = JSON.parse(ev.data) } catch { return }
-      if (typeof m.id === 'number' && this.pending.has(m.id)) {
-        const { resolve, reject } = this.pending.get(m.id); this.pending.delete(m.id)
-        if (m.error) reject(new Error(m.error.message)); else resolve(m.result)
-        return
-      }
-      if (typeof m.method === 'string') for (const fn of this.events) { try { fn({}, m.method, m.params ?? {}, m.sessionId) } catch { /* ignore */ } }
-    })
-  }
-  send(method, params = {}, timeoutMs = 30000) {
-    const id = (this._id += 1)
-    const p = new Promise((res, rej) => this.pending.set(id, { resolve: res, reject: rej }))
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, method)
-  }
-  close() { try { this.ws?.close() } catch { /* ignore */ } }
 }
 async function evaluate(s, expr, timeoutMs = 60000) {
   const r = await s.send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true, userGesture: true }, timeoutMs)
