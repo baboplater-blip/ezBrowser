@@ -59,10 +59,22 @@
 - 같은 경로의 과거 중앙값과 비교해 delta 출력, **+10MB 이상이면 경고**. 표본 3개 미만이면 비교를 표시하지 않는다(성급한 판단 방지).
 - 검증: 3회 연속 실행 → 3회차에 `기준선 비교(warm, 과거 2회 중앙값 253.5MB): -2.5MB` 정상 출력.
 
+### 적대 심사(code-reviewer 1기) 결과와 조치
+| 지적 | 심각도 | 조치 |
+|------|--------|------|
+| **직전 커밋(임무 4)이 `perf-out/`·`perf-breakdown-out/` 프로필 290파일(쿠키·leveldb·캐시)을 실수로 커밋** | Medium | **내 실수.** push 전이라 그 커밋을 되돌려 산출물 없이 재작성(임무 4·5 통합 커밋), `.gitignore` 추가로 재발 차단 |
+| 이력 배열 원소가 `null`이면 중앙값 계산에서 TypeError | Medium | 로드 시 비객체 원소 필터 |
+| `typeof === 'number'` 가 `NaN` 통과 | Low | `Number.isFinite` 로 교체 |
+| `perf-history.json` 쓰기가 비원자적 | Low | tmp + rename |
+| 진단이 이미 세션을 쥔 타깃에 두 번째 WS 를 염(영향 불확실) + 같은 URL 중복 출력 | Medium(불확실)/Low | 해당 타깃은 진단에서 건너뛰도록 수정 — 불확실성 자체를 제거 |
+| S11 진단이 실패를 가리거나 세션을 누수하는가 | — | **문제 없음** 판정(throw 는 항상 실행, `finally` 로 close 보장) |
+| 폴링 8초 확대가 회귀를 덮는가 | — | **문제 없음** 판정(수렴 시 즉시 break, 영구 실패는 여전히 FAIL) |
+
 ### 회귀 (최종)
 | 항목 | 결과 |
 |------|------|
-| `npm run verify` | ✅ **4/4** (typecheck·build·package·스모크 **16/16**) |
+| `npm run verify` | ✅ **4/4** (typecheck·build·package·스모크 **16/16**) — 심사 반영 후 재확인 |
+| perf 기준선 비교 | ✅ `기준선 비교(warm, 과거 3회 중앙값 253MB): -3MB` 정상 동작 |
 | agent-safety | ✅ **14/14** |
 | session-restore | ✅ **17/17** |
 
