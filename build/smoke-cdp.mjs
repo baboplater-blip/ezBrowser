@@ -866,7 +866,11 @@ async function scenarioS11(ctx) {
   const wantInvert = after === true
   let filterVal = null
   let hasInvert = false
-  for (let i = 0; i < 12; i++) {
+  // 대기를 넉넉히(최대 8초) — 머신이 바쁠 때(직전에 성능 측정 같은 무거운 작업을 돌린 뒤)
+  // 메인→렌더러 CSS 주입 반영이 3초를 넘길 수 있다. 짧게 잡으면 제품이 멀쩡한데 게이트만
+  // 빨개진다(2026-09-07: 무거운 perf 실행 직후 실행에서만 ≈50% 실패했고, 격리 재현기에서는
+  // 5라운드×3탭 전부 정상이었다).
+  for (let i = 0; i < 32; i++) {
     filterVal = await evaluate(session, `getComputedStyle(document.documentElement).filter`)
     hasInvert = typeof filterVal === 'string' && filterVal.includes('invert')
     if (hasInvert === wantInvert) break
@@ -882,7 +886,29 @@ async function scenarioS11(ctx) {
 
   const consistent = (after === true && hasInvert) || (after !== true && !hasInvert)
   if (!consistent) {
-    throw new Error(`forcePageDark=${after} 인데 콘텐츠 filter=${filterVal ?? '(none)'} — 불일치`)
+    // 실패했을 때 "어느 탭을 봤는지 / 다른 탭은 어떤지"가 없으면 원인을 좁힐 수 없다.
+    // (2026-09-07: 이 시나리오가 ≈50% 실패했는데 대상 탭 정보가 없어 진단이 막혔다.)
+    let where = '(수집 실패)'
+    try {
+      const href = await evaluate(session, 'location.href')
+      const others = []
+      for (const t of await getTargetList(ctx.port)) {
+        if (t.type !== 'page' || !String(t.url).startsWith('http')) continue
+        // 이미 세션을 쥐고 있는 대상 탭은 다시 열지 않는다(같은 타깃에 두 번째 WS 를 여는 것을 피하고,
+        // 같은 URL 이 두 번 찍히는 것도 막는다). 그 탭 값은 위의 filterVal 이 이미 갖고 있다.
+        if (t.webSocketDebuggerUrl === session.wsUrl) continue
+        let s2 = null
+        try {
+          s2 = await connectSession(t, 'diag')
+          const f = await evaluate(s2, 'getComputedStyle(document.documentElement).filter', { timeoutMs: 5000 })
+          others.push(`${t.url.slice(0, 40)}→${String(f).includes('invert') ? 'invert' : String(f)}`)
+        } catch (e) {
+          others.push(`${t.url.slice(0, 40)}→(조회실패)`)
+        } finally { try { s2?.close() } catch { /* ignore */ } }
+      }
+      where = `대상=${href} · 전체 탭: ${others.join(' | ')}`
+    } catch { /* 진단 실패는 원래 오류를 가리지 않는다 */ }
+    throw new Error(`forcePageDark=${after} 인데 콘텐츠 filter=${filterVal ?? '(none)'} — 불일치 · ${where}`)
   }
   return `toggle: forcePageDark ${before}→${after}, computed filter ${hasInvert ? '포함' : '없음'}(invert) — 일치 확인, `
     + `원복 완료, 스크린샷 ${shot.ok ? shot.path : `실패: ${shot.error}`}`

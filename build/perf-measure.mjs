@@ -42,11 +42,23 @@ const DEFAULTS = {
   port: 9228,
   coldRuns: 3,
   idleMinutes: 3,
+  // 빈 창 baseline 은 한 시점이 아니라 여러 표본의 **중앙값**으로 판정한다(단일 시점은
+  // 그 순간의 GC·지연 초기화 상태에 좌우돼 예산선을 넘나든다 — 2026-09-07 실측).
+  baselineSamples: 5,
+  baselineIntervalMs: 4000,
+  forceCold: false,
 }
 
 const BUDGET = {
   coldStartMs: 2000,
+  // 빈 창 RSS 예산 250MB 는 **웜(2번째 이후 실행 = 실사용 절대다수)** 기준이다.
   blankWindowMemoryMB: 250,
+  // 콜드(설치 후 첫 실행)는 adblock 이 필터 원문을 받아 엔진을 빌드하므로 고정비가 더 붙는다.
+  // CLAUDE.md 의 완화 조항("콜드 예산은 250 + adblock 고정비로 자동 완화")을 코드로 옮긴 값.
+  // 근거 실측: V4(2026-07-11) 콜드 285 / 웜 226 → 차 59MB. 2026-09-07 콜드 289 / 웜 243~249 → 차 40~46MB.
+  // 두 측정을 모두 덮도록 60MB 로 둔다(콜드 예산 = 310MB). 이 값을 올려야 할 상황이 오면
+  // 그것은 완화가 아니라 **adblock 콜드 빌드 비용이 실제로 늘었다는 신호**이므로 조사할 것.
+  adblockColdAllowanceMB: 60,
   perTabMemoryMB: 80,
   idleCpuPercent: 0.5,
   rendererJsGzipKB: 500,
@@ -61,6 +73,8 @@ function parseArgs(argv) {
     else if (a === '--port') out.port = Number(argv[++i] ?? DEFAULTS.port)
     else if (a === '--cold-runs') out.coldRuns = Number(argv[++i] ?? DEFAULTS.coldRuns)
     else if (a === '--idle-minutes') out.idleMinutes = Number(argv[++i] ?? DEFAULTS.idleMinutes)
+    else if (a === '--baseline-samples') out.baselineSamples = Math.max(1, Number(argv[++i] ?? DEFAULTS.baselineSamples))
+    else if (a === '--cold') out.forceCold = true
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0) }
     else console.warn(`[perf-measure] 알 수 없는 인자 무시: ${a}`)
   }
@@ -80,6 +94,9 @@ perf-measure — 가벼움 예산(1원칙 #1) 정밀 측정 하네스
   --port <n>          --remote-debugging-port 값 (기본: 9228)
   --cold-runs <n>      콜드 스타트 반복 횟수 (기본: 3)
   --idle-minutes <n>  idle CPU 샘플링 시간(분) (기본: 3)
+  --baseline-samples <n>  빈 창 baseline 표본 수, 중앙값으로 판정 (기본: 5)
+  --cold              프로필을 비워 **콜드 경로**(adblock 캐시 없음)를 일부러 측정
+                      (기본은 웜 = 2번째 이후 실행, 실사용 절대다수)
 `.trim())
 }
 
@@ -455,7 +472,9 @@ async function measureColdStart(args) {
 async function measureLongSession(args) {
   console.log('\n[long-session] 시작 …')
   await cleanupStaleProcess(args.out)
-  seedProfile(args.profileDir, false) // cold-start 에서 이미 시드된 프로필 재사용
+  // 기본은 웜(콜드 스타트 단계에서 만들어진 프로필·adblock 캐시 재사용) — 실사용 절대다수가
+  // 겪는 "2번째 이후 실행"이 판정 기준이기 때문이다. --cold 는 캐시를 지워 콜드 경로를 강제한다.
+  seedProfile(args.profileDir, args.forceCold)
   // 콜드 스타트 마지막 회차의 graceful shutdown 직후라 OS 가 이전 프로세스의 디버그 포트 소켓을
   // 아직 완전히 회수하지 못했을 수 있음 — 다른 포트를 쓰고 약간의 여유를 둔다.
   const longPort = args.port + 1
@@ -465,8 +484,19 @@ async function measureLongSession(args) {
     // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
     throw new Error(`디버그 포트 ${longPort} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
   }
+  // adblock 엔진 캐시(engine.bin)는 프로필 안에 산다. 이게 있으면 역직렬화만 하는 "웜",
+  // 없으면 필터 원문을 받아 빌드하는 "콜드"다. V4 실측으로 둘의 메모리 차이가 크다는 것이
+  // 확인됐으므로(웜 ≈226MB / 콜드 ≈285MB), 어느 경로를 쟀는지 **기록 없이 판정하면 안 된다**.
+  const adblockCachePath = path.join(args.profileDir, 'adblock', 'engine.bin')
+  let adblockCache = { existedAtLaunch: false, bytes: 0 }
+  try {
+    const st = fs.statSync(adblockCachePath)
+    adblockCache = { existedAtLaunch: true, bytes: st.size }
+  } catch { /* 없으면 콜드 */ }
+  console.log(`[long-session] adblock 캐시: ${adblockCache.existedAtLaunch ? `있음(${(adblockCache.bytes / 1048576).toFixed(1)}MB) → 웜 경로` : '없음 → 콜드 경로'}`)
+
   const { child, stdoutPath } = launchApp(args.exe, args.out, longPort, args.profileDir, '-long')
-  const result = { ok: false }
+  const result = { ok: false, adblockCache, measuredPath: adblockCache.existedAtLaunch ? 'warm' : 'cold' }
   let chromeSession = null
   let controlSession = null
   try {
@@ -509,8 +539,28 @@ async function measureLongSession(args) {
       console.warn('  ⚠ adblock 초기화 로그를 20s 내 확인하지 못함(설정에서 꺼졌거나 지연) — 폴백 고정 대기(8s) 사용')
       await sleep(8000)
     }
-    const baseline = await sampleMemory(controlSession, 'baseline(newtab x1)')
-    console.log(`  baseline: private=${baseline.totalPrivateWorkingSetMB}MB workingSet(electron)=${baseline.totalWorkingSetElectronMB}MB tabs=${baseline.tabs.total} procs=${baseline.processCount}`)
+    // 한 시점만 찍으면 그 순간의 GC·지연 초기화 상태가 판정을 좌우한다(실측: 같은 세션에서
+    // 242MB ↔ 254MB 로 예산선을 넘나들었다). 여러 번 재서 **분포**를 남기고 중앙값으로 판정한다.
+    const baselineSeries = []
+    for (let i = 0; i < args.baselineSamples; i++) {
+      if (i > 0) await sleep(args.baselineIntervalMs)
+      const smp = await sampleMemory(controlSession, `baseline(newtab x1) #${i + 1}`)
+      baselineSeries.push(smp)
+      console.log(`  baseline #${i + 1}: private=${smp.totalPrivateWorkingSetMB}MB workingSet(electron)=${smp.totalWorkingSetElectronMB}MB procs=${smp.processCount}`)
+    }
+    const privates = baselineSeries.map((b) => b.totalPrivateWorkingSetMB).sort((a, b) => a - b)
+    const medianPrivate = privates.length % 2
+      ? privates[(privates.length - 1) / 2]
+      : Math.round(((privates[privates.length / 2 - 1] + privates[privates.length / 2]) / 2) * 10) / 10
+    const baseline = { ...baselineSeries[baselineSeries.length - 1], totalPrivateWorkingSetMB: medianPrivate }
+    result.baselineSeries = {
+      samples: privates,
+      median: medianPrivate,
+      min: privates[0],
+      max: privates[privates.length - 1],
+      spread: Math.round((privates[privates.length - 1] - privates[0]) * 10) / 10,
+    }
+    console.log(`  baseline 확정(중앙값): private=${medianPrivate}MB (표본 ${privates.length}개, 최소 ${privates[0]} / 최대 ${privates[privates.length - 1]}, 폭 ${result.baselineSeries.spread}MB)`)
 
     // ── 2) 탭당 RSS 증가 — about:blank 10개 (background) ──
     console.log('[long-session] about:blank 10탭 생성 …')
@@ -651,14 +701,19 @@ function printReport(args, coldRuns, longSession) {
     { 항목: '콜드 스타트', 측정치_private: '-', 측정치_workingSet: `${cold.avg}ms (avg) / ${cold.max}ms (max)`, 예산: `${BUDGET.coldStartMs}ms`, 판정: cold.pass ? 'PASS' : 'FAIL' },
   ]
   if (longSession.ok) {
-    const blankPass = longSession.baseline.totalPrivateWorkingSetMB <= BUDGET.blankWindowMemoryMB
-    const blankPassWS = longSession.baseline.totalWorkingSetElectronMB <= BUDGET.blankWindowMemoryMB
+    // 어느 경로를 쟀는지에 따라 예산이 다르다 — 라벨 없이 판정하면 콜드 측정이 늘 실패한다.
+    const measuredPath = longSession.measuredPath ?? 'unknown'
+    const blankBudget = measuredPath === 'cold'
+      ? BUDGET.blankWindowMemoryMB + BUDGET.adblockColdAllowanceMB
+      : BUDGET.blankWindowMemoryMB
+    const blankPass = longSession.baseline.totalPrivateWorkingSetMB <= blankBudget
+    const blankPassWS = longSession.baseline.totalWorkingSetElectronMB <= blankBudget
     const perTabPass = longSession.perTabPrivateMB <= BUDGET.perTabMemoryMB
     const perTabPassWS = longSession.perTabWorkingSetElectronMB <= BUDGET.perTabMemoryMB
     const cpuPass = longSession.idle.avgSumCpuPercentSecondHalf <= BUDGET.idleCpuPercent
     const gzipPass = longSession.rendererJs?.gzipKB != null && longSession.rendererJs.gzipKB <= BUDGET.rendererJsGzipKB
     budgetRows.push(
-      { 항목: '빈 창 RSS(newtab 1개)', 측정치_private: `${longSession.baseline.totalPrivateWorkingSetMB}MB`, 측정치_workingSet: `${longSession.baseline.totalWorkingSetElectronMB}MB`, 예산: `${BUDGET.blankWindowMemoryMB}MB`, 판정: `private=${blankPass ? 'PASS' : 'FAIL'} / WS=${blankPassWS ? 'PASS' : 'FAIL'}` },
+      { 항목: `빈 창 RSS(newtab 1개, ${measuredPath === 'cold' ? '콜드' : '웜'} 경로)`, 측정치_private: `${longSession.baseline.totalPrivateWorkingSetMB}MB${longSession.baselineSeries ? ` (중앙값, 표본 ${longSession.baselineSeries.samples.length}개 폭 ${longSession.baselineSeries.spread}MB)` : ''}`, 측정치_workingSet: `${longSession.baseline.totalWorkingSetElectronMB}MB`, 예산: `${blankBudget}MB${measuredPath === 'cold' ? ` (250 + adblock 콜드 ${BUDGET.adblockColdAllowanceMB})` : ''}`, 판정: `private=${blankPass ? 'PASS' : 'FAIL'} / WS=${blankPassWS ? 'PASS' : 'FAIL'}` },
       { 항목: '탭 추가당 RSS 증가', 측정치_private: `${longSession.perTabPrivateMB}MB/탭`, 측정치_workingSet: `${longSession.perTabWorkingSetElectronMB}MB/탭`, 예산: `${BUDGET.perTabMemoryMB}MB/탭`, 판정: `private=${perTabPass ? 'PASS' : 'FAIL'} / WS=${perTabPassWS ? 'PASS' : 'FAIL'}` },
       { 항목: `휴식 시 CPU(${longSession.idle.minutes}분 idle, 후반부 평균)`, 측정치_private: '-', 측정치_workingSet: `${longSession.idle.avgSumCpuPercentSecondHalf}%`, 예산: `${BUDGET.idleCpuPercent}%`, 판정: cpuPass ? 'PASS' : 'FAIL' },
       { 항목: '외피 초기 JS(gzip)', 측정치_private: '-', 측정치_workingSet: `${longSession.rendererJs?.gzipKB ?? 'N/A'}KB`, 예산: `${BUDGET.rendererJsGzipKB}KB`, 판정: gzipPass ? 'PASS' : 'FAIL' },
@@ -707,6 +762,55 @@ async function main() {
     budgetTable: budgetRows,
   }, null, 2))
   console.log(`\n[perf-measure] 결과 저장: ${resultsPath}`)
+
+  // ── 기준선 이력 ────────────────────────────────────────────────────────
+  //
+  // 한 번의 측정값만으로는 "예산을 넘었다"를 말할 수 없다. 2026-09-07 실측에서 같은 빌드가
+  // 같은 머신에서 233~260MB 로 흔들렸다(실행 간 드리프트 ±13MB — 예산까지의 여유와 맞먹는다).
+  // 그래서 실행마다 이력을 남기고, **같은 경로(웜/콜드)의 과거 중앙값**과 비교해 보여준다.
+  // 회귀는 한 번의 초과가 아니라 **중앙값의 이동**으로 판단해야 한다.
+  const historyPath = path.join(args.out, 'perf-history.json')
+  let history = []
+  try {
+    const parsed = JSON.parse(fs.readFileSync(historyPath, 'utf8'))
+    // 손상된 이력(원소가 null·비객체·NaN)이 아래 계산에서 TypeError 를 내지 않도록 여기서 걸러낸다.
+    if (Array.isArray(parsed)) history = parsed.filter((h) => h && typeof h === 'object')
+  } catch { /* 첫 실행 */ }
+
+  const entry = {
+    at: new Date().toISOString(),
+    path: longSession.measuredPath ?? 'unknown',
+    blankPrivateMB: longSession.baseline?.totalPrivateWorkingSetMB ?? null,
+    perTabPrivateMB: longSession.perTabPrivateMB ?? null,
+    coldStartAvgMs: cold?.avg ?? null,
+    spreadMB: longSession.baselineSeries?.spread ?? null,
+  }
+  const samePath = history.filter((h) => h.path === entry.path && Number.isFinite(h.blankPrivateMB))
+  if (samePath.length >= 2 && typeof entry.blankPrivateMB === 'number') {
+    const prev = samePath.slice(-9).map((h) => h.blankPrivateMB).sort((a, b) => a - b)
+    const prevMedian = prev.length % 2
+      ? prev[(prev.length - 1) / 2]
+      : (prev[prev.length / 2 - 1] + prev[prev.length / 2]) / 2
+    const delta = Math.round((entry.blankPrivateMB - prevMedian) * 10) / 10
+    const sign = delta >= 0 ? '+' : ''
+    console.log(`[perf-measure] 기준선 비교(${entry.path}, 과거 ${prev.length}회 중앙값 ${prevMedian}MB): ${sign}${delta}MB`)
+    if (delta >= 10) {
+      console.log(`  ⚠ 과거 중앙값 대비 ${sign}${delta}MB — 실행 간 드리프트(±13MB 관측)를 감안해도 큰 편이다. 추세를 확인할 것.`)
+    }
+    entry.deltaVsMedianMB = delta
+  } else {
+    console.log(`[perf-measure] 기준선 비교: 같은 경로(${entry.path}) 과거 표본 ${samePath.length}개 — 3회 이상 쌓이면 비교를 표시한다.`)
+  }
+  history.push(entry)
+  try {
+    // 원자적 쓰기(tmp + rename) — 중간에 죽어도 반쪽 파일이 남지 않는다.
+    const tmp = `${historyPath}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(history.slice(-50), null, 2))
+    fs.renameSync(tmp, historyPath)
+    console.log(`[perf-measure] 기준선 이력: ${historyPath} (${Math.min(history.length, 50)}회 보관)`)
+  } catch (err) {
+    console.warn('[perf-measure] 기준선 이력 저장 실패(무시):', err.message)
+  }
 
   // 판정은 **Private WorkingSet 기준**이다(CLAUDE.md 가벼움 예산 표: Electron 의
   // `getAppMetrics().workingSetSize` 는 공유 페이지를 중복 집계해 5~7배 과대평가하므로

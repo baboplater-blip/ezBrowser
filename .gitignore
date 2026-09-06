@@ -34,6 +34,8 @@ build/sign.local.js
 app/dist/
 smoke-out*/
 verify-out/
+perf-out/
+perf-breakdown-out/
 logs/
 설치파일/
 resources/brand/
