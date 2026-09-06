@@ -71,7 +71,17 @@ export async function startPageServer() {
     base,
     pageUrl(n) { return `${base}/page?n=${n}` },
     close() {
-      return new Promise((resolve) => server.close(() => resolve()))
+      // 열린 keep-alive 연결이 하나라도 있으면 server.close() 의 콜백은 영영 오지 않는다.
+      // 검증 대상 앱이 아직 살아 있는 순간에 닫으면 실제로 그렇게 멈춘다(2026-09-06 실측:
+      // 스모크가 16/16 통과 후 종료 단계에서 8분 이상 정지 → verify-all 의 회수 시계가 잡음).
+      // 연결을 강제로 끊고, 그래도 안 끝나면 짧은 타임아웃으로 진행한다.
+      return new Promise((resolve) => {
+        let done = false
+        const finish = () => { if (!done) { done = true; resolve() } }
+        const timer = setTimeout(finish, 3000)
+        server.close(() => { clearTimeout(timer); finish() })
+        try { server.closeAllConnections?.() } catch { /* ignore */ }
+      })
     },
   }
 }

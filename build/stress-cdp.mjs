@@ -35,7 +35,7 @@ const REPO_ROOT = path.resolve(__dirname, '..')
 
 const DEFAULTS = {
   exe: path.join(REPO_ROOT, 'dist', 'win-unpacked', 'ezBrowser.exe'),
-  out: 'C:\\Users\\molma\\AppData\\Local\\Temp\\claude\\c--Users-molma-Desktop-----browser-build\\9385582e-821e-4490-88cc-bb0c7fda225a\\scratchpad\\stress',
+  out: path.join(REPO_ROOT, 'verify-out', 'stress'),
   port: 9225,
   keepAlive: false,
 }

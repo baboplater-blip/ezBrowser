@@ -344,11 +344,18 @@ async function connectSession(target, label) {
  * 대책: 타깃 재발견 → 연결 → Runtime.enable → 짧은 타임아웃(2s) 프로브 evaluate 를
  * 성공할 때까지 반복한다. 응답이 없으면 그 세션을 버리고 새로 연결한다(스왑된 타깃 대응).
  */
-async function connectShellSessionReady(port, { totalMs = 45_000, probeMs = 2_000 } = {}) {
+async function connectShellSessionReady(port, { totalMs = 90_000 } = {}) {
   const deadline = Date.now() + totalMs
+  // 프로브 대기는 **짧게 시작해 크게 늘린다**. 갓 패키징한 exe 는 첫 실행에서 백신 검사·콜드
+  // 캐시 때문에 외피 렌더러가 CDP 에 붙기까지 오래 걸린다(2026-09-06 실측: 같은 머신에서
+  // 20ms → 16초로 변동). 짧은 타임아웃으로 재연결만 반복하면 **늦게 오는 응답을 매번 버려**
+  // 영원히 실패한다 — 실제로 그렇게 45초를 18번 헛되이 쓴 적이 있다.
+  const schedule = [8_000, 20_000, 30_000, 30_000]
   let attempt = 0
   let lastErr = null
   while (Date.now() < deadline) {
+    const remain = deadline - Date.now()
+    const probeMs = Math.max(2_000, Math.min(schedule[Math.min(attempt, schedule.length - 1)], remain))
     attempt += 1
     let session = null
     try {
@@ -373,7 +380,7 @@ async function connectShellSessionReady(port, { totalMs = 45_000, probeMs = 2_00
 
 /** Runtime.evaluate 래퍼 — 예외를 throw 로, 값을 returnByValue 로 돌려받는다. */
 async function evaluate(session, expression, opts = {}) {
-  const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
+  const { awaitPromise = true, returnByValue = true, timeoutMs = 30_000 } = opts
   const result = await session.send('Runtime.evaluate', {
     expression,
     awaitPromise,
@@ -409,6 +416,44 @@ async function getTargetList(port) {
 function isShellTarget(t) {
   return t.type === 'page' && typeof t.url === 'string'
     && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
+}
+
+/**
+ * 이미 연결한 세션이 **실제로 응답하는지** 확인한다(필요하면 잠깐 기다린다).
+ * 갓 만들어진 창의 타깃은 /json/list 에 먼저 나타나고 렌더러 준비는 그 뒤라, 곧바로 보낸
+ * 첫 명령이 응답하지 않을 수 있다(2026-09-06 실측: 시크릿 창 시나리오 flake).
+ */
+async function ensureSessionReady(session, { totalMs = 45_000, probeMs = 15_000 } = {}) {
+  const deadline = Date.now() + totalMs
+  let lastErr = null
+  while (Date.now() < deadline) {
+    try {
+      await session.send('Runtime.enable', {}, probeMs)
+      const probe = await session.send('Runtime.evaluate', { expression: '1+1', returnByValue: true }, probeMs)
+      if (probe?.result?.value === 2) return true
+    } catch (err) { lastErr = err }
+    await sleep(300)
+  }
+  throw new Error(`세션 응답 확인 실패(${session.label})${lastErr ? ` — ${lastErr.message}` : ''}`)
+}
+
+/** CDP 디버그 포트가 빌 때까지 기다린다(응답이 없으면 비어 있는 것). */
+async function waitForPortFree(port, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1500) })
+      if (!res.ok) return true
+    } catch (err) {
+      // **연결 거부**만 "비어 있음"이다. 타임아웃·리셋은 소켓을 쥔 좀비가 응답만 못 하는
+      // 상태일 수 있고, 그때 진행하면 새 앱이 포트를 못 잡아 남의 타깃을 검사하게 된다
+      // (2026-09-06 실측: 이 오판이 전 시나리오 FAIL 의 원인이었다).
+      const code = err?.cause?.code ?? err?.code
+      if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') return true
+    }
+    await sleep(500)
+  }
+  return false
 }
 
 async function waitForShellTarget(port, timeoutMs = 30_000) {
@@ -979,8 +1024,18 @@ async function scenarioS11(ctx) {
   await callApi(ctx.chromeSession, 'actions.run', ['action.darkmode.toggle', { windowId: ctx.windowId }])
   await sleep(700)
   const after = await callApi(ctx.chromeSession, 'settings.get', ['appearance.forcePageDark'])
-  const filterVal = await evaluate(session, `getComputedStyle(document.documentElement).filter`)
-  const hasInvert = typeof filterVal === 'string' && filterVal.includes('invert')
+
+  // CSS 주입은 메인 → 렌더러 비동기다. 한 번만 읽으면 아직 안 들어온 순간을 찍어
+  // "불일치"로 오판할 수 있다(2026-09-06 실측 flake). 기대 상태가 될 때까지 잠깐 기다린다.
+  const wantInvert = after === true
+  let filterVal = null
+  let hasInvert = false
+  for (let i = 0; i < 12; i++) {
+    filterVal = await evaluate(session, `getComputedStyle(document.documentElement).filter`)
+    hasInvert = typeof filterVal === 'string' && filterVal.includes('invert')
+    if (hasInvert === wantInvert) break
+    await sleep(250)
+  }
   const shot = await cdpScreenshot(session, ctx.outDir, 's11-content-darkmode')
 
   // 원복
@@ -1030,6 +1085,7 @@ async function scenarioS12(ctx) {
   }, { timeoutMs: 10000, label: 'S12 새 시크릿 창 외피 CDP 타깃' })
 
   const incogSession = await connectSession(newShell, 'chrome-incognito')
+  await ensureSessionReady(incogSession)
   ctx.state.openSessions.push(incogSession)
   const incogWindowId = shellTargetWindowId(newShell)
   if (!incogWindowId) throw new Error('시크릿 창 외피 URL 에서 windowId 를 읽지 못함')
@@ -1164,6 +1220,20 @@ async function main() {
   // 이름 기반 종료가 아니라, 이 하네스가 이전에 띄운 PID 만 정리 (사용자의 실제 인스턴스는 건드리지 않음).
   await cleanupStaleProcess(args.out)
 
+  // 디버그 포트가 정말 비었는지 확인한다.
+  //
+  // 왜 (2026-09-06 실측): 앞선 실행이 남긴 인스턴스가 같은 포트를 쥐고 있으면, 우리가 새 앱을
+  // 띄워도 /json/list 는 **좀비의 타깃**을 돌려준다. 그 렌더러는 이미 죽어 있어 CDP 명령이
+  // 영영 응답하지 않고, 스모크는 전 시나리오 FAIL 로 무너진다. 원인을 알 수 없는 이 간헐 실패의
+  // 진짜 정체가 이것이었다. 남의 브라우저를 검사하느니 **큰 소리로 실패**하는 편이 낫다.
+  const portFree = await waitForPortFree(args.port, 12_000)
+  if (!portFree) {
+    console.error(`[smoke-cdp] 디버그 포트 ${args.port} 가 이미 사용 중입니다 (다른 인스턴스가 쥐고 있음).`)
+    console.error('  → 그 프로세스를 종료하거나 --port 로 다른 포트를 지정하세요.')
+    console.error('  (그대로 진행하면 남의 인스턴스를 검사하게 되므로 중단합니다.)')
+    process.exit(2)
+  }
+
   // 격리 프로필: 실사용자 프로필(%APPDATA%/browser-build)과 완전히 분리.
   // 온보딩/복원 다이얼로그를 피하도록 최소 settings.json 시드.
   seedProfile(args.profileDir, args.keepProfile)
@@ -1192,8 +1262,8 @@ async function main() {
 
   let infraOk = false
   try {
-    console.log('[smoke-cdp] CDP 외피 타깃 대기 + 응답 확인 중 (최대 45초)…')
-    ctx.chromeSession = await connectShellSessionReady(args.port, { totalMs: 45_000 })
+    console.log('[smoke-cdp] CDP 외피 타깃 대기 + 응답 확인 중 (최대 90초)…')
+    ctx.chromeSession = await connectShellSessionReady(args.port, { totalMs: 90_000 })
     ctx.state.openSessions.push(ctx.chromeSession)
 
     ctx.windowId = await evaluate(

@@ -29,6 +29,7 @@ npm run dev         # vite + electron (cross-env 로 VITE_DEV_SERVER_URL 주입)
 
 | 하네스 | 무엇을 검증 |
 |--------|-------------|
+| **`verify-all.mjs`** | **통합 러너 — 아래 하네스를 한 줄로 묶는다. `npm run verify`(quick) / `npm run verify:full`. 실패 시 비0 종료** |
 | `smoke-cdp.mjs` | 상시 스모크 16종 (탭·omnibox·북마크·설정·팔레트·adblock·워크스페이스 격리·z-order·다운로드·동영상) |
 | `verify-agent-safety-cdp.mjs` | AI 에이전트 안전·조작 A1~A14 (DOM 지문·업로드·드롭존·타이핑 인간화) |
 | `dl-matrix.mjs` + `dl-matrix-server.mjs` | 다운로드 11시나리오 (HLS/DASH/토큰CDN/이어받기) |
@@ -38,10 +39,14 @@ npm run dev         # vite + electron (cross-env 로 VITE_DEV_SERVER_URL 주입)
 | `probe-fingerprint-cdp.mjs` / `bench-agent-cdp.mjs` | 자동화 지문 노출 / 에이전트 동작 속도 |
 | `probe-download.mjs` | 단일 URL 다운로드 가능성 진단 CLI |
 
-**하네스 3대 함정 (반드시 지킬 것)**
+라운드 검증은 개별 하네스를 기억해 돌리지 말고 **`npm run verify`** 로 시작한다(무엇을 돌릴지는 러너 등록부가 정본).
+
+**하네스 5대 함정 (반드시 지킬 것)**
 1. 패키징·검증 전 `Stop-Process -Name ezBrowser -Force` (실행 중이면 EXE 잠김 / 사용자 인스턴스 kill 주의 — PID 스코프 권장)
 2. 하네스는 **`--user-data-dir` 격리 프로필** 사용 (사용자 실프로필 오염 금지)
 3. 종료는 CDP `Browser.close` (강제 kill 하면 `sessions/current.json` 잔존 → 다음 부팅에 복원 모달이 창 생성을 블록)
+4. **`taskkill /F` 는 죽음을 보장하지 않는다** — 명령을 받고도 살아남아 **디버그 포트를 계속 쥐는** 인스턴스가 있다. 죽었는지 확인하고 재시도할 것. 좀비가 포트를 쥐면 `/json/list` 가 좀비의 타깃을 돌려주고, 그 렌더러는 영영 응답하지 않아 하네스가 통째로 무너진다(2026-09-06 실측 — INFRA 실패의 주원인)
+5. **갓 패키징한 exe 의 첫 실행은 CDP 응답이 수십 초 늦을 수 있다**(같은 머신에서 20ms ↔ 16초, 백신 검사·콜드 캐시 추정). 짧은 타임아웃 + 재연결 반복은 늦게 오는 응답을 매번 버려 영원히 실패한다 — 대기를 키울 것. `--full` 은 패키징 직후를 피하고, `dist/win-unpacked` 를 백신 예외로 두면 안정적이다
 
 ## ③ 하네스 전수 (재사용 대상)
 

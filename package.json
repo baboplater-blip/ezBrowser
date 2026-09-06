@@ -22,6 +22,9 @@
     "licenses": "license-checker --json --production --excludePrivatePackages > app/main/storage/oss-licenses.json",
     "i18n:check": "node build/i18n-check.mjs",
     "perf:check": "node build/perf-check.mjs",
+    "verify": "node build/verify-all.mjs --quick",
+    "verify:full": "node build/verify-all.mjs --full",
+    "verify:list": "node build/verify-all.mjs --list",
     "typecheck": "tsc -p app/main --noEmit && tsc -p app/preload --noEmit && tsc -p app/renderer --noEmit"
   },
   "dependencies": {
