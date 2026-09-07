@@ -38,6 +38,7 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 
 const results = []
+const reportFiles = []   // 이 검사가 만든 보고서 파일 — 끝나고 지운다
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function check(id, name, ok, detail) {
   results.push({ id, name, status: ok ? 'PASS' : 'FAIL', detail })
@@ -419,6 +420,43 @@ async function main() {
         `성공한 동작 ${okResults}건 — 0 이면 RO1 은 "전부 막혀서" 통과한 것이다`)
     }
 
+    // ---- SR2: 빈 보고서 방지 — 노트도 markdown 도 없이 report 하면 되돌린다 ----
+    {
+      // 가드 조건은 "노트가 없고 **markdown 도 비었을 때**" 다. markdown 을 주면
+      // 그건 빈 보고서가 아니므로 통과시키는 것이 설계다(그래서 여기서는 제목만 준다).
+      const bareReport = { reply: () => JSON.stringify({ action: 'report', title: '빈 보고서 시도' }) }
+      const r = await run({
+        reqId: 'SR2', task: '이 사이트를 훑고 보고해라', readOnly: true,
+        script: [bareReport, doneStep], timeoutMs: 30000,
+      })
+      const nudged = r.evs.some((e) => e.type === 'result' && e.ok === false
+        && /노트가 없음|노트가 하나도/.test(String(e.detail ?? '')))
+      check('SR2', '노트 없이 보고서를 쓰려 하면 되돌려 note 를 유도한다', nudged,
+        `되돌림=${nudged} · 이벤트 ${r.types.slice(0, 8).join('>')}`)
+    }
+
+    // ---- SR1: note 를 쌓고 report 하면 .md 파일이 실제로 나온다 ----
+    {
+      const note = (text) => ({ reply: () => JSON.stringify({ action: 'note', text, thought: '기록' }) })
+      const reportStep = { reply: () => JSON.stringify({ action: 'report', title: '검증 보고서', markdown: '개요와 결론' }) }
+      const r = await run({
+        reqId: 'SR1', task: '이 사이트를 훑고 보고해라', readOnly: true,
+        script: [note('첫 페이지 요약'), note('둘째 페이지 요약'), reportStep], timeoutMs: 40000,
+      })
+      const reportEv = r.evs.find((e) => e.type === 'report')
+      const savedPath = reportEv?.path ? String(reportEv.path) : ''
+      let fileOk = false, hasNote = false
+      if (savedPath && fs.existsSync(savedPath)) {
+        const md = fs.readFileSync(savedPath, 'utf8')
+        fileOk = md.length > 50
+        hasNote = md.includes('첫 페이지 요약') && md.includes('둘째 페이지 요약')
+        reportFiles.push(savedPath)
+      }
+      check('SR1', '보고서가 .md 파일로 저장되고 노트 내용이 담긴다',
+        !!reportEv && fileOk && hasNote && (reportEv.notes ?? 0) >= 2,
+        `노트 ${reportEv?.notes ?? 0}개 · 파일=${savedPath ? path.basename(savedPath) : '(없음)'} · 내용포함=${hasNote}`)
+    }
+
     try { page.close() } catch { /* ignore */ }
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)
@@ -434,6 +472,9 @@ async function main() {
     await llm.close()
     await pages.close()
   }
+
+  // 이 검사가 실제 다운로드 폴더에 만든 보고서만 정리한다(사용자 파일은 손대지 않는다).
+  for (const f of reportFiles) { try { fs.unlinkSync(f) } catch { /* 이미 없으면 그만 */ } }
 
   fs.writeFileSync(path.join(args.out, 'agent-loop-results.json'), JSON.stringify(results, null, 2))
   console.log('\n===== verify-agent-loop 결과 =====')

@@ -100,6 +100,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 L1~L9·F1~F3',
     },
     {
+      id: 'feed-collector', kind: 'harness', modes: ['full'],
+      script: 'verify-feed-collector-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'feed-collector', 'feed-collector-results.json'),
+      timeoutMs: 10 * 60000, desc: '피드 수집·중복 제거·키워드 필터 + 양성대조 C1~C4',
+    },
+    {
       id: 'agent-triggers', kind: 'harness', modes: ['full'],
       script: 'verify-agent-triggers-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'agent-triggers', 'agent-triggers-results.json'),
