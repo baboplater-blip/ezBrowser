@@ -10,7 +10,7 @@
     "dev": "concurrently -k -n RENDERER,MAIN -c blue,green \"npm:dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
     "build:renderer": "vite build",
     "build:main": "tsc -p app/main",
-    "build:preload": "esbuild app/preload/chrome.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/chrome.js && esbuild app/preload/content.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/content.js && esbuild app/preload/internal.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/internal.js && esbuild app/preload/ext-dnr.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/ext-dnr.js",
+    "build:preload": "esbuild app/preload/chrome.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/chrome.js && esbuild app/preload/content.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/content.js && esbuild app/preload/internal.ts --bundle --platform=browser --format=cjs --target=chrome134 --external:electron --outfile=app/dist/preload/internal.js",
     "build": "npm run gen:tokens && npm run gen:icon && npm run gen:perf-baseline && npm run build:renderer && npm run build:main && npm run build:preload",
     "gen:tokens": "node build/gen-tokens.mjs",
     "gen:icon": "node build/gen-icon.mjs",

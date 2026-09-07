@@ -93,14 +93,14 @@
 
 ### 최신 실행
 
-**`npm run verify` — 8/8 PASS · 36s** (2026-09-07 14:16)
+**`npm run verify` — 8/8 PASS · 40s** (2026-09-07 14:28)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
 | typecheck | ✅ PASS | 4s | 종료코드 0 |
-| build | ✅ PASS | 5s | 종료코드 0 |
-| package | ✅ PASS | 8s | 종료코드 0 |
-| smoke | ✅ PASS | 13s | PASS 16 |
+| build | ✅ PASS | 6s | 종료코드 0 |
+| package | ✅ PASS | 10s | 종료코드 0 |
+| smoke | ✅ PASS | 14s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
 | editor-text | ✅ PASS | 0s | PASS 5 |
 | agent-gate | ✅ PASS | 0s | PASS 8 |
@@ -108,6 +108,7 @@
 
 ### 최근 10회
 
+- 2026-09-07 14:28 · `quick` · **8/8 PASS** · 40s
 - 2026-09-07 14:16 · `quick` · **8/8 PASS** · 36s
 - 2026-09-07 14:03 · `quick` · **8/8 PASS** · 38s
 - 2026-09-07 13:33 · `quick` · **8/8 PASS** · 38s
@@ -117,7 +118,6 @@
 - 2026-09-07 12:41 · `full` · **27/27 PASS** · 17m 56s
 - 2026-09-07 12:30 · `quick` · **8/8 PASS** · 32s
 - 2026-09-07 11:33 · `quick` · **8/8 PASS** · 36s
-- 2026-09-07 11:25 · `quick` · **8/8 PASS** · 35s
 
 <!-- verify-all:end -->
 

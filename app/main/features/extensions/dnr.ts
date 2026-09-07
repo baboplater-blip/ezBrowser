@@ -19,7 +19,7 @@
 //    직접 걸지 않고 **순수 판정 함수**만 제공하고, adblock 모듈의 단일 리스너가 호출한다.
 
 import { readFile, readdir, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 
@@ -73,6 +73,7 @@ let staticRules: CompiledRule[] = []
 // 확장이 런타임에 넣는 룰. dynamic 은 **재시작 후에도 유지**(크롬과 같다), session 은 메모리만.
 const dynamicRaw = new Map<string, RawRule[]>()
 const sessionRaw = new Map<string, RawRule[]>()
+let diskCompiled: CompiledRule[] = []   // Chromium 이 디스크에 쓴 확장 동적 룰
 let dynamicCompiled: CompiledRule[] = []
 let sessionCompiled: CompiledRule[] = []
 // 매칭에 쓰는 최종 목록(정적 + 동적 + 세션을 우선순위로 정렬해 합친 것).
@@ -83,7 +84,7 @@ function rankOf(a: CompiledRule): number {
 }
 
 function rebuildMerged(): void {
-  rules = [...staticRules, ...dynamicCompiled, ...sessionCompiled]
+  rules = [...staticRules, ...dynamicCompiled, ...sessionCompiled, ...diskCompiled]
     .sort((a, b) => (b.priority - a.priority) || (rankOf(a) - rankOf(b)))
 }
 
@@ -291,6 +292,85 @@ export function updateRuntimeRules(
 
 export function getRuntimeRules(extId: string, scope: 'dynamic' | 'session'): RawRule[] {
   return (scope === 'dynamic' ? dynamicRaw : sessionRaw).get(extId) ?? []
+}
+
+// ===== Chromium 이 디스크에 쓴 동적 룰을 읽어 온다 =====
+//
+// 왜 (2026-09-07, 임무 39): 확장이 `chrome.declarativeNetRequest.updateDynamicRules` 를 부르면
+// **Electron 이 받아 디스크에 쓴다** — 집행만 하지 않을 뿐이다. 확장 컨텍스트에 preload 를 넣는
+// 길이 막혀 있으므로(임무 38), 그 파일을 읽어 우리 엔진에 병합한다.
+//
+//   <userData>/Partitions/<파티션>/DNR Extension Rules/<확장ID>/rules.json
+//
+// 한계: `updateSessionRules`(세션 룰)는 Chromium 이 **디스크에 쓰지 않는다** → 여전히 미지원.
+
+const DISK_POLL_MS = 2000
+let diskTimer: NodeJS.Timeout | null = null
+const diskRaw = new Map<string, RawRule[]>()   // "<파티션>/<확장ID>" -> 룰
+
+function dnrStoreDirs(): string[] {
+  const root = path.join(app.getPath('userData'), 'Partitions')
+  const out: string[] = []
+  try {
+    for (const part of readdirSync(root)) {
+      const d = path.join(root, part, 'DNR Extension Rules')
+      if (existsSync(d)) out.push(d)
+    }
+  } catch { /* Partitions 가 없으면 그만 */ }
+  // 기본 세션은 Partitions 밖에도 둘 수 있다.
+  const flat = path.join(app.getPath('userData'), 'DNR Extension Rules')
+  if (existsSync(flat)) out.push(flat)
+  return out
+}
+
+/** 디스크의 동적 룰을 다시 읽는다. 내용이 바뀌었으면 true. */
+function syncDiskRules(): boolean {
+  const seen = new Set<string>()
+  let changed = false
+  for (const dir of dnrStoreDirs()) {
+    let exts: string[] = []
+    try { exts = readdirSync(dir) } catch { continue }
+    for (const extId of exts) {
+      const file = path.join(dir, extId, 'rules.json')
+      if (!existsSync(file)) continue
+      const key = `${path.basename(path.dirname(dir))}/${extId}`
+      seen.add(key)
+      let list: RawRule[] = []
+      try {
+        const parsed = JSON.parse(readFileSync(file, 'utf-8'))
+        if (Array.isArray(parsed)) list = parsed
+      } catch { continue }   // 쓰는 도중이면 다음 폴링에서 다시 본다
+      const before = JSON.stringify(diskRaw.get(key) ?? [])
+      const after = JSON.stringify(list)
+      if (before !== after) { diskRaw.set(key, list); changed = true }
+    }
+  }
+  // 사라진 확장의 룰은 버린다
+  for (const key of [...diskRaw.keys()]) if (!seen.has(key)) { diskRaw.delete(key); changed = true }
+
+  if (changed) {
+    diskCompiled = []
+    for (const [key, list] of diskRaw) {
+      const extId = key.slice(key.indexOf('/') + 1)
+      diskCompiled.push(...compileList(extId, list))
+    }
+    rebuildMerged()
+  }
+  return changed
+}
+
+/** 디스크 동적 룰 감시 시작 — 파일 이벤트는 놓칠 수 있어 폴링을 안전망으로 둔다. */
+export function watchDiskDynamicRules(): void {
+  if (diskTimer) return
+  syncDiskRules()
+  diskTimer = setInterval(() => {
+    try {
+      if (syncDiskRules()) {
+        console.log(`[dnr] 확장 동적 룰 갱신 — 매칭 목록 ${rules.length}개`)
+      }
+    } catch { /* 폴링 실패는 무시 */ }
+  }, DISK_POLL_MS)
+  if (typeof diskTimer.unref === 'function') diskTimer.unref()
 }
 
 /** 확장이 제거되면 그 확장의 런타임 룰도 함께 버린다. */

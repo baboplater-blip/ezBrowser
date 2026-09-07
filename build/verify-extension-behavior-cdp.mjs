@@ -274,7 +274,7 @@ async function main() {
         // 프레임 컨텍스트에서는 실행되는지도 함께 본다 — SW 만 안 되는지 가르기 위해.
         preloadInPage = await evalIn(p1, 'window.__bbDnrPreload === true')
         added = await evalIn(sw, 'globalThis.__bbAddDynamic ? globalThis.__bbAddDynamic().then((r) => JSON.stringify(r)).catch((e) => String(e)) : "함수 없음"', true)
-        await sleep(800)
+        await sleep(3500)   // Electron 이 디스크에 쓰고 우리 폴링(2초)이 읽을 시간
         stored = await evalIn(sw, 'chrome.declarativeNetRequest.getDynamicRules().then((r) => JSON.stringify(r)).catch((e) => String(e))', true)
         applied = JSON.parse(await evalIn(shell, 'window.browserAPI.extensions.list().then(l => JSON.stringify(l.map(x => x.dnrRules)))', true) ?? '[]')
         // 룰을 넣은 뒤 그 경로를 요청해 본다
@@ -282,23 +282,18 @@ async function main() {
         const r1 = await evalIn(p1, `fetch('/dyn/a.js').then(() => 'ok').catch(() => 'blocked')`, true)
         blockedAfterAdd = pages.dynHits === 0
         removed = await evalIn(sw, 'globalThis.__bbRemoveDynamic ? globalThis.__bbRemoveDynamic().then(() => true).catch((e) => String(e)) : "함수 없음"', true)
-        await sleep(600)
+        await sleep(3500)   // 제거도 디스크→폴링을 거친다
         pages.resetHits()
         await evalIn(p1, `fetch('/dyn/b.js').then(() => 'ok').catch(() => 'blocked')`, true)
         loadedAfterRemove = pages.dynHits > 0
         try { sw.close() } catch { /* ignore */ }
       }
-      const why = '동적 룰 API 는 **확장 컨텍스트에 우리 preload 를 주입**해야 하는데, Electron 35 에서 '
-        + '`session.registerPreloadScript`(frame·service-worker)도 구형 `setPreloads` 도 실행되지 않았다 '
-        + '(등록은 성공으로 보고되고 파일도 asar 밖 실경로에 있는데 스크립트가 돌지 않는다 — 2026-09-07 실측). '
-        + '한편 Electron 은 `chrome.declarativeNetRequest` **표면만** 제공한다: updateDynamicRules 를 받아 '
-        + '저장하고 getDynamicRules 로 돌려주지만 **집행하지 않는다**. 그래서 확장이 런타임에 넣는 룰은 '
-        + '아직 무력하다(정적 룰셋과 modifyHeaders 는 동작한다). 메인 측 배관(저장·병합·영속·IPC)은 '
-        + '완성돼 있어 주입 경로만 풀리면 바로 붙는다.'
-      gap('X8', '확장이 런타임에 넣은 동적 룰이 실제로 차단한다',
-        preloadRan === true && blockedAfterAdd === true,
-        `preload 실행 SW=${preloadRan}/페이지=${preloadInPage} · Electron 표면 존재=${hasApi} · 차단됨=${blockedAfterAdd}`,
-        why)
+      check('X8', '확장이 런타임에 넣은 동적 룰이 실제로 차단한다',
+        blockedAfterAdd === true,
+        `Electron 표면 존재=${hasApi} · 추가 후 서버 도달 0회=${blockedAfterAdd} · 저장된 룰=${String(stored).slice(0, 80)}`)
+      check('X9', '동적 룰을 제거하면 다시 통과한다(양성 대조)',
+        loadedAfterRemove === true,
+        `제거 후 서버 도달=${loadedAfterRemove} — false 면 X8 은 "확장과 무관하게" 통과한 것이다`)
     }
 
     // X8·X9 까지 쓰고 나서 닫는다(앞에서 닫으면 그 뒤 검사가 세션을 잃는다).

@@ -11,7 +11,7 @@ import { getAllWindows } from '../windows/window-service'
 import { addSessionInitHook, forEachInstalledSession } from '../session-bootstrap'
 import type { ExtensionSummary } from '../../shared/types'
 import {
-  reloadDnrRules, dnrRuleCountFor, loadDynamicRules,
+  reloadDnrRules, dnrRuleCountFor, loadDynamicRules, watchDiskDynamicRules,
   updateRuntimeRules, getRuntimeRules, dropRuntimeRules,
 } from '../features/extensions/dnr'
 
@@ -114,44 +114,7 @@ function sessions(): Session[] {
  * `electron-chrome-extensions` 가 자기 API 를 넣는 것과 **같은 방식**('frame' + 'service-worker').
  * id 를 고정해 두면 같은 세션에 두 번 등록돼도 교체된다(멱등).
  */
-/**
- * ⚠ 현재 이 등록은 **효과가 없다**(2026-09-07 실측). Electron 35 에서 세션 preload 가
- * frame·service-worker 어느 쪽으로도 실행되지 않았다(등록은 성공으로 보고되고 파일도
- * asar 밖 실경로에 있는데 스크립트가 돌지 않는다). 구형 `setPreloads` 도 마찬가지다.
- *
- * 그래서 확장의 **동적 룰 API**(updateDynamicRules 등)는 아직 우리 엔진에 닿지 못한다.
- * 메인 측 배관(저장·병합·영속·IPC)은 완성돼 있으므로 **주입 경로만 풀리면 바로 붙는다**.
- * 지우지 않고 남겨 두는 이유다 — 검사 X8 이 이 상태를 매 실행 GAP 으로 보고한다.
- */
-function registerDnrPreload(ses: Session): void {
-  try {
-    // ⚠ 세션 preload(`registerPreloadScript`)는 **asar 안 파일을 읽지 못한다**(2026-09-07 실측:
-    //   등록은 성공했다고 하는데 스크립트가 실행되지 않았다). 그래서 asar 밖(userData)으로
-    //   한 번 복사해 그 실경로를 등록한다.
-    const src = path.join(__dirname, '..', '..', 'preload', 'ext-dnr.js')
-    const file = path.join(app.getPath('userData'), 'ext-dnr-preload.js')
-    try {
-      if (existsSync(src)) {
-        const cur = existsSync(file) ? readFileSync(file, 'utf-8') : ''
-        const next = readFileSync(src, 'utf-8')
-        if (cur !== next) writeFileSync(file, next, 'utf-8')
-      }
-    } catch (err) { console.warn('[dnr-preload] 복사 실패', err) }
-    const exists = existsSync(file)
-    const canRegister = 'registerPreloadScript' in ses
-    if (!exists || !canRegister) return
-    ses.registerPreloadScript({ id: 'bb-dnr-frame', type: 'frame', filePath: file })
-    ses.registerPreloadScript({ id: 'bb-dnr-sw', type: 'service-worker', filePath: file })
-    // 구형 경로도 함께 — registerPreloadScript 만으로는 실행되지 않는 경우를 봤다.
-    try {
-      const cur = typeof ses.getPreloads === 'function' ? ses.getPreloads() : []
-      if (!cur.includes(file)) ses.setPreloads([...cur, file])
-    } catch (err) { console.warn('[dnr-preload] setPreloads 실패', err) }
-  } catch (err) { console.warn('[extensions] DNR preload 등록 실패', err) }
-}
-
 async function loadEnabledInto(ses: Session): Promise<void> {
-  registerDnrPreload(ses)
   const root = extensionsRoot()
   let entries: string[] = []
   try { entries = await fsp.readdir(root) } catch { return }
@@ -173,6 +136,8 @@ export async function initExtensions(): Promise<void> {
   // 확장 라이브러리 유무와 무관하게 DNR 배관은 세운다 — 동적 룰은 디스크에서 복원한다.
   registerDnrIpc()
   await loadDynamicRules()
+  // 확장이 런타임에 넣는 룰은 Electron 이 디스크에 쓴다 — 그것을 읽어 우리 엔진에 병합한다.
+  watchDiskDynamicRules()
 
   const mod = await loadModule()
   if (!mod) return
