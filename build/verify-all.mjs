@@ -107,6 +107,9 @@ function steps(outRoot) {
 function parseArgs(argv) {
   const out = {
     mode: 'quick', only: null, skipBuild: false, list: false, keepGoing: false,
+    // --full 은 라운드 종결 절차이므로 결과를 status.md 에 자동 기록한다(--no-record 로 생략).
+    // quick·only 실행은 개발 중 수시로 돌리므로 기본은 기록하지 않는다(--record 로 강제).
+    record: null,
     outRoot: path.join(REPO_ROOT, 'verify-out', 'all'),
   }
   for (let i = 0; i < argv.length; i++) {
@@ -116,6 +119,8 @@ function parseArgs(argv) {
     else if (a === '--only') out.only = String(argv[++i] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     else if (a === '--skip-build') out.skipBuild = true
     else if (a === '--keep-going') out.keepGoing = true
+    else if (a === '--record') out.record = true
+    else if (a === '--no-record') out.record = false
     else if (a === '--list') out.list = true
     else if (a === '--out') out.outRoot = path.resolve(argv[++i] ?? '')
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0) }
@@ -228,6 +233,65 @@ function killAppsStartedAfter(sinceMs) {
     console.log(`  ⚠ 종료되지 않은 앱 PID ${survivors.join(', ')} — 디버그 포트를 쥐고 있으면 다음 단계가 실패할 수 있습니다.`)
   }
   return killed
+}
+
+/**
+ * 검증 결과를 status.md 의 전용 섹션에 기록한다(마커 사이를 통째로 교체 — 멱등).
+ *
+ * 왜: test.md 는 "기록 없는 검증은 안 한 것으로 친다"고 정하고 있지만, 사람이 표를 옮겨 적는
+ * 한 그 단계는 언젠가 생략된다. 손으로 쓰는 라운드 로그와 **분리된 섹션**에 자동으로 남겨,
+ * 최소한 "언제 무엇이 통과했는지"는 항상 남게 한다.
+ */
+function recordToStatus(summaryMd, rows, ms, modeLabel, startedAt) {
+  const statusPath = path.join(REPO_ROOT, 'status.md')
+  const BEGIN = '<!-- verify-all:begin -->'
+  const END = '<!-- verify-all:end -->'
+  let text
+  try { text = fs.readFileSync(statusPath, 'utf8') } catch { return null }
+
+  const passCount = rows.filter((r) => r.status === 'PASS').length
+  const when = new Date(startedAt).toISOString().slice(0, 16).replace('T', ' ')
+  const line = `- ${when} · \`${modeLabel}\` · **${passCount}/${rows.length} PASS** · ${fmtDuration(ms)}`
+
+  // 기존 섹션에서 이력 줄만 추려 이어 붙인다(최근 10개).
+  let history = []
+  const prev = text.indexOf(BEGIN)
+  if (prev >= 0) {
+    const block = text.slice(prev, text.indexOf(END) + END.length)
+    history = block.split('\n').filter((l) => /^- \d{4}-\d{2}-\d{2} /.test(l))
+  }
+  history = [line, ...history.filter((l) => l !== line)].slice(0, 10)
+
+  const section = [
+    BEGIN,
+    '## 검증 실행 기록 (자동 — `verify-all` 이 갱신)',
+    '',
+    '> 이 섹션은 `npm run verify:full` 이 자동으로 덮어쓴다. 손으로 고치지 말 것.',
+    '> 라운드의 해석·판단은 아래 "최근 라운드 로그"에 사람이 쓴다.',
+    '',
+    '### 최신 실행',
+    '',
+    summaryMd.split('\n').filter((l) => !/^─/.test(l)).join('\n').trim(),
+    '',
+    '### 최근 10회',
+    '',
+    ...history,
+    '',
+    END,
+  ].join('\n')
+
+  if (prev >= 0) {
+    const endIdx = text.indexOf(END) + END.length
+    text = text.slice(0, prev) + section + text.slice(endIdx)
+  } else {
+    const anchor = '## 최근 라운드 로그'
+    const at = text.indexOf(anchor)
+    text = at >= 0
+      ? text.slice(0, at) + section + '\n\n---\n\n' + text.slice(at)
+      : text.trimEnd() + '\n\n' + section + '\n'
+  }
+  fs.writeFileSync(statusPath, text)
+  return statusPath
 }
 
 function fmtDuration(ms) {
@@ -477,6 +541,12 @@ async function main() {
     fs.writeFileSync(path.join(args.outRoot, 'verify-all-summary.md'), md)
     console.log(`요약 파일: ${path.join(args.outRoot, 'verify-all-summary.md')}`)
   } catch { /* best-effort */ }
+
+  const shouldRecord = args.record === null ? (args.mode === 'full' && !args.only) : args.record === true
+  if (shouldRecord) {
+    const written = recordToStatus(md, rows, summary.ms, modeLabel, startedAt)
+    if (written) console.log(`status.md 검증 기록 갱신: ${written}`)
+  }
   if (failed.length) console.log(`실패 단계: ${failed.map((f) => `${f.id}(${f.status})`).join(', ')}`)
 
   return (failed.length || notRun) ? 1 : 0

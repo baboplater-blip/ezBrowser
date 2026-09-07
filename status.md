@@ -85,6 +85,40 @@
 
 ---
 
+<!-- verify-all:begin -->
+## 검증 실행 기록 (자동 — `verify-all` 이 갱신)
+
+> 이 섹션은 `npm run verify:full` 이 자동으로 덮어쓴다. 손으로 고치지 말 것.
+> 라운드의 해석·판단은 아래 "최근 라운드 로그"에 사람이 쓴다.
+
+### 최신 실행
+
+**`npm run verify:full` — 11/11 PASS · 10m 23s** (2026-09-07 03:47)
+
+| 단계 | 상태 | 소요 | 상세 |
+|------|------|------|------|
+| typecheck | ✅ PASS | 4s | 종료코드 0 |
+| build | ✅ PASS | 5s | 종료코드 0 |
+| package | ✅ PASS | 8s | 종료코드 0 |
+| smoke | ✅ PASS | 17s | PASS 16 |
+| agent-safety | ✅ PASS | 1m 14s | PASS 14 |
+| fingerprint | ✅ PASS | 3s | 종료코드 0 |
+| session-restore | ✅ PASS | 21s | PASS 17 |
+| dl-matrix | ✅ PASS | 16s | PASS 10 · SKIP 1 |
+| ext-matrix | ✅ PASS | 48s | 종료코드 0 |
+| stress | ✅ PASS | 2m 10s | 종료코드 0 |
+| perf | ✅ PASS | 4m 49s | 종료코드 0 |
+
+### 최근 10회
+
+- 2026-09-07 03:47 · `full` · **11/11 PASS** · 10m 23s
+- 2026-09-07 03:47 · `only(smoke)` · **1/1 PASS** · 14s
+- 2026-09-07 03:45 · `only(smoke)` · **1/1 PASS** · 14s
+
+<!-- verify-all:end -->
+
+---
+
 ## 최근 라운드 로그 (최신이 위)
 
 ### 2026-09-07 — auto-dev 임무 12: 시나리오 격리 시도 → 되돌림 (실패한 실험의 기록)
