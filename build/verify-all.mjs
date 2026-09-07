@@ -90,7 +90,13 @@ function steps(outRoot) {
       id: 'agent-loop', kind: 'harness', modes: ['full'],
       script: 'verify-agent-loop-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'agent-loop', 'agent-loop-results.json'),
-      timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e(클릭·확인거부·승인·질문·무인) L1~L6',
+      timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 L1~L9·F1~F3',
+    },
+    {
+      id: 'agent-triggers', kind: 'harness', modes: ['full'],
+      script: 'verify-agent-triggers-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'agent-triggers', 'agent-triggers-results.json'),
+      timeoutMs: 10 * 60000, desc: 'AI 트리거 발화·쿨다운·비활성·삭제 + 양성대조 T1~T5',
     },
     {
       id: 'ai-errors', kind: 'harness', modes: ['full'],

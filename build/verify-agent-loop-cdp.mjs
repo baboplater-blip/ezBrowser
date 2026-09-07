@@ -49,6 +49,7 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>에이전트 시험</t
 <h1>에이전트 시험 페이지</h1>
 <button id="ok">확인</button>
 <button id="pay">결제하기</button>
+<input id="f" type="file">
 <p id="state">대기</p>
 <script>
   window.__clicked = false; window.__paid = false;
@@ -86,6 +87,30 @@ async function main() {
   const llm = await startFakeLlm({ port: args.llmPort })
   const pages = await startPageServer(args.pagePort)
 
+  // 자료 폴더(안)와 그 **바깥** 폴더를 만들어 경계를 시험한다.
+  const filesDir = path.join(args.out, 'files')
+  const outsideDir = path.join(args.out, 'outside')
+  fs.rmSync(filesDir, { recursive: true, force: true })
+  fs.rmSync(outsideDir, { recursive: true, force: true })
+  fs.mkdirSync(filesDir, { recursive: true })
+  fs.mkdirSync(outsideDir, { recursive: true })
+  fs.writeFileSync(path.join(filesDir, 'ok.txt'), '허용된 파일')
+  fs.writeFileSync(path.join(outsideDir, 'secret.txt'), '폴더 밖 비밀')
+  // 폴더 밖을 가리키는 링크를 만든다. Windows 는 파일 심링크에 권한이 필요하지만
+  // **디렉터리 정션(junction)** 은 권한 없이 만들 수 있고, realpath 로 해석되므로 탈출 검사에 쓸 수 있다.
+  let linkKind = ''
+  try {
+    fs.symlinkSync(path.join(outsideDir, 'secret.txt'), path.join(filesDir, 'link.txt'), 'file')
+    linkKind = '파일 심링크'
+  } catch {
+    try {
+      fs.symlinkSync(outsideDir, path.join(filesDir, 'linkdir'), 'junction')
+      linkKind = '디렉터리 정션'
+    } catch { linkKind = '' }
+  }
+  const symlinkOk = linkKind !== ''
+  const linkPath = linkKind === '파일 심링크' ? 'link.txt' : 'linkdir/secret.txt'
+
   const profileDir = path.join(args.out, 'profile')
   fs.rmSync(profileDir, { recursive: true, force: true })
   fs.mkdirSync(profileDir, { recursive: true })
@@ -103,6 +128,7 @@ async function main() {
       agentAutoApprove: false,
       agentVision: 'off',
       agentHumanInput: false,   // 시험에서는 빠른 합성 입력으로 충분하다
+      agentFilesDir: filesDir,  // 자료 폴더 경계 검사(F1~F4)용
     },
   }, null, 2))
 
@@ -309,6 +335,33 @@ async function main() {
         ended && llm.count <= 8,
         `종료=${ended}(${r.types.slice(-2).join('>')}) · LLM 호출 ${llm.count}회(상한 4 + 여유)`)
       await evalIn(shell, `window.browserAPI.settings.set('ai.agentMaxSteps', 8)`, true)
+    }
+
+    // ---- F1~F4: 자료 폴더 경계 — 폴더 밖 파일은 어떤 경로로도 붙지 않는다 ----
+    {
+      const upload = (name) => ({ reply: () => JSON.stringify({ action: 'upload_file', name, thought: name }) })
+      const script = [
+        upload('ok.txt'),
+        upload('../outside/secret.txt'),
+        upload(path.join(outsideDir, 'secret.txt').split(path.sep).join('/')),
+        ...(symlinkOk ? [upload(linkPath)] : []),
+        doneStep,
+      ]
+      const r = await run({ reqId: 'F', task: '파일을 붙여라', script, timeoutMs: 45000 })
+      const res = r.evs.filter((e) => e.type === 'result' && String(e.label ?? '').includes('업로드'))
+      const okCount = res.filter((e) => e.ok).length
+      const refused = res.filter((e) => !e.ok).length
+      const attached = await evalIn(page, '(document.getElementById("f")?.files?.length ?? 0)')
+      const expectRefused = symlinkOk ? 3 : 2
+
+      check('F1', '자료 폴더 안 파일은 실제로 첨부된다',
+        okCount >= 1 && attached >= 1,
+        `성공 ${okCount}건 · 페이지 input 파일 ${attached}개`)
+      check('F2', `폴더 밖 경로는 전부 거부된다(상대·절대${symlinkOk ? '·심링크' : ''})`,
+        refused === expectRefused,
+        `거부 ${refused}/${expectRefused}건 · 상세: ${res.filter((e) => !e.ok).map((e) => String(e.detail ?? '')).join(' | ').slice(0, 160)}`)
+      check('F3', '심링크 탈출 검사를 실제로 수행했다', symlinkOk,
+        symlinkOk ? `${linkKind} 로 폴더 밖 링크 생성 — 검사 포함(${linkPath})` : '이 환경에서 심링크를 만들 수 없어 F4 는 건너뜀(권한). 상대·절대 경로 검사만 유효')
     }
 
     try { page.close() } catch { /* ignore */ }
