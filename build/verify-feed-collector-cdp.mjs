@@ -51,6 +51,36 @@ function listHtml() {
 <body style="font:16px system-ui;padding:40px"><h1>시험 피드</h1><ul id="list">${li}</ul></body>`
 }
 
+// 웹훅 수신 서버 — 외부로 보내지 않고 **여기로만** 받는다.
+function startHookServer(port) {
+  const received = []
+  let mode = 'ok'   // 'ok' | 'fail' | 'hang'
+  const server = http.createServer((req, res) => {
+    let raw = ''
+    req.on('data', (c) => { raw += c })
+    req.on('end', () => {
+      let body = null
+      try { body = JSON.parse(raw || 'null') } catch { body = raw }
+      received.push({ at: Date.now(), contentType: req.headers['content-type'] ?? '', body })
+      if (mode === 'hang') return                       // 응답하지 않는다
+      res.writeHead(mode === 'fail' ? 500 : 200, { 'content-type': 'application/json' })
+      res.end('{}')
+    })
+  })
+  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve({
+    url: `http://127.0.0.1:${port}/hook`,
+    received,
+    setMode(m) { mode = m },
+    async close() {
+      await new Promise((r) => {
+        try { server.closeAllConnections?.() } catch { /* ignore */ }
+        const t = setTimeout(r, 3000)
+        server.close(() => { clearTimeout(t); r() })
+      })
+    },
+  })))
+}
+
 function startPageServer(port) {
   const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
@@ -78,9 +108,10 @@ async function main() {
   fs.mkdirSync(args.out, { recursive: true })
   args.port = await preferFreePort(args.port, 'feed-collector')
   await waitForPortFree(args.port)
-  ;[args.pagePort] = await getFreePorts(1)
+  ;[args.pagePort, args.hookPort] = await getFreePorts(2)
 
   const pages = await startPageServer(args.pagePort)
+  const hook = await startHookServer(args.hookPort)
 
   const profileDir = path.join(args.out, 'profile')
   fs.rmSync(profileDir, { recursive: true, force: true })
@@ -90,7 +121,8 @@ async function main() {
     startup: { mode: 'newtab', urls: [] },
     adblock: { enabled: false },
     // 요약(AI 브리핑)은 끄고 **수집·중복 제거**만 본다 — 모델에 의존하지 않게.
-    ai: { enabled: true, provider: 'ollama', ollamaUrl: 'http://127.0.0.1:1', ollamaModel: 'test-model' },
+    ai: { enabled: true, provider: 'ollama', ollamaUrl: 'http://127.0.0.1:1', ollamaModel: 'test-model',
+      webhookUrl: hook.url },   // 웹훅은 **로컬 수신 서버로만** 보낸다
   }, null, 2))
 
   const logStream = fs.createWriteStream(path.join(args.out, 'app.log'))
@@ -164,6 +196,50 @@ async function main() {
       await evalIn(cp, `window.internalAPI.ai.collectorRemove(${JSON.stringify(id2)})`, true)
     }
 
+    // ---- W1~W4: 웹훅 ----
+    {
+      const wid = await addCollector({ name: '웹훅 수집기', webhook: true })
+      const sent = () => hook.received.length
+
+      // W1 새 항목이 있으면 전송되고 페이로드에 항목이 담긴다
+      const before1 = sent()
+      const r1 = await runNow(wid)
+      await sleep(1200)
+      const got = hook.received[hook.received.length - 1]
+      const payloadHasItem = JSON.stringify(got?.body ?? '').includes('고양이 소식 하나')
+      check('W1', '새 항목이 있으면 웹훅이 전송되고 항목이 담긴다',
+        sent() > before1 && payloadHasItem && String(got?.contentType).includes('json'),
+        `전송 ${before1}→${sent()}회 · content-type=${got?.contentType} · 항목포함=${payloadHasItem}`)
+
+      // W2 새 항목이 없으면 보내지 않는다
+      const before2 = sent()
+      await runNow(wid)
+      await sleep(1200)
+      check('W2', '새 항목이 없으면 웹훅을 보내지 않는다', sent() === before2,
+        `전송 ${before2}→${sent()}회(같아야 함)`)
+
+      // W3 양성 대조 — 새 항목이 생기면 다시 보낸다
+      items = [...items, { title: '웹훅용 새 소식', href: '/w1' }]
+      const before3 = sent()
+      await runNow(wid)
+      await sleep(1200)
+      const last = hook.received[hook.received.length - 1]
+      check('W3', '새 항목이 다시 생기면 웹훅을 보낸다(양성 대조)',
+        sent() > before3 && JSON.stringify(last?.body ?? '').includes('웹훅용 새 소식'),
+        `전송 ${before3}→${sent()}회 — 이것이 그대로면 W2 는 "웹훅이 죽어서" 통과한 것이다`)
+
+      // W4 수신 서버가 실패해도 수집은 성공한다
+      hook.setMode('fail')
+      items = [...items, { title: '실패내성 확인용 소식', href: '/w2' }]
+      const r4 = await runNow(wid)
+      const count4 = r4?.run?.items?.length ?? 0
+      hook.setMode('ok')
+      check('W4', '웹훅 수신이 실패해도 수집 자체는 성공한다', !!r4?.ok && count4 >= 1,
+        `수집 ok=${r4?.ok} · 새 항목 ${count4}건(웹훅은 500 응답)`)
+
+      await evalIn(cp, `window.internalAPI.ai.collectorRemove(${JSON.stringify(wid)})`, true)
+    }
+
     await evalIn(cp, `window.internalAPI.ai.collectorRemove(${JSON.stringify(id)})`, true)
     try { cp.close() } catch { /* ignore */ }
   } catch (err) {
@@ -178,6 +254,7 @@ async function main() {
     await sleep(1500)
     try { child.kill() } catch { /* ignore */ }
     await pages.close()
+    await hook.close()
   }
 
   fs.writeFileSync(path.join(args.out, 'feed-collector-results.json'), JSON.stringify(results, null, 2))

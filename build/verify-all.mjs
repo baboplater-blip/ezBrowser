@@ -100,6 +100,13 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 L1~L9·F1~F3',
     },
     {
+      // 최소 간격(60초)을 실제로 기다리므로 약 3분 걸린다 - 반복이 멈추는지는 기다려야만 알 수 있다.
+      id: 'agent-repeat', kind: 'harness', modes: ['full'],
+      script: 'verify-agent-repeat-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'agent-repeat', 'agent-repeat-results.json'),
+      timeoutMs: 12 * 60000, desc: '반복 작업 횟수 제한·중단·계정활동 간격 강제 RP1~RP4',
+    },
+    {
       id: 'feed-collector', kind: 'harness', modes: ['full'],
       script: 'verify-feed-collector-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'feed-collector', 'feed-collector-results.json'),
