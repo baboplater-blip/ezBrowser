@@ -171,13 +171,10 @@ async function main() {
       injected: await evalIn(p1, 'document.documentElement.getAttribute("data-ext-injected")'),
       mark: await evalIn(p1, '(document.getElementById("mark")||{}).textContent'),
     } : {}
-    gap('X1', '확장의 declarativeNetRequest 가 실제로 요청을 차단한다',
+    // 임무 36 에서 DNR 을 구현해 **GAP 에서 정식 검사로 승격**했다. 이제 실패하면 회귀다.
+    check('X1', '확장의 declarativeNetRequest 가 실제로 요청을 차단한다',
       state1.adLoaded === false && pages.adHits === 0,
-      `광고 스크립트 로드=${state1.adLoaded} · 서버 적중 ${pages.adHits}회(0 이어야 함) · 확장 ${loaded.length}개 로드`,
-      'electron-chrome-extensions 에 declarativeNetRequest 구현이 없고(라이브러리 전체 검색 0건) '
-      + 'Electron 35 도 확장용 DNR 을 제공하지 않는다. CLAUDE.md 가 지원 우선순위 2번으로 적은 API 이고 '
-      + 'uBO Lite 같은 MV3 차단기는 전부 여기에만 의존하므로, 그 확장들은 **로드는 되지만 아무것도 막지 못한다**. '
-      + '자체 광고차단(@ghostery)은 별개로 정상 동작한다.')
+      `광고 스크립트 로드=${state1.adLoaded} · 서버 적중 ${pages.adHits}회(0 이어야 함) · 확장 ${loaded.length}개 로드`)
 
     // ---- X2 콘텐츠 스크립트 주입 ----
     check('X2', '콘텐츠 스크립트가 페이지에 주입·실행된다',
@@ -218,9 +215,9 @@ async function main() {
       const { page: p2 } = await openPage('?x5')
       const adLoaded2 = p2 ? await evalIn(p2, 'window.__adLoaded === true') : null
       try { p2?.close() } catch { /* ignore */ }
-      // X1 이 공백인 동안 이 검사는 "확장을 꺼도 페이지는 정상" 만 확인한다.
-      // DNR 이 구현되면 이 항목이 X1 의 양성 대조로 의미를 갖는다.
-      check('X5', '확장을 꺼도 페이지가 정상 동작한다(DNR 구현 시 X1 의 양성 대조)',
+      // X1 의 **양성 대조** — 확장을 끄면 차단이 사라져야 한다.
+      // 이게 없으면 X1 은 "확장과 무관하게 요청이 안 갔을" 가능성과 구분되지 않는다.
+      check('X5', '확장을 끄면 차단이 사라진다(X1 의 양성 대조)',
         adLoaded2 === true || pages.adHits > 0,
         `광고 로드=${adLoaded2} · 서버 적중 ${pages.adHits}회`)
     }

@@ -1686,3 +1686,14 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - **게이트에 넣지 않는다** — 매 검증마다 사용자 머신에 소프트웨어를 설치하는 것은 너무 침습적이다. 출시 전에 사람이 돌린다.
     - **연속 실행 주의(실측)**: 제거 직후 곧바로 재설치하면 설치 프로그램이 `0xC0000005` 로 죽는다(2회 재현). 레지스트리·디렉터리가 깨끗해도 그렇고, **30초 이상 두면** 정상 통과한다. 원인은 설치 프로그램 내부라 더 좁히지 못했다. NSIS 가 `_?=` 제거 시 **제거기 자신을 남기는** 것도 확인해 하네스가 치우게 했다.
   - **검증**: ai-persist 4/4 · extension-behavior 4 PASS + **1 GAP** · install 5/5 · `npm run verify` 8/8. 게이트 29단계(install 제외).
+- 2026-09-07: **임무 36 - 확장 declarativeNetRequest 지원 구현** (임무 34 가 찾은 공백을 메움). **1원칙 #2 의 실질을 되찾은 라운드.**
+  - **문제**: `electron-chrome-extensions` 에 DNR 구현이 없고 Electron 도 확장용 DNR 을 제공하지 않아, **uBO Lite 같은 MV3 차단기는 로드는 되지만 아무것도 막지 못했다**. `ext-matrix` 는 "로드 성공" 만 봐서 이 착시를 초록으로 보고했다.
+  - **[app/main/features/extensions/dnr.ts](browser-build/app/main/features/extensions/dnr.ts)(신규)**: 확장 manifest 의 **정적 룰셋**(`declarative_net_request.rule_resources`)을 읽어 컴파일하고, 요청마다 판정한다.
+    - 지원: 액션 `block`·`allow`·`redirect`(url·extensionPath)·`upgradeScheme` / 조건 `urlFilter`(크롬 문법 `||` `|` `^` `*`)·`regexFilter`·`resourceTypes`(+excluded)·`initiatorDomains`(+excluded)·`requestDomains`(+excluded)·대소문자 옵션 / **priority + allow 가 block 을 이김**.
+    - 미지원(정직하게 명시): 동적 룰 API(`updateDynamicRules`)·`modifyHeaders`.
+    - 룰 파일이 확장 폴더 밖을 가리키면 무시한다(경로 이탈 방지 — 임무 20 과 같은 계열).
+  - **배선 — 세션당 리스너 1개 제약 준수**: DNR 모듈은 리스너를 **직접 걸지 않고 순수 판정 함수만** 제공하고, adblock 의 단일 `onBeforeRequest` 가 **가장 먼저** 호출한다. 회귀 #5 계열(리스너 덮어쓰기)을 피하는 유일한 방법이다. **광고차단을 꺼도 확장 차단은 살아 있어야** 하므로, 예전에 `onBeforeRequest(null)` 로 두던 자리에 **DNR 전용 리스너**를 설치했다. 확장 변경(설치·제거·활성)마다 `extensionEvents 'changed'` 한 곳에서 룰을 다시 읽는다.
+  - **실측 결과**: 시험 확장으로 X1 이 **GAP → PASS**(광고 스크립트 차단, 서버 적중 0회)로 바뀌었고, **실제 웹스토어 uBO Lite 의 룰 18,450개**를 컴파일해 적용하는 것을 확인했다(선언 룰셋 6개 → 적용 18450).
+  - **`ext-matrix` 에 DNR 동작 단계 추가**: 확장이 룰셋을 선언했는데 **적용 룰이 0개면 무력**임을 표에 드러낸다 — "로드=성공" 착시 제거. `ExtensionSummary.dnrRules` 로 확장별 적용 룰 수를 노출(설정 화면에서도 쓸 수 있다).
+  - **무회귀 확인**(네트워크 경로를 건드렸으므로): 스모크 16/16(광고차단 S10·워크스페이스 partition R13 포함) · dl-matrix 10 PASS/1 SKIP · extension-behavior 5/5 · `npm run verify` 8/8.
+  - **남은 것**: 동적 룰 API 와 `modifyHeaders`. 이 둘을 쓰는 확장은 아직 그 부분이 동작하지 않는다.

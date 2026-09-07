@@ -10,6 +10,7 @@ import { createTab, getWebContentsByTabId } from '../tabs/tab-service'
 import { getAllWindows } from '../windows/window-service'
 import { addSessionInitHook, forEachInstalledSession } from '../session-bootstrap'
 import type { ExtensionSummary } from '../../shared/types'
+import { reloadDnrRules, dnrRuleCountFor } from '../features/extensions/dnr'
 
 let extensionsAdapter: unknown = null
 
@@ -58,6 +59,17 @@ async function writeDisabled(set: Set<string>): Promise<void> {
 }
 
 export const extensionEvents = new EventEmitter()
+
+// 확장이 바뀌면(설치·제거·활성 변경) declarativeNetRequest 정적 룰셋을 다시 읽는다.
+// 한 곳에서 잡아야 어느 경로로 바뀌든 빠지지 않는다(임무 36).
+extensionEvents.on('changed', () => {
+  void (async () => {
+    try {
+      const n = await reloadDnrRules(await readDisabled())
+      if (n > 0) console.log(`[extensions] DNR 룰 ${n}개 적용`)
+    } catch (err) { console.warn('[extensions] DNR 룰 적재 실패', err) }
+  })()
+})
 
 function sessions(): Session[] {
   // 모든 설치된 세션(default + persist:default + 모든 워크스페이스 partition)에 확장을 로드해야
@@ -194,6 +206,9 @@ export async function listExtensions(): Promise<ExtensionSummary[]> {
       hasIcon: Boolean(iconDataUrl),
       iconDataUrl,
       hasAction: Boolean(manifest.action || manifest.browser_action),
+      // 확장이 declarativeNetRequest 로 실제로 몇 개 룰을 적용 중인지 — 0 이면
+      // '로드는 됐지만 아무것도 막지 못하는' 상태다(임무 34 에서 드러난 착시).
+      dnrRules: dnrRuleCountFor(dir),
       actionTitle: localizeString(
         manifest.action?.default_title
         ?? manifest.browser_action?.default_title

@@ -368,6 +368,8 @@ export interface PerfReport {
 }
 
 export interface ExtensionSummary {
+  /** 이 확장의 declarativeNetRequest 정적 룰 중 우리가 적용 중인 개수(없으면 0). */
+  dnrRules?: number
   id: string
   name: string
   version: string

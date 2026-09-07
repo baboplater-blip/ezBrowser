@@ -7,6 +7,7 @@ import type { AdblockRecentBlock, AdblockStats } from '../../../shared/types'
 import { getSetting, setNestedSetting } from '../../storage/settings'
 import { addSessionInitHook, forEachInstalledSession } from '../../session-bootstrap'
 import { applyToResponseHeaders } from '../policy'
+import { dnrDecide } from '../extensions/dnr'
 import { nudgeGc } from '../gc-nudge'
 
 // @ghostery 코스메틱/scriptlet 주입용 content preload 경로. enableBlockingInSession 이 첫 세션에
@@ -211,6 +212,11 @@ function attachOverridingListeners(ses: Session, b: BlockerInstance): void {
       callback({ redirectURL: u.replace('//player.mediadelivery.net/', '//iframe.mediadelivery.net/') })
       return
     }
+    // 확장의 declarativeNetRequest 를 **먼저** 적용한다. 세션당 리스너가 하나뿐이라
+    // 여기서 팬아웃하지 않으면 확장 차단이 아예 동작할 수 없다(임무 34 에서 확인한 공백).
+    const dnr = dnrDecide(details)
+    if (dnr) { callback(dnr); return }
+
     const sourceUrl = frameUrlOf(details)
     if (isSiteAllowlisted(sourceUrl)) {
       callback({})
@@ -246,7 +252,12 @@ function attachOverridingListeners(ses: Session, b: BlockerInstance): void {
 }
 
 function clearListeners(ses: Session): void {
-  ses.webRequest.onBeforeRequest(null)
+  // null 로 두면 **확장의 DNR 까지 죽는다** — 광고차단을 꺼도 확장 차단은 살아 있어야 하므로
+  // DNR 전용 리스너로 교체한다(임무 36).
+  ses.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+    const dnr = dnrDecide(details)
+    callback(dnr ?? {})
+  })
   // null 로 두면 policy 응답헤더 룰까지 죽는다(policy installOn 은 WeakSet 가드로 재설치 안 됨)
   // → adblock 없이도 policy 만 적용하는 리스너로 교체
   ses.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, cb) => {

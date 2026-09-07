@@ -604,6 +604,29 @@ async function main() {
       entry.storedIdLiveInCdp = own.length > 0
     }
 
+    // ===== DNR 동작 확인 (임무 36) =====
+    // "로드 성공" 만으로는 착시다 — uBO Lite 같은 MV3 차단기는 declarativeNetRequest 로만 막는데,
+    // 그 API 가 죽어 있으면 로드는 되고 **아무것도 막지 못한다**(임무 34 에서 실제로 그랬다).
+    // 확장이 룰셋을 선언했는데 우리가 적용한 룰이 0 개면 그 확장은 무력하다.
+    for (const entry of report.matrix) {
+      if (!entry.realId) continue
+      const dir = path.join(args.out, 'profile', 'extensions', entry.realId)
+      let declares = 0
+      try {
+        const mf = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))
+        const res = mf?.declarative_net_request?.rule_resources
+        declares = Array.isArray(res) ? res.filter((r) => r?.enabled !== false).length : 0
+      } catch { declares = 0 }
+      entry.dnrDeclaredRulesets = declares
+      const fromList = (Array.isArray(list) ? list : []).find((x) => x?.id === entry.realId)
+      entry.dnrAppliedRules = Number(fromList?.dnrRules ?? 0)
+      entry.dnrWorking = declares === 0 ? null : entry.dnrAppliedRules > 0
+      if (declares > 0) {
+        console.log(`[dnr] ${entry.name}: 선언 룰셋 ${declares}개 → 적용 룰 ${entry.dnrAppliedRules}개`
+          + (entry.dnrWorking ? '' : '  ← 로드는 됐지만 차단이 동작하지 않는다'))
+      }
+    }
+
     // 액션(popup/options) 렌더 확인 — hasAction 인 것만.
     for (const entry of report.matrix) {
       if (!entry.realId || !entry.hasAction) continue
