@@ -364,6 +364,14 @@ async function runAb(args) {
   const aVals = []
   const bVals = []
   console.log(`[perf-breakdown:AB] ${args.aLabel} vs ${args.bLabel} — 각 ${runs}회 **교대** 실행`)
+  // 탐지 한계를 **측정 전에** 알린다. 이 값보다 작은 기여도는 이 조건에서 구분할 수 없고,
+  // 그걸 모른 채 시작하면 "차이 없음"을 원인 부재로 오해하게 된다(2026-09-07: 실제로 두 번 그랬다).
+  // 이 머신의 부팅 간 산포는 관측상 10~20MB 였다. 표본이 늘면 중앙값이 안정되므로 대략 산포/√n 로 잡는다.
+  const assumedSpread = 18
+  const detectable = Math.round((assumedSpread / Math.sqrt(runs)) * 10) / 10
+  console.log(`[perf-breakdown:AB] 예상 탐지 한계 ≈ ${detectable}MB (관측 산포 ${assumedSpread}MB 가정, 표본 ${runs}회)`)
+  console.log('[perf-breakdown:AB] 이보다 작은 기여도는 이 조건에서 "차이 없음"으로 나온다 — 더 작은 것을 보려면')
+  console.log('[perf-breakdown:AB] 표본을 늘리거나, 한 부팅 안에서 재는 방식(초기화 전후 rss 증분)을 쓸 것.')
   for (let i = 1; i <= runs; i++) {
     for (const side of ['a', 'b']) {
       const cfg = {
@@ -397,6 +405,7 @@ async function runAb(args) {
   console.log(`중앙값 차이(${args.bLabel} − ${args.aLabel}) = ${delta >= 0 ? '+' : ''}${delta}MB · 관측 산포(최대) = ${noise}MB`)
   if (Math.abs(delta) <= noise) {
     console.log('판정: **차이 없음** — 중앙값 차이가 실행 간 산포 이내다. 이 데이터로 기여도를 주장하면 안 된다.')
+    console.log(`      (이 조건의 탐지 한계 ≈ ${detectable}MB — 그보다 작은 차이는 애초에 보이지 않는다)`)
     console.log(`      (주장하려면 표본을 늘리거나(--runs ${runs * 2}) 더 조용한 환경에서 측정할 것)`)
   } else {
     console.log(`판정: **차이 있음** — 산포(${noise}MB)를 넘는 ${Math.abs(delta)}MB 차이. ${delta > 0 ? args.bLabel : args.aLabel} 쪽이 더 많이 쓴다.`)

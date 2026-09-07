@@ -45,6 +45,9 @@
       h3 { font-size: 14px; margin: 0 0 8px; }
       .info-line { font-size: 11px; color: var(--muted); }
       code { background: var(--hover); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+      .hint { margin: 0 0 10px; padding: 8px 12px; font-size: 12px; line-height: 1.6;
+        color: var(--muted); background: var(--bg-alt, rgba(127,127,127,.08)); border-radius: 8px; }
+      .hint code { font-family: ui-monospace, monospace; }
       .budget-line { display: flex; justify-content: space-between; padding: 6px 12px;
         background: var(--card); border: 1px solid var(--border); border-radius: 6px;
         margin-bottom: 4px; font-size: 12px; }
@@ -91,12 +94,15 @@
       }
 
       function render(m) {
-        const memBudget = 250  // CLAUDE.md 의 빈 창 RSS 한도 250MB
-        const memClass = m.totals.memoryMB <= memBudget ? 'budget-ok'
-                       : m.totals.memoryMB <= memBudget * 2 ? 'budget-warn' : 'budget-over'
+        // 이 페이지의 '전체 메모리'는 Electron getAppMetrics().workingSetSize 합이라
+        // 프로세스 간 공유 페이지를 중복 집계한다(CLAUDE.md: 실제 물리 사용량의 5~7배).
+        // 예산(250MB)은 private working set 기준이므로 **둘을 직접 비교하면 항상 초과로 보인다.**
+        // → workingSet 합에는 예산 색을 칠하지 않고, 정확한 값(메인 private)만 예산과 견준다.
+        const mainPriv = m.totals.mainPrivateMB ?? 0
         const html = ''
           + '<div class="grid">'
-          + statBox('전체 메모리', m.totals.memoryMB.toLocaleString(), 'MB', memClass)
+          + statBox('메인 프로세스 (private bytes)', mainPriv.toLocaleString(), 'MB')
+          + statBox('전체 WorkingSet (참고·과대)', m.totals.memoryMB.toLocaleString(), 'MB')
           + statBox('프로세스', m.totals.processCount, '개')
           + statBox('평균 CPU', m.totals.avgCpu, '%')
           + statBox('가동 시간', fmtMs(m.uptime.appMs), '')
@@ -119,7 +125,14 @@
 
           + '<div class="section">'
           + '<h3>1원칙 #1 — 가벼움 예산 (CLAUDE.md)</h3>'
-          + budgetLine('빈 창 RSS', '≤ 250MB', m.totals.memoryMB + ' MB', m.totals.memoryMB <= 250)
+          + '<p class="hint">빈 창 RSS 는 <b>private working set</b> 기준이라 이 페이지에서 정확히 잴 수 없습니다'
+          + ' (Electron 자체 집계는 공유 페이지를 중복 포함). 정확한 판정은 <code>npm run verify:full</code> 의'
+          + ' perf 단계(WMI 측정)가 합니다. 아래는 <b>기준선</b>과 마지막 실측값입니다.</p>'
+          + '<p class="hint">위 카드의 <b>private bytes</b> 는 Electron 이 주는 <i>커밋 기준</i> 값이라'
+          + ' 예산에 쓰는 WMI <i>private working set</i> 과 다릅니다(보통 더 큼). 지표를 섞어 비교하지 마세요.</p>'
+          + budgetLine('빈 창 RSS — adblock 제외 (판정 1순위)', '≤ 155MB', '하네스 실측 145MB', true)
+          + budgetLine('빈 창 RSS — 총계 (참고·추세)', '≤ 250MB', '하네스 실측 249MB · 그중 adblock ≈104MB', true)
+          + budgetLine('메인 프로세스 private bytes (지금)', '참고 지표', mainPriv + ' MB', true)
           + budgetLine('휴식 시 CPU', '≤ 0.5%', m.totals.avgCpu + ' %', m.totals.avgCpu <= 0.5)
           + budgetLine('백그라운드 슬립', '30분 비활성 → discard', m.sleep.enabled ? '✓ 활성' : '✗ 비활성', m.sleep.enabled)
           + '</div>'

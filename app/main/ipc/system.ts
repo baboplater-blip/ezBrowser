@@ -54,6 +54,8 @@ interface Metrics {
   totals: {
     processCount: number
     memoryMB: number
+    /** 메인 프로세스의 정확한 private 메모리(MB). 전체 합계는 workingSet 이라 과대평가된다. */
+    mainPrivateMB: number
     avgCpu: number
   }
   tabs: {
@@ -76,7 +78,7 @@ interface Metrics {
   }
 }
 
-function collectMetrics(): Metrics {
+async function collectMetrics(): Promise<Metrics> {
   const metrics = app.getAppMetrics()
   const rows: ProcessRow[] = metrics.map((m) => ({
     pid: m.pid,
@@ -86,12 +88,19 @@ function collectMetrics(): Metrics {
     cpu: Number(((m.cpu?.percentCPUUsage ?? 0) as number).toFixed(2)),
   })).sort((a, b) => b.memoryMB - a.memoryMB)
   const memoryMB = rows.reduce((s, r) => s + r.memoryMB, 0)
+  // getAppMetrics().workingSetSize 는 프로세스 간 공유 페이지를 중복 집계해 실제 물리 사용량보다
+  // 크게 나온다(CLAUDE.md: 5~7배). 메인 프로세스만이라도 **정확한 private** 을 함께 준다.
+  let mainPrivateMB = 0
+  try {
+    const info = await process.getProcessMemoryInfo()
+    mainPrivateMB = Math.round((info.private ?? 0) / 1024)
+  } catch { /* 플랫폼 미지원 시 0 */ }
   const avgCpu = rows.length > 0
     ? Number((rows.reduce((s, r) => s + r.cpu, 0) / rows.length).toFixed(2))
     : 0
   return {
     processes: rows,
-    totals: { processCount: rows.length, memoryMB, avgCpu },
+    totals: { processCount: rows.length, memoryMB, avgCpu, mainPrivateMB },
     tabs: {
       total: getTotalTabCount(),
       discarded: getDiscardedCount(),
@@ -116,7 +125,7 @@ function collectMetrics(): Metrics {
 const bootTime = Date.now()
 
 export function registerSystemIpc(): void {
-  ipcMain.handle(IPC.system.metrics, (e) => {
+  ipcMain.handle(IPC.system.metrics, async (e) => {
     if (!isTrustedSender(e)) return null
     return collectMetrics()
   })
