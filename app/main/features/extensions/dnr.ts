@@ -48,6 +48,7 @@ interface RawRule {
     excludedDomains?: string[]
     requestDomains?: string[]
     excludedRequestDomains?: string[]
+    domainType?: string          // 'firstParty' | 'thirdParty'
   }
 }
 
@@ -67,6 +68,7 @@ interface CompiledRule {
   excludedInitiatorDomains?: string[]
   requestDomains?: string[]
   excludedRequestDomains?: string[]
+  domainType?: 'firstParty' | 'thirdParty'
 }
 
 let staticRules: CompiledRule[] = []
@@ -183,7 +185,16 @@ function compile(extId: string, raw: RawRule): CompiledRule | null {
     excludedInitiatorDomains: c.excludedInitiatorDomains ?? c.excludedDomains,
     requestDomains: c.requestDomains,
     excludedRequestDomains: c.excludedRequestDomains,
+    domainType: c.domainType === 'firstParty' || c.domainType === 'thirdParty' ? c.domainType : undefined,
   }
+}
+
+/** 같은 사이트인가(등록 가능 도메인 근사 — 마지막 두 라벨 비교). */
+function sameSite(a: string, b: string): boolean {
+  if (!a || !b) return false
+  if (a === b) return true
+  const tail = (h: string): string => h.split('.').slice(-2).join('.')
+  return tail(a) === tail(b)
 }
 
 /** Electron webRequest 의 resourceType 을 크롬 DNR 의 이름으로. */
@@ -410,8 +421,18 @@ export function dnrDecide(details: DnrDetails): DnrDecision {
     if (r.excludedResourceTypes && rt && r.excludedResourceTypes.has(rt)) continue
     if (r.requestDomains && !domainMatches(reqHost, r.requestDomains)) continue
     if (r.excludedRequestDomains && domainMatches(reqHost, r.excludedRequestDomains)) continue
-    if (r.initiatorDomains && initiator && !domainMatches(initiator, r.initiatorDomains)) continue
+    // ⚠ initiatorDomains 가 지정된 룰은 **발신 도메인을 알 수 없으면 적용하지 않는다**(크롬과 같다).
+    //   예전에는 initiator 가 비면 검사를 건너뛰어, 발신 도메인으로만 좁힌 룰 823개가
+    //   **모든 요청에 적용**됐다 — uBO Lite 를 켜면 네이버·구글·위키백과까지 막혔다(임무 40 실측).
+    if (r.initiatorDomains && (!initiator || !domainMatches(initiator, r.initiatorDomains))) continue
     if (r.excludedInitiatorDomains && initiator && domainMatches(initiator, r.excludedInitiatorDomains)) continue
+    // domainType 도 발신을 알아야 판정할 수 있다 — 모르면 적용하지 않는다.
+    if (r.domainType) {
+      if (!initiator) continue
+      const first = sameSite(initiator, reqHost)
+      if (r.domainType === 'firstParty' && !first) continue
+      if (r.domainType === 'thirdParty' && first) continue
+    }
     if (!r.test(url)) continue
 
     // 정렬 덕분에 먼저 맞는 것이 곧 최우선 룰이다.
@@ -454,8 +475,14 @@ function matchesRule(r: CompiledRule, details: DnrDetails): boolean {
   if (r.excludedResourceTypes && rt && r.excludedResourceTypes.has(rt)) return false
   if (r.requestDomains && !domainMatches(reqHost, r.requestDomains)) return false
   if (r.excludedRequestDomains && domainMatches(reqHost, r.excludedRequestDomains)) return false
-  if (r.initiatorDomains && initiator && !domainMatches(initiator, r.initiatorDomains)) return false
+  if (r.initiatorDomains && (!initiator || !domainMatches(initiator, r.initiatorDomains))) return false
   if (r.excludedInitiatorDomains && initiator && domainMatches(initiator, r.excludedInitiatorDomains)) return false
+  if (r.domainType) {
+    if (!initiator) return false
+    const first = sameSite(initiator, reqHost)
+    if (r.domainType === 'firstParty' && !first) return false
+    if (r.domainType === 'thirdParty' && first) return false
+  }
   return r.test(details.url)
 }
 

@@ -205,6 +205,14 @@ function steps(outRoot) {
       timeoutMs: 25 * 60000, desc: '게이트 5 확장 10종 (웹스토어 CRX 다운로드 — 네트워크)',
     },
     {
+      // uBO Lite 의 **진짜 룰**로 우리 DNR 엔진을 시험한다. ext-matrix 가 받아 둔 프로필을 읽으므로
+      // 반드시 그 뒤에 온다. 없으면 SKIP(게이트를 빨갛게 만들지 않는다).
+      id: 'ubo-rules', kind: 'harness', modes: ['full'],
+      script: 'verify-ubo-rules.mjs', outArg: true,
+      result: (o) => path.join(o, 'ubo-rules', 'ubo-rules-results.json'),
+      timeoutMs: 3 * 60000, desc: 'uBO Lite 실제 룰로 DNR 엔진 판정 검증 U1~U4',
+    },
+    {
       id: 'stress', kind: 'harness', modes: ['full'],
       script: 'stress-cdp.mjs', outArg: true, result: (o) => path.join(o, 'stress', 'stress-results.json'),
       timeoutMs: 30 * 60000, desc: '게이트 3 50탭 스트레스',
