@@ -1,7 +1,7 @@
 import { app, dialog, type WebContents } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import Store from 'electron-store'
+import { createStore } from '../../storage/safe-store'
 import { getWebContentsByTabId, getTab } from '../../tabs/tab-service'
 import { getWindow } from '../../windows/window-service'
 
@@ -52,7 +52,7 @@ const ZOOM_MIN = -3
 const ZOOM_MAX = 4
 const ZOOM_STEP = 0.5
 
-const zoomStore = new Store<{ levels: Record<string, number> }>({ name: 'zoom', defaults: { levels: {} } })
+const zoomStore = createStore<{ levels: Record<string, number> }>({ name: 'zoom', defaults: { levels: {} } })
 
 function originOf(url: string): string | null {
   try {

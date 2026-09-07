@@ -1,0 +1,15 @@
+{
+  "workspaces": [
+    {
+      "id": "ws-mtqtzeto-1",
+      "name": "기본",
+      "color": "gray",
+      "homeUrl": "browser://newtab",
+      "partition": "persist:ws-ws-mtqtzeto-1",
+      "createdAt": 1788760779468,
+      "updatedAt": 1788760779468,
+      "position": 0
+    }
+  ],
+  "activeId": "ws-mtqtzeto-1"
+}

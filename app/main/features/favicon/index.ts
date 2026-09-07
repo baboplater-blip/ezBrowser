@@ -1,9 +1,9 @@
-import Store from 'electron-store'
+import { createStore } from '../../storage/safe-store'
 
 // origin → favicon URL 캐시. 슬립/복원/새 탭/북마크에서 페이지 로드 없이 파비콘 표시.
 const CAP = 600
 
-const store = new Store<{ map: Record<string, string> }>({ name: 'favicons', defaults: { map: {} } })
+const store = createStore<{ map: Record<string, string> }>({ name: 'favicons', defaults: { map: {} } })
 
 // 삽입 순서 유지를 위한 in-memory Map (LRU 근사)
 const cache = new Map<string, string>()

@@ -88,6 +88,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '설정 되돌릴 수 없는 동작 — 내보내기/가져오기·키맵 D1~D3·K1~K3',
     },
     {
+      id: 'corrupt-profile', kind: 'harness', modes: ['full'],
+      script: 'verify-corrupt-profile-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'corrupt-profile', 'corrupt-profile-results.json'),
+      timeoutMs: 10 * 60000, desc: '프로필 파일이 깨져도 앱이 뜨는가 C0~C3',
+    },
+    {
       id: 'error-boundary', kind: 'harness', modes: ['full'],
       script: 'verify-error-boundary-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'error-boundary', 'error-boundary-results.json'),

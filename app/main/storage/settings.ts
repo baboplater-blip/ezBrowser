@@ -1,4 +1,4 @@
-import Store from 'electron-store'
+import { createStore } from './safe-store'
 
 export interface AppSettings {
   appearance: {
@@ -233,7 +233,7 @@ const DEFAULTS: AppSettings = {
 
 // clearInvalidConfig: 손상된 settings.json(예: BOM·잘림)이 있어도 throw 대신 기본값으로 리셋 —
 // 설정 파일 하나가 메인 프로세스 전체를 죽이지 않도록 방어.
-const store = new Store<AppSettings>({ name: 'settings', defaults: DEFAULTS, clearInvalidConfig: true })
+const store = createStore<AppSettings>({ name: 'settings', defaults: DEFAULTS })
 
 export function getSettings(): AppSettings {
   return store.store as AppSettings

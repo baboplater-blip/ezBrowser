@@ -1,5 +1,5 @@
 import { net } from 'electron'
-import Store from 'electron-store'
+import { createStore } from '../../storage/safe-store'
 import { getSetting } from '../../storage/settings'
 
 // 새 탭 위젯(날씨·뉴스). 외부 API 키 없이 동작:
@@ -32,11 +32,11 @@ let geoCache: { lat: number; lon: number; place: string; ts: number } | null = n
 const FX_TTL_MS = 60 * 60 * 1000
 
 // 마지막 성공값 영속 — 앱 재시작 직후 새 탭에서 즉시 표시(이후 백그라운드 갱신).
-const persist = new Store<{ weather?: WeatherResult; news?: Record<string, NewsResult>; fx?: Record<string, FxResult> }>({ name: 'widgets-cache' })
+const persist = createStore<{ weather?: WeatherResult; news?: Record<string, NewsResult>; fx?: Record<string, FxResult> }>({ name: 'widgets-cache' })
 
 // 새 탭 위젯 사용자 데이터(메모·할 일). browser:// 로컬스토리지와 달리 방문 데이터 삭제에도 보존되고
 // 향후 데이터 내보내기에 포함 가능. 키는 IPC 계층에서 화이트리스트로 제한.
-const userData = new Store<Record<string, unknown>>({ name: 'widgets-data' })
+const userData = createStore<Record<string, unknown>>({ name: 'widgets-data' })
 export function getWidgetData(key: string): unknown { return userData.get(key) ?? null }
 export function setWidgetData(key: string, value: unknown): void { userData.set(key, value) }
 

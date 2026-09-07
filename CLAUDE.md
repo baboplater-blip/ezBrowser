@@ -1578,3 +1578,15 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **음성 대조로 효과를 확증**(추정이 아니라 실측): ① Toolbar 가 던지게 만든 빌드 → 경계가 받아 `2/2 PASS`(안내 표시 + 창 유지) ② **같은 빌드에서 경계만 걷어내면 `root 자식 0개 · 본문 0자 · 탭바 없음`** = 완전한 흰 외피. 즉 이 수정이 결과를 실제로 바꾼다.
   - **[build/verify-error-boundary-cdp.mjs](browser-build/build/verify-error-boundary-cdp.mjs)(신규)** — `verify-all --full` 에 `error-boundary` 로 등록. **한계를 헤더에 명시**: 게이트가 자동으로 돌리는 것은 *정상 상태* 검사뿐이라 "경계가 늘 떠 있다(=외피가 무너진 채다)" 만 잡는다. "경계가 실제로 받는가" 는 헤더에 적어 둔 5단계 음성 대조를 **사람이** 돌려야 한다. 제품에 검사용 후크를 심지 않기 위한 의도적 선택이다.
   - **검증**: `verify:full` **16/16 PASS · 12분 18초**(internal-pages 26 · input-guards 9 포함) · error-boundary 정상 2/2 + 음성 대조 2/2 · `npm run verify` 4/4 · 외피 번들 gzip **99.6KB**(예산 500KB 의 20%).
+- 2026-09-07: **임무 23 — 프로필 파일이 깨졌을 때 앱이 시작조차 못 하던 결함 fix**. 임무 19~22 가 "나쁜 값이 **IPC 로** 들어오는" 경우를 막았다면, 이건 "나쁜 값이 **디스크에서** 들어오는" 나머지 절반이다. 정전·강제 종료로 쓰기가 끊기면 JSON 파일은 실제로 잘린다.
+  - **결함 (심각·사용자 대면)**: 저장소 모듈들이 **최상위에서 `new Store(...)`** 를 만든다. 그 파일이 잘려 있으면 conf 가 생성자 안에서 `JSON.parse` 하다 던지고, 그것이 **import 도중** 터지므로 우리 try/catch·로그·창 생성보다 앞이다. 사용자가 보는 것은 창이 아니라 이 상자다:
+    `A JavaScript error occurred in the main process — SyntaxError: Unexpected end of JSON input (at new ElectronStore)`. **창이 하나도 뜨지 않고, 어떤 파일을 지워야 하는지도 알 수 없다.**
+    - 진짜 원인은 `clearInvalidConfig` 가 **`settings.ts` 한 곳에만** 켜져 있었던 것 — 나머지 6개 저장소(permissions·readlater·favicons·zoom·widgets-cache·widgets-data)는 꺼진 채였다.
+  - **fix — [app/main/storage/safe-store.ts](browser-build/app/main/storage/safe-store.ts)(신규) `createStore()`**: ① 모든 저장소에 `clearInvalidConfig: true` 를 **기본으로** 적용 ② 그래도 생성이 실패하면 깨진 파일을 `<name>.corrupt-<시각>.json` 으로 **격리하고 한 번 더 시도**(읽을 수 없는 내용이라 잃는 것은 없고, 사용자는 앱을 연다) ③ 무슨 일이 있었는지 로그로 남긴다. 7개 `new Store` 를 전부 교체.
+  - **[build/verify-corrupt-profile-cdp.mjs](browser-build/build/verify-corrupt-profile-cdp.mjs)(신규)** — `verify-all --full` 에 `corrupt-profile` 로 등록. 정상 프로필을 **실제 부팅으로 만든 뒤** 6개 파일을 실제로 일어나는 모양(잘림·쓰레기·빈 파일·형태 불일치)으로 깨뜨리고 다시 띄워 ① 창이 뜨는가 ② 외피가 그려지는가 ③ 탭 만들기·설정 읽기가 되는가 를 본다. **4/4 PASS**(수정 전에는 창이 아예 뜨지 않았다).
+  - **하네스가 저지른 실수 3건 — 전부 제품 결함으로 오인할 뻔했다**:
+    1. **단일 인스턴스 잠금**: 종료를 시간(sleep)으로 기다려 다음 부팅이 겹쳤다. 같은 userData 의 두 번째 인스턴스는 **아무 것도 출력하지 않고 즉시 종료**하므로 "앱이 안 뜬다" 로 보인다. → 실제 `exit` 이벤트를 기다리도록 수정.
+    2. **`fs.cpSync` 로 프로필 통째 복사**: Chromium 프로필의 잠긴 파일에서 **node 를 그대로 죽인다**(출력 없이 exit 127). → 손상 대상 파일의 내용만 메모리에 기억.
+    3. 일회용 진단 스크립트가 Git Bash 의 `$(pwd)`(POSIX 경로)를 `--user-data-dir` 에 넘겨 엉뚱한 프로필을 쓰게 했다. → 하네스는 항상 `path.join(REPO, ...)` 로 Windows 절대경로를 만든다.
+    - **교훈**: 부팅이 안 되는 현상은 원인이 앱보다 **도구 쪽인 경우가 더 많다.** 앱 로그가 비어 있으면 그것부터 의심할 것.
+  - **검증**: corrupt-profile 4/4 · `npm run verify` 4/4(스모크 16/16) · internal-pages 26/26(저장소 교체 후 회귀 없음) · typecheck 3/3.
