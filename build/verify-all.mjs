@@ -433,6 +433,10 @@ async function main() {
   const startedAt = Date.now()
   const modeLabel = args.only ? `only(${args.only.join(',')})` : args.mode
   console.log(`[verify-all] 모드=${modeLabel} · 단계 ${selected.length}개 · 결과 ${args.outRoot}`)
+  if (args.mode === 'full' && !args.only) {
+    console.log('[verify-all] 전체 검증은 **실제 창을 여러 번 띄우고 약 10분** 걸립니다(50탭 스트레스·성능 측정 포함).')
+    console.log('[verify-all] 화면을 쓰셔야 하면 `npm run verify`(약 30초, 창 1개)로 충분합니다.')
+  }
   if (selected.some((s) => s.network)) {
     console.log('[verify-all] 네트워크를 쓰는 단계 포함 (ext-matrix: 웹스토어 CRX 다운로드).')
   }
@@ -542,7 +546,11 @@ async function main() {
     console.log(`요약 파일: ${path.join(args.outRoot, 'verify-all-summary.md')}`)
   } catch { /* best-effort */ }
 
-  const shouldRecord = args.record === null ? (args.mode === 'full' && !args.only) : args.record === true
+  // 기록 조건(2026-09-07, 사용자 선택 B): 라운드 종결은 quick 이 맡으므로 **완전한 게이트 실행**이면
+  // 기록한다(--only 나 --skip-build 가 붙은 개발 중 실행은 제외 — status.md 가 매번 흔들리면 안 된다).
+  const shouldRecord = args.record === null
+    ? (!args.only && !args.skipBuild)
+    : args.record === true
   if (shouldRecord) {
     const written = recordToStatus(md, rows, summary.ms, modeLabel, startedAt)
     if (written) console.log(`status.md 검증 기록 갱신: ${written}`)
