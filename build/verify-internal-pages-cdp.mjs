@@ -167,6 +167,98 @@ async function main() {
         try { session?.close() } catch { /* ignore */ }
       }
     }
+
+    // ===== 2단계: 데이터가 있을 때의 렌더 =====
+    // 1단계는 빈 프로필이라 "빈 상태" 만 본다. 실제 렌더 버그는 목록에 내용이 있을 때 나온다.
+    // 각 페이지의 internalAPI 로 N건을 넣고, 새로고침 후 화면에 그만큼 보이는지 대조한다.
+    const SEEDS = [
+      {
+        host: 'bookmarks', n: 3, needle: '검증북마크',
+        seed: `(async () => {
+          for (let i = 1; i <= 3; i++) {
+            await window.internalAPI.bookmarks.add({ url: 'https://example.com/b' + i, title: '검증북마크' + i })
+          }
+          return (await window.internalAPI.bookmarks.list()).bookmarks?.length ?? null
+        })()`,
+      },
+      {
+        host: 'policies', n: 3, needle: '검증정책',
+        seed: `(async () => {
+          for (let i = 1; i <= 3; i++) {
+            await window.internalAPI.policy.save({ name: '검증정책' + i, match: ['*://p' + i + '.example/*'] })
+          }
+          return (await window.internalAPI.policy.list()).length
+        })()`,
+      },
+      {
+        host: 'macros', n: 3, needle: '검증매크로',
+        seed: `(async () => {
+          for (let i = 1; i <= 3; i++) {
+            await window.internalAPI.macro.save({ name: '검증매크로' + i, trigger: { type: 'shortcut', value: '' }, actions: [] })
+          }
+          return (await window.internalAPI.macro.list()).length
+        })()`,
+      },
+      {
+        host: 'userscripts', n: 3, needle: '검증스크립트',
+        seed: `(async () => {
+          for (let i = 1; i <= 3; i++) {
+            await window.internalAPI.userscript.save({
+              source: ['// ==UserScript==', '// @name 검증스크립트' + i, '// @match *://*/*', '// ==/UserScript==', 'console.log(1)'].join(String.fromCharCode(10)),
+            })
+          }
+          return (await window.internalAPI.userscript.list()).length
+        })()`,
+      },
+    ]
+
+    for (const seed of SEEDS) {
+      const url = `browser://${seed.host}`
+      let session = null
+      const errors = []
+      try {
+        const t = (await getTargetList(args.port)).find((x) => String(x.url).startsWith(url))
+        if (!t) { check(`데이터:${seed.host}`, `${url} 데이터 렌더`, false, '1단계에서 연 탭을 못 찾음'); continue }
+        session = await connectSession(t, `data-${seed.host}`)
+        await ensureSessionReady(session)
+
+        // 씨앗 심기가 실패하면 조용히 undefined 가 된다 — 이유를 드러낸다.
+        const seedRes = await session.send('Runtime.evaluate', {
+          expression: seed.seed, awaitPromise: true, returnByValue: true,
+        })
+        const seedErr = seedRes.result?.exceptionDetails ?? seedRes.exceptionDetails
+        const seeded = seedRes.result?.result?.value ?? seedRes.result?.value
+        if (seedErr) {
+          errors.push('씨앗 실패: ' + String(seedErr.exception?.description ?? seedErr.text ?? '?').slice(0, 200))
+        }
+
+        session.events.push((msg) => {
+          if (msg.method === 'Runtime.exceptionThrown') {
+            const d = msg.params?.exceptionDetails
+            errors.push('예외: ' + String(d?.exception?.description ?? d?.text ?? '?'))
+          } else if (msg.method === 'Runtime.consoleAPICalled' && msg.params?.type === 'error') {
+            errors.push('console.error')
+          }
+        })
+        await session.send('Runtime.enable')
+        await session.send('Page.reload', { ignoreCache: false })
+        await sleep(2500)
+
+        const shown = await session.send('Runtime.evaluate', {
+          expression: `(document.body.innerText.match(new RegExp(${JSON.stringify(seed.needle)}, 'g')) || []).length`,
+          returnByValue: true,
+        }).then((r) => r.result?.result?.value ?? r.result?.value)
+
+        check(`데이터:${seed.host}`, `${url} 이 넣은 ${seed.n}건을 화면에 그린다`,
+          errors.length === 0 && shown >= seed.n,
+          `저장 ${seeded}건 · 화면 ${shown}건(기대 ${seed.n} 이상)`
+          + (errors.length ? ` · 오류 ${errors.length}건: ${errors[0]}` : ''))
+      } catch (err) {
+        check(`데이터:${seed.host}`, `${url} 데이터 렌더`, false, err.message)
+      } finally {
+        try { session?.close() } catch { /* ignore */ }
+      }
+    }
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)
   } finally {
