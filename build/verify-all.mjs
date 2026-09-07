@@ -113,6 +113,19 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '피드 수집·중복 제거·키워드 필터 + 양성대조 C1~C4',
     },
     {
+      id: 'ai-persist', kind: 'harness', modes: ['full'],
+      script: 'verify-ai-persist-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'ai-persist', 'ai-persist-results.json'),
+      timeoutMs: 8 * 60000, desc: 'AI 대화·실행이력 재시작 영속화·상한 PS1~PS4',
+    },
+    {
+      // 확장이 **로드만 되는 게 아니라 동작하는지** — DNR 은 현재 알려진 공백(GAP)이다.
+      id: 'extension-behavior', kind: 'harness', modes: ['full'],
+      script: 'verify-extension-behavior-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'extension-behavior', 'extension-behavior-results.json'),
+      timeoutMs: 8 * 60000, desc: '확장 실동작(차단·주입·저장소·SW) X1~X5',
+    },
+    {
       id: 'agent-triggers', kind: 'harness', modes: ['full'],
       script: 'verify-agent-triggers-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'agent-triggers', 'agent-triggers-results.json'),

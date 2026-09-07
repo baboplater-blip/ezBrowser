@@ -121,7 +121,7 @@
 
 ```
 browser-build/
-├── .claude/
+├── .Codex/
 │   ├── settings.json
 │   ├── agents/                  # 28 에이전트
 │   ├── skills/                  # 14 스킬
@@ -158,7 +158,7 @@ browser-build/
 ├── resources/                   # 앱 아이콘 (ico/icns/png)
 ├── package.json
 ├── electron-builder.yml
-├── CLAUDE.md
+├── AGENTS.md
 └── README.md
 ```
 
@@ -371,7 +371,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **진단 방법 정착**: chrome WebContentsView 에 `did-fail-load` + `preload-error` 이벤트를 stdout 출력하도록 항상 후킹. 향후 외피 흰 화면 회귀 즉시 원인 노출.
   - **검증**: 재패키지 후 win-unpacked 부팅 시 BrowserBuild.exe 5 프로세스(메인/GPU/Network/Renderer/콘텐츠) 정상, preload-error 로그 없음, 외피 React 마운트 → 탭바·툴바·**검색창(omnibox)** 정상 표시.
 - 2026-05-25: **묶음 E — 저장 코어 (북마크 + 방문 이력 + 새 탭 위젯) 1차 구현**.
-  - **약속 이행**: CLAUDE.md "better-sqlite3 (네이티브 빌드 toolchain 이슈 — 북마크/이력 DB 구현 라운드에서 prebuilt 바이너리로 재투입)" 약속을 **sql.js (WASM SQLite)** 로 이행. 네이티브 toolchain 불필요·prebuilt 바이너리 의존 없음·크로스플랫폼 단일 산출물.
+  - **약속 이행**: AGENTS.md "better-sqlite3 (네이티브 빌드 toolchain 이슈 — 북마크/이력 DB 구현 라운드에서 prebuilt 바이너리로 재투입)" 약속을 **sql.js (WASM SQLite)** 로 이행. 네이티브 toolchain 불필요·prebuilt 바이너리 의존 없음·크로스플랫폼 단일 산출물.
   - **db.ts 코어**: `openDb(filename, schema)` 헬퍼 — `userData/data/<name>.db` 영속화, 800ms 디바운스 자동 flush, `before-quit` 시 sync flush(데이터 손실 방지), 트랜잭션 단위 export. WASM 로드는 `app.isPackaged` 분기로 `process.resourcesPath/app.asar.unpacked/...` 직접 read (asar 안 fs 미지원 우회).
   - **bookmarks 저장소**: folders + bookmarks 2 테이블, CRUD(add/remove/rename/move/folderCreate/folderRemove) + `isBookmarked(url)` 즉답 + `searchBookmarks(query)` LIKE 검색. 변경 시 `bookmarkEvents` emit → 모든 창에 broadcast.
   - **history 저장소**: visits 테이블(URL UNIQUE + visit_count + last_visit_at), `UPSERT ON CONFLICT(url) DO UPDATE` 로 같은 URL 재방문 시 카운트만 증가. `recentVisits`/`searchHistory`/`topSites` + 부분/전체 clear. `browser:`/`chrome:`/`about:`/`devtools:`/`localhost`/`127.0.0.1` 자동 skip.
@@ -440,7 +440,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **검증**: dev+packaged 부팅 클린 5 프로세스, log 정상. CSS Filter invert 는 가장 안정적인 방식 — 일부 색 hue 가 약간 다를 수 있으나 모든 사이트 100% 호환.
   - **다음 라운드 후보**: ① 수직 탭 + 분할 화면 (자유도 핵심, insets 모델 위에 자연), ② 마우스 제스처, ③ Userscript 엔진 (Tampermonkey 호환), ④ 페이지 번역, ⑤ Dark Reader dynamic 모드 (이미지 색 정확도), ⑥ 설정 UI (browser://settings), ⑦ 폴더 이름 변경 + 북마크 인라인 편집 + 사이드패널 width drag-resize.
 - 2026-05-25: **묶음 F-4a — 수직 탭 (탭바 위치 자유: 상/좌/우)**.
-  - **자유도 #5 (레이아웃 자유) 1차 진입**: CLAUDE.md "탭바 위치(상/하/좌/우), 분할 화면(타일링), 수직/가로 탭 동시" 중 **수직 탭(좌/우)** 구현. 분할 화면(panes 모델)은 다음 라운드.
+  - **자유도 #5 (레이아웃 자유) 1차 진입**: AGENTS.md "탭바 위치(상/하/좌/우), 분할 화면(타일링), 수직/가로 탭 동시" 중 **수직 탭(좌/우)** 구현. 분할 화면(panes 모델)은 다음 라운드.
   - **TabBar orientation prop**: `'top' | 'left' | 'right' | 'bottom'`. CSS 룰을 `.tabbar.tabbar-top` / `.tabbar.vertical` 로 분리. vertical 시 220px 너비, 세로 stack flexbox, 탭 카드가 둥근 모서리 + active 시 border+bg 강조. 핀 탭도 제목 표시. 드롭 타깃 위치는 box-shadow top-edge 로 가로용 left-edge 와 구분.
   - **App.tsx layout 분기**: orientation === 'top' 이면 `<chrome-shell>` 안 첫 row 에 TabBar, vertical 이면 `<main-area>` 의 좌/우 stripe 에 TabBar. Toolbar + BookmarkBar 는 항상 상단 chrome-shell. SidePanel 와 동시 사용 가능 — 수직 탭바 ＋ 좌측 사이드패널이 좌측에 차곡차곡.
   - **insets 계산 확장**: `left = (orientation==='left' ? 220 : 0) + (leftPanelOpen ? 280 : 0)`, `right = (orientation==='right' ? 220 : 0) + (rightPanelOpen ? 280 : 0)`. 메인 탭 view 자동 재배치.
@@ -675,7 +675,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - 메모리: 임시 파일 → 최종 파일 합칠 때 segment 전체를 메모리에 read (`fs.readFile`) — 대용량 파일에서 비효율적. **stream pipe** 로 다음 라운드.
   - **빌드 산출물**: 외피 JS 180.95 → **181.10 KB / gzip 58.59 KB** (배지 + CSS), preload 동일. NSIS 인스톨러 92.65 MB.
   - **검증**: packaged 5 프로세스 정상, log clean.
-  - **콕콕 기본 기능 14종 — 전부 ✅**: adblock · 동영상 · 토렌트 · 스크린샷 · 사이드 패널 · 다크 모드 · 새 탭 위젯 · 마우스 제스처 · 빠른 검색 · 리더 모드 · 페이지 번역 · QR 코드 · 비밀번호 매니저 · **다운로드 가속**. **CLAUDE.md 의 1원칙 #3 ("콕콕처럼 처음부터 쓸 만하다") 완전 충족.**
+  - **콕콕 기본 기능 14종 — 전부 ✅**: adblock · 동영상 · 토렌트 · 스크린샷 · 사이드 패널 · 다크 모드 · 새 탭 위젯 · 마우스 제스처 · 빠른 검색 · 리더 모드 · 페이지 번역 · QR 코드 · 비밀번호 매니저 · **다운로드 가속**. **AGENTS.md 의 1원칙 #3 ("콕콕처럼 처음부터 쓸 만하다") 완전 충족.**
   - **다음 라운드 후보**: ① **단축키 인라인 편집** (settings 의 keymap 표를 편집 가능 + 충돌 검출 UI), ② **자동 저장 확인 배너** (외피 prompt), ③ **외피 prefs 통합** (북마크 바·사이드패널·탭바 방향을 settings 로 이전), ④ **워크스페이스 보강** (탭→스페이스 이동·드래그 reorder), ⑤ **internal IPC trust 강화**, ⑥ **정책 엔진 보강** (정식 Chrome match pattern · 룰 import/export), ⑦ **다운로드 가속 보강** (일시정지/재개 · stream merge · resume on disconnect).
 - 2026-05-25: **묶음 O — 단축키 인라인 편집**. 자유도 #6 "100% 재바인딩" 미완 약속 이행.
   - **회귀 fix (closure 갱신)**: `attachAcceleratorsToWindow` 가 `const km = getKeymap()` 으로 closure 캡처 → 키맵 변경 후 새 윈도우만 새 매핑 사용하던 버그. closure 안에서 매번 `getKeymap()` 호출하도록 변경. 변경 즉시 모든 기존 윈도우에 반영.
@@ -697,7 +697,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - 🟡 다음 라운드 보강 후보: 액션 ID drop-down (현재는 free text 입력 — 명령 팔레트로 액션 찾기 후 복사 권장), 컨텍스트별 시각화 그룹화, JSON import/export.
   - **빌드 산출물**: 외피 JS 동일 (181.10 KB), preload internal.js 8.9 → **9.1 KB** (keymap.set/reset 추가). chrome/content 동일.
   - **검증**: packaged 5 프로세스 정상, log clean.
-  - **다음 라운드 후보**: ① **자동 저장 확인 배너** (비밀번호 silent 자동 저장 → 외피 prompt 배너로 사용자 확인), ② **외피 prefs 통합** (북마크 바·사이드패널·탭바 방향·워크스페이스 rail 을 settings 로 이전 + 다중 창 동기), ③ **워크스페이스 보강** (탭→스페이스 이동·드래그 reorder·"마지막 닫은 탭" 워크스페이스별), ④ **다운로드 가속 보강** (일시정지/재개·stream merge), ⑤ **internal IPC trust 강화** (settings/keymap/workspace 도 isTrustedSender), ⑥ **정책 엔진 보강** (Chrome 정식 match pattern·룰 import/export·권한 룰), ⑦ **Mod API 시작** (자유도 #8 — CLAUDE.md 자유도 모듈 표의 추가 항목, 메뉴·탭 lifecycle·네트워크 인터셉트 후킹).
+  - **다음 라운드 후보**: ① **자동 저장 확인 배너** (비밀번호 silent 자동 저장 → 외피 prompt 배너로 사용자 확인), ② **외피 prefs 통합** (북마크 바·사이드패널·탭바 방향·워크스페이스 rail 을 settings 로 이전 + 다중 창 동기), ③ **워크스페이스 보강** (탭→스페이스 이동·드래그 reorder·"마지막 닫은 탭" 워크스페이스별), ④ **다운로드 가속 보강** (일시정지/재개·stream merge), ⑤ **internal IPC trust 강화** (settings/keymap/workspace 도 isTrustedSender), ⑥ **정책 엔진 보강** (Chrome 정식 match pattern·룰 import/export·권한 룰), ⑦ **Mod API 시작** (자유도 #8 — AGENTS.md 자유도 모듈 표의 추가 항목, 메뉴·탭 lifecycle·네트워크 인터셉트 후킹).
 - 2026-05-25: **묶음 P — 비밀번호 자동 저장 확인 배너**. 비밀번호 매니저 silent 저장 UX 갭 해소.
   - **`proposeSave` 구조 변경 ([features/password](browser-build/app/main/features/password/index.ts))**:
     - 기존: form submit → 즉시 silent 저장
@@ -741,7 +741,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - 좌·우 사이드 패널 토글 (Ctrl+B / Ctrl+Alt+B 동등)
   - **다중 창 효과**: 설정 페이지 또는 한 창에서 토글하면 **모든 창의 외피 즉시 반영** (settings.onChange broadcast). 이전엔 각 창의 localStorage 가 격리되어 동기 안 됨.
   - **단축키 그대로 작동**: 기존 `bookmark-bar:toggle`, `sidepanel:toggle`, `tabbar:cycle-orientation` IPC 는 단순히 setState 호출 → useEffect 가 settings.set 자동 호출 → 모든 창 동기.
-  - **자유도 #6 (단축키) + #5 (레이아웃) 보강**: 같은 동작을 단축키·외피 클릭·설정 페이지 어디서든 동일 결과. CLAUDE.md 의 "모든 액션이 actionId 보유" 원칙과 일관.
+  - **자유도 #6 (단축키) + #5 (레이아웃) 보강**: 같은 동작을 단축키·외피 클릭·설정 페이지 어디서든 동일 결과. AGENTS.md 의 "모든 액션이 actionId 보유" 원칙과 일관.
   - **빌드 산출물**: 외피 JS 182.55 → **183.79 KB / gzip 59.24 KB** (settings 구독 로직 + 모양 카테고리 확장), preload 동일.
   - **검증**: packaged 5 프로세스 정상, log clean.
   - **알려진 제한 (다음 라운드 보강)**:
@@ -769,7 +769,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - URL 객체에서 `protocol`(`:` 제거) · `hostname` · `pathname+search+hash` 부분별 매칭
   - **빌드 산출물**: 외피 JS 183.79 → **184.38 KB / gzip 59.45 KB** (WorkspaceRail 드래그 + CSS). preload 동일.
   - **검증**: packaged 5 프로세스 정상, log clean. 정식 match pattern 위에 기존 단순 와일드카드 패턴 후방 호환 안전.
-  - **다음 라운드 후보**: ① **정책 엔진 import/export + 권한 룰** (사이트별 카메라/위치/마이크 권한 화이트리스트), ② **탭→스페이스 이동 + 가속 일시정지/재개** (보강 묶음 2탄), ③ **userscript match pattern 통일** (policy 의 정식 파서 공유), ④ **외피 디자인 토큰 편집기** (색·폰트·라운드 picker — ui-designer 모듈), ⑤ **`neverOrigins` 영속화 + prompt 사용자 편집**, ⑥ **Mod API 시작** (메뉴·탭 lifecycle·네트워크 인터셉트 후킹), ⑦ **확장 호환 매트릭스 테스트** (uBO Lite/Dark Reader/Bitwarden 등 10개 검증 — CLAUDE.md 약속 이행).
+  - **다음 라운드 후보**: ① **정책 엔진 import/export + 권한 룰** (사이트별 카메라/위치/마이크 권한 화이트리스트), ② **탭→스페이스 이동 + 가속 일시정지/재개** (보강 묶음 2탄), ③ **userscript match pattern 통일** (policy 의 정식 파서 공유), ④ **외피 디자인 토큰 편집기** (색·폰트·라운드 picker — ui-designer 모듈), ⑤ **`neverOrigins` 영속화 + prompt 사용자 편집**, ⑥ **Mod API 시작** (메뉴·탭 lifecycle·네트워크 인터셉트 후킹), ⑦ **확장 호환 매트릭스 테스트** (uBO Lite/Dark Reader/Bitwarden 등 10개 검증 — AGENTS.md 약속 이행).
 - 2026-05-25: **묶음 S — 정책 엔진 권한 룰 + Import/Export**. **자유도 #7 (정책 엔진) 미완 약속 모두 이행**.
   - **권한 룰 모델 ([shared/types.ts](browser-build/app/shared/types.ts))**: `PolicyRule.permissions?: Record<string, 'allow' | 'deny' | 'default'>` 신규 필드. 'default' 는 저장 시 자동 제거 (전역 화이트리스트 적용).
   - **지원 권한 6종** (Electron permission 키 기준):
@@ -808,7 +808,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - import 시 사용자 확인 "기존 룰 유지" 만 — "모두 덮어쓰기" 옵션 없음
     - 권한 deny 시 사용자에게 룰 정보 표시 안 함 (어떤 룰이 거부했는지)
     - `chrome:` / `devtools:` 등 내부 origin 권한 매칭 미정 (현재 url match 가능한 것만)
-  - **다음 라운드 후보**: ① **탭→스페이스 이동 + 가속 일시정지/재개** (보강 묶음 2탄 — 2 자유도 모듈 약속 미완 해소), ② **userscript match pattern 통일** (policy 의 정식 파서를 userscript 도 공유 — Tampermonkey 호환성 강화), ③ **외피 디자인 토큰 편집기** (색·폰트·라운드 picker — ui-designer 자유도 모듈), ④ **확장 호환 매트릭스 테스트** (uBO Lite·Dark Reader·Bitwarden 등 10개 — CLAUDE.md 약속 이행), ⑤ **Mod API 시작** (메뉴·탭 lifecycle·네트워크 인터셉트 — 자유도 모듈 표 잔여), ⑥ **`neverOrigins` 영속화 + 비밀번호 prompt 사용자 편집**, ⑦ **자동 업데이트 채널** (electron-updater + GitHub Releases — release-engineer 약속).
+  - **다음 라운드 후보**: ① **탭→스페이스 이동 + 가속 일시정지/재개** (보강 묶음 2탄 — 2 자유도 모듈 약속 미완 해소), ② **userscript match pattern 통일** (policy 의 정식 파서를 userscript 도 공유 — Tampermonkey 호환성 강화), ③ **외피 디자인 토큰 편집기** (색·폰트·라운드 picker — ui-designer 자유도 모듈), ④ **확장 호환 매트릭스 테스트** (uBO Lite·Dark Reader·Bitwarden 등 10개 — AGENTS.md 약속 이행), ⑤ **Mod API 시작** (메뉴·탭 lifecycle·네트워크 인터셉트 — 자유도 모듈 표 잔여), ⑥ **`neverOrigins` 영속화 + 비밀번호 prompt 사용자 편집**, ⑦ **자동 업데이트 채널** (electron-updater + GitHub Releases — release-engineer 약속).
 - 2026-05-25: **묶음 T — 탭→스페이스 이동 + 가속 일시정지/재개 (보강 묶음 2탄)**.
   - **자유도 #4 (워크스페이스) 잔여 약속 #1 해소 — 탭→스페이스 이동**:
     - 신규 `moveTabToWorkspace(tabId, targetWorkspaceId)` 함수 ([tabs/tab-service.ts](browser-build/app/main/tabs/tab-service.ts))
@@ -835,8 +835,8 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - 액션 팔레트의 동적 워크스페이스 선택 UI 없음(Ctrl+Shift+PageDown/Up 순환만, ws 별 직접 점프는 없음 — 다음 라운드).
   - **빌드 산출물**: 외피 JS 동일 (184.38 KB / gzip 59.45 KB) — 모든 변경이 메인 측. preload 동일 (chrome 13.9 / content 11.1 / internal 9.2 KB).
   - **검증**: packaged Electron 35 부팅 ALIVE, log clean (`[adblock] initialized (standard)`, error 없음).
-  - **다음 라운드 후보**: ① **userscript match pattern 통일** (policy 의 정식 파서 공유 — Tampermonkey 호환성 강화), ② **외피 디자인 토큰 편집기** (색·폰트·라운드 picker — ui-designer 자유도 모듈), ③ **확장 호환 매트릭스 테스트** (uBO Lite·Dark Reader·Bitwarden 등 10개 — CLAUDE.md 약속 이행), ④ **Mod API 시작** (메뉴·탭 lifecycle·네트워크 인터셉트 — 자유도 모듈 표 잔여), ⑤ **`neverOrigins` 영속화 + 비밀번호 prompt 사용자 편집**, ⑥ **자동 업데이트 채널** (electron-updater + GitHub Releases — release-engineer 약속), ⑦ **가속 잡 영속화** (segment.received 저장 → 앱 재시작 시 부활).
-- 2026-05-25: **묶음 U-α — 자유도 잔여 모듈 4종 일괄 1차 구현** → **CLAUDE.md 자유도 모듈 표 전부 ✅ (Mod API + automation-engine + ui-designer + data-sovereignty)**.
+  - **다음 라운드 후보**: ① **userscript match pattern 통일** (policy 의 정식 파서 공유 — Tampermonkey 호환성 강화), ② **외피 디자인 토큰 편집기** (색·폰트·라운드 picker — ui-designer 자유도 모듈), ③ **확장 호환 매트릭스 테스트** (uBO Lite·Dark Reader·Bitwarden 등 10개 — AGENTS.md 약속 이행), ④ **Mod API 시작** (메뉴·탭 lifecycle·네트워크 인터셉트 — 자유도 모듈 표 잔여), ⑤ **`neverOrigins` 영속화 + 비밀번호 prompt 사용자 편집**, ⑥ **자동 업데이트 채널** (electron-updater + GitHub Releases — release-engineer 약속), ⑦ **가속 잡 영속화** (segment.received 저장 → 앱 재시작 시 부활).
+- 2026-05-25: **묶음 U-α — 자유도 잔여 모듈 4종 일괄 1차 구현** → **AGENTS.md 자유도 모듈 표 전부 ✅ (Mod API + automation-engine + ui-designer + data-sovereignty)**.
   - **공통 인프라**: 4개 IPC namespace 신설 (`data` / `tokens` / `macro` / `mod`), 모두 `isTrustedSender` 검증으로 외부 사이트 접근 차단. preload `internal.ts` 에 4종 API 노출 (외피 chrome.ts 는 `tokens.onChanged` 만 — 외피 CSS 변수 즉시 적용용).
   - **🅰 data-sovereignty ([features/data-sovereignty](browser-build/app/main/features/data-sovereignty/index.ts))**:
     - **JSON dump 방식** (zip 라이브러리 의존 회피, 1차 MVP). 다음 라운드에 zip 으로 격상 검토.
@@ -874,7 +874,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - **활성 상태 영속화**: `userData/mods/_state.json` 에 `{id: enabled}`. 부팅 시 활성이었던 mod 만 자동 로드.
     - 관리 페이지 [pages/mods/index.html](browser-build/pages/mods/index.html): 카드별 토글·재로드·삭제 (디렉터리 rm). 에러 시 빨간 border + error message. 경고 배너 ("Mod 는 메인 프로세스에서 실행됩니다. 알 수 없는 출처의 코드는 절대 활성화하지 마세요").
     - 신규 액션 `action.mods.open` (단축키 미할당).
-  - **자유도 모듈 표 진행 현황 — 12/12 완성** (CLAUDE.md 자유도 모듈 표 기준):
+  - **자유도 모듈 표 진행 현황 — 12/12 완성** (AGENTS.md 자유도 모듈 표 기준):
     - ✅ userChrome.css · ✅ userChrome.js · ✅ Userscript · ✅ 명령 팔레트 · ✅ 워크스페이스 · ✅ 레이아웃 자유 · ✅ 단축키 재바인딩 · ✅ 정책 엔진 · ✅ **자동화 매크로** (이번 라운드) · ✅ **디자인 토큰** (이번 라운드) · ✅ **데이터 주권** (이번 라운드) · ✅ **Mod API** (이번 라운드)
   - **신규 IPC 17 채널**: data(2) + tokens(4) + macro(6) + mod(5), 모두 `isTrustedSender` 보호.
   - **빌드 산출물**: 외피 JS 184.38 → **184.60 KB / gzip 59.55 KB** (tokens onChanged useEffect 추가), preload chrome 13.9 → **14.5 KB**, content 11.1 → **11.6 KB** (자동 변경 없음, esbuild 마이너 차이), internal 9.2 → **11.0 KB** (data/tokens/macro/mod 4 namespace 추가).
@@ -898,18 +898,18 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - `system.metrics` IPC: `app.getAppMetrics()` 결과를 PID·타입·메모리(MB)·CPU% 로 정리 + 탭 카운트 (총/활성/슬립) + 슬립 상태 + 환경 정보 (Electron/Chromium/Node 버전, 플랫폼).
     - `system.sweepTabSleep` IPC: 사용자가 "지금 비활성 탭 슬립" 버튼으로 즉시 sweep 호출 가능.
     - `system.bootInfo` IPC: 부팅 시각 + 가동 시간.
-    - **페이지 UI**: 1초마다 자동 갱신, 4×2 stat 카드 (메모리·프로세스 수·CPU·가동 시간 / 탭 총·활성·슬립·임계). **CLAUDE.md 가벼움 예산 표** 직접 노출 — 빈 창 RSS ≤ 250MB · 휴식 CPU ≤ 0.5% · 백그라운드 슬립 활성 여부. budget-ok/warn/over 색상 강조.
+    - **페이지 UI**: 1초마다 자동 갱신, 4×2 stat 카드 (메모리·프로세스 수·CPU·가동 시간 / 탭 총·활성·슬립·임계). **AGENTS.md 가벼움 예산 표** 직접 노출 — 빈 창 RSS ≤ 250MB · 휴식 CPU ≤ 0.5% · 백그라운드 슬립 활성 여부. budget-ok/warn/over 색상 강조.
     - 프로세스별 표 (PID · 타입 · 메모리 · CPU) 메모리 큰 순 정렬.
   - **신규 액션 `action.memory.open`**: `browser://memory` 새 탭. 단축키 미할당 — 명령 팔레트로 접근. settings 의 디자인 토큰처럼 명령 팔레트가 진입 경로.
   - **lazy load 점검 — qrcode 라이브러리 지연 로드**:
     - `features/qrcode` 의 `const QRCode = require('qrcode')` top-level → `getQRCode()` 함수로 지연. 첫 QR 생성 시점까지 라이브러리 로드 안 됨 → 콜드 스타트 단축 + 메모리 baseline 감소.
     - Readability 는 이미 lazy 였음 (`features/reader/index.ts` 의 `readabilityCode = null` 패턴) — 변경 없음.
-  - **`/audit-perf` 슬래시 커맨드 보강**: `.claude/commands/audit-perf.md` 절차에 **"실시간 확인: browser://memory 페이지"** 안내 + 9단계 "백그라운드 슬립 검증" (sweep 후 RSS 재측정으로 탭당 80MB → ~5MB 절감 확인) 추가.
+  - **`/audit-perf` 슬래시 커맨드 보강**: `.Codex/commands/audit-perf.md` 절차에 **"실시간 확인: browser://memory 페이지"** 안내 + 9단계 "백그라운드 슬립 검증" (sweep 후 RSS 재측정으로 탭당 80MB → ~5MB 절감 확인) 추가.
   - **신규 settings 카테고리 `performance`**: `tabSleepEnabled: true` · `tabSleepMinutes: 30`. 다음 라운드에 settings UI 에 노출 예정 (현재는 settings.json 직접 편집 또는 IPC).
   - **신규 IPC 4 채널 (`system.*`)**: 모두 `isTrustedSender` 보호.
   - **빌드 산출물**: 외피 JS 185.13 → **185.76 KB / gzip 60.01 KB** (TabBar 슬립 표시 + CSS), preload internal 11.0 → **11.5 KB** (system API 4종), chrome 14.5 → **14.6 KB**, content 11.6 → **11.8 KB**.
   - **검증**: dev/packaged 부팅 둘 다 **5 프로세스 정상**, log clean (`[adblock] initialized (standard)`, error 없음). 탭 슬립 루프는 부팅 후 매 60초 자동 동작.
-  - **CLAUDE.md 1원칙 #1 약속 진행**: ✅ 백그라운드 탭 슬립 (30분 비활성 → discard) · ✅ 외피 초기 JS ≤ 500KB gzip (현재 60KB, 예산의 12%) · 🟡 콜드 스타트·LCP·디스크·휴식 CPU 측정값 — `browser://memory` 페이지에서 실시간 확인 가능 (자동 측정 + 회귀 차단은 다음 라운드).
+  - **AGENTS.md 1원칙 #1 약속 진행**: ✅ 백그라운드 탭 슬립 (30분 비활성 → discard) · ✅ 외피 초기 JS ≤ 500KB gzip (현재 60KB, 예산의 12%) · 🟡 콜드 스타트·LCP·디스크·휴식 CPU 측정값 — `browser://memory` 페이지에서 실시간 확인 가능 (자동 측정 + 회귀 차단은 다음 라운드).
   - **알려진 제한 (다음 라운드)**:
     - 슬립 시 `about:blank` loadURL — 일부 메모리는 webContents 살아있어 완전 해방 아님 (~5MB 잔여). 진짜 destroy 는 webContents 재생성 필요 (layout 교란 위험).
     - thumbnail freeze 미구현 — 슬립된 탭의 마지막 화면 thumbnail 캡처 + TabBar hover 시 표시는 다음 라운드.
@@ -1170,7 +1170,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **개선 효과(직접 격리 재측정)**: 콜드(설치 후 첫 실행) main 231→**203MB**(-28MB) · 총 317→**285MB**(-32MB). 웜(2번째 이후 실행 — 실사용 대다수) main 166→**143MB**(-23MB) · 총 253→**226MB**(-27MB, **250MB 예산 통과**).
   - **공식 하네스(`perf-measure.mjs`) 재측정**: 콜드 스타트 3회 avg 278ms(예산 2000ms PASS) 불변. idle CPU 0.084%(예산 0.5% PASS) 불변. 외피 gzip 70.96KB(예산 500KB PASS) 불변. **빈 창 private RSS: 개선 전 이 환경 재측정 311MB → 개선 후 290MB**(콜드 경로 편향 — 위 "핵심 발견" 참고, 250MB 예산 대비 여전히 FAIL이나 21MB 개선). 탭당 private 13.7MB(예산 80MB PASS, 불변) — WorkingSet(Electron 자체 집계, 공유 페이지 중복) 컬럼은 참고용으로 별도 FAIL 표기(판정 기준 아님).
   - **스모크 16/16 PASS 유지**(adblock 차단 S10·워크스페이스 partition adblock R13 포함 — 기능 회귀 없음), typecheck 3/3 무경고, win --dir 패키징 정상.
-  - **예산 현실화 권고**: 250MB 예산은 **"설치 후 첫 실행(콜드 adblock 빌드)"** 시나리오에서 EasyList+EasyPrivacy+KR(standard, 기본값) 만으로도 물리적으로 달성 불가(≈285MB, 개선 후에도) — 필터 엔진 자체(캐시 역직렬화 후에도 main 프로세스 상주 ≈107MB)가 콕콕 핵심 기능의 실측 고정비용이며 임의로 더 줄일 레버가 없음(`enableCompression:true`·`debug:false`·engine.bin 캐시 경로 이미 최적 — 확인 완료, 필터 축소는 범위 밖). **"2번째 이후 실행"(웜, 실사용 대다수)은 226MB 로 250MB 예산을 통과**하므로, 권고: ① 예산을 **"콜드/첫 실행 300MB, 웜/steady-state 250MB"** 두 트랙으로 분리하거나, ② CLAUDE.md 의 기존 확장 예외 조항("확장이 활성화되면 한도는 추가분만큼 완화")과 동일한 논리로 standard 이상 adblock 레벨에도 유사 완화 조항 부여, ③ `perf-measure.mjs` 의 콜드런이 adblock 1500ms 타이머를 기다리도록 보정해 매 측정이 안정적으로 "웜" 경로를 재현하게 하는 하네스 자체 수정(측정 재현성 문제 — 별도 라운드).
+  - **예산 현실화 권고**: 250MB 예산은 **"설치 후 첫 실행(콜드 adblock 빌드)"** 시나리오에서 EasyList+EasyPrivacy+KR(standard, 기본값) 만으로도 물리적으로 달성 불가(≈285MB, 개선 후에도) — 필터 엔진 자체(캐시 역직렬화 후에도 main 프로세스 상주 ≈107MB)가 콕콕 핵심 기능의 실측 고정비용이며 임의로 더 줄일 레버가 없음(`enableCompression:true`·`debug:false`·engine.bin 캐시 경로 이미 최적 — 확인 완료, 필터 축소는 범위 밖). **"2번째 이후 실행"(웜, 실사용 대다수)은 226MB 로 250MB 예산을 통과**하므로, 권고: ① 예산을 **"콜드/첫 실행 300MB, 웜/steady-state 250MB"** 두 트랙으로 분리하거나, ② AGENTS.md 의 기존 확장 예외 조항("확장이 활성화되면 한도는 추가분만큼 완화")과 동일한 논리로 standard 이상 adblock 레벨에도 유사 완화 조항 부여, ③ `perf-measure.mjs` 의 콜드런이 adblock 1500ms 타이머를 기다리도록 보정해 매 측정이 안정적으로 "웜" 경로를 재현하게 하는 하네스 자체 수정(측정 재현성 문제 — 별도 라운드).
   - **다음 라운드 후보**: ① `perf-measure.mjs` 콜드런 타이밍 보정(위 하네스 재현성 이슈), ② 예산 현실화 정책 확정(위 권고 중 택1), ③ 확장 호환 매트릭스 10종(게이트 5), ④ 다운로드 매트릭스 나머지, ⑤ settings.downloads.defaultPath 배선.
 - 2026-07-12: **검증 라운드 V5 — 게이트 5 약속 매트릭스(다운로드 10/11 + 확장 9/10) + 확장 ID 아키텍처 버그 fix**. (Fable 5 지휘관 + Sonnet 워커 3, 상세는 status.md)
   - **다운로드 매트릭스 `build/dl-matrix.mjs`+`dl-matrix-server.mjs`(신규)**: 11시나리오 로컬 결정적 서버(AES-128 실제 aes-128-cbc 암호화·쿠키게이트 403 HTML·throttled 16MB resume). **10 PASS / 1 SKIP(yt-dlp 지원호스트 — 바이너리 미설치+네이티브 동의 다이얼로그) / 0 FAIL**. progressive·토큰CDN octet-stream·HLS 평문(.ts)/fMP4(.mp4)/AES-128/master(최고대역폭)·DASH muxed·blob/MSE 감지·쿠키게이트(탭 세션 쿠키)·재시작 이어받기(강제 kill 후 바이트 완전 일치) 전부 검증. 라운드 Y/Z/AA 다운로드 엔진 실증(앱 버그 0).
@@ -1179,7 +1179,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - **버그 2 (확장 ID 불일치, 심각·아키텍처 — 1원칙 #2 핵심 깨짐)**: `installFromCrx` 가 temp 로드→`loaded.id` 획득→`extensionsRoot()/<id>` 이동→재로드. Electron 은 manifest 에 `key` 없으면 **설치 경로 해시로 ID 생성** → 경로 바뀌면 ID 바뀜 → 저장·반환 ID(temp) ≠ 최종 경로 런타임 ID. 결과(실측): 툴바 액션 팝업 `chrome-error://` 빈 페이지, `browser://extensions` 이름 `__MSG_extName__`, disable/remove 재시작 전 무반응. **6개 로드돼도 0개 앱 UI 사용 가능**.
       - **fix (정석 — manifest key 주입)**: CRX 헤더의 서명 pubkey 를 추출해 `manifest.json` 의 `"key"`(base64) 에 주입 → loadExtension 이 경로가 아니라 key 로 웹스토어와 동일한 안정 ID 파생. 이동/재로드 제거(최종 경로에서 한 번만 로드). `idFromPublicKey`=SHA256(pubkey DER)[0:16] a-p 인코딩(Chromium GenerateId 동일).
       - **함정(적대적 검증으로 발견)**: 웹스토어 CRX3 헤더 field 2 에 RSA proof **2개** — 첫째는 구글이 추가한 배포/재게시 키(모든 확장 **동일**), 둘째가 개발자 키(웹스토어 ID 결정). 첫 proof 를 잡으면 9개 확장이 전부 같은 ID(`lfoeajg...`)로 붕괴돼 서로 덮어씀. **해결**: `CrxFileHeader.signed_header_data`(field 10000) 안 `SignedData.crx_id`(field 1) = Chromium 이 이미 계산한 정답 16바이트 → 각 proof pubkey 의 `idFromPublicKey` 가 이 값과 일치하는 것만 선택(순서 무의존 self-verify). `extractCrx3PublicKey` 가 minimal protobuf(varint/wire-type) 수동 파서로 구현. unpacked 로컬(폴더 드래그, key 없음)은 자체 RSA 키페어 생성으로 경로 독립성 확보.
-    - **결과(지휘관 직접 재검증)**: **9/10 로드 + 8/8 팝업 실제 렌더(chrome-error 아님) + ID 완벽 일치**(저장 dir = 런타임 SW ID = 웹스토어 ID, 예 uBO `ddkjiahej...`). Save to Pocket 만 204(진짜 delisted). CLAUDE.md "웹스토어 상위 100개 70% 무수정 동작" 목표 초과(90%).
+    - **결과(지휘관 직접 재검증)**: **9/10 로드 + 8/8 팝업 실제 렌더(chrome-error 아님) + ID 완벽 일치**(저장 dir = 런타임 SW ID = 웹스토어 ID, 예 uBO `ddkjiahej...`). Save to Pocket 만 204(진짜 delisted). AGENTS.md "웹스토어 상위 100개 70% 무수정 동작" 목표 초과(90%).
   - **검증 방법 핵심 교훈**: 워커 최종 보고(성공)와 하네스 결과 파일(붕괴 `lfoeajg...`)이 모순 → **결과 파일 타임스탬프(23:47)가 코드 수정(23:52)·빌드(23:54)보다 이전** = 수정 전 중간 산출물임을 간파 → 최신 빌드로 지휘관 직접 재실행해 확정. **산출물 타임스탬프를 코드 수정 시각과 대조하라. 워커의 성공 주장도 낡은 결과 파일도 단독으로 믿지 말 것.**
   - **검증**: typecheck 3/3 · win --dir 패키징 · 다운로드 10/11 · 확장 9/10(ID 일치·팝업 렌더) · 스모크 16/16 유지(회귀 없음).
   - **관찰(미수정)**: 확장 description 의 `__MSG__` i18n 치환 미구현(이름은 fix), 앱 종료 exit code 0xC0000005(하네스 강제종료 경로 추정·런타임 무관), 기존 붕괴 ID 설치본은 재설치 시 정상화.
@@ -1199,18 +1199,18 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **함정(테스트 환경)**: oneClick 은 **이전 설치 경로를 레지스트리(HKCU\Software)에 기억** — 앞선 assisted 테스트의 불완전 정리로 남은 경로 키 때문에 첫 재설치가 그 위치(temp\ezb-clean-test)로 감. 실제 clean PC 엔 이 기록 없음. 완전 정리는 Uninstall 키 + `HKCU\Software\*ezBrowser*/*browser-build*` 경로 키 둘 다 sweep 필요.
   - **산출물**: `dist/ezBrowser-0.1.0-win-x64.exe`(97.3MB, oneClick 자동설치). 여전히 미서명(SmartScreen 경고) + 자동업데이트 owner 플레이스홀더 — 둘 다 설치·실행엔 무관, 사용자 제공 값 대기.
   - **남은 게이트 7(사용자 제공 필수)**: 코드 서명 `.pfx`, 자동업데이트 GitHub `owner/repo`, 외부 clean Windows 실기 설치 검증.
-- 2026-07-21: **묶음 AI-1 — 브라우저 내장 AI 어시스턴트 (aside.com 영감) 1차: 페이지 AI 사이드바 + BYOK 3제공자**. 코드베이스에 AI/LLM 코드가 전무했던 greenfield 레이어. aside.com 분석 결과 그 핵심은 ① 페이지 맥락 AI(사이드바 요약·질문·챗) ② 로그인된 사이트에서 스스로 작업하는 에이전트 ③ BYOK(자체 LLM 없음 — 사용자 ChatGPT/Claude 키 또는 로컬 Ollama). 우리는 이미 사이드패널·비번매니저(safeStorage)·content.js DOM 접근·net.request 아웃바운드를 다 갖춰 얹기에 이례적으로 유리. **이번 라운드는 ①(사이드바)을 내되, ②(에이전트)가 재작성 없이 얹히도록 "에이전트 준비된 토대"로 설계**(사용자 명시 요구: "브라우저에서 하는 작업을 다 찾아서 해준다 — 우리 설계도 그렇게").
-  - **AI 제공자 레이어 ([features/ai/providers.ts](browser-build/app/main/features/ai/providers.ts))**: Anthropic(Claude)/OpenAI/로컬 Ollama 3종 **스트리밍** 추상화. main 프로세스 `net.request` POST(번역·위젯과 동일 패턴) — CORS 무관. Anthropic·OpenAI 는 SSE(`data:` 라인), Ollama 는 NDJSON(줄 단위 JSON) — 제공자별 `parseLine` 로 분기. 부분 청크 버퍼링(`\n` 분할·마지막 partial 보존), 취소(`req.abort`), 120s 타임아웃, HTTP 상태별 친절한 한국어 에러(401/403 키·404 모델·429 한도·Ollama 연결). **요청 body 빌더가 제공자별로 분리돼 있어 에이전트 라운드에서 `tools`/`tool_choice` 만 추가하면 됨**(tool-use 준비).
+- 2026-07-21: **묶음 AI-1 — 브라우저 내장 AI 어시스턴트 (aside.com 영감) 1차: 페이지 AI 사이드바 + BYOK 3제공자**. 코드베이스에 AI/LLM 코드가 전무했던 greenfield 레이어. aside.com 분석 결과 그 핵심은 ① 페이지 맥락 AI(사이드바 요약·질문·챗) ② 로그인된 사이트에서 스스로 작업하는 에이전트 ③ BYOK(자체 LLM 없음 — 사용자 ChatGPT/Codex 키 또는 로컬 Ollama). 우리는 이미 사이드패널·비번매니저(safeStorage)·content.js DOM 접근·net.request 아웃바운드를 다 갖춰 얹기에 이례적으로 유리. **이번 라운드는 ①(사이드바)을 내되, ②(에이전트)가 재작성 없이 얹히도록 "에이전트 준비된 토대"로 설계**(사용자 명시 요구: "브라우저에서 하는 작업을 다 찾아서 해준다 — 우리 설계도 그렇게").
+  - **AI 제공자 레이어 ([features/ai/providers.ts](browser-build/app/main/features/ai/providers.ts))**: Anthropic(Codex)/OpenAI/로컬 Ollama 3종 **스트리밍** 추상화. main 프로세스 `net.request` POST(번역·위젯과 동일 패턴) — CORS 무관. Anthropic·OpenAI 는 SSE(`data:` 라인), Ollama 는 NDJSON(줄 단위 JSON) — 제공자별 `parseLine` 로 분기. 부분 청크 버퍼링(`\n` 분할·마지막 partial 보존), 취소(`req.abort`), 120s 타임아웃, HTTP 상태별 친절한 한국어 에러(401/403 키·404 모델·429 한도·Ollama 연결). **요청 body 빌더가 제공자별로 분리돼 있어 에이전트 라운드에서 `tools`/`tool_choice` 만 추가하면 됨**(tool-use 준비).
   - **키 보안 ([features/ai/keys.ts](browser-build/app/main/features/ai/keys.ts))**: aside 의 "자격증명 노출 안 함" 정신 그대로 — API 키를 평문 settings.json 에 두지 않고 **safeStorage**(Windows DPAPI 등)로 암호화해 `userData/ai-keys.json` 에 base64 저장(비번매니저와 동일 모델). 설정 UI 는 실제 키가 아니라 "✓ 설정됨/미설정"만 표시. Ollama 는 키 불필요.
   - **페이지 추출 ([features/ai/page-content.ts](browser-build/app/main/features/ai/page-content.ts))**: 리더 모드와 동일한 `@mozilla/readability` 를 **읽기 전용**으로(DOM clone 파싱, 페이지 안 건드림) — 본문+선택영역 반환. maxContextChars(기본 12000)로 캡. **에이전트 라운드에서 "클릭 가능한 요소 목록"까지 반환하도록 확장하면 관찰(observe) 단계 재사용**.
   - **오케스트레이션 ([features/ai/index.ts](browser-build/app/main/features/ai/index.ts))**: 설정·키·제공자·페이지추출을 묶어 `startAiChat({reqId, tabId, includePage, messages})`. includePage 면 활성 탭 본문을 시스템 프롬프트에 주입("# 사용자가 지금 보고 있는 페이지" 블록 + 선택영역). reqId 로 스트림 취소 핸들 추적.
   - **IPC ([ipc/ai.ts](browser-build/app/main/ipc/ai.ts))**: `ai:config/pageContext/keyStatus/setKey/clearKey/send/cancel` + 스트림 이벤트 `ai:delta/done/error` + 액션 `ai:open`. `ai:send` 는 호출 창(`e.sender`)으로 델타 스트리밍. 전부 `isTrustedSender` 가드. preload: `browserAPI.ai.*`(외피 사이드바) + `internalAPI.ai.{config,keyStatus,setKey,clearKey}`(설정 페이지 키 관리).
   - **외피 AI 사이드바 ([components/AiTab.tsx](browser-build/app/renderer/components/AiTab.tsx))**: 사이드패널 신규 `✨ AI` 섹션(기본 첫 탭). 챗 버블(스트리밍 델타 실시간 누적 + 커서), 퀵액션(이 페이지 요약·선택영역 설명·핵심 정보 추출), 페이지 컨텍스트 토글, 중단 버튼, 새 대화. 키 없으면 "설정에서 키 입력" 셋업 카드(Ollama 안내 포함). 툴바 `✨` 버튼 + `action.ai.open`(**Ctrl+Shift+Space**) + 명령 팔레트. LLM 응답은 안전하게 `white-space: pre-wrap` 평문 렌더(마크다운 렌더는 다음 라운드).
-  - **설정 ([settings.ts](browser-build/app/main/storage/settings.ts) `ai` 카테고리)**: enabled·provider·제공자별 모델(anthropicModel 기본 `claude-sonnet-4-5`·openaiModel `gpt-4o-mini`·ollamaModel `llama3.2`·ollamaUrl `localhost:11434`)·maxTokens·maxContextChars·includePageByDefault. 모델은 자유 편집(사용자 계정/설치에 맞게). browser://settings 에 `✨ AI` 카테고리(제공자 전환 시 해당 모델·키 UI 즉시 재렌더, 키 저장/삭제 버튼).
+  - **설정 ([settings.ts](browser-build/app/main/storage/settings.ts) `ai` 카테고리)**: enabled·provider·제공자별 모델(anthropicModel 기본 `Codex-sonnet-4-5`·openaiModel `gpt-4o-mini`·ollamaModel `llama3.2`·ollamaUrl `localhost:11434`)·maxTokens·maxContextChars·includePageByDefault. 모델은 자유 편집(사용자 계정/설치에 맞게). browser://settings 에 `✨ AI` 카테고리(제공자 전환 시 해당 모델·키 UI 즉시 재렌더, 키 저장/삭제 버튼).
   - **검증 (패키징 없이 built main 을 electron 직접 구동 + CDP, 격리 프로필)**: typecheck 3/3·build(외피 gzip 72.7→74.7KB, 예산 500KB 의 15%)·**AI 파이프라인 CDP 7/7 PASS**(부팅·`browserAPI.ai` 표면·config 형태·send→에러 파이프라인·Ollama net.request 왕복·action→사이드바 DOM·무크래시). **결정적 발견**: 사용자 PC 에 Ollama 가 실제 가동 중(exaone3.5:7.8b·qwen2.5 등 설치됨) → **키 없이 실제 스트리밍 답변 end-to-end 성공**(exaone3.5 로 17 델타, 시스템 프롬프트대로 "브라우저 내장 AI 어시스턴트"로 한국어 답변). 즉 로컬 무료·프라이빗 AI 가 모델만 있으면 즉시 동작.
   - **다음 라운드 후보**: ① **에이전트 루프(자유도 신규 축)** — `page-actions`(클릭·입력·이동 via executeJavaScript) + 관찰 모듈(page-content 확장: 상호작용 요소 열거) + tool-use(providers 확장) + 확인 게이트(결제·전송 등 민감 동작), aside 의 "다 찾아서 해준다" 재현, ② 마크다운 렌더(코드블록·리스트), ③ 선택영역만 번역/설명 인라인, ④ Memory(aside 식 markdown 로컬 기억·"Dreaming"), ⑤ 스크린샷 멀티모달(captureTab → vision), ⑥ 대화 이력 영속화·세션별 스레드.
-  - **후속(묶음 AI-1b): Google Gemini 무료 티어 제공자 추가**. 사용자 문의("구독으로 못 쓰나? API 는 비용 아닌가?")에 답: 구독(ChatGPT Plus/Claude Pro)엔 API 미포함(별도 종량제), 구독 자체를 쓰려면 aside 식 웹세션 자동조작뿐(ToS·계정 위험 → 에이전트 라운드 옵션). **무료 경로 = 로컬 Ollama(이미 됨) + Google Gemini 무료 티어**. Gemini 를 4번째 제공자로 추가 — provider 레이어 추상화 덕에 `providers.ts` 에 `googleEndpoint`(Generative Language API, role=user/model·system=systemInstruction·`?alt=sse` SSE 스트리밍) 어댑터만 추가하고 keys(`AiSecretProvider` += google)·settings(`ai.provider` += google, `googleModel` 기본 `gemini-2.0-flash`)·IPC 검증·preload 타입·설정 UI(무료 키 안내 aistudio.google.com)에 google 전파. **Gemini 스트림은 종료 마커 없이 연결 종료로 완료**(resp end → onDone). typecheck 3/3·build 통과. 무료 키(신용카드 불필요) 발급해 넣으면 클라우드 품질 AI 를 비용 없이 사용.
-- 2026-07-21: **묶음 AI-2 — 자율 에이전트 (aside 의 "브라우저에서 하는 작업을 다 찾아서 해준다") 1차**. AI-1 에서 "에이전트-준비" 로 지은 토대 위에 관찰→판단→실행 루프를 얹음. **핵심 결정 — 크로스 프로바이더 "JSON 액션 프로토콜"**: 제공자별 tool-use 배관(4종) 대신 LLM 이 매 스텝 JSON 액션 하나를 출력하게 하고 파싱 → 사용자의 로컬 Ollama·Gemini·Claude·OpenAI 어디서든 동일 동작, 신규 제공자 코드 0(AI-1 텍스트 경로 재사용).
+  - **후속(묶음 AI-1b): Google Gemini 무료 티어 제공자 추가**. 사용자 문의("구독으로 못 쓰나? API 는 비용 아닌가?")에 답: 구독(ChatGPT Plus/Codex Pro)엔 API 미포함(별도 종량제), 구독 자체를 쓰려면 aside 식 웹세션 자동조작뿐(ToS·계정 위험 → 에이전트 라운드 옵션). **무료 경로 = 로컬 Ollama(이미 됨) + Google Gemini 무료 티어**. Gemini 를 4번째 제공자로 추가 — provider 레이어 추상화 덕에 `providers.ts` 에 `googleEndpoint`(Generative Language API, role=user/model·system=systemInstruction·`?alt=sse` SSE 스트리밍) 어댑터만 추가하고 keys(`AiSecretProvider` += google)·settings(`ai.provider` += google, `googleModel` 기본 `gemini-2.0-flash`)·IPC 검증·preload 타입·설정 UI(무료 키 안내 aistudio.google.com)에 google 전파. **Gemini 스트림은 종료 마커 없이 연결 종료로 완료**(resp end → onDone). typecheck 3/3·build 통과. 무료 키(신용카드 불필요) 발급해 넣으면 클라우드 품질 AI 를 비용 없이 사용.
+- 2026-07-21: **묶음 AI-2 — 자율 에이전트 (aside 의 "브라우저에서 하는 작업을 다 찾아서 해준다") 1차**. AI-1 에서 "에이전트-준비" 로 지은 토대 위에 관찰→판단→실행 루프를 얹음. **핵심 결정 — 크로스 프로바이더 "JSON 액션 프로토콜"**: 제공자별 tool-use 배관(4종) 대신 LLM 이 매 스텝 JSON 액션 하나를 출력하게 하고 파싱 → 사용자의 로컬 Ollama·Gemini·Codex·OpenAI 어디서든 동일 동작, 신규 제공자 코드 0(AI-1 텍스트 경로 재사용).
   - **눈과 손 ([features/ai/page-actions.ts](browser-build/app/main/features/ai/page-actions.ts))**: `observePage(wc)` — 콘텐츠 페이지에서 `executeJavaScript` 로 상호작용 요소(a/button/input/select/textarea/[role]/[onclick]) 열거, 화면 근처·가시 요소만, 각 요소에 `data-bb-agent-ref` 속성 부여(실행 때 그 ref 로 정확히 집음), 접근성 이름+본문 스니펫 반환. `executeInPageAction(wc, action)` — click(scrollIntoView 후 .click())·type(native setter + input/change 이벤트, contenteditable 대응, submit=true 면 Enter/requestSubmit)·scroll. navigate 는 main 에서 `wc.loadURL`+did-finish-load 대기.
   - **루프 ([features/ai/agent.ts](browser-build/app/main/features/ai/agent.ts))**: `runAgentTask({reqId,tabId,task}, emit)` — 관찰→`chatOnce`(providers 에 신설한 비스트리밍 1회 호출, streamChat 재사용)→`extractJson`(균형 중괄호 스캐너로 프로즈 속 JSON 추출)→민감 게이트→실행→반복. MAX_STEPS=12, http(s) 만, 이력 트림(관찰이 커서 최근 10 메시지만·작업은 system 에 고정), done/ask 로 종료. 액션: click/type/navigate/scroll/read/wait/done/ask.
   - **확인 게이트(aside 안전 모델)**: `SENSITIVE` 정규식(결제·구매·주문·송금·삭제·전송·게시·submit·pay·checkout·order·delete…) 매칭 요소 클릭 또는 type+submit 이면 실행 전 `confirm` 이벤트 → 사용자 승인 대기(`pendingConfirm` resolver). 거부 시 미실행 + 이력에 기록하고 계속. 중단(`cancelAgentTask`)은 진행 중 LLM 호출까지 abort.
@@ -1241,7 +1241,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **파서 견고화(소형 로컬 모델 형식 이탈 대비)**: 검증 중 exaone 이 "NONE" 대신 "(지속적인 사실 없음)"·"(참고: 형식에 맞춰…)" 같은 **머리말/메타를 출력 → 파서가 그걸 기억으로 저장하는 버그** 발견. fix: ① 프롬프트를 단순·명령형으로(예시 포함, 머리말 금지) ② `isNonFactLine` 로 없음-문장(없음/none/해당없음)·메타(참고/형식/출력하면/다음과같/예:)·괄호 시작·마크다운 잔재 줄을 거부, 각 줄 bullet·따옴표·`*``` 정리 후 dedup. **단, "…입니다." 같은 실제 사실 문장은 통과**하도록 메타 표지만 좁게 매칭.
   - **탭 닫기 액션**: 에이전트 `close_tab {index}` — 탭 관리 완성(열기·전환·닫기). **현재 조작 중인 탭(▶)은 닫기 거부**(루프 붕괴 방지 — 먼저 전환 요구). `closeTab(tab-service)` 사용, 민감 게이트 없음(Ctrl+Shift+T 복원 가능).
   - **검증 (실제 Ollama exaone3.5, CDP)**: typecheck 3/3·build(외피 불변 77.35KB). **AI-6 e2e 5/5 PASS** — ① 자동 Dreaming: 챗 "내 직업은 의사야" → 메모리에 `- 직업: 의사` 깨끗이 추출(머리말·잡음 0, 파서 fix 후) ② close_tab: 에이전트가 다른 탭 닫기(탭 2→1) + **현재 탭 생존**. 파서 fix 전 2회는 "(없음)"·"(참고…)" 저장 버그로 FAIL → 프롬프트+파서 보강 후 PASS.
-  - **알려진 제한**: 자동 Dreaming 추출 품질은 모델 지시-따르기에 의존 — 강한 모델(Claude/Gemini/GPT)에서 최상, 소형 로컬 모델은 보수적일 수 있으나 파서가 잡음 저장을 방어(안전). 스크린샷 vision·네이티브 tool-use 여전히 미구현(로컬 모델 비전 미지원·클라우드 키 부재로 e2e 검증 불가 → 보류).
+  - **알려진 제한**: 자동 Dreaming 추출 품질은 모델 지시-따르기에 의존 — 강한 모델(Codex/Gemini/GPT)에서 최상, 소형 로컬 모델은 보수적일 수 있으나 파서가 잡음 저장을 방어(안전). 스크린샷 vision·네이티브 tool-use 여전히 미구현(로컬 모델 비전 미지원·클라우드 키 부재로 e2e 검증 불가 → 보류).
 - 2026-07-21: **묶음 AI-7 — 챗 대화 영속화 (재시작해도 대화 유지 + 여러 스레드 관리)**. AI-1~6 까지의 챗은 React state 뿐이라 사이드바를 닫거나 앱을 끄면 사라졌음. aside 의 "맥락 유지" 정신에 맞춰 대화를 디스크에 저장.
   - **저장소 ([features/ai/conversations.ts](browser-build/app/main/features/ai/conversations.ts))**: `userData/ai-chats.json` 하나에 모든 대화. `Conversation{id,title,createdAt,updatedAt,messages[]}`. 원자적(tmp+rename) 300ms 디바운스 저장, 부팅 시 sync 로드(memory.ts 패턴). `initConversations`(initAi 에서 호출)·`listConversations`(요약, 최신순)·`getConversation`·`saveConversation`(upsert, 첫 user 메시지로 자동 제목 40자)·`renameConversation`·`deleteConversation`·`clearAllConversations` + `conversationEvents` 변경 broadcast. 상한: 대화 100개·대화당 메시지 200개(초과 시 오래된 것 트림).
   - **IPC/preload**: `ai.convList/convGet/convSave/convDelete/convRename/convClear` + `convChanged` broadcast(`isTrustedSender` 가드). preload `browserAPI.ai.conv*` + `onConvChanged`.
@@ -1262,7 +1262,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **검증 (실제 로컬 exaone3.5, CDP, 2회 부팅)**: typecheck 3/3·build(외피 gzip 78.60→79.28KB). **AI-9 e2e 15/15 PASS** — 매크로 ▶ 실행 → 에이전트가 http 버튼 실제 클릭 완수 → **실행 이력에 11단계 기록(⚙️ 행동 포함)·status done** → lastRunAt 갱신 → 🕘 이력 UI 목록·상세 렌더 → ✎ 매크로 이름 인라인 편집 → **강제 kill 재시작 후 실행 이력 유지(done)**. 프로필/프로세스 정리.
   - **알려진 제한(다음 후보)**: 대화 폴더/태그 정리(①의 잔여, UI 규모 커 별도 라운드), 실행 이력에서 바로 재실행 버튼 없음, 이력 검색 없음. 스크린샷 vision·네이티브 tool-use 여전히 클라우드 키/비전 모델 부재로 보류.
 - 2026-07-21: **묶음 AI-10 — 대화 폴더/태그 정리 + `ai-sidebar-design` 스킬 신설** (①의 잔여 해소).
-  - **`frontend-design` 스킬 요청 대응**: 사용자가 UI/UX 개선을 위해 frontend-design 설치를 요청. 이는 Anthropic 번들 스킬이라 이 환경(프로젝트/전역 `.claude/skills/`)에 없고 공식본을 진짜로 설치 불가 → 공식본 사칭 대신 **우리 제약(280px 도크·디자인 토큰·외피 테마)에 특화한 실제 프로젝트 스킬 `ai-sidebar-design`** 을 기존 18개 스킬과 동일 형식으로 신설([.claude/skills/ai-sidebar-design/SKILL.md](browser-build/.claude/skills/ai-sidebar-design/SKILL.md)). 내용: 절대 제약, 확립된 컴포넌트 어휘(`.ai-*`) 표, 좁은 폭 IA 원칙, 칩(chip) 규칙, 접근성 체크리스트, 새 하위 뷰 추가 절차, 폴더/태그 적용안. 앞으로 모든 AI 사이드바 라운드가 참조.
+  - **`frontend-design` 스킬 요청 대응**: 사용자가 UI/UX 개선을 위해 frontend-design 설치를 요청. 이는 Anthropic 번들 스킬이라 이 환경(프로젝트/전역 `.Codex/skills/`)에 없고 공식본을 진짜로 설치 불가 → 공식본 사칭 대신 **우리 제약(280px 도크·디자인 토큰·외피 테마)에 특화한 실제 프로젝트 스킬 `ai-sidebar-design`** 을 기존 18개 스킬과 동일 형식으로 신설([.Codex/skills/ai-sidebar-design/SKILL.md](browser-build/.Codex/skills/ai-sidebar-design/SKILL.md)). 내용: 절대 제약, 확립된 컴포넌트 어휘(`.ai-*`) 표, 좁은 폭 IA 원칙, 칩(chip) 규칙, 접근성 체크리스트, 새 하위 뷰 추가 절차, 폴더/태그 적용안. 앞으로 모든 AI 사이드바 라운드가 참조.
   - **스킬 적용 — 폴더/태그 (좁은 폭 → 얕게)**: 폴더=**1단 평면**(중첩 트리 금지), 태그=교차 라벨(다대다). `conversations.ts` 에 `Conversation.folderId?`/`tags?` + `ChatFolder{id,name}` 를 같은 `ai-chats.json`(`{conversations, folders}`)에 저장. 함수: `listFolders/createFolder/renameFolder/deleteFolder`(폴더 삭제 시 대화 미분류로)/`setConversationFolder`/`setConversationTags`(sanitize: #제거·trim·중복제거·최대8개·24자)/`listTags`. `ConversationSummary` 에 folderId/tags 방출. IPC `ai.folderList/folderCreate/folderRename/folderDelete/folderChanged` + `ai.convSetFolder/convSetTags` + preload.
   - **AiTab 히스토리 UI (스킬 어휘 재사용)**: 검색창 아래 **필터 행** — 폴더 칩(전체/폴더들/미분류, 단일선택) + 태그 칩(합집합, 다중선택 AND). 대화 행 보조메타에 `📁폴더 · #태그`. 행 `📁` 버튼 → **패널 폭 안 인라인 분류 패널**(절대좌표 팝오버 아님 — 콘텐츠 뷰 안 가림): 폴더 칩 선택 + `＋ 새 폴더` 인라인 입력 + 태그 칩(제거) + 태그 추가 입력. 신규 CSS `.ai-chip(.active/.tag/.removable)`·`.ai-filter-row`·`.ai-assign*` 전부 디자인 토큰만.
   - **검증 (CDP, 2회 부팅)**: typecheck 3/3·build(외피 gzip 79.28→80.20KB). **AI-10 e2e 15/15 PASS** — 폴더 생성·대화 지정·태그 지정(저장소) → 필터 행 표시 → 폴더 칩 필터 1개·태그 칩 필터 1개 → 인라인 패널 열림 → 패널로 폴더 지정·태그 추가 → **강제 kill 재시작 후 폴더/태그 유지**. 프로필/프로세스 정리.
@@ -1301,7 +1301,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **agent.ts 이중 경로 + 폴백**: `useTools = nativeToolUse!=='off' && supportsNativeTools(provider,model)`. useTools 면 `chatWithTools(AGENT_TOOLS)`(12개 도구 — click/type_text/navigate/open_tab/switch_tab/close_tab/scroll/read/wait/remember/done/ask, 각 optional `thought`), `toolCallToAction(tc)` 로 기존 `AgentAction` 실행기 재사용. 도구 안 쓰고 텍스트로 답하면 `extractJson` 로 재폴백. **기존 JSON 액션 프로토콜은 else 분기로 100% 보존**(비-tool 모델·`off` 설정). 시스템 프롬프트도 tool 모드용 분리. 민감 게이트·확인·ask·탭 조작 전부 두 경로 공용.
   - **설정**: `ai.nativeToolUse: 'auto' | 'off'`(기본 auto) 스키마 + `browser://settings` AI 기본 섹션에 select. 'auto'=지원 시 사용·아니면 폴백.
   - **검증 (CDP + 로컬 HTTP 서버 + 실제 Ollama, 2회 연속)**: typecheck 3/3·build(외피 불변 82.26KB — 전부 main/설정). **AI-16 e2e 5/5 PASS** — ① 원시 Ollama qwen 이 우리 tool 스키마로 click 함수 호출 생성(content-json) → ② **qwen 네이티브 tool 경로로 실제 버튼 클릭**(`start>observe>thought>action`, 서버 hit 확인) → ③ **민감 게이트(결제) tool 경로에서도 confirm 발생 → 거부 시 미실행**(paid=false) → ④ **exaone(non-tool)+auto → capability 자동 폴백(JSON 경로)로 클릭**(회귀 없음). 프로필/electron 정리(stray 0).
-  - **알려진 제한(다음 후보)**: tool 경로도 "1도구/턴 + 결과는 다음 관찰에 접붙임"(엄격한 tool_result 프로토콜 아님 — 교대 단순화·안정). 스트리밍 아님(비스트리밍 1회). 클라우드 키(Claude/GPT/Gemini) tool 경로는 배관만 검증(로컬 qwen 으로 실동작 확인, 키 부재로 클라우드 실호출 미검증). **스크린샷 vision 은 여전히 로컬 비전 모델 설치 or 클라우드 키가 있어야 실검증 가능** — 사용자가 비전 모델(llava·llama3.2-vision 등) 설치 시 다음 라운드.
+  - **알려진 제한(다음 후보)**: tool 경로도 "1도구/턴 + 결과는 다음 관찰에 접붙임"(엄격한 tool_result 프로토콜 아님 — 교대 단순화·안정). 스트리밍 아님(비스트리밍 1회). 클라우드 키(Codex/GPT/Gemini) tool 경로는 배관만 검증(로컬 qwen 으로 실동작 확인, 키 부재로 클라우드 실호출 미검증). **스크린샷 vision 은 여전히 로컬 비전 모델 설치 or 클라우드 키가 있어야 실검증 가능** — 사용자가 비전 모델(llava·llama3.2-vision 등) 설치 시 다음 라운드.
 - 2026-08-20: **묶음 SEC-1 — 자동발행(블로그·인스타·틱톡·유튜브) 적대적 감사 후속 보안 라운드 5종**. 페이블 4기 병렬 적대 감사(네이버 발행 / 인스타·페북 봇회피 / 틱톡·유튜브 업로드 / 안전코어)에서 나온 급소를 우선순위대로 수정. 신규 모듈 [features/ai/agent-gate.ts](browser-build/app/main/features/ai/agent-gate.ts) 가 위험·게시·인젝션 판정의 단일 출처.
   - **① 게이트 아키텍처 재설계 (라벨 키워드 → 위험 등급)**: 기존 `isSensitive`/`earlyGateSensitive` 2종 폐기 → `assessRisk(action, obs, ctx)` 단일 함수. 등급 `none | confirm | critical`. 판정 재료를 **①페이지 URL(위조 어려움) ②행동 종류 ③대상 라벨·프레임** 3축으로 확장.
     - **단일 게이트 지점**: 루프의 모든 개별 핸들러(done·ask·run_js·key·upload·open_tab…)보다 **앞**에 게이트를 두어, 액션이 늘어도 우회 경로가 안 생긴다(전에는 open_tab·run_js·ref없는 Enter 3곳이 게이트 뒤에서 continue 해 무확인 실행됐다).
@@ -1423,17 +1423,17 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **`build/lib/cdp.mjs`(신규)**: `CDPSession`(타임아웃 시 pending 정리 + CDP 이벤트 구독 `events` — agent-safety 의 Electron debugger shim 이 쓰는 상위집합) · `connectSession` · `getTargetList` · `isShellTarget` · `waitForShellTarget` · `waitForTargetByUrlPredicate` · **`waitForPortFree`**(연결 거부만 "비었음", 타임아웃은 점유로 간주) · **`connectShellSessionReady`**(8s→20s→30s 프로브, 총 90초, 실패 세션 폐기 후 재연결) · `ensureSessionReady`. 앱 spawn·프로필 시드·시나리오는 각 하네스가 계속 소유(합치면 회귀 위험만 커짐).
   - **이식 범위**: smoke · dl-matrix · ext-matrix · session-restore · stress · perf-measure · perf-breakdown · verify-agent-safety · verify-fixes · probe-fingerprint · bench-agent **11개** — 중복 약 **600줄 제거**, 지역 `CDPSession` 정의 **0개**. 외피 접속 **8곳**을 `connectShellSessionReady` 로, 앱 기동 **8곳**에 포트 점유 가드 삽입, 갓 뜬 창/탭 접속 **4곳**에 `ensureSessionReady` 추가.
   - **⚠ 자동 변환의 함정(기록해 둘 것)**: 1차 변환기가 블록 끝을 "열 0 의 `}`"로 판정해, **한 줄 함수**(`async function getTargetList(port) { … }`)를 만나면 다음 블록까지 삼켰다 — 압축형 3개 파일에서 `isShellTarget`·`startProbeServer` 등이 **조용히 삭제**됐고 `node --check` 는 통과했다(선언 소실은 문법 오류가 아님). **선언 소실 감사**(이식 전후 최상위 선언 집합 비교 + 사용처 확인)로 3건 전부 검출 → 복원 후 **중괄호 깊이 추적** 방식으로 재이식. 자동 리팩터링에는 문법 검사만으로 부족하다.
-  - **perf 게이트 판정 버그 수정**: `perf-measure` 가 예산 표의 판정 문자열을 `includes('FAIL')` 로 보는 바람에, **참고용 WorkingSet 열**(CLAUDE.md 가 "판정에 쓰지 말 것"이라 명시한 Electron 자체 집계) 때문에 **모든 예산을 통과해도 항상 exit 1** 이었다. private 판정만 실패로 세도록 교정 + 초과 항목명 출력. 늘 빨간 게이트는 무시당한다.
+  - **perf 게이트 판정 버그 수정**: `perf-measure` 가 예산 표의 판정 문자열을 `includes('FAIL')` 로 보는 바람에, **참고용 WorkingSet 열**(AGENTS.md 가 "판정에 쓰지 말 것"이라 명시한 Electron 자체 집계) 때문에 **모든 예산을 통과해도 항상 exit 1** 이었다. private 판정만 실패로 세도록 교정 + 초과 항목명 출력. 늘 빨간 게이트는 무시당한다.
   - **검증(전부 실측)**: smoke **16/16** · session-restore **17/17** · dl-matrix **10 PASS/1 SKIP**(yt-dlp) · ext-matrix PASS · stress PASS · fingerprint PASS · agent-safety **14/14** · bench-agent 정상 산출(클릭 빠름 159ms — SPD-1 기록치와 일치). 선언 소실 감사 **파손 0**.
   - **관찰(미수정)**: ① agent-safety **A14 가 간헐 9/10**(오클릭 0, 재실행 시 10/10) — 이식과 무관한 기존 flake. ② perf 빈 창 RSS private 이 같은 세션에서 **242MB → 254MB**(예산 250MB) 로 경계에서 흔들린다. V4 가 문서화한 웜(≈226MB)/콜드(≈285MB) 구간의 경계로, 하네스가 웜 경로를 확실히 재도록 하거나 콜드 완화 조항을 판정에 반영하는 것이 다음 과제. ③ `verify-fixes`·`perf-breakdown` 은 이식·구조 검증만 하고 실행하지 않았다.
 - 2026-09-07: **auto-dev 임무 4 — perf 게이트(게이트 4) 결정론화 + 빈 창 RSS 증가 원인 규명**. 하네스·계측 전용(앱 런타임 코드 무접촉).
   - **진단 먼저**: 빈 창 baseline 을 한 시점이 아니라 **5표본 시계열**로 재고, 기동 직전 `<profile>/adblock/engine.bin` 존재 여부로 **웜/콜드 경로를 라벨링**하도록 계측을 넣었다. 결과 — 표본 내 변동은 3~4MB 로 작고, **웜/콜드 차이가 40~46MB 로 크다**(웜 243~251MB / 콜드 289~290MB). 즉 그동안의 판정 요동은 측정 노이즈가 아니었다.
   - **수정 3건 (`build/perf-measure.mjs`)**:
-    1. **콜드 완화 조항 코드화** — CLAUDE.md 의 "콜드 예산 = 250 + adblock 고정비"를 `adblockColdAllowanceMB: 60`(V4 실측 차 59MB, 2026-09-07 실측 차 40~46MB 를 모두 덮는 값)으로 상수화. 측정 경로에 따라 자동으로 웜 250MB / 콜드 310MB 적용. 콜드 290MB → **PASS**(이전엔 예산 250 으로 재 항상 FAIL).
+    1. **콜드 완화 조항 코드화** — AGENTS.md 의 "콜드 예산 = 250 + adblock 고정비"를 `adblockColdAllowanceMB: 60`(V4 실측 차 59MB, 2026-09-07 실측 차 40~46MB 를 모두 덮는 값)으로 상수화. 측정 경로에 따라 자동으로 웜 250MB / 콜드 310MB 적용. 콜드 290MB → **PASS**(이전엔 예산 250 으로 재 항상 FAIL).
     2. **baseline 중앙값 판정** — 5표본(4초 간격) 중앙값으로 확정하고 표본 수·최소·최대·폭을 결과에 기록. 첫 표본이 늘 몇 MB 높게 나오는 편향 제거.
     3. 결과 표에 **어느 경로를 쟀는지·표본 정보·적용 예산**을 함께 출력 — 다음 사람이 수치를 해석할 수 있게.
   - **핵심 발견 — 빈 창 RSS 가 예산선에 붙었다(제품 사실)**: 웜 baseline 이 V4(2026-07-11) **226MB → 오늘 243~251MB**. `perf-breakdown` 격리 측정으로 주범을 분리 — **메인 프로세스 169MB**(V4 143MB, +26MB)이고, **AI 레이어를 끄면 메인 155MB / 총 240MB 로 예산 이내**가 된다(= AI 레이어 기여 **≈15MB**). 나머지 ≈11MB 는 SEC 라운드 등 누적분.
-    - 따라서 웜 판정이 3회 중 250·250·**251** 로 뒤집히는 것은 **하네스 결함이 아니라 값이 예산선 위에 있다는 뜻**이다. **예산을 고쳐 통과시키지 않았다** — 선택지는 ① AI 레이어 지연 로드(사이드바·에이전트를 쓸 때만 적재 — CLAUDE.md 의 "무거운 기능은 lazy load, 끄면 메모리 0" 원칙에 부합) ② 다른 곳에서 10MB 회수 ③ AI 레이어를 adblock 처럼 예산 완화 항목으로 명시. **제품 결정 사항**이라 사용자 판단으로 남긴다.
+    - 따라서 웜 판정이 3회 중 250·250·**251** 로 뒤집히는 것은 **하네스 결함이 아니라 값이 예산선 위에 있다는 뜻**이다. **예산을 고쳐 통과시키지 않았다** — 선택지는 ① AI 레이어 지연 로드(사이드바·에이전트를 쓸 때만 적재 — AGENTS.md 의 "무거운 기능은 lazy load, 끄면 메모리 0" 원칙에 부합) ② 다른 곳에서 10MB 회수 ③ AI 레이어를 adblock 처럼 예산 완화 항목으로 명시. **제품 결정 사항**이라 사용자 판단으로 남긴다.
   - **관찰 — S11(다크모드) 간헐 실패 ≈50%**: `forcePageDark=true` 로 설정은 바뀌는데 그 콘텐츠 탭의 `computed filter` 가 3초 넘게 `none` 이다(하네스는 3초 폴링으로 이미 보강돼 있음). 설정 반영은 되고 **그 탭에 CSS 주입이 안 되는** 형태 — 다크모드가 해당 webContents 를 추적하지 못하는 경로(워크스페이스 전환 후 탭 세션 등)로 의심된다. 앱 측 조사·수정은 별도 라운드.
 - 2026-09-07: **auto-dev 임무 5 — 다크모드 오탐 해소 · AI 지연 로드 철회(전제 오류 정정) · perf 기준선 추적**. 앱 런타임 코드 변경 **0**(①을 구현했다가 되돌림).
   - **⚠ 앞 항목(임무 4) 수치 정정**: "AI 레이어 기여 ≈15MB" 는 **오판이었고 철회한다.** `ai.enabled=false` 1회 측정에 근거했는데 재현되지 않았다(default 169·163 vs ai-off 171·162 — ai-off 가 더 높기도). 부팅 초기화를 직접 건너뛰는 A/B 도 **4대4 교대로 늘리자 차이가 사라졌다**(ON 256·256·248·233 / OFF 258·260·257·248). 실제 원인은 **실행 간 ±13MB 드리프트**(같은 빌드가 233~260MB)이고, 그 폭이 예산 여유와 맞먹어 2~4 표본이 없는 차이를 만들어 냈다.
@@ -1516,7 +1516,7 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **검증**: CDP 로 `browser://memory` 실기 확인(주입값 렌더·하드코딩 145 사라짐·콜드 스타트 줄 추가) · perf 1회로 2축 이력 생성·기준선 재생성 확인 · 종결 게이트 `npm run verify` **4/4 PASS · 31초**.
 - 2026-09-07: **auto-dev 임무 15 — 가벼움 예산 상수를 단일 출처로**. 하네스·문서 전용.
   - **문제(임무 14가 만든 부채)**: 예산 숫자가 `perf-measure.mjs` 의 `BUDGET` 과 `gen-perf-baseline.mjs` 의 `BUDGETS` **두 곳에** 박혀 있었다. 한쪽만 고치면 **측정은 통과인데 `browser://memory` 에는 다른 예산이 뜨는** 상태가 된다.
-  - **[`app/shared/perf-budget.json`](app/shared/perf-budget.json) 신설 — 기계가 읽는 정본**. 값마다 `_키` 로 근거를 함께 적었다(콜드 완화 60MB, adblock 제외 155MB 의 실측 근거 등). CLAUDE.md 의 예산 표는 **사람이 읽는 설명**으로 역할을 분리하고, 그 사실을 표 위에 명시.
+  - **[`app/shared/perf-budget.json`](app/shared/perf-budget.json) 신설 — 기계가 읽는 정본**. 값마다 `_키` 로 근거를 함께 적었다(콜드 완화 60MB, adblock 제외 155MB 의 실측 근거 등). AGENTS.md 의 예산 표는 **사람이 읽는 설명**으로 역할을 분리하고, 그 사실을 표 위에 명시.
   - **`build/lib/budget.mjs`**: 얇은 로더 — `_` 로 시작하는 설명 키를 걸러 값만 주고, **필수 키가 없거나 숫자가 아니면 크게 실패**한다(조용히 잘못된 판정을 하느니). `perf-measure`·`gen-perf-baseline` 이 이걸 쓴다.
   - **앱까지 같은 값이 흐른다**: `gen-perf-baseline` 이 예산 전체를 `perf-baseline.json` 에 담아 주입 → `browser://memory` 의 CPU 예산도 하드코딩(0.5) 대신 주입값을 쓴다.
   - **검증**: 로더 자체검사(7키 전부) · `--no-dual` 실행으로 콜드스타트 2000ms·탭당 80MB·CPU 0.5%·gzip 500KB 가 전부 JSON 에서 오는 것 확인(이때 **dual 실패 시 총계 폴백 판정**이 설계대로 작동) · dual 정상 경로 **149MB ≤ 155MB, 종료코드 0** · 종결 게이트 `npm run verify` 4/4 PASS.
@@ -1675,14 +1675,3 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **음성 대조**: 계정활동 간격 강제(`activity ? MIN_INTERVAL_PUBLISH_MS : ...`)를 없애자 RP4 가 `요청 1분 → 실제 1분` 으로 실패. 웹훅은 W3 가 양성 대조 역할.
   - **검증**: feed-collector **8/8**(C1~C4·W1~W4) · agent-repeat 4/4 · `npm run verify` 8/8. 전체 게이트 27단계.
   - 이번 라운드에도 **제품 결함은 없었다**.
-- 2026-09-07: **임무 33~35 - 영속화·확장 실동작·출시 점검 (3연속)**.
-  - **임무 33 [verify-ai-persist-cdp.mjs](browser-build/build/verify-ai-persist-cdp.mjs)(신규, PS1~PS4)**: 대화·실행 이력은 **재시작을 넘겨야 의미가 있는 기록**이라 앱을 두 번 띄워야만 확인된다. PS1 대화가 **강제 종료 후에도** 남는다 · PS2 실행 이력 보존 · PS3 상한 100개를 넘기면 **오래된 것부터** 잘린다(보관 100개·최신 보존·`질문 1` 제거 확인) · PS4 재시작 시 `running` 잔여가 정리된다.
-    - 하네스 함정 2건: ① 강제 종료 후 재부팅이라 **'지난 세션 복원' 모달**이 창 생성을 막았다(임무 23 의 기전) → `startup.mode: 'last-session'` 으로 회피 ② `convSave` 는 **객체 하나**를 받는데 `(id, messages)` 두 인자로 불러 조용히 아무 것도 저장되지 않았다.
-  - **임무 34 [verify-extension-behavior-cdp.mjs](browser-build/build/verify-extension-behavior-cdp.mjs)(신규, X1~X5)** — **중요한 발견**: `ext-matrix` 는 확장이 **로드되는지**까지만 본다. 목적별 시험 확장을 직접 만들어 실제 동작을 확인했더니:
-    - ✅ **콘텐츠 스크립트 주입·실행**, ✅ **chrome.storage**, ✅ **MV3 service worker** 는 전부 정상.
-    - △ **`declarativeNetRequest` 는 동작하지 않는다** — `electron-chrome-extensions` 에 구현이 **아예 없고**(라이브러리 전체 검색 0건) Electron 35 도 확장용 DNR 을 제공하지 않는다. CLAUDE.md 가 **지원 우선순위 2번**으로 적은 API 이고 **uBO Lite 같은 MV3 차단기는 전부 여기에만 의존**하므로, 그 확장들은 **로드는 되지만 아무것도 막지 못한다**. 자체 광고차단(@ghostery)은 별개로 정상.
-    - **GAP 상태 도입**: 미구현 기능을 FAIL 로 두면 게이트가 영구히 빨개져 결국 무시당한다. `PASS/FAIL` 과 별도로 `GAP` 을 세어 **실패로 치지 않되 매 실행 이유와 함께 크게 출력**한다. 구현되면 `check()` 로 승격한다.
-  - **임무 35 [verify-install-cdp.mjs](browser-build/build/verify-install-cdp.mjs)(신규, I1~I5)**: 늘 검증하는 것은 `win-unpacked` 인데 **사용자에게 가는 것은 NSIS 설치본**이다. 최신 코드로 인스톨러를 다시 굽고(102MB, 미서명) 무인 설치 → **설치본 `app.asar` 에서 외피가 뜨는지** → 바로가기·레지스트리 → 무인 제거 → **사용자 실제 프로필 무접촉**(45개 → 45개)까지 **5/5 통과**.
-    - **게이트에 넣지 않는다** — 매 검증마다 사용자 머신에 소프트웨어를 설치하는 것은 너무 침습적이다. 출시 전에 사람이 돌린다.
-    - **연속 실행 주의(실측)**: 제거 직후 곧바로 재설치하면 설치 프로그램이 `0xC0000005` 로 죽는다(2회 재현). 레지스트리·디렉터리가 깨끗해도 그렇고, **30초 이상 두면** 정상 통과한다. 원인은 설치 프로그램 내부라 더 좁히지 못했다. NSIS 가 `_?=` 제거 시 **제거기 자신을 남기는** 것도 확인해 하네스가 치우게 했다.
-  - **검증**: ai-persist 4/4 · extension-behavior 4 PASS + **1 GAP** · install 5/5 · `npm run verify` 8/8. 게이트 29단계(install 제외).

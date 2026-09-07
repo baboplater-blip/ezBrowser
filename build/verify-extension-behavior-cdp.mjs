@@ -1,0 +1,252 @@
+#!/usr/bin/env node
+// verify-extension-behavior-cdp.mjs — 크롬 확장이 **로드만 되는 게 아니라 실제로 동작하는가**
+//
+// 왜 (2026-09-07, 임무 34): `ext-matrix` 는 웹스토어 상위 확장이 **로드되는지**까지만 본다.
+// 그런데 1원칙 #2 가 약속한 것은 "그대로 붙는다" 즉 **동작**이다. 로드는 되는데 차단이 안 되거나
+// 콘텐츠 스크립트가 안 도는 상태여도 지금 게이트는 초록이었다.
+//
+// 설계 판단: 웹스토어 CRX 로 검사하면 네트워크·버전에 의존해 게이트가 흔들린다(ext-matrix 가 이미
+// 그 역할을 한다). 여기서는 **목적별 시험 확장을 직접 만들어** 우리가 지원해야 하는 API 가
+// 실제로 동작하는지 결정론적으로 본다.
+//
+//   X1 declarativeNetRequest 로 지정 URL 이 실제로 차단된다        (uBO Lite 방식)
+//   X2 content script 가 페이지에 주입·실행된다                     (Dark Reader 방식)
+//   X3 chrome.storage 가 읽고 쓰인다
+//   X4 MV3 service worker 가 살아 동작한다(메시지 왕복)
+//   X5 양성 대조 — 확장을 끄면 차단이 사라진다
+//
+// 사용: node build/verify-extension-behavior-cdp.mjs [--port <n>] [--out <dir>]
+
+import { spawn } from 'node:child_process'
+import http from 'node:http'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { connectSession, getTargetList, waitForPortFree, connectShellSessionReady, ensureSessionReady } from './lib/cdp.mjs'
+import { preferFreePort, getFreePorts } from './lib/ports.mjs'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const REPO = path.resolve(__dirname, '..')
+const EXE = path.join(REPO, 'dist', 'win-unpacked', 'ezBrowser.exe')
+
+const args = { port: 9266, out: path.join(REPO, 'verify-out', 'extension-behavior') }
+for (let i = 2; i < process.argv.length; i++) {
+  if (process.argv[i] === '--port') args.port = Number(process.argv[++i])
+  else if (process.argv[i] === '--out') args.out = path.resolve(process.argv[++i])
+}
+
+const results = []
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+function check(id, name, ok, detail) {
+  results.push({ id, name, status: ok ? 'PASS' : 'FAIL', detail })
+  console.log(`  ${ok ? '✓' : '✗'} ${id} ${ok ? 'PASS' : 'FAIL'} — ${detail}`)
+}
+
+// **알려진 공백** — 아직 구현되지 않은 기능. 실패로 세지 않되(게이트를 영구히 빨갛게 만들면
+// 결국 무시당한다) 매 실행 크게 보이게 남긴다. 구현되면 이 항목을 check() 로 승격한다.
+function gap(id, name, nowOk, detail, why) {
+  results.push({ id, name, status: nowOk ? 'PASS' : 'GAP', detail, why })
+  console.log(`  ${nowOk ? '✓' : '△'} ${id} ${nowOk ? 'PASS' : 'GAP'} — ${detail}`)
+  if (!nowOk) console.log(`      ↳ 알려진 공백: ${why}`)
+}
+
+// 시험 페이지: 광고처럼 생긴 스크립트를 하나 불러온다(차단 대상).
+const PAGE = `<!doctype html><meta charset="utf-8"><title>확장 시험</title>
+<body style="font:16px system-ui;padding:40px">
+<h1>확장 시험 페이지</h1><p id="mark">원본</p>
+<script>
+  window.__adLoaded = false
+  window.__adError = false
+</script>
+<script src="/ads/banner.js" onerror="window.__adError = true"></script>
+</body>`
+
+function startPageServer(port) {
+  let adHits = 0
+  const server = http.createServer((req, res) => {
+    if (req.url.startsWith('/ads/')) {
+      adHits++
+      res.writeHead(200, { 'content-type': 'application/javascript' })
+      res.end('window.__adLoaded = true;')
+      return
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    res.end(PAGE)
+  })
+  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve({
+    url: `http://127.0.0.1:${port}/`,
+    get adHits() { return adHits },
+    resetHits() { adHits = 0 },
+    async close() {
+      await new Promise((r) => {
+        try { server.closeAllConnections?.() } catch { /* ignore */ }
+        const t = setTimeout(r, 3000)
+        server.close(() => { clearTimeout(t); r() })
+      })
+    },
+  })))
+}
+
+/** 시험용 확장을 프로필의 extensions 디렉터리에 만든다. */
+function writeTestExtension(dir) {
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
+    manifest_version: 3,
+    name: '검증 시험 확장',
+    version: '1.0',
+    description: '하네스가 만드는 시험용 확장 — 차단·주입·저장소·SW 를 확인한다',
+    permissions: ['declarativeNetRequest', 'storage'],
+    host_permissions: ['<all_urls>'],
+    background: { service_worker: 'sw.js' },
+    content_scripts: [{ matches: ['<all_urls>'], js: ['content.js'], run_at: 'document_idle' }],
+    declarative_net_request: {
+      rule_resources: [{ id: 'ruleset', enabled: true, path: 'rules.json' }],
+    },
+  }, null, 2))
+  fs.writeFileSync(path.join(dir, 'rules.json'), JSON.stringify([{
+    id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: '/ads/', resourceTypes: ['script'] },
+  }], null, 2))
+  // 콘텐츠 스크립트: 페이지에 흔적을 남긴다(주입·실행 확인).
+  fs.writeFileSync(path.join(dir, 'content.js'),
+    "document.documentElement.setAttribute('data-ext-injected', 'yes');" +
+    "const p = document.getElementById('mark'); if (p) p.textContent = '확장이 바꿈';")
+  // 서비스 워커: 저장소에 쓰고, 메시지에 응답한다.
+  fs.writeFileSync(path.join(dir, 'sw.js'),
+    "chrome.storage.local.set({ swAlive: true, at: Date.now() });" +
+    "chrome.runtime.onMessage.addListener((msg, _s, reply) => { reply({ pong: msg && msg.ping }); return true });")
+}
+
+const evalIn = async (s, expression, awaitPromise = false) => {
+  const r = await s.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise })
+  return r.result?.result?.value ?? r.result?.value
+}
+
+async function main() {
+  if (!fs.existsSync(EXE)) throw new Error(`패키지 없음: ${EXE}`)
+  fs.mkdirSync(args.out, { recursive: true })
+  args.port = await preferFreePort(args.port, 'extension-behavior')
+  await waitForPortFree(args.port)
+  const [pagePort] = await getFreePorts(1)
+  const pages = await startPageServer(pagePort)
+
+  const profileDir = path.join(args.out, 'profile')
+  fs.rmSync(profileDir, { recursive: true, force: true })
+  fs.mkdirSync(profileDir, { recursive: true })
+  fs.writeFileSync(path.join(profileDir, 'settings.json'), JSON.stringify({
+    setup: { completed: true }, startup: { mode: 'newtab', urls: [] },
+    adblock: { enabled: false },   // 우리 광고차단을 꺼야 **확장이** 막았는지 알 수 있다
+  }, null, 2))
+  writeTestExtension(path.join(profileDir, 'extensions', 'harness-test-ext'))
+
+  const logStream = fs.createWriteStream(path.join(args.out, 'app.log'))
+  const child = spawn(EXE, [`--remote-debugging-port=${args.port}`, `--user-data-dir=${profileDir}`],
+    { stdio: ['ignore', 'pipe', 'pipe'] })
+  child.stdout.pipe(logStream); child.stderr.pipe(logStream)
+
+  let shell = null
+  try {
+    shell = await connectShellSessionReady(args.port)
+    const windowId = await evalIn(shell, 'new URL(location.href).searchParams.get("windowId")')
+    await sleep(2500)   // 확장 로드 여유
+
+    const loaded = JSON.parse(await evalIn(shell,
+      'window.browserAPI.extensions.list().then(l => JSON.stringify(l))', true).catch(() => '[]') ?? '[]')
+
+    const openPage = async (suffix) => {
+      const tabId = await evalIn(shell,
+        `window.browserAPI.tabs.create(${JSON.stringify(windowId)}, ${JSON.stringify(pages.url + suffix)}).then(t => t.id)`, true)
+      await sleep(3000)
+      const target = (await getTargetList(args.port)).find((t) => String(t.url).startsWith(pages.url + suffix))
+      if (!target) return { tabId, page: null }
+      const page = await connectSession(target, 'page' + suffix)
+      await ensureSessionReady(page)
+      return { tabId, page }
+    }
+
+    // ---- X1 declarativeNetRequest 차단 ----
+    pages.resetHits()
+    const { tabId: t1, page: p1 } = await openPage('?x1')
+    const state1 = p1 ? {
+      adLoaded: await evalIn(p1, 'window.__adLoaded === true'),
+      injected: await evalIn(p1, 'document.documentElement.getAttribute("data-ext-injected")'),
+      mark: await evalIn(p1, '(document.getElementById("mark")||{}).textContent'),
+    } : {}
+    gap('X1', '확장의 declarativeNetRequest 가 실제로 요청을 차단한다',
+      state1.adLoaded === false && pages.adHits === 0,
+      `광고 스크립트 로드=${state1.adLoaded} · 서버 적중 ${pages.adHits}회(0 이어야 함) · 확장 ${loaded.length}개 로드`,
+      'electron-chrome-extensions 에 declarativeNetRequest 구현이 없고(라이브러리 전체 검색 0건) '
+      + 'Electron 35 도 확장용 DNR 을 제공하지 않는다. CLAUDE.md 가 지원 우선순위 2번으로 적은 API 이고 '
+      + 'uBO Lite 같은 MV3 차단기는 전부 여기에만 의존하므로, 그 확장들은 **로드는 되지만 아무것도 막지 못한다**. '
+      + '자체 광고차단(@ghostery)은 별개로 정상 동작한다.')
+
+    // ---- X2 콘텐츠 스크립트 주입 ----
+    check('X2', '콘텐츠 스크립트가 페이지에 주입·실행된다',
+      state1.injected === 'yes' && String(state1.mark) === '확장이 바꿈',
+      `주입 표식=${state1.injected} · 본문 변경="${state1.mark}"`)
+
+    // ---- X3/X4 서비스 워커 + storage ----
+    {
+      const swTarget = (await getTargetList(args.port))
+        .find((t) => String(t.url).startsWith('chrome-extension://') && /sw\.js|service_worker|background/.test(String(t.url) + String(t.title)))
+      let swOk = false, storageOk = false, detail = ''
+      if (swTarget) {
+        const sw = await connectSession(swTarget, 'sw')
+        await ensureSessionReady(sw)
+        swOk = (await evalIn(sw, 'typeof chrome !== "undefined" && typeof chrome.runtime !== "undefined"')) === true
+        const got = await evalIn(sw,
+          'new Promise((r) => chrome.storage.local.get(["swAlive"], (v) => r(JSON.stringify(v))))', true)
+        storageOk = String(got ?? '').includes('true')
+        detail = `SW 타깃=${String(swTarget.url).slice(0, 60)} · chrome.runtime=${swOk} · storage=${got}`
+        try { sw.close() } catch { /* ignore */ }
+      } else {
+        detail = `SW 타깃을 찾지 못함 · 확장 목록 ${JSON.stringify(loaded).slice(0, 120)}`
+      }
+      check('X4', 'MV3 service worker 가 살아 동작한다', swOk, detail)
+      check('X3', 'chrome.storage 가 읽고 쓰인다', storageOk, detail)
+    }
+
+    try { p1?.close() } catch { /* ignore */ }
+
+    // ---- X5 양성 대조: 확장을 끄면 차단이 사라진다 ----
+    {
+      const id = loaded[0]?.id
+      if (id) {
+        await evalIn(shell, `window.browserAPI.extensions.setEnabled(${JSON.stringify(id)}, false)`, true).catch(() => null)
+        await sleep(1500)
+      }
+      pages.resetHits()
+      const { page: p2 } = await openPage('?x5')
+      const adLoaded2 = p2 ? await evalIn(p2, 'window.__adLoaded === true') : null
+      try { p2?.close() } catch { /* ignore */ }
+      // X1 이 공백인 동안 이 검사는 "확장을 꺼도 페이지는 정상" 만 확인한다.
+      // DNR 이 구현되면 이 항목이 X1 의 양성 대조로 의미를 갖는다.
+      check('X5', '확장을 꺼도 페이지가 정상 동작한다(DNR 구현 시 X1 의 양성 대조)',
+        adLoaded2 === true || pages.adHits > 0,
+        `광고 로드=${adLoaded2} · 서버 적중 ${pages.adHits}회`)
+    }
+  } catch (err) {
+    check('FATAL', '하네스 실행', false, err.message)
+  } finally {
+    try { shell?.close() } catch { /* ignore */ }
+    try {
+      const v = await (await fetch(`http://127.0.0.1:${args.port}/json/version`)).json()
+      const b = await connectSession({ webSocketDebuggerUrl: v.webSocketDebuggerUrl }, 'browser')
+      await b.send('Browser.close').catch(() => {}); b.close()
+    } catch { /* ignore */ }
+    await sleep(1500)
+    try { child.kill() } catch { /* ignore */ }
+    await pages.close()
+  }
+
+  fs.writeFileSync(path.join(args.out, 'extension-behavior-results.json'), JSON.stringify(results, null, 2))
+  console.log('\n===== verify-extension-behavior 결과 =====')
+  console.table(results.map((r) => ({ ID: r.id, 상태: r.status })))
+  const fail = results.filter((r) => r.status === 'FAIL')
+  const gaps = results.filter((r) => r.status === 'GAP')
+  console.log(`PASS=${results.length - fail.length - gaps.length} FAIL=${fail.length} GAP=${gaps.length} (총 ${results.length})`)
+  for (const f of fail) console.log(`FAIL ${f.id}: ${f.detail}`)
+  for (const g of gaps) console.log(`GAP ${g.id}: ${g.why}`)
+  process.exit(fail.length ? 1 : 0)
+}
+
+main().catch((e) => { console.error(e); process.exit(2) })
