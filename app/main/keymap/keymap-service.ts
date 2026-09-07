@@ -53,9 +53,29 @@ export function getKeymap(): KeymapFile {
   return cache
 }
 
+/**
+ * 저장 전 형태 검증 — 잘못된 값이 오면 **캐시도 디스크도 건드리지 않고** 거부한다.
+ *
+ * 왜 (2026-09-07, 임무 18 에서 발견): 예전에는 `cache = next` 로 무조건 덮어썼다. 설정 페이지가
+ * 실수로 배열을 보내면 `cache.bindings` 가 사라져 **모든 단축키가 먹통이 되고 그 상태가 디스크에
+ * 저장**됐다(로드 시 폴백이 있어 재시작하면 회복되지만, 재시작 전까지는 깨진 채로 남는다).
+ * 사용자 설정을 받아 쓰는 경로는 "호출자가 알아서 잘 보낼 것"을 전제하면 안 된다.
+ */
+function isValidKeymap(v: unknown): v is KeymapFile {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+  const f = v as Partial<KeymapFile>
+  if (!Array.isArray(f.bindings)) return false
+  return f.bindings.every((b) => b && typeof b === 'object'
+    && typeof (b as KeyBinding).action === 'string'
+    && typeof (b as KeyBinding).key === 'string')
+}
+
 export async function saveKeymap(next: KeymapFile): Promise<void> {
-  cache = next
-  await writeFile(keymapPath(), JSON.stringify(next, null, 2), 'utf8')
+  if (!isValidKeymap(next)) {
+    throw new Error('키맵 형식이 올바르지 않습니다 — { version, bindings: [{ action, key, ... }] } 여야 합니다')
+  }
+  cache = { version: typeof next.version === 'number' ? next.version : 1, bindings: next.bindings }
+  await writeFile(keymapPath(), JSON.stringify(cache, null, 2), 'utf8')
 }
 
 export async function resetKeymap(): Promise<KeymapFile> {

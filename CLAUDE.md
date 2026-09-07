@@ -1535,3 +1535,13 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - **8/8 PASS** — 이번에는 제품 결함이 나오지 않았다(양방향·전 카테고리 모두 정상).
   - **하네스 자신의 순서 결함 1건**: S4 가 모든 카테고리를 훑고 **마지막 카테고리에 머문 채** S5 가 `data-select` 를 찾아 "요소 없음"으로 실패했다 → 카테고리를 명시적으로 되돌리도록 교정. (임무 16 과 같은 부류 — **테스트가 앞 단계의 상태에 기대면 조용히 틀린다.**)
   - **검증**: 하네스 8/8 · 러너 경유 PASS(16초) · 종결 게이트 `npm run verify` 4/4 PASS.
+- 2026-09-07: **auto-dev 임무 18 — 설정의 되돌릴 수 없는 동작 검증 + 키맵 저장 결함 fix**.
+  - **결함 발견·수정 (`app/main/keymap/keymap-service.ts`)**: `saveKeymap` 이 **검증 없이 `cache = next` 후 디스크에 썼다.** 설정 페이지가 잘못된 형태(예: 배열)를 보내면 `cache.bindings` 가 사라져 **모든 단축키가 먹통이 되고 그 상태가 저장**된다(`findConflicts` 가 `TypeError: cache.bindings is not iterable` 로 터짐). 로드 경로에는 폴백이 있어 **재시작하면 회복되지만, 재시작 전까지는 깨진 채**다.
+    - fix: `isValidKeymap` 로 `{version, bindings:[{action, key}...]}` 를 검증하고 **틀리면 캐시도 디스크도 건드리지 않고 거부**. **사용자 설정을 받아 쓰는 경로는 "호출자가 알아서 잘 보낼 것"을 전제하면 안 된다.**
+    - 발견 경위: 하네스가 잘못된 형태를 보냈다가 메인 프로세스 예외를 유발 — **찔러 보지 않았으면 몰랐을 결함**이다.
+  - **[build/verify-settings-deep-cdp.mjs](build/verify-settings-deep-cdp.mjs)(신규)**: `verify-all --full` 에 `settings-deep` 으로 등록(6초). 설정 페이지 컨텍스트에서 `internalAPI` 를 직접 호출 — 페이지가 실제로 쓰는 경로다.
+    - **D1** 내보내기가 방금 바꾼 설정을 담은 번들 생성(7파일) · **D2** 가져오기가 **경로 이탈·화이트리스트 밖을 전부 거부**(`../../evil-escape.json` 등 3건, 프로필 밖 파일 생성 0) · **D3** 내보내기→변경→가져오기 **왕복이 디스크 파일을 되돌림**
+    - **K1** 키맵 49개 바인딩 읽기 · **K2** 편집 저장 + 기본값 복원 · **K3** **잘못된 키맵 4종을 전부 거부하고 기존 49개가 살아남음**(위 결함의 회귀 검사)
+    - **6/6 PASS**.
+  - **하네스가 계약을 잘못 알고 있었던 것도 함께 교정**: `keymap.get()` 은 `{ keymap:{version,bindings}, conflicts }` 를 주고 바인딩 필드는 `action`(내가 `actionId` 로 가정). API 계약은 추측하지 말고 소스에서 확인할 것.
+  - **검증**: 하네스 6/6 · 러너 경유 PASS(6초) · typecheck 0 · 종결 게이트 `npm run verify` 4/4 PASS.

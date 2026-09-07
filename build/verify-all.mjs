@@ -82,6 +82,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: 'browser://settings·welcome 표시·반영 대조 S1~S5·W1~W3',
     },
     {
+      id: 'settings-deep', kind: 'harness', modes: ['full'],
+      script: 'verify-settings-deep-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'settings-deep', 'settings-deep-results.json'),
+      timeoutMs: 10 * 60000, desc: '설정 되돌릴 수 없는 동작 — 내보내기/가져오기·키맵 D1~D3·K1~K3',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',

@@ -93,17 +93,18 @@
 
 ### 최신 실행
 
-**`npm run verify` — 4/4 PASS · 33s** (2026-09-07 04:44)
+**`npm run verify` — 4/4 PASS · 32s** (2026-09-07 04:50)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
 | typecheck | ✅ PASS | 4s | 종료코드 0 |
 | build | ✅ PASS | 5s | 종료코드 0 |
-| package | ✅ PASS | 8s | 종료코드 0 |
+| package | ✅ PASS | 7s | 종료코드 0 |
 | smoke | ✅ PASS | 14s | PASS 16 |
 
 ### 최근 10회
 
+- 2026-09-07 04:50 · `quick` · **4/4 PASS** · 32s
 - 2026-09-07 04:44 · `quick` · **4/4 PASS** · 33s
 - 2026-09-07 04:35 · `quick` · **4/4 PASS** · 32s
 - 2026-09-07 04:28 · `quick` · **4/4 PASS** · 31s
