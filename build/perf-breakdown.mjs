@@ -54,6 +54,18 @@ function parseArgs(argv) {
     else if (a === '--warmup-ms') out.warmupMs = Number(argv[++i] ?? DEFAULTS.warmupMs)
     else if (a === '--stabilize-ms') out.stabilizeMs = Number(argv[++i] ?? DEFAULTS.stabilizeMs)
     else if (a === '--single-boot') out.singleBoot = true
+    else if (a === '--ab') out.ab = true
+    else if (a === '--runs') out.runs = Math.max(2, Number(argv[++i] ?? 4))
+    else if (a === '--a-label') out.aLabel = argv[++i] ?? 'A'
+    else if (a === '--b-label') out.bLabel = argv[++i] ?? 'B'
+    else if (a === '--a-settings') out.aSettings = argv[++i] ?? '{}'
+    else if (a === '--b-settings') out.bSettings = argv[++i] ?? '{}'
+    else if (a === '--a-env' || a === '--b-env') {
+      const which = a === '--a-env' ? 'aEnv' : 'bEnv'
+      const kv = argv[++i] ?? ''
+      const eq = kv.indexOf('=')
+      if (eq > 0) (out[which] ??= {})[kv.slice(0, eq)] = kv.slice(eq + 1)
+    }
     else if (a === '--env') {
       const kv = argv[++i] ?? ''
       const eq = kv.indexOf('=')
@@ -331,6 +343,72 @@ async function runOne(args) {
   return result
 }
 
+// ── A/B 비교 모드 ────────────────────────────────────────────────────────
+//
+// 왜 있는가 (2026-09-07, auto-dev 임무 5의 뼈아픈 교훈):
+//   메모리 기여도를 손으로 A/B 하다 **두 번 잘못된 결론**을 냈다. 1회씩·2회씩 비교했을 때
+//   "AI 레이어가 15MB" 라는 차이가 보였지만, 4회씩 교대로 늘리자 사라졌다. 이 머신의 빈 창
+//   측정에는 실행 간 ±13MB 드리프트가 있고 그 폭이 예산 여유와 맞먹기 때문이다.
+//   그래서 **표본 수와 교대 실행을 코드가 강제**하고, 차이가 산포보다 작으면 "차이 없음"으로
+//   못 박는다. 사람이 눈으로 두 숫자를 비교하는 순간 같은 실수가 반복된다.
+
+function stats(values) {
+  const v = [...values].sort((a, b) => a - b)
+  const median = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2
+  return { n: v.length, median, min: v[0], max: v[v.length - 1], spread: v[v.length - 1] - v[0], values: v }
+}
+
+async function runAb(args) {
+  const runs = args.runs ?? 4
+  const aVals = []
+  const bVals = []
+  console.log(`[perf-breakdown:AB] ${args.aLabel} vs ${args.bLabel} — 각 ${runs}회 **교대** 실행`)
+  for (let i = 1; i <= runs; i++) {
+    for (const side of ['a', 'b']) {
+      const cfg = {
+        ...args,
+        label: `${side === 'a' ? args.aLabel : args.bLabel}#${i}`,
+        settings: side === 'a' ? (args.aSettings ?? '{}') : (args.bSettings ?? '{}'),
+        extraEnv: side === 'a' ? args.aEnv : args.bEnv,
+      }
+      const r = await runOne(cfg)
+      if (!r.ok) { console.warn(`  ⚠ ${cfg.label} 실패: ${r.error}`); continue }
+      ;(side === 'a' ? aVals : bVals).push(r.sample.totalPrivateWorkingSetMB)
+    }
+  }
+  if (aVals.length < 2 || bVals.length < 2) {
+    console.error('[perf-breakdown:AB] 유효 표본이 부족해 비교할 수 없습니다.')
+    return { ok: false }
+  }
+  const A = stats(aVals)
+  const B = stats(bVals)
+  const delta = Math.round((B.median - A.median) * 10) / 10
+  const noise = Math.max(A.spread, B.spread)
+
+  console.log('\n===== A/B 비교 (전체 private WS, MB) =====')
+  console.table([
+    { 구성: args.aLabel, 표본: A.n, 중앙값: A.median, 최소: A.min, 최대: A.max, 산포: A.spread },
+    { 구성: args.bLabel, 표본: B.n, 중앙값: B.median, 최소: B.min, 최대: B.max, 산포: B.spread },
+  ])
+  console.log(`중앙값 차이(${args.bLabel} − ${args.aLabel}) = ${delta >= 0 ? '+' : ''}${delta}MB · 관측 산포(최대) = ${noise}MB`)
+  if (Math.abs(delta) <= noise) {
+    console.log('판정: **차이 없음** — 중앙값 차이가 실행 간 산포 이내다. 이 데이터로 기여도를 주장하면 안 된다.')
+    console.log(`      (주장하려면 표본을 늘리거나(--runs ${runs * 2}) 더 조용한 환경에서 측정할 것)`)
+  } else {
+    console.log(`판정: **차이 있음** — 산포(${noise}MB)를 넘는 ${Math.abs(delta)}MB 차이. ${delta > 0 ? args.bLabel : args.aLabel} 쪽이 더 많이 쓴다.`)
+  }
+  const outPath = path.join(args.out, 'ab-result.json')
+  fs.writeFileSync(outPath, JSON.stringify({
+    at: new Date().toISOString(), runs,
+    a: { label: args.aLabel, settings: args.aSettings ?? '{}', env: args.aEnv ?? null, ...A },
+    b: { label: args.bLabel, settings: args.bSettings ?? '{}', env: args.bEnv ?? null, ...B },
+    deltaMedianMB: delta, noiseMB: noise,
+    verdict: Math.abs(delta) <= noise ? 'no-difference' : 'difference',
+  }, null, 2))
+  console.log(`결과: ${outPath}`)
+  return { ok: true }
+}
+
 async function main() {
   if (typeof WebSocket === 'undefined') {
     console.error('[perf-breakdown] Node 22+ 필요 (전역 WebSocket 없음).')
@@ -341,7 +419,7 @@ async function main() {
     console.error(`[perf-breakdown] exe 를 찾을 수 없음: ${args.exe}`)
     process.exit(1)
   }
-  const result = await runOne(args)
+  const result = args.ab ? await runAb(args) : await runOne(args)
   process.exit(result.ok ? 0 : 1)
 }
 

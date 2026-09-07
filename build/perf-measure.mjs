@@ -769,7 +769,12 @@ async function main() {
   // 같은 머신에서 233~260MB 로 흔들렸다(실행 간 드리프트 ±13MB — 예산까지의 여유와 맞먹는다).
   // 그래서 실행마다 이력을 남기고, **같은 경로(웜/콜드)의 과거 중앙값**과 비교해 보여준다.
   // 회귀는 한 번의 초과가 아니라 **중앙값의 이동**으로 판단해야 한다.
-  const historyPath = path.join(args.out, 'perf-history.json')
+  // 이력은 --out 과 무관하게 **저장소 고정 위치**에 쌓는다. verify-all 은 단계별 out 디렉터리를
+  // 넘기므로(verify-out/all/perf), out 을 따라가면 수동 실행과 게이트 실행의 추세선이 갈라져
+  // "과거 표본 0개"만 반복된다(2026-09-07 full 실행에서 실제로 그랬다).
+  const historyDir = path.join(REPO_ROOT, 'perf-out')
+  fs.mkdirSync(historyDir, { recursive: true })
+  const historyPath = path.join(historyDir, 'perf-history.json')
   let history = []
   try {
     const parsed = JSON.parse(fs.readFileSync(historyPath, 'utf8'))
