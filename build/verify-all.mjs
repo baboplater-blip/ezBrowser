@@ -87,6 +87,18 @@ function steps(outRoot) {
       timeoutMs: 3 * 60000, desc: 'AI 제공자 4종 요청 형식·스트림 파싱·도구 호출 P1~P4',
     },
     {
+      id: 'agent-loop', kind: 'harness', modes: ['full'],
+      script: 'verify-agent-loop-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'agent-loop', 'agent-loop-results.json'),
+      timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e(클릭·확인거부·승인·질문·무인) L1~L6',
+    },
+    {
+      id: 'ai-errors', kind: 'harness', modes: ['full'],
+      script: 'verify-ai-errors-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'ai-errors', 'ai-errors-results.json'),
+      timeoutMs: 10 * 60000, desc: 'AI 오류 문구(401·429·404·연결·취소·깨진 스트림) E0~E6',
+    },
+    {
       id: 'agent-safety', kind: 'harness', modes: ['full'],
       script: 'verify-agent-safety-cdp.mjs', outArg: false, result: () => fixed('agent-safety-results.json'),
       timeoutMs: 12 * 60000, desc: 'AI 에이전트 안전·조작 A1~A14',
