@@ -13,15 +13,22 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadBudget } from './lib/budget.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 const HISTORY = path.join(REPO_ROOT, 'perf-out', 'perf-history.json')
 const OUT = path.join(REPO_ROOT, 'app', 'main', 'storage', 'perf-baseline.json')
 
-// 예산은 perf-measure.mjs 의 BUDGET 과 같은 값을 쓴다(둘이 어긋나면 페이지가 거짓말을 한다).
-// 한쪽을 바꾸면 다른 쪽도 바꿀 것 — 그 사실을 여기 적어 둔다.
-const BUDGETS = { noAdblockMB: 155, totalMB: 250 }
+// 예산은 **단일 출처**(app/shared/perf-budget.json)에서 읽는다 — perf-measure 와 같은 값이 보장된다.
+const B = loadBudget()
+const BUDGETS = {
+  noAdblockMB: B.blankWindowNoAdblockMB,
+  totalMB: B.blankWindowMemoryMB,
+  coldStartMs: B.coldStartMs,
+  perTabMB: B.perTabMemoryMB,
+  idleCpuPercent: B.idleCpuPercent,
+}
 
 function median(values) {
   const v = [...values].sort((a, b) => a - b)

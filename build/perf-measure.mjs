@@ -32,6 +32,7 @@ import {
   waitForShellTarget,
   waitForTargetByUrlPredicate,
 } from './lib/cdp.mjs'
+import { loadBudget } from './lib/budget.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -53,30 +54,9 @@ const DEFAULTS = {
   dual: true,
 }
 
-const BUDGET = {
-  coldStartMs: 2000,
-  // 빈 창 RSS 예산 250MB 는 **웜(2번째 이후 실행 = 실사용 절대다수)** 기준이다.
-  blankWindowMemoryMB: 250,
-  // 콜드(설치 후 첫 실행)는 adblock 이 필터 원문을 받아 엔진을 빌드하므로 고정비가 더 붙는다.
-  // CLAUDE.md 의 완화 조항("콜드 예산은 250 + adblock 고정비로 자동 완화")을 코드로 옮긴 값.
-  // 근거 실측: V4(2026-07-11) 콜드 285 / 웜 226 → 차 59MB. 2026-09-07 콜드 289 / 웜 243~249 → 차 40~46MB.
-  // 두 측정을 모두 덮도록 60MB 로 둔다(콜드 예산 = 310MB). 이 값을 올려야 할 상황이 오면
-  // 그것은 완화가 아니라 **adblock 콜드 빌드 비용이 실제로 늘었다는 신호**이므로 조사할 것.
-  adblockColdAllowanceMB: 60,
-  // **판정 1순위** — adblock 을 제외한 빈 창(= 우리가 통제하는 코드).
-  //
-  // adblock 은 콕콕 핵심이라 끌 수 없는 고정비(2026-09-07 실측 103~110MB)이고, 그걸 섞어서
-  // 판정하면 **우리 코드의 회귀가 adblock 비용에 묻힌다**. 그래서 축을 나눈다.
-  //
-  // 값의 근거(2026-09-07 dual 3회 실측): adblock 제외 **149 · 146 · 149MB**(측정 노이즈 ±1.5MB).
-  // 예산 = 중앙값 149 + 6MB(≈ 노이즈의 3배). 이 여유는 **측정 흔들림은 통과시키되
-  // 5MB 이상의 실제 증가는 잡는** 크기다. 새로 세우는 축이므로 기존 예산의 완화가 아니다.
-  // 이 값을 올려야 할 상황이 오면 그것은 **우리 코드가 커졌다는 신호**이므로 조사부터 할 것.
-  blankWindowNoAdblockMB: 155,
-  perTabMemoryMB: 80,
-  idleCpuPercent: 0.5,
-  rendererJsGzipKB: 500,
-}
+// 예산은 **단일 출처**(app/shared/perf-budget.json)에서 읽는다 — 근거·주의는 그 파일 안에 있다.
+// 여기에 숫자를 다시 적지 않는다(두 곳에 두면 한쪽만 고쳐져 화면과 판정이 어긋난다).
+const BUDGET = loadBudget()
 
 function parseArgs(argv) {
   const out = { ...DEFAULTS }

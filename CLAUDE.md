@@ -251,6 +251,11 @@ browser-build/
 
 ## 가벼움 예산 (1원칙 #1, 측정 = `/audit-perf`)
 
+> **기계가 읽는 정본은 [`app/shared/perf-budget.json`](app/shared/perf-budget.json) 하나다.**
+> 아래 표는 사람이 읽는 설명이며, 판정에 쓰이는 숫자는 그 파일에서만 온다
+> (`perf-measure` 가 읽고, `gen-perf-baseline` 이 앱에 주입해 `browser://memory` 까지 같은 값을 쓴다).
+> 숫자를 바꾸려면 **왜 늘었는지부터 조사**할 것 — 예산 완화는 측정으로 근거를 만든 뒤에만.
+
 | 항목 | 한도 | 측정 방법 |
 |------|-----|----------|
 | 콜드 스타트 (창 표시까지) | ≤ 2.0s | `app.whenReady()` → `window.show()` 타임스탬프 |
@@ -1509,3 +1514,9 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **페이지**: 하드코딩 3줄 → `budgetRows(m.perfBaseline)` 로 교체. 최신값·최근 중앙값·adblock 비용·콜드 스타트를 함께 보이고, **측정 시각과 "verify:full 로 갱신된다"**를 명시. 기준선이 없으면 "npm run verify:full 로 측정하면 여기에 표시됩니다".
   - **예산 상수 이중화 주의**: `gen-perf-baseline.mjs` 의 `BUDGETS` 는 `perf-measure.mjs` 의 `BUDGET` 과 같은 값이어야 한다(어긋나면 페이지가 거짓말을 한다) — 양쪽 주석에 명시.
   - **검증**: CDP 로 `browser://memory` 실기 확인(주입값 렌더·하드코딩 145 사라짐·콜드 스타트 줄 추가) · perf 1회로 2축 이력 생성·기준선 재생성 확인 · 종결 게이트 `npm run verify` **4/4 PASS · 31초**.
+- 2026-09-07: **auto-dev 임무 15 — 가벼움 예산 상수를 단일 출처로**. 하네스·문서 전용.
+  - **문제(임무 14가 만든 부채)**: 예산 숫자가 `perf-measure.mjs` 의 `BUDGET` 과 `gen-perf-baseline.mjs` 의 `BUDGETS` **두 곳에** 박혀 있었다. 한쪽만 고치면 **측정은 통과인데 `browser://memory` 에는 다른 예산이 뜨는** 상태가 된다.
+  - **[`app/shared/perf-budget.json`](app/shared/perf-budget.json) 신설 — 기계가 읽는 정본**. 값마다 `_키` 로 근거를 함께 적었다(콜드 완화 60MB, adblock 제외 155MB 의 실측 근거 등). CLAUDE.md 의 예산 표는 **사람이 읽는 설명**으로 역할을 분리하고, 그 사실을 표 위에 명시.
+  - **`build/lib/budget.mjs`**: 얇은 로더 — `_` 로 시작하는 설명 키를 걸러 값만 주고, **필수 키가 없거나 숫자가 아니면 크게 실패**한다(조용히 잘못된 판정을 하느니). `perf-measure`·`gen-perf-baseline` 이 이걸 쓴다.
+  - **앱까지 같은 값이 흐른다**: `gen-perf-baseline` 이 예산 전체를 `perf-baseline.json` 에 담아 주입 → `browser://memory` 의 CPU 예산도 하드코딩(0.5) 대신 주입값을 쓴다.
+  - **검증**: 로더 자체검사(7키 전부) · `--no-dual` 실행으로 콜드스타트 2000ms·탭당 80MB·CPU 0.5%·gzip 500KB 가 전부 JSON 에서 오는 것 확인(이때 **dual 실패 시 총계 폴백 판정**이 설계대로 작동) · dual 정상 경로 **149MB ≤ 155MB, 종료코드 0** · 종결 게이트 `npm run verify` 4/4 PASS.

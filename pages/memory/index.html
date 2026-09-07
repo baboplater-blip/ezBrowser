@@ -132,7 +132,11 @@
           + ' 예산에 쓰는 WMI <i>private working set</i> 과 다릅니다(보통 더 큼). 지표를 섞어 비교하지 마세요.</p>'
           + budgetRows(m.perfBaseline)
           + budgetLine('메인 프로세스 private bytes (지금)', '참고 지표', mainPriv + ' MB', true)
-          + budgetLine('휴식 시 CPU', '≤ 0.5%', m.totals.avgCpu + ' %', m.totals.avgCpu <= 0.5)
+          + (function () {
+              // CPU 예산도 주입된 단일 출처 값을 쓴다(없으면 문서상 기본 0.5%).
+              const cpuBudget = (m.perfBaseline && m.perfBaseline.budgets && m.perfBaseline.budgets.idleCpuPercent) || 0.5
+              return budgetLine('휴식 시 CPU', '≤ ' + cpuBudget + '%', m.totals.avgCpu + ' %', m.totals.avgCpu <= cpuBudget)
+            })()
           + budgetLine('백그라운드 슬립', '30분 비활성 → discard', m.sleep.enabled ? '✓ 활성' : '✗ 비활성', m.sleep.enabled)
           + '</div>'
 
