@@ -56,6 +56,7 @@ function parseArgs(argv) {
     else if (a === '--single-boot') out.singleBoot = true
     else if (a === '--ab') out.ab = true
     else if (a === '--runs') out.runs = Math.max(2, Number(argv[++i] ?? 4))
+    else if (a === '--settle-ms') out.settleMs = Math.max(0, Number(argv[++i] ?? 15000))
     else if (a === '--a-label') out.aLabel = argv[++i] ?? 'A'
     else if (a === '--b-label') out.bLabel = argv[++i] ?? 'B'
     else if (a === '--a-settings') out.aSettings = argv[++i] ?? '{}'
@@ -373,6 +374,9 @@ async function runAb(args) {
       }
       const r = await runOne(cfg)
       if (!r.ok) { console.warn(`  ⚠ ${cfg.label} 실패: ${r.error}`); continue }
+      // 부팅을 연달아 하면 그 자체가 부하가 되어 산포를 키운다(2026-09-07 실측: 대조군에서
+      // 산포 8~16MB → 10MB 미만 기여도는 탐지 불가). 측정 사이에 머신을 식힌다.
+      await sleep(args.settleMs ?? 15000)
       ;(side === 'a' ? aVals : bVals).push(r.sample.totalPrivateWorkingSetMB)
     }
   }

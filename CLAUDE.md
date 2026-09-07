@@ -1427,3 +1427,12 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - 이 정밀도라면 **V4(226MB) 대비 +24MB 증가는 실재**로 본다(임무 5에서 유보했던 판단 갱신). 단 **출처는 미상**이고 AI 레이어는 A/B 로 배제됨.
   - **`verify:full` 첫 완주 — 10/11 PASS · 총 9분 18초**: typecheck 4s · build 4s · package 8s · smoke 17s(16종) · agent-safety 1m13s(A1~A14) · fingerprint 3s · session-restore 20s(17종) · dl-matrix 16s(10 PASS·1 SKIP) · ext-matrix 42s · stress 2m11s · perf 3m53s(**유일 실패 = 예산 초과, 제품 사실**). **견적 20~40분보다 훨씬 싸다 — 라운드 종료 시 습관적으로 돌릴 만하다.** 회수 시계 값은 실측이 여유롭더라도 **줄이지 않았다**(느린 머신·부하 상태에서 거짓 실패를 내지 않기 위해).
   - **perf 이력 경로 통합**: `verify-all` 이 단계별 `--out` 을 넘겨 게이트 실행 이력이 따로 쌓이는 바람에 항상 "과거 표본 0개"였다 → 저장소 고정 위치(`perf-out/perf-history.json`)로 통일해 수동·게이트 실행이 한 추세선을 공유한다.
+- 2026-09-07: **auto-dev 임무 7 — 빈 창 메모리 출처 사냥: adblock 110MB(전체의 44%) 확정**. 측정용 임시 코드는 전량 제거(앱 코드 최종 변경 0).
+  - **adblock 이 유일한 대형 항목**: A/B 결과 ON 중앙값 **257MB** vs OFF **147MB** → **차이 110MB**(산포 19MB를 크게 상회, 도구가 "차이 있음" 판정). V4 기록 ≈107MB 와 사실상 동일 — **adblock 은 커지지 않았다.** 끄면 147MB 로 예산에 100MB 여유가 생긴다(단 콕콕 핵심이라 기본 OFF 는 금지).
+  - **부팅 초기화 6종은 전부 꺼도 차이 없음**(DB·policy·userscript/password/tokens/automation/modapi·video/torrent·AI·client-hints, 중앙값 차 -6.5MB < 산포 18MB). 대조군(AI)도 예상대로 "차이 없음"으로 절차 자체를 검증했다.
+  - **방법론 전환 — 한 부팅 안에서 재기**: 부팅 간 산포가 15~18MB라 10MB 미만 기여도는 원리적으로 분리 불가. 그래서 같은 프로세스 안에서 초기화 전후 `process.memoryUsage().rss` 증분을 쟀더니 노이즈 없이 보였다:
+    - **`db(sql.js)` +60.9MB** (rss 86→146MB) ← 압도적. 이후 GC 가 대부분 회수(→111MB)해 **정상상태 기여는 작지만 피크 메모리 최대 항목**이다.
+    - 나머지(workspaces·userscript·policy·ipc·actions·downloads·media·translate·qrcode·ai)는 **전부 ≤1MB**.
+    - **교훈: "무엇이 메모리를 쓰나"는 먼저 한 프로세스 안에서 재고, 정상상태 비교가 필요할 때만 A/B 로 간다.** 부팅 간 A/B 로는 10MB 미만을 볼 수 없다.
+  - **A/B 도구 보강**: `--settle-ms`(연속 부팅이 만드는 자기 부하 완화). 판정 규칙(산포 대비)은 **완화하지 않았다** — 규칙을 느슨하게 하면 임무 4·5의 오판이 재현된다.
+  - **못 한 것**: V4 대비 **+24MB 증가의 출처는 미상**. 주요 후보(adblock·부팅 초기화 6종·sql.js 정상상태)는 배제했고, 남은 가능성은 외피 번들 증가·Chromium 내부 변동·**개별로는 탐지 한계 미만인 작은 증가들의 합**이다. 이 머신의 분해능(±15~18MB)으로는 더 좁힐 수 없어 **억지로 원인을 지목하지 않는다**.
