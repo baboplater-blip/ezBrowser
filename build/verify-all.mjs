@@ -88,6 +88,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '설정 되돌릴 수 없는 동작 — 내보내기/가져오기·키맵 D1~D3·K1~K3',
     },
     {
+      id: 'error-boundary', kind: 'harness', modes: ['full'],
+      script: 'verify-error-boundary-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'error-boundary', 'error-boundary-results.json'),
+      timeoutMs: 6 * 60000, desc: '외피 오류 경계 — 평소엔 안 뜨고 외피가 정상인가(EB1·EB2)',
+    },
+    {
       id: 'internal-pages', kind: 'harness', modes: ['full'],
       script: 'verify-internal-pages-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'internal-pages', 'internal-pages-results.json'),

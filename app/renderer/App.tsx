@@ -18,6 +18,7 @@ import { WorkspaceRail, WORKSPACE_RAIL_WIDTH } from './components/WorkspaceRail'
 import { PasswordSavePrompt } from './components/PasswordSavePrompt'
 import { UpdateBanner } from './components/UpdateBanner'
 import { FindBar } from './components/FindBar'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTabs } from './hooks/useTabs'
 import { useActions } from './hooks/useActions'
 import { useMacros } from './hooks/useMacros'
@@ -442,45 +443,53 @@ export function App() {
             {tabbarOrientation === 'left' && (
               <TabBar windowId={windowId} tabs={tabs} orientation="left" />
             )}
-            <SidePanel
-              side="left"
-              open={leftPanelOpen}
-              width={SIDEPANEL_WIDTH}
-              onClose={() => setLeftPanelOpen(false)}
-              windowId={windowId}
-              active={activeTab}
-              tree={bookmarkTree}
-              requestTab={sidePanelRequest}
-              aiSummarizeNonce={aiSummarizeNonce}
-              aiWriteNonce={aiWriteNonce}
-            />
+            <ErrorBoundary scope="사이드 패널" compact>
+              <SidePanel
+                side="left"
+                open={leftPanelOpen}
+                width={SIDEPANEL_WIDTH}
+                onClose={() => setLeftPanelOpen(false)}
+                windowId={windowId}
+                active={activeTab}
+                tree={bookmarkTree}
+                requestTab={sidePanelRequest}
+                aiSummarizeNonce={aiSummarizeNonce}
+                aiWriteNonce={aiWriteNonce}
+              />
+            </ErrorBoundary>
             <PaneStage windowId={windowId} layout={paneLayout} tabs={tabs} />
-            <SidePanel
-              side="right"
-              open={rightPanelOpen}
-              width={SIDEPANEL_WIDTH}
-              onClose={() => setRightPanelOpen(false)}
-              windowId={windowId}
-              active={activeTab}
-              tree={bookmarkTree}
-              requestTab={sidePanelRequest}
-              aiSummarizeNonce={aiSummarizeNonce}
-              aiWriteNonce={aiWriteNonce}
-            />
+            <ErrorBoundary scope="사이드 패널" compact>
+              <SidePanel
+                side="right"
+                open={rightPanelOpen}
+                width={SIDEPANEL_WIDTH}
+                onClose={() => setRightPanelOpen(false)}
+                windowId={windowId}
+                active={activeTab}
+                tree={bookmarkTree}
+                requestTab={sidePanelRequest}
+                aiSummarizeNonce={aiSummarizeNonce}
+                aiWriteNonce={aiWriteNonce}
+              />
+            </ErrorBoundary>
             {tabbarOrientation === 'right' && (
               <TabBar windowId={windowId} tabs={tabs} orientation="right" />
             )}
-            <VideoCandidatePanel
-              open={videoOpen && videoCandidates.length > 0}
-              candidates={videoCandidates}
-              width={VIDEO_PANEL_WIDTH}
-              onClose={() => setVideoOpen(false)}
-            />
-            <DownloadsPanel
-              open={downloadsOpen}
-              width={DOWNLOADS_PANEL_WIDTH}
-              onClose={() => setDownloadsOpen(false)}
-            />
+            <ErrorBoundary scope="동영상 패널" compact>
+              <VideoCandidatePanel
+                open={videoOpen && videoCandidates.length > 0}
+                candidates={videoCandidates}
+                width={VIDEO_PANEL_WIDTH}
+                onClose={() => setVideoOpen(false)}
+              />
+            </ErrorBoundary>
+            <ErrorBoundary scope="다운로드 패널" compact>
+              <DownloadsPanel
+                open={downloadsOpen}
+                width={DOWNLOADS_PANEL_WIDTH}
+                onClose={() => setDownloadsOpen(false)}
+              />
+            </ErrorBoundary>
           </div>
           {activeDownloads > 0 && !downloadsOpen && (
             <button
