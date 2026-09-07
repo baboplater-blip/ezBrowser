@@ -47,6 +47,10 @@ const DEFAULTS = {
   baselineSamples: 5,
   baselineIntervalMs: 4000,
   forceCold: false,
+  // adblock 을 끈 baseline 도 함께 재서 "우리 코드"와 "adblock 비용"을 분리 판정한다.
+  // (2026-09-07 실측: adblock 이 빈 창 메모리의 110MB, 약 44% — 이걸 섞어 놓으면
+  //  게이트가 우리 코드의 회귀를 adblock 비용에 묻어 놓친다.)
+  dual: true,
 }
 
 const BUDGET = {
@@ -59,6 +63,16 @@ const BUDGET = {
   // 두 측정을 모두 덮도록 60MB 로 둔다(콜드 예산 = 310MB). 이 값을 올려야 할 상황이 오면
   // 그것은 완화가 아니라 **adblock 콜드 빌드 비용이 실제로 늘었다는 신호**이므로 조사할 것.
   adblockColdAllowanceMB: 60,
+  // **판정 1순위** — adblock 을 제외한 빈 창(= 우리가 통제하는 코드).
+  //
+  // adblock 은 콕콕 핵심이라 끌 수 없는 고정비(2026-09-07 실측 103~110MB)이고, 그걸 섞어서
+  // 판정하면 **우리 코드의 회귀가 adblock 비용에 묻힌다**. 그래서 축을 나눈다.
+  //
+  // 값의 근거(2026-09-07 dual 3회 실측): adblock 제외 **149 · 146 · 149MB**(측정 노이즈 ±1.5MB).
+  // 예산 = 중앙값 149 + 6MB(≈ 노이즈의 3배). 이 여유는 **측정 흔들림은 통과시키되
+  // 5MB 이상의 실제 증가는 잡는** 크기다. 새로 세우는 축이므로 기존 예산의 완화가 아니다.
+  // 이 값을 올려야 할 상황이 오면 그것은 **우리 코드가 커졌다는 신호**이므로 조사부터 할 것.
+  blankWindowNoAdblockMB: 155,
   perTabMemoryMB: 80,
   idleCpuPercent: 0.5,
   rendererJsGzipKB: 500,
@@ -75,6 +89,8 @@ function parseArgs(argv) {
     else if (a === '--idle-minutes') out.idleMinutes = Number(argv[++i] ?? DEFAULTS.idleMinutes)
     else if (a === '--baseline-samples') out.baselineSamples = Math.max(1, Number(argv[++i] ?? DEFAULTS.baselineSamples))
     else if (a === '--cold') out.forceCold = true
+    else if (a === '--dual') out.dual = true
+    else if (a === '--no-dual') out.dual = false
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0) }
     else console.warn(`[perf-measure] 알 수 없는 인자 무시: ${a}`)
   }
@@ -97,6 +113,7 @@ perf-measure — 가벼움 예산(1원칙 #1) 정밀 측정 하네스
   --baseline-samples <n>  빈 창 baseline 표본 수, 중앙값으로 판정 (기본: 5)
   --cold              프로필을 비워 **콜드 경로**(adblock 캐시 없음)를 일부러 측정
                       (기본은 웜 = 2번째 이후 실행, 실사용 절대다수)
+  --no-dual           adblock 제외 baseline 측정을 생략(기본은 측정 — 판정 1순위)
 `.trim())
 }
 
@@ -278,6 +295,18 @@ function seedProfile(profileDir, reset) {
     }
     fs.writeFileSync(settingsPath, JSON.stringify(seed, null, 2))
   }
+}
+
+/** 프로필의 settings.json 을 부분 갱신한다(dual 모드에서 adblock 을 껐다 켜기 위함). */
+function patchProfileSettings(profileDir, patch) {
+  const settingsPath = path.join(profileDir, 'settings.json')
+  let cur = {}
+  try { cur = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) } catch { /* 없으면 새로 */ }
+  const merged = { ...cur }
+  for (const [k, v] of Object.entries(patch)) {
+    merged[k] = (v && typeof v === 'object' && !Array.isArray(v)) ? { ...(cur[k] ?? {}), ...v } : v
+  }
+  fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2))
 }
 
 // ── CDP 클라이언트 (smoke-cdp.mjs 와 동일) ────────────────────────────────
@@ -562,6 +591,14 @@ async function measureLongSession(args) {
     }
     console.log(`  baseline 확정(중앙값): private=${medianPrivate}MB (표본 ${privates.length}개, 최소 ${privates[0]} / 최대 ${privates[privates.length - 1]}, 폭 ${result.baselineSeries.spread}MB)`)
 
+    // dual 모드의 2회차(adblock 제외 baseline)는 baseline 만 필요하다 — 탭 증분·idle CPU 는
+    // adblock 유무와 무관하고, 반복하면 실행 시간만 배로 든다.
+    if (args.baselineOnly) {
+      result.ok = true
+      result.baseline = baseline
+      return result
+    }
+
     // ── 2) 탭당 RSS 증가 — about:blank 10개 (background) ──
     console.log('[long-session] about:blank 10탭 생성 …')
     for (let i = 0; i < 10; i++) {
@@ -649,7 +686,7 @@ function judgeColdStart(runs) {
   return { avg, max, pass: avg !== null && avg <= BUDGET.coldStartMs, vals }
 }
 
-function printReport(args, coldRuns, longSession) {
+function printReport(args, coldRuns, longSession, noAdblock) {
   const cold = judgeColdStart(coldRuns)
   console.log('\n===================================================')
   console.log(' 가벼움 예산(1원칙 #1) 정밀 측정 결과')
@@ -706,6 +743,10 @@ function printReport(args, coldRuns, longSession) {
     const blankBudget = measuredPath === 'cold'
       ? BUDGET.blankWindowMemoryMB + BUDGET.adblockColdAllowanceMB
       : BUDGET.blankWindowMemoryMB
+    const noAdblockMB = noAdblock?.ok ? (noAdblock.baseline?.totalPrivateWorkingSetMB ?? null) : null
+    const noAdblockPass = noAdblockMB === null ? true : noAdblockMB <= BUDGET.blankWindowNoAdblockMB
+    const adblockCostMB = noAdblockMB === null ? null
+      : Math.round((longSession.baseline.totalPrivateWorkingSetMB - noAdblockMB) * 10) / 10
     const blankPass = longSession.baseline.totalPrivateWorkingSetMB <= blankBudget
     const blankPassWS = longSession.baseline.totalWorkingSetElectronMB <= blankBudget
     const perTabPass = longSession.perTabPrivateMB <= BUDGET.perTabMemoryMB
@@ -713,7 +754,16 @@ function printReport(args, coldRuns, longSession) {
     const cpuPass = longSession.idle.avgSumCpuPercentSecondHalf <= BUDGET.idleCpuPercent
     const gzipPass = longSession.rendererJs?.gzipKB != null && longSession.rendererJs.gzipKB <= BUDGET.rendererJsGzipKB
     budgetRows.push(
-      { 항목: `빈 창 RSS(newtab 1개, ${measuredPath === 'cold' ? '콜드' : '웜'} 경로)`, 측정치_private: `${longSession.baseline.totalPrivateWorkingSetMB}MB${longSession.baselineSeries ? ` (중앙값, 표본 ${longSession.baselineSeries.samples.length}개 폭 ${longSession.baselineSeries.spread}MB)` : ''}`, 측정치_workingSet: `${longSession.baseline.totalWorkingSetElectronMB}MB`, 예산: `${blankBudget}MB${measuredPath === 'cold' ? ` (250 + adblock 콜드 ${BUDGET.adblockColdAllowanceMB})` : ''}`, 판정: `private=${blankPass ? 'PASS' : 'FAIL'} / WS=${blankPassWS ? 'PASS' : 'FAIL'}` },
+      // 판정 1순위: adblock 제외(우리 코드). dual 측정이 없으면 이 행은 생략된다.
+      ...(noAdblockMB === null ? [] : [{
+        항목: '빈 창 RSS — adblock 제외 (판정 1순위)',
+        측정치_private: `${noAdblockMB}MB`,
+        측정치_workingSet: '-',
+        예산: `${BUDGET.blankWindowNoAdblockMB}MB`,
+        판정: noAdblockPass ? `PASS (여유 ${Math.round((BUDGET.blankWindowNoAdblockMB - noAdblockMB) * 10) / 10}MB)` : `FAIL (초과 ${Math.round((noAdblockMB - BUDGET.blankWindowNoAdblockMB) * 10) / 10}MB)`,
+      }]),
+      // 총계는 참고·추세용. adblock 실측 비용을 함께 적어 초과 사유가 보이게 한다.
+      { 항목: `빈 창 RSS(newtab 1개, ${measuredPath === 'cold' ? '콜드' : '웜'} 경로) — 총계(참고)`, 측정치_private: `${longSession.baseline.totalPrivateWorkingSetMB}MB${longSession.baselineSeries ? ` (중앙값, 표본 ${longSession.baselineSeries.samples.length}개 폭 ${longSession.baselineSeries.spread}MB)` : ''}${adblockCostMB === null ? '' : ` · 그중 adblock ${adblockCostMB}MB`}`, 측정치_workingSet: `${longSession.baseline.totalWorkingSetElectronMB}MB`, 예산: `${blankBudget}MB${measuredPath === 'cold' ? ` (250 + adblock 콜드 ${BUDGET.adblockColdAllowanceMB})` : ''}`, 판정: `private=${blankPass ? `PASS (여유 ${Math.round((blankBudget - longSession.baseline.totalPrivateWorkingSetMB) * 10) / 10}MB)` : (noAdblockMB === null ? `FAIL (초과 ${Math.round((longSession.baseline.totalPrivateWorkingSetMB - blankBudget) * 10) / 10}MB)` : `참고: 초과 ${Math.round((longSession.baseline.totalPrivateWorkingSetMB - blankBudget) * 10) / 10}MB`)} / WS=${blankPassWS ? 'PASS' : 'FAIL'}` },
       { 항목: '탭 추가당 RSS 증가', 측정치_private: `${longSession.perTabPrivateMB}MB/탭`, 측정치_workingSet: `${longSession.perTabWorkingSetElectronMB}MB/탭`, 예산: `${BUDGET.perTabMemoryMB}MB/탭`, 판정: `private=${perTabPass ? 'PASS' : 'FAIL'} / WS=${perTabPassWS ? 'PASS' : 'FAIL'}` },
       { 항목: `휴식 시 CPU(${longSession.idle.minutes}분 idle, 후반부 평균)`, 측정치_private: '-', 측정치_workingSet: `${longSession.idle.avgSumCpuPercentSecondHalf}%`, 예산: `${BUDGET.idleCpuPercent}%`, 판정: cpuPass ? 'PASS' : 'FAIL' },
       { 항목: '외피 초기 JS(gzip)', 측정치_private: '-', 측정치_workingSet: `${longSession.rendererJs?.gzipKB ?? 'N/A'}KB`, 예산: `${BUDGET.rendererJsGzipKB}KB`, 판정: gzipPass ? 'PASS' : 'FAIL' },
@@ -750,7 +800,28 @@ async function main() {
   const coldRuns = await measureColdStart(args)
   const longSession = await measureLongSession(args)
 
-  const { cold, budgetRows } = printReport(args, coldRuns, longSession)
+  // ── dual: adblock 을 끈 baseline 도 잰다 ────────────────────────────────
+  // 판정 1순위는 **adblock 제외** 값이다. adblock 은 콕콕 핵심이라 끌 수 없는 고정비이고
+  // (2026-09-07 실측 110MB), 그걸 섞어서 판정하면 우리 코드의 회귀가 묻힌다.
+  let noAdblock = null
+  if (args.dual && longSession.ok) {
+    console.log('\n[dual] adblock 을 끈 baseline 측정 …')
+    try {
+      patchProfileSettings(args.profileDir, { adblock: { enabled: false } })
+      noAdblock = await measureLongSession({ ...args, baselineOnly: true })
+    } catch (err) {
+      console.warn('[dual] adblock 제외 측정 실패(무시):', err.message)
+    } finally {
+      patchProfileSettings(args.profileDir, { adblock: { enabled: true } })
+    }
+    if (noAdblock?.ok) {
+      const total = longSession.baseline?.totalPrivateWorkingSetMB ?? 0
+      const base = noAdblock.baseline?.totalPrivateWorkingSetMB ?? 0
+      console.log(`[dual] adblock 제외 ${base}MB · adblock 포함 ${total}MB · adblock 비용 ${Math.round((total - base) * 10) / 10}MB`)
+    }
+  }
+
+  const { cold, budgetRows } = printReport(args, coldRuns, longSession, noAdblock)
 
   const resultsPath = path.join(args.out, 'perf-results.json')
   fs.writeFileSync(resultsPath, JSON.stringify({
@@ -759,6 +830,7 @@ async function main() {
     coldRuns,
     coldJudgement: cold,
     longSession,
+    noAdblock: noAdblock?.ok ? { baseline: noAdblock.baseline, path: noAdblock.measuredPath } : null,
     budgetTable: budgetRows,
   }, null, 2))
   console.log(`\n[perf-measure] 결과 저장: ${resultsPath}`)
