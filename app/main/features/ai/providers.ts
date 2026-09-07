@@ -228,7 +228,8 @@ function googleEndpoint(req: AiRequest): Endpoint {
   }
 }
 
-function endpointFor(req: AiRequest): Endpoint {
+// 검증 하네스가 요청 형태(URL·헤더·본문)를 키 없이 대조할 수 있도록 노출한다 — 순수 함수.
+export function endpointFor(req: AiRequest): Endpoint {
   switch (req.provider) {
     case 'anthropic': return anthropicEndpoint(req)
     case 'openai': return openaiEndpoint(req)
@@ -580,7 +581,9 @@ function safeParseArgs(s: unknown): Record<string, unknown> {
 
 // 일부 모델(예: Ollama 의 qwen2.5-coder)은 구조화된 tool_calls 대신 content 에 `{"name":..,"arguments":..}`
 // JSON 텍스트로 함수 호출을 내보낸다. 그 경우를 폴백으로 파싱한다(```json 펜스·<tool_call> 태그 제거).
-function extractToolCallFromText(text: string, knownNames?: Set<string>): ToolCall | null {
+// 노출 이유: 일부 모델(Ollama 계열)이 구조화 tool_calls 대신 본문에 함수 호출 JSON 을 넣는다.
+// 이 폴백이 깨지면 tool 경로가 무한 관찰 루프가 되므로 회귀 검사가 필요하다.
+export function extractToolCallFromText(text: string, knownNames?: Set<string>): ToolCall | null {
   const s = text.trim().replace(/<\/?tool_call>/gi, '').replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
   const start = s.indexOf('{')
   if (start < 0) return null
@@ -604,7 +607,7 @@ function extractToolCallFromText(text: string, knownNames?: Set<string>): ToolCa
   } catch { return null }
 }
 
-function parseToolResponse(provider: AiProviderId, text: string, knownNames?: Set<string>): ToolChatResult {
+export function parseToolResponse(provider: AiProviderId, text: string, knownNames?: Set<string>): ToolChatResult {
   const json = JSON.parse(text) as Record<string, unknown>
   let toolCalls: ToolCall[] = []
   let out = ''

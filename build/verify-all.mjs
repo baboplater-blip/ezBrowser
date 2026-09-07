@@ -65,6 +65,20 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '게이트 1 스모크 16종',
     },
     {
+      // 순수 함수라 앱을 띄우지 않고 1초 안에 끝난다 — 마감 게이트(quick)에도 넣는다.
+      // 이 판정이 느슨해지면 결제·삭제가 확인 없이 실행되므로 자주 볼수록 좋다.
+      id: 'agent-gate', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-agent-gate.mjs', outArg: true,
+      result: (o) => path.join(o, 'agent-gate', 'agent-gate-results.json'),
+      timeoutMs: 3 * 60000, desc: '에이전트 안전 판정(돈·삭제 확인 / 발행 오탐 0) R1~R8',
+    },
+    {
+      id: 'ai-providers', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-ai-providers.mjs', outArg: true,
+      result: (o) => path.join(o, 'ai-providers', 'ai-providers-results.json'),
+      timeoutMs: 3 * 60000, desc: 'AI 제공자 4종 요청 형식·스트림 파싱·도구 호출 P1~P4',
+    },
+    {
       id: 'agent-safety', kind: 'harness', modes: ['full'],
       script: 'verify-agent-safety-cdp.mjs', outArg: false, result: () => fixed('agent-safety-results.json'),
       timeoutMs: 12 * 60000, desc: 'AI 에이전트 안전·조작 A1~A14',

@@ -105,7 +105,10 @@ const INJECTION_RE = new RegExp([
   'ignore\\s+(all\\s+)?(previous|prior|above)\\s+(instructions?|prompts?)',
   'disregard\\s+(the\\s+)?(previous|above)',
   '(system|시스템)\\s*(prompt|프롬프트)\\s*(을|를)?\\s*(출력|무시|공개|reveal|print)',
-  '너는\\s*이제\\b',
+  // 한글 뒤에는 \\b(단어 경계)를 쓰면 안 된다 — JS 정규식의 \\b 는 [A-Za-z0-9_] 기준이라
+  // 한글 다음에는 **절대 성립하지 않는다**. 이 줄은 어떤 문장에도 매치되지 않는 죽은 패턴이었다
+  // (2026-09-07 임무 24 실측). 영문 쪽(you are now …\\b)은 정상이라 그대로 둔다.
+  '너는\\s*이제',
   'you\\s+are\\s+now\\s+(a|an)\\b',
   '"action"\\s*:',            // 페이지 안에 우리 액션 JSON 을 심어 행동을 지시하는 시도
   'new\\s+instructions?\\s*:',
@@ -121,7 +124,7 @@ export function detectInjection(text: string): boolean {
 // 1회 인젝션이 영구 기억에 들어가면 이후 모든 세션의 시스템 프롬프트를 오염시키는 백도어가 된다.
 const MEMORY_INSTRUCTION_RE = new RegExp([
   '무시하',
-  '하세요|해라|하라\\b|해야\\s*한다|반드시\\s*\\S+하',
+  '하세요|해라|하라|해야\\s*한다|반드시\\s*\\S+하',   // 한글 뒤 \\b 금지(위 주석 참고)
   '앞으로\\s*(모든|항상)',
   'always\\s+\\w+|must\\s+\\w+|never\\s+\\w+',
   'ignore|instruction',
