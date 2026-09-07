@@ -76,6 +76,12 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: 'browser://memory 표시값 실측 대조 M1~M6',
     },
     {
+      id: 'settings-welcome', kind: 'harness', modes: ['full'],
+      script: 'verify-settings-welcome-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'settings-welcome', 'settings-welcome-results.json'),
+      timeoutMs: 10 * 60000, desc: 'browser://settings·welcome 표시·반영 대조 S1~S5·W1~W3',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',
