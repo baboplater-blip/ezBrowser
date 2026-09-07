@@ -32,6 +32,7 @@ import {
   waitForShellTarget,
   waitForTargetByUrlPredicate,
 } from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 import { loadBudget } from './lib/budget.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -413,6 +414,8 @@ async function measureColdStart(args) {
     await cleanupStaleProcess(args.out)
     seedProfile(args.profileDir, i === 1) // 첫 회차만 프로필 초기화, 이후는 재사용(정상 종료로 current.json 정리됨)
     const t0 = Date.now()
+    // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+    args.port = await preferFreePort(args.port, 'perf-measure.mjs')
     if (!(await waitForPortFree(args.port))) {
       // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
       // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.

@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import {
   connectSession, connectShellSessionReady, getTargetList, waitForPortFree, sleep,
 } from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -77,6 +78,8 @@ async function main() {
     startup: { mode: 'newtab', urls: [] },
   }, null, 2))
 
+  // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+  args.port = await preferFreePort(args.port, 'verify-input-guards-cdp.mjs')
   if (!(await waitForPortFree(args.port))) {
     console.error(`디버그 포트 ${args.port} 사용 중 — 남은 인스턴스를 종료하세요.`)
     process.exit(2)

@@ -42,6 +42,7 @@ import {
   waitForShellTarget,
   waitForTargetByUrlPredicate,
 } from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -1088,6 +1089,8 @@ async function main() {
   // 띄워도 /json/list 는 **좀비의 타깃**을 돌려준다. 그 렌더러는 이미 죽어 있어 CDP 명령이
   // 영영 응답하지 않고, 스모크는 전 시나리오 FAIL 로 무너진다. 원인을 알 수 없는 이 간헐 실패의
   // 진짜 정체가 이것이었다. 남의 브라우저를 검사하느니 **큰 소리로 실패**하는 편이 낫다.
+  // 잔재가 고정 포트를 쥐고 있으면 빈 포트로 옮겨 실행을 살린다(그래도 안 되면 아래에서 중단).
+  args.port = await preferFreePort(args.port, 'smoke-cdp')
   const portFree = await waitForPortFree(args.port, 12_000)
   if (!portFree) {
     console.error(`[smoke-cdp] 디버그 포트 ${args.port} 가 이미 사용 중입니다 (다른 인스턴스가 쥐고 있음).`)

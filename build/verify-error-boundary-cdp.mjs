@@ -30,6 +30,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { connectSession, waitForPortFree, connectShellSessionReady } from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(__dirname, '..')
@@ -52,6 +53,8 @@ function check(id, name, ok, detail) {
 async function main() {
   if (!fs.existsSync(EXE)) throw new Error(`패키지 없음: ${EXE}`)
   fs.mkdirSync(args.out, { recursive: true })
+  // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+  args.port = await preferFreePort(args.port, 'verify-error-boundary-cdp.mjs')
   await waitForPortFree(args.port)
 
   const profileDir = path.join(args.out, 'profile')

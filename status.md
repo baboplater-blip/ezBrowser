@@ -93,20 +93,23 @@
 
 ### 최신 실행
 
-**`npm run verify` — 7/7 PASS · 33s** (2026-09-07 11:09)
+**`npm run verify` — 8/8 PASS · 35s** (2026-09-07 11:25)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
 | typecheck | ✅ PASS | 4s | 종료코드 0 |
 | build | ✅ PASS | 5s | 종료코드 0 |
 | package | ✅ PASS | 7s | 종료코드 0 |
-| smoke | ✅ PASS | 14s | PASS 16 |
+| smoke | ✅ PASS | 13s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
+| editor-text | ✅ PASS | 0s | PASS 5 |
 | agent-gate | ✅ PASS | 0s | PASS 8 |
 | ai-providers | ✅ PASS | 0s | PASS 4 |
 
 ### 최근 10회
 
+- 2026-09-07 11:25 · `quick` · **8/8 PASS** · 35s
+- 2026-09-07 11:24 · `quick` · **7/7 PASS** · 35s
 - 2026-09-07 11:09 · `quick` · **7/7 PASS** · 33s
 - 2026-09-07 10:13 · `quick` · **7/7 PASS** · 39s
 - 2026-09-07 09:48 · `quick` · **7/7 PASS** · 34s
@@ -115,8 +118,6 @@
 - 2026-09-07 07:38 · `quick` · **6/6 PASS** · 1m 12s
 - 2026-09-07 06:24 · `full` · **18/18 PASS** · 13m 55s
 - 2026-09-07 06:19 · `quick` · **4/4 PASS** · 33s
-- 2026-09-07 05:52 · `quick` · **4/4 PASS** · 32s
-- 2026-09-07 05:37 · `full` · **16/16 PASS** · 12m 18s
 
 <!-- verify-all:end -->
 

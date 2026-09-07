@@ -32,6 +32,7 @@ import {
   waitForPortFree,
   waitForShellTarget,
 } from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -487,6 +488,8 @@ async function main() {
   await cleanupStaleProcess(args.out)
   seedProfile(profileDir)
 
+  // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+  args.port = await preferFreePort(args.port, 'ext-matrix.mjs')
   if (!(await waitForPortFree(args.port))) {
 
     // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.

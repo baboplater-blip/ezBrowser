@@ -23,7 +23,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { connectSession, getTargetList, waitForPortFree, connectShellSessionReady, ensureSessionReady } from './lib/cdp.mjs'
 import { startFakeLlm } from './lib/fake-llm.mjs'
-import { getFreePorts } from './lib/ports.mjs'
+import { getFreePorts, preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(__dirname, '..')
@@ -71,6 +71,8 @@ const evalIn = async (s, expression, awaitPromise = false) => {
 async function main() {
   if (!fs.existsSync(EXE)) throw new Error(`패키지 없음: ${EXE}`)
   fs.mkdirSync(args.out, { recursive: true })
+  // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+  args.port = await preferFreePort(args.port, 'verify-agent-triggers-cdp.mjs')
   await waitForPortFree(args.port)
   // 우리가 여는 서버 포트는 **OS 에서 빈 것을 받아** 쓴다 - 고정 포트는 앞선 실행의 잔재와 충돌한다.
   ;[args.llmPort, args.pagePort] = await getFreePorts(2)

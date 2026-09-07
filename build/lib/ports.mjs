@@ -60,3 +60,31 @@ export function describePortOwner(port) {
     return null
   }
 }
+
+/**
+ * 이 포트가 비어 있으면 그대로 쓰고, 점유 중이면 **빈 포트로 대체**한다.
+ *
+ * 하네스의 CDP 디버그 포트는 고정값이라 앞선 실행의 잔재와 부딪히면 실행이 통째로 죽었다.
+ * 명시적으로 `--port` 를 준 경우에는 사용자의 의도(디버깅 시 고정)를 존중해야 하므로,
+ * 이 함수는 **기본값에만** 쓰고 명시값에는 쓰지 않는다.
+ */
+export async function preferFreePort(port, label = '') {
+  const free = await isPortFree(port)
+  if (free) return port
+  const owner = describePortOwner(port)
+  const next = await getFreePort()
+  console.warn(`[ports] ${label || '디버그'} 포트 ${port} 점유 중${owner ? ` (${owner})` : ''} → ${next} 로 대체`)
+  return next
+}
+
+/** TCP 연결이 거부되면 비어 있는 것으로 본다(타임아웃은 점유로 간주 - 좀비가 그렇게 보인다). */
+export function isPortFree(port) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ port, host: '127.0.0.1' })
+    const done = (free) => { try { sock.destroy() } catch { /* ignore */ } resolve(free) }
+    sock.setTimeout(1200)
+    sock.once('connect', () => done(false))
+    sock.once('timeout', () => done(false))
+    sock.once('error', (err) => done(err.code === 'ECONNREFUSED'))
+  })
+}

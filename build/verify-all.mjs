@@ -73,6 +73,13 @@ function steps(outRoot) {
       timeoutMs: 2 * 60000, desc: '한글에서 성립하지 않는 정규식 가정(단어경계·w) K1~K2',
     },
     {
+      // 순수 함수 — 발행글이 마크다운 기호로 깨지던 사고의 회귀 검사. 즉시 끝나므로 quick 에도 둔다.
+      id: 'editor-text', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-editor-text.mjs', outArg: true,
+      result: (o) => path.join(o, 'editor-text', 'editor-text-results.json'),
+      timeoutMs: 2 * 60000, desc: '마크다운→에디터 평문 변환(누출 0·내용 보존) M1~M5',
+    },
+    {
       // 순수 함수라 앱을 띄우지 않고 1초 안에 끝난다 — 마감 게이트(quick)에도 넣는다.
       // 이 판정이 느슨해지면 결제·삭제가 확인 없이 실행되므로 자주 볼수록 좋다.
       id: 'agent-gate', kind: 'harness', modes: ['quick', 'full'],
