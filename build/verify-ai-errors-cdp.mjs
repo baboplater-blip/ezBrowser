@@ -168,6 +168,32 @@ async function main() {
       check('E6', '깨진 스트림에도 앱이 살아 있다', alive === true,
         `앱 정상=${alive} · 오류문구=${st.error ? String(st.error).slice(0, 50) : '(없음)'} · 완료=${st.done}`)
     }
+    // ---- E7 진행형 스트리밍: 답이 조각으로 도착하는가(끝에 몰아 오지 않는가) ----
+    {
+      llm.setScript([{ mode: 'slow', chunks: ['조각하나 ', '조각둘 ', '조각셋 ', '조각넷 ', '조각다섯 '], delayMs: 500 }])
+      await evalIn(shell, 'window.__ai = { delta: "", error: null, done: false }; true')
+      const t0 = Date.now()
+      await evalIn(shell,
+        `window.browserAPI.ai.send({ reqId: 'E7', includePage: false, messages: [{ role: 'user', content: '안녕' }] })`, true)
+
+      const timeline = []
+      const deadline = Date.now() + 12000
+      while (Date.now() < deadline) {
+        const st = JSON.parse(await evalIn(shell, 'JSON.stringify(window.__ai)') ?? '{}')
+        const len = String(st.delta ?? '').length
+        const last = timeline[timeline.length - 1]
+        if (!last || last.len !== len) timeline.push({ ms: Date.now() - t0, len, done: !!st.done })
+        if (st.done || st.error) break
+        await sleep(250)
+      }
+      // 길이가 0 -> ... -> 최종 으로 **두 번 이상 늘어야** 조각으로 온 것이다.
+      const growth = timeline.filter((p) => p.len > 0).length
+      const finalLen = timeline.length ? timeline[timeline.length - 1].len : 0
+      check('E7', '답이 조각으로 도착한다(끝에 몰아 오지 않는다)',
+        growth >= 2 && finalLen > 0,
+        `길이 변화 ${timeline.map((p) => `${p.ms}ms:${p.len}자`).join(' > ')}`)
+    }
+
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)
   } finally {

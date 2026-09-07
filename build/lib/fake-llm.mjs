@@ -93,7 +93,7 @@ export function startFakeLlm({ port = 11500, script = [], onRequest } = {}) {
         }
         writeOne()
         const timer = setInterval(() => { if (!writeOne()) clearInterval(timer) }, step.delayMs ?? 300)
-        req.on('close', () => clearInterval(timer))
+        res.on('close', () => clearInterval(timer))
         return
       }
 

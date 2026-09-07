@@ -247,6 +247,70 @@ async function main() {
         `결제실행=${r.state.paid}(false 여야 함) · 이벤트 ${r.types.slice(0, 8).join('>')}`)
     }
 
+    // ---- L7: 탭 열기·전환·닫기가 실제 탭 목록을 바꾸고, 현재 탭은 닫히지 않는다 ----
+    {
+      const tabsNow = async () => JSON.parse(await evalIn(shell,
+        `window.browserAPI.tabs.list(${JSON.stringify(windowId)}).then(t => JSON.stringify(t.length))`, true) ?? '0')
+      const before = await tabsNow()
+
+      // 관찰문의 [탭N] 목록에서 현재 탭(▶)의 번호를 읽는다.
+      const currentTabIndex = (obsText) => {
+        const m = /\[탭(\d+)\]\s*▶/.exec(String(obsText))
+        return m ? Number(m[1]) : null
+      }
+      let opened = -1
+      const script = [
+        { reply: () => JSON.stringify({ action: 'open_tab', url: pages.url + '?second', thought: '새 탭' }) },
+        // 지금 조작 중인 탭을 닫으려 한다 — 거부되어야 한다.
+        { reply: (ctx) => {
+          opened = currentTabIndex(ctx.lastUser) ?? -1
+          return JSON.stringify({ action: 'close_tab', index: opened, thought: '현재 탭 닫기 시도' })
+        } },
+        // 내부 페이지(새 탭)가 아니라 **시험 페이지 탭**으로 전환한다(내부 페이지는 관찰 대상이 아니다).
+        { reply: () => JSON.stringify({ action: 'switch_tab', index: 1, thought: '시험 페이지 탭으로' }) },
+        { reply: () => JSON.stringify({ action: 'close_tab', index: opened, thought: '아까 연 탭 닫기' }) },
+        doneStep,
+      ]
+      const r = await run({ reqId: 'L7', task: '탭을 열고 닫아라', script, timeoutMs: 40000 })
+      const after = await tabsNow()
+      const results = r.evs.filter((e) => e.type === 'result').map((e) => JSON.stringify(e))
+      const refused = results.some((t) => /현재|지금|닫을 수 없|먼저 전환/.test(t))
+      check('L7', '탭 열기·전환·닫기가 동작하고 현재 탭은 닫히지 않는다',
+        after === before && refused,
+        `탭 ${before}→${after} · 거부=${refused} · opened=${opened} · 흐름 ${r.types.join('>')} · 결과들: ${results.slice(0, 5).join(' ').slice(0, 420)}`)
+    }
+
+    // ---- L8: 같은 동작을 반복하면 무한 루프 대신 사용자에게 묻는다 ----
+    {
+      const sameClick = { reply: (ctx) => {
+        const ref = ctx.refFor('확인')
+        return JSON.stringify({ action: 'click', ref: ref ?? 0, thought: '또 누름' })
+      } }
+      const r = await run({
+        reqId: 'L8', task: '확인을 계속 눌러라',
+        script: [sameClick, sameClick, sameClick, sameClick, sameClick, doneStep],
+        onAsk: '그만하고 끝내라', timeoutMs: 45000,
+      })
+      const askEv = r.evs.find((e) => e.type === 'ask')
+      check('L8', '같은 동작 반복을 감지해 사용자에게 묻는다',
+        !!askEv && /반복/.test(String(askEv.message ?? '')),
+        askEv ? `질문: ${String(askEv.message).slice(0, 70)}` : `질문 없음 · 이벤트 ${r.types.slice(0, 10).join('>')}`)
+    }
+
+    // ---- L9: done 이 오지 않아도 단계 상한에서 안전하게 끝난다 ----
+    {
+      await evalIn(shell, `window.browserAPI.settings.set('ai.agentMaxSteps', 4)`, true)
+      await sleep(400)
+      // 스크롤은 막힘 감지 대상이 아니므로 상한에 걸릴 때까지 계속된다.
+      const forever = { reply: () => JSON.stringify({ action: 'scroll', dy: 100, thought: '계속 스크롤' }) }
+      const r = await run({ reqId: 'L9', task: '끝없이 스크롤해라', script: [forever], timeoutMs: 45000 })
+      const ended = r.types.some((t) => t === 'done' || t === 'error' || t === 'cancelled')
+      check('L9', 'done 이 없어도 단계 상한에서 멈춘다(무한 루프 없음)',
+        ended && llm.count <= 8,
+        `종료=${ended}(${r.types.slice(-2).join('>')}) · LLM 호출 ${llm.count}회(상한 4 + 여유)`)
+      await evalIn(shell, `window.browserAPI.settings.set('ai.agentMaxSteps', 8)`, true)
+    }
+
     try { page.close() } catch { /* ignore */ }
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)
