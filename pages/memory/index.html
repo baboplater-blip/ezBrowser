@@ -130,8 +130,7 @@
           + ' perf 단계(WMI 측정)가 합니다. 아래는 <b>기준선</b>과 마지막 실측값입니다.</p>'
           + '<p class="hint">위 카드의 <b>private bytes</b> 는 Electron 이 주는 <i>커밋 기준</i> 값이라'
           + ' 예산에 쓰는 WMI <i>private working set</i> 과 다릅니다(보통 더 큼). 지표를 섞어 비교하지 마세요.</p>'
-          + budgetLine('빈 창 RSS — adblock 제외 (판정 1순위)', '≤ 155MB', '하네스 실측 145MB', true)
-          + budgetLine('빈 창 RSS — 총계 (참고·추세)', '≤ 250MB', '하네스 실측 249MB · 그중 adblock ≈104MB', true)
+          + budgetRows(m.perfBaseline)
           + budgetLine('메인 프로세스 private bytes (지금)', '참고 지표', mainPriv + ' MB', true)
           + budgetLine('휴식 시 CPU', '≤ 0.5%', m.totals.avgCpu + ' %', m.totals.avgCpu <= 0.5)
           + budgetLine('백그라운드 슬립', '30분 비활성 → discard', m.sleep.enabled ? '✓ 활성' : '✗ 비활성', m.sleep.enabled)
@@ -173,6 +172,35 @@
           + '<div class="label">' + label + '</div>'
           + '<div class="value">' + value + (unit ? '<span class="unit">' + unit + '</span>' : '') + '</div>'
           + '</div>'
+      }
+
+      // 기준선은 빌드 시점에 구운 실측값(build/gen-perf-baseline.mjs)을 쓴다.
+      // 하드코딩된 숫자는 시간이 지나면 낡고, 낡은 숫자는 없는 것만 못하다.
+      function budgetRows(b) {
+        if (!b || !b.latest) {
+          return budgetLine('빈 창 RSS 기준선', '측정 필요',
+            'npm run verify:full 로 측정하면 여기에 실측값이 표시됩니다', false)
+        }
+        const L = b.latest, M = b.medianOfRecent || {}, B = b.budgets || {}
+        const when = L.at ? new Date(L.at).toLocaleString() : '시각 미상'
+        const noAd = (L.noAdblockMB != null)
+          ? L.noAdblockMB + ' MB' + (M.noAdblockMB != null ? ' (최근 ' + M.samples + '회 중앙값 ' + M.noAdblockMB + ')' : '')
+          : '미측정 — 다음 verify:full 부터 기록됩니다'
+        const total = (L.totalMB != null)
+          ? L.totalMB + ' MB'
+            + (L.adblockCostMB != null ? ' · 그중 adblock ' + L.adblockCostMB + 'MB' : '')
+            + (M.totalMB != null ? ' (최근 ' + M.samples + '회 중앙값 ' + M.totalMB + ')' : '')
+          : '미측정'
+        return ''
+          + budgetLine('빈 창 RSS — adblock 제외 (판정 1순위)', '≤ ' + (B.noAdblockMB ?? 155) + ' MB',
+              noAd, L.noAdblockMB == null ? true : L.noAdblockMB <= (B.noAdblockMB ?? 155))
+          + budgetLine('빈 창 RSS — 총계 (참고·추세)', '≤ ' + (B.totalMB ?? 250) + ' MB',
+              total, L.totalMB == null ? true : L.totalMB <= (B.totalMB ?? 250))
+          + (L.coldStartMs != null
+              ? budgetLine('콜드 스타트 (마지막 실측)', '≤ 2000 ms', L.coldStartMs + ' ms', L.coldStartMs <= 2000)
+              : '')
+          + '<p class="hint">위 세 줄은 <b>' + when + '</b> 의 하네스 실측값입니다'
+            + ' (빌드 시점에 주입 — <code>npm run verify:full</code> 을 돌리면 갱신됩니다).</p>'
       }
 
       function budgetLine(name, target, current, met) {

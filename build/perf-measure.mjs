@@ -861,6 +861,11 @@ async function main() {
     perTabPrivateMB: longSession.perTabPrivateMB ?? null,
     coldStartAvgMs: cold?.avg ?? null,
     spreadMB: longSession.baselineSeries?.spread ?? null,
+    // 판정 1순위 축(adblock 제외)과 adblock 비용도 함께 남긴다 — 이력만 보고도 2축을 알 수 있게.
+    noAdblockMB: noAdblock?.ok ? (noAdblock.baseline?.totalPrivateWorkingSetMB ?? null) : null,
+    adblockCostMB: (noAdblock?.ok && longSession.baseline)
+      ? Math.round((longSession.baseline.totalPrivateWorkingSetMB - noAdblock.baseline.totalPrivateWorkingSetMB) * 10) / 10
+      : null,
   }
   const samePath = history.filter((h) => h.path === entry.path && Number.isFinite(h.blankPrivateMB))
   if (samePath.length >= 2 && typeof entry.blankPrivateMB === 'number') {

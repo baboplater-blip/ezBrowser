@@ -1501,3 +1501,11 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **기록 조건도 함께 변경**: status.md 자동 기록은 **완전한 게이트 실행**(`--only`·`--skip-build` 없이 돌린 `verify` 또는 `verify:full`)에서 수행 — 개발 중 부분 실행은 status.md 를 흔들지 않는다.
   - **`--full` 실행 전 안내 출력**: "실제 창을 여러 번 띄우고 약 10분 걸립니다 · 화면을 쓰셔야 하면 `npm run verify` 로 충분합니다".
   - 검증: `npm run verify` **4/4 PASS · 31초**(자동 기록 확인) · 부분 실행(`--only ... --skip-build`) 미기록 확인.
+- 2026-09-07: **auto-dev 임무 14 — `browser://memory` 기준선 하드코딩 제거(빌드 시점 실측 주입)**.
+  - **문제**: 임무 9에서 메모리 페이지의 거짓 판정은 고쳤지만, 그 자리에 넣은 실측값(145/249MB)이 **하드코딩**이었다. 시간이 지나면 낡고, **낡은 숫자는 없는 것만 못하다.**
+  - **설계 판단**: 이력 파일(`perf-out/perf-history.json`)은 **개발 머신 산출물**이라 설치된 앱이 읽을 수 없다 → `oss-licenses.json`(npm run licenses) 과 **같은 방식으로 빌드 시점에 구워** 앱에 넣는다.
+  - **`build/gen-perf-baseline.mjs`(신규)**: 이력에서 **웜 경로 최신 1회 + 최근 10회 중앙값**을 뽑아 `app/main/storage/perf-baseline.json` 생성(gitignore). 이력이 없으면(클론 직후) 조용히 건너뛰고 페이지는 "측정 필요"를 보인다. `npm run build` 파이프라인에 편입.
+  - **perf 이력에 2축 값 추가**: `noAdblockMB`·`adblockCostMB` 를 함께 기록 — 이력만 보고도 판정 1순위 축을 알 수 있다. 실측 확인: `{path:'warm', total:250, noAdblock:147, adblockCost:103}`.
+  - **페이지**: 하드코딩 3줄 → `budgetRows(m.perfBaseline)` 로 교체. 최신값·최근 중앙값·adblock 비용·콜드 스타트를 함께 보이고, **측정 시각과 "verify:full 로 갱신된다"**를 명시. 기준선이 없으면 "npm run verify:full 로 측정하면 여기에 표시됩니다".
+  - **예산 상수 이중화 주의**: `gen-perf-baseline.mjs` 의 `BUDGETS` 는 `perf-measure.mjs` 의 `BUDGET` 과 같은 값이어야 한다(어긋나면 페이지가 거짓말을 한다) — 양쪽 주석에 명시.
+  - **검증**: CDP 로 `browser://memory` 실기 확인(주입값 렌더·하드코딩 145 사라짐·콜드 스타트 줄 추가) · perf 1회로 2축 이력 생성·기준선 재생성 확인 · 종결 게이트 `npm run verify` **4/4 PASS · 31초**.

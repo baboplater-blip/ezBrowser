@@ -16,6 +16,22 @@ interface LicenseEntry {
 
 let licenseCache: LicenseEntry[] | null = null
 
+/**
+ * 빌드 시점에 구운 성능 기준선(`build/gen-perf-baseline.mjs` 산출물).
+ * 없으면 null — 페이지는 "측정 기록 없음"을 보인다. 하드코딩된 숫자는 낡으면 거짓말이 된다.
+ */
+let perfBaselineCache: unknown | null | undefined
+async function loadPerfBaseline(): Promise<unknown | null> {
+  if (perfBaselineCache !== undefined) return perfBaselineCache ?? null
+  try {
+    const file = path.join(app.getAppPath(), 'app', 'main', 'storage', 'perf-baseline.json')
+    perfBaselineCache = JSON.parse(await readFile(file, 'utf-8'))
+  } catch {
+    perfBaselineCache = null
+  }
+  return perfBaselineCache ?? null
+}
+
 async function loadLicenses(): Promise<LicenseEntry[]> {
   if (licenseCache) return licenseCache
   try {
@@ -127,7 +143,8 @@ const bootTime = Date.now()
 export function registerSystemIpc(): void {
   ipcMain.handle(IPC.system.metrics, async (e) => {
     if (!isTrustedSender(e)) return null
-    return collectMetrics()
+    const m = await collectMetrics()
+    return { ...m, perfBaseline: await loadPerfBaseline() }
   })
 
   ipcMain.handle(IPC.system.bootInfo, (e) => {
