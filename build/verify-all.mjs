@@ -453,6 +453,30 @@ async function main() {
   const failed = rows.filter((r) => r.status !== 'PASS')
   console.log(`통과 ${rows.length - failed.length}/${rows.length}${notRun ? ` (중단으로 미실행 ${notRun})` : ''} · 총 ${fmtDuration(summary.ms)}`)
   console.log(`결과: ${path.join(args.outRoot, 'verify-all-results.json')}`)
+
+  // ── 보고서용 요약 블록 ──────────────────────────────────────────────────
+  // 라운드 종결 절차(CLAUDE.md 품질 게이트)는 "돌리고 결과를 보고서에 붙인다"이다.
+  // 사람이 표를 손으로 옮겨 적게 하면 그 단계가 조용히 생략된다 — 붙여넣을 수 있는 형태로 준다.
+  const icon = (st) => (st === 'PASS' ? '✅' : st === 'TIMEOUT' ? '⏱️' : st === 'BLOCKED' ? '⛔' : '❌')
+  const md = [
+    '',
+    '── 보고서에 붙일 요약 (마크다운) ' + '─'.repeat(28),
+    '',
+    `**\`npm run verify${modeLabel === 'full' ? ':full' : ''}\` — ${rows.length - failed.length}/${rows.length} PASS · ${fmtDuration(summary.ms)}** (${new Date(startedAt).toISOString().slice(0, 16).replace('T', ' ')})`,
+    '',
+    '| 단계 | 상태 | 소요 | 상세 |',
+    '|------|------|------|------|',
+    ...rows.map((r) => `| ${r.id} | ${icon(r.status)} ${r.status} | ${fmtDuration(r.ms)} | ${r.detail} |`),
+    ...(notRun ? ['', `> 중단으로 미실행: ${notRun}단계`] : []),
+    ...(failed.length ? ['', `> 실패: ${failed.map((f) => `\`${f.id}\`(${f.status})`).join(', ')} — 로그: \`${args.outRoot}\``] : []),
+    '─'.repeat(60),
+    '',
+  ].join('\n')
+  console.log(md)
+  try {
+    fs.writeFileSync(path.join(args.outRoot, 'verify-all-summary.md'), md)
+    console.log(`요약 파일: ${path.join(args.outRoot, 'verify-all-summary.md')}`)
+  } catch { /* best-effort */ }
   if (failed.length) console.log(`실패 단계: ${failed.map((f) => `${f.id}(${f.status})`).join(', ')}`)
 
   return (failed.length || notRun) ? 1 : 0
