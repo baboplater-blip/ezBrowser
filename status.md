@@ -93,21 +93,41 @@
 
 ### 최신 실행
 
-**`npm run verify` — 8/8 PASS · 32s** (2026-09-07 12:30)
+**`npm run verify:full` — 27/27 PASS · 17m 56s** (2026-09-07 12:41)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
 | typecheck | ✅ PASS | 4s | 종료코드 0 |
 | build | ✅ PASS | 5s | 종료코드 0 |
-| package | ✅ PASS | 6s | 종료코드 0 |
+| package | ✅ PASS | 7s | 종료코드 0 |
 | smoke | ✅ PASS | 13s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
 | editor-text | ✅ PASS | 0s | PASS 5 |
 | agent-gate | ✅ PASS | 0s | PASS 8 |
 | ai-providers | ✅ PASS | 0s | PASS 4 |
+| agent-loop | ✅ PASS | 16s | PASS 17 |
+| agent-repeat | ✅ PASS | 3m 47s | PASS 4 |
+| feed-collector | ✅ PASS | 27s | PASS 8 |
+| agent-triggers | ✅ PASS | 37s | PASS 5 |
+| ai-errors | ✅ PASS | 13s | PASS 8 |
+| agent-safety | ✅ PASS | 1m 14s | PASS 14 |
+| memory-page | ✅ PASS | 11s | PASS 6 |
+| settings-welcome | ✅ PASS | 16s | PASS 8 |
+| settings-deep | ✅ PASS | 6s | PASS 6 |
+| corrupt-profile | ✅ PASS | 10s | PASS 4 |
+| error-boundary | ✅ PASS | 5s | PASS 2 |
+| internal-pages | ✅ PASS | 1m 10s | PASS 26 |
+| input-guards | ✅ PASS | 4s | PASS 9 |
+| fingerprint | ✅ PASS | 3s | 종료코드 0 |
+| session-restore | ✅ PASS | 21s | PASS 17 |
+| dl-matrix | ✅ PASS | 16s | PASS 10 · SKIP 1 |
+| ext-matrix | ✅ PASS | 43s | 종료코드 0 |
+| stress | ✅ PASS | 2m 10s | 종료코드 0 |
+| perf | ✅ PASS | 4m 55s | 종료코드 0 |
 
 ### 최근 10회
 
+- 2026-09-07 12:41 · `full` · **27/27 PASS** · 17m 56s
 - 2026-09-07 12:30 · `quick` · **8/8 PASS** · 32s
 - 2026-09-07 11:33 · `quick` · **8/8 PASS** · 36s
 - 2026-09-07 11:25 · `quick` · **8/8 PASS** · 35s
@@ -117,7 +137,6 @@
 - 2026-09-07 09:48 · `quick` · **7/7 PASS** · 34s
 - 2026-09-07 09:34 · `quick` · **7/7 PASS** · 34s
 - 2026-09-07 08:26 · `quick` · **7/7 PASS** · 38s
-- 2026-09-07 07:38 · `quick` · **6/6 PASS** · 1m 12s
 
 <!-- verify-all:end -->
 
