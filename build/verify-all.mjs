@@ -88,6 +88,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '설정 되돌릴 수 없는 동작 — 내보내기/가져오기·키맵 D1~D3·K1~K3',
     },
     {
+      id: 'internal-pages', kind: 'harness', modes: ['full'],
+      script: 'verify-internal-pages-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'internal-pages', 'internal-pages-results.json'),
+      timeoutMs: 12 * 60000, desc: 'browser:// 내부 페이지 22종이 오류 없이 내용을 보이는가',
+    },
+    {
       id: 'input-guards', kind: 'harness', modes: ['full'],
       script: 'verify-input-guards-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'input-guards', 'input-guards-results.json'),

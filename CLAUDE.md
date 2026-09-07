@@ -1560,3 +1560,12 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - 이때 **하네스 자체의 결함도 드러났다**: 저장 직후 `remove` 로 정리하는 바람에 **이탈 삭제가 흔적까지 지워** 파일 검사가 0건으로 보였다(저장은 이탈했는데). → 파일 검사를 **정리 이전**으로 옮겼다. 정리 코드가 증거를 지우면 그 검사는 통과만 한다.
   - **훑고 문제 없다고 확인한 곳**: 매크로(단일 `macros.json`, id 가 파일명 아님) · Mod(경로는 디렉터리 스캔 결과) · AI 대화·기억·저장작업(`String()` 강제 변환) · 위젯 데이터(키 화이트리스트) · 설정 `setNestedSetting`(dot-prop 6 이 `__proto__` 차단) · `ipcMain.on` 사용 0(모든 핸들러가 invoke 라 예외가 앱을 죽이지 않는다).
   - **검증**: `verify:full` 15/15 · input-guards **9/9**(G9 음성 대조 확인) · `npm run verify` 4/4 · typecheck 3/3.
+- 2026-09-07: **임무 21 — browser:// 내부 페이지 22종 전수 점검 하네스**. 내부 페이지는 20개가 넘는데 검증이 있는 건 settings·welcome·memory 셋뿐이었다. 그 셋을 실제로 대조했을 때 **각각 결함이 나왔으므로**(메모리 페이지의 거짓 예산 판정, 키맵 저장 결함) 나머지도 봐야 했다.
+  - **[build/verify-internal-pages-cdp.mjs](browser-build/build/verify-internal-pages-cdp.mjs)(신규)**: 페이지마다 탭을 열고 **새로고침해 로드 처음부터** ① 자바스크립트 예외·`console.error` ② 본문이 비었는지 ③ 그 페이지의 필수 요소가 있는지 ④ 치환 안 된 자리표시자(`__MSG_`·`{{ }}`·`[object Object]`·`undefined`·`NaN`)가 새는지를 본다. `verify-all --full` 에 `internal-pages` 로 등록(22종, 약 1분).
+  - **결과 22/22 PASS — 이번엔 제품 결함이 없었다.** 모든 내부 페이지가 오류 없이 내용을 보인다.
+  - **하네스 자신의 결함 2건을 먼저 잡았다**(둘 다 제품이 아니라 테스트 문제):
+    - `tabs.create` 는 `(windowId, url)` 인데 **객체 하나로 불렀다** → 21개 페이지가 "로드 실패"로 보였다. 시작 탭이 newtab 이라 그 하나만 통과해 **거짓 실패**가 그럴듯해 보였다. 기존 하네스(`verify-memory-page`)의 호출부와 대조해 정정.
+    - 없는 페이지(`browser://no-such-page`)가 **PASS 했다** — 앱은 정상으로 `text/plain` 404 를 주는데 하네스가 그걸 페이지로 셌다. `document.contentType === 'text/html'` 조건 추가.
+  - **음성 대조로 검출력 확인**: 필수 요소를 있을 수 없는 선택자로 바꾸면 FAIL(`필수요소=false`), 없는 페이지는 `HTML 아님(text/plain)` 으로 FAIL. **아무것도 못 찾은 검사는 먼저 스스로를 의심해야 한다.**
+  - **범위**: 빈 프로필 기준이라 목록형 페이지(이력·북마크·매크로)는 "빈 상태" 를 본다. 데이터가 있을 때의 렌더는 이 하네스가 보지 않는다(다음 후보).
+  - **검증**: internal-pages 22/22 · `npm run verify` 4/4(스모크 16/16) · typecheck 3/3.
