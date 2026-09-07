@@ -25,6 +25,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { connectSession, getTargetList, waitForPortFree, connectShellSessionReady, ensureSessionReady } from './lib/cdp.mjs'
 import { startFakeLlm } from './lib/fake-llm.mjs'
+import { getFreePorts } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(__dirname, '..')
@@ -50,11 +51,14 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>에이전트 시험</t
 <button id="ok">확인</button>
 <button id="pay">결제하기</button>
 <input id="f" type="file">
+<button id="pub">발행</button>
+<input id="txt" type="text" placeholder="제목">
 <p id="state">대기</p>
 <script>
-  window.__clicked = false; window.__paid = false;
+  window.__clicked = false; window.__paid = false; window.__published = false;
   document.getElementById('ok').onclick = () => { window.__clicked = true; document.getElementById('state').textContent = '눌림' }
   document.getElementById('pay').onclick = () => { window.__paid = true; document.getElementById('state').textContent = '결제됨' }
+  document.getElementById('pub').onclick = () => { window.__published = true; document.getElementById('state').textContent = '발행됨' }
 </script></body>`
 
 function startPageServer(port) {
@@ -83,6 +87,8 @@ async function main() {
   if (!fs.existsSync(EXE)) throw new Error(`패키지 없음: ${EXE}`)
   fs.mkdirSync(args.out, { recursive: true })
   await waitForPortFree(args.port)
+  // 우리가 여는 서버 포트는 **OS 에서 빈 것을 받아** 쓴다 - 고정 포트는 앞선 실행의 잔재와 충돌한다.
+  ;[args.llmPort, args.pagePort] = await getFreePorts(2)
 
   const llm = await startFakeLlm({ port: args.llmPort })
   const pages = await startPageServer(args.pagePort)
@@ -157,11 +163,11 @@ async function main() {
     await ensureSessionReady(page)
 
     /** 한 시나리오 실행: 각본을 걸고 에이전트를 돌린 뒤 이벤트를 모은다. */
-    async function run({ script, reqId, task, onConfirm, onAsk, rows, autoConfirm, timeoutMs = 30000 }) {
+    async function run({ script, reqId, task, onConfirm, onAsk, rows, autoConfirm, readOnly, timeoutMs = 30000 }) {
       llm.setScript(script)
-      await evalIn(page, 'window.__clicked = false; window.__paid = false; true')
+      await evalIn(page, 'window.__clicked = false; window.__paid = false; window.__published = false; true')
       await evalIn(shell, 'window.__ev = []; true')
-      const startArgs = { reqId, tabId, task, ...(rows ? { rows, autoConfirm: !!autoConfirm } : {}) }
+      const startArgs = { reqId, tabId, task, ...(readOnly ? { readOnly: true } : {}), ...(rows ? { rows, autoConfirm: !!autoConfirm } : {}) }
       await evalIn(shell, `window.browserAPI.ai.agentStart(${JSON.stringify(startArgs)})`, true)
 
       const deadline = Date.now() + timeoutMs
@@ -185,6 +191,8 @@ async function main() {
       const state = {
         clicked: await evalIn(page, 'window.__clicked === true'),
         paid: await evalIn(page, 'window.__paid === true'),
+        published: await evalIn(page, 'window.__published === true'),
+        typed: await evalIn(page, '(document.getElementById("txt")?.value ?? "")'),
       }
       return { evs, state, types: evs.map((e) => e.type) }
     }
@@ -362,6 +370,51 @@ async function main() {
         `거부 ${refused}/${expectRefused}건 · 상세: ${res.filter((e) => !e.ok).map((e) => String(e.detail ?? '')).join(' | ').slice(0, 160)}`)
       check('F3', '심링크 탈출 검사를 실제로 수행했다', symlinkOk,
         symlinkOk ? `${linkKind} 로 폴더 밖 링크 생성 — 검사 포함(${linkPath})` : '이 환경에서 심링크를 만들 수 없어 F4 는 건너뜀(권한). 상대·절대 경로 검사만 유효')
+    }
+
+    // ---- NP1: 발행 금지 모드에서 발행 버튼은 **코드로** 막힌다(프롬프트 지시가 아니라) ----
+    {
+      const NO_PUBLISH = '[모드: 발행 금지]'
+      const r = await run({
+        reqId: 'NP1', task: `${NO_PUBLISH} 글을 쓰고 임시저장만 해라`,
+        script: [clickByLabel('발행'), doneStep], timeoutMs: 30000,
+      })
+      const blocked = r.evs.some((e) => e.type === 'result' && e.ok === false
+        && /발행 금지/.test(String(e.detail ?? '')))
+      check('NP1', '발행 금지 모드에서는 발행 버튼이 눌리지 않는다',
+        r.state.published === false && blocked,
+        `발행됨=${r.state.published}(false 여야 함) · 차단 메시지=${blocked}`)
+    }
+
+    // ---- RO1: 읽기 전용에서 입력·JS 실행이 차단되고 페이지가 바뀌지 않는다 ----
+    {
+      const typeStep = { reply: (ctx) => JSON.stringify({ action: 'type', ref: ctx.refFor('제목') ?? 0, text: '침입', thought: '입력 시도' }) }
+      const jsStep = { reply: () => JSON.stringify({ action: 'run_js', code: 'document.getElementById("txt").value = "JS침입"', thought: 'JS 시도' }) }
+      const r = await run({
+        reqId: 'RO1', task: '이 페이지를 살펴보고 보고해라', readOnly: true,
+        script: [typeStep, jsStep, doneStep], timeoutMs: 30000,
+      })
+      const refusals = r.evs.filter((e) => e.type === 'result' && e.ok === false
+        && /읽기 전용/.test(String(e.detail ?? '')))
+      check('RO1', '읽기 전용에서 입력·JS 가 차단되고 페이지가 안 바뀐다',
+        refusals.length >= 2 && String(r.state.typed) === '',
+        `차단 ${refusals.length}건(2 이상이어야 함) · 입력칸 내용="${r.state.typed}"(비어야 함)`)
+    }
+
+    // ---- RO2: 읽기 전용에서도 열람·스크롤은 정상 동작한다(양성 대조) ----
+    {
+      const r = await run({
+        reqId: 'RO2', task: '이 페이지를 읽고 보고해라', readOnly: true,
+        script: [
+          { reply: () => JSON.stringify({ action: 'scroll', dy: 200, thought: '스크롤' }) },
+          { reply: () => JSON.stringify({ action: 'read', thought: '읽기' }) },
+          doneStep,
+        ], timeoutMs: 30000,
+      })
+      const okResults = r.evs.filter((e) => e.type === 'result' && e.ok === true).length
+      check('RO2', '읽기 전용에서도 열람·스크롤은 된다(양성 대조)',
+        okResults >= 1 && r.types.includes('done'),
+        `성공한 동작 ${okResults}건 — 0 이면 RO1 은 "전부 막혀서" 통과한 것이다`)
     }
 
     try { page.close() } catch { /* ignore */ }

@@ -174,6 +174,13 @@ export async function waitForPortFree(port, timeoutMs = 12_000) {
     }
     await sleep(500)
   }
+  // 여기까지 왔다는 것은 누군가 그 포트를 쥐고 있다는 뜻이다.
+  // **누가** 쥐고 있는지 찍어 준다 - 이게 없으면 "앱이 안 뜬다" 로 오해하게 된다(임무 23 실화).
+  try {
+    const { describePortOwner } = await import('./ports.mjs')
+    const owner = describePortOwner(port)
+    if (owner) console.warn(`[cdp] 포트 ${port} 를 ${owner} 가 점유 중 - 앞선 실행의 잔재일 수 있다`)
+  } catch { /* 진단 실패는 무시 */ }
   return false
 }
 
