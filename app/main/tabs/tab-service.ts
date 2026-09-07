@@ -98,6 +98,14 @@ const groups = new Map<string, TabGroup>()
 let groupCounter = 0
 const GROUP_COLORS: TabGroupColor[] = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'orange', 'gray']
 
+// 그룹 색은 세션 스냅샷에 영속되고 외피가 CSS 변수(--group-color)로 쓴다.
+// 렌더러가 보낸 값을 팔레트와 대조해 **아는 색일 때만** 받는다.
+// (2026-09-07 임무 19: 워크스페이스에 같은 결함이 있어 객체 `{}` 가 색으로 저장됐다.
+//  여기는 truthy 검사뿐이라 같은 값이 통과한다.)
+function validGroupColor(v: unknown): TabGroupColor | null {
+  return typeof v === 'string' && (GROUP_COLORS as string[]).includes(v) ? (v as TabGroupColor) : null
+}
+
 interface Pane { tabId: string | null }
 export type SplitDirection = 'h' | 'v'
 interface WindowLayout {
@@ -876,8 +884,9 @@ export function createGroup(
   if (!ctx) return null
   groupCounter += 1
   const id = `group-${groupCounter}`
-  const color = opts?.color ?? GROUP_COLORS[groupCounter % GROUP_COLORS.length]!
-  const group: TabGroup = { id, windowId, title: opts?.title ?? '새 그룹', color, collapsed: false }
+  const color = validGroupColor(opts?.color) ?? GROUP_COLORS[groupCounter % GROUP_COLORS.length]!
+  const title = typeof opts?.title === 'string' && opts.title ? opts.title : '새 그룹'
+  const group: TabGroup = { id, windowId, title, color, collapsed: false }
   groups.set(id, group)
   let wsForReindex: string | undefined
   if (opts?.tabIds) {
@@ -896,7 +905,8 @@ export function updateGroup(groupId: string, patch: { title?: string; color?: Ta
   const g = groups.get(groupId)
   if (!g) return
   if (typeof patch.title === 'string') g.title = patch.title
-  if (patch.color) g.color = patch.color
+  const color = validGroupColor(patch.color)
+  if (color) g.color = color
   emitGroups(g.windowId)
   emitTabList(g.windowId)
 }

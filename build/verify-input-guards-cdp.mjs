@@ -180,6 +180,89 @@ async function main() {
       check('G5', '읽기 목록이 위험한 스킴을 저장하지 않는다', true, '(internalAPI.readlater 미노출 — 건너뜀)')
     }
 
+    // G7 탭 그룹 — 색은 세션 스냅샷에 영속되고 외피가 CSS 변수로 쓴다.
+    //    (2026-09-07 임무 19: updateGroup 의 색이 truthy 검사뿐이라 객체가 통과했다)
+    const g7 = await evaluate(shell, `(async () => {
+      const wid = ${JSON.stringify(windowId)}
+      const g = await window.browserAPI.groups.create(wid, { title: '검증그룹', color: 'blue' })
+      const rows = []
+      for (const patch of [{ color: {} }, { color: 42 }, { color: 'not-a-color' }, { title: 99 }]) {
+        let accepted = false
+        try { await window.browserAPI.groups.update(g.id, patch); accepted = true } catch { accepted = false }
+        rows.push({ patch: JSON.stringify(patch), accepted })
+      }
+      const after = (await window.browserAPI.groups.list(wid)).find((x) => x.id === g.id)
+      // 잘못된 색으로 새 그룹을 만드는 경로도 함께 본다
+      const bad = await window.browserAPI.groups.create(wid, { title: {}, color: {} })
+      const out = {
+        rows,
+        color: after?.color, title: after?.title,
+        colorOk: typeof after?.color === 'string', titleOk: typeof after?.title === 'string',
+        newColorOk: typeof bad?.color === 'string', newTitleOk: typeof bad?.title === 'string',
+      }
+      try { await window.browserAPI.groups.remove(g.id) } catch {}
+      try { await window.browserAPI.groups.remove(bad.id) } catch {}
+      return out
+    })()`)
+    check('G7', '탭 그룹이 타입 틀린 색·제목을 저장하지 않는다',
+      g7.colorOk && g7.titleOk && g7.newColorOk && g7.newTitleOk && g7.color !== 'not-a-color',
+      `색 ${JSON.stringify(g7.color)} · 제목 ${JSON.stringify(g7.title)} · 새 그룹 색 문자열=${g7.newColorOk}`)
+
+    // G8 북마크 — 주소가 문자열이 아니면 저장하지 않는다(북마크 바가 new URL 로 파싱한다)
+    const g8 = await evaluate(shell, `(async () => {
+      const before = await window.browserAPI.bookmarks.list()
+      const rows = []
+      for (const a of [null, { url: 42, title: 'x' }, { url: {}, title: 'x' }, { url: '', title: 'x' }, { url: 'https://ok.example/', title: 77 }]) {
+        let accepted = false
+        try { const r = await window.browserAPI.bookmarks.add(a); accepted = !!r } catch { accepted = false }
+        rows.push({ a: JSON.stringify(a), accepted })
+      }
+      const after = await window.browserAPI.bookmarks.list()
+      const flat = (t) => (t?.bookmarks ?? t ?? [])
+      const items = Array.isArray(after) ? after : flat(after)
+      const bad = (items || []).filter((b) => typeof b?.url !== 'string' || typeof b?.title !== 'string')
+      for (const b of (items || [])) { if (String(b?.url).includes('ok.example')) { try { await window.browserAPI.bookmarks.remove(b.id) } catch {} } }
+      return { rows, badCount: bad.length, listWorks: !!after }
+    })()`)
+    check('G8', '북마크가 문자열 아닌 주소·제목을 저장하지 않는다',
+      g8.listWorks && g8.badCount === 0 && g8.rows.slice(0, 4).every((r) => !r.accepted),
+      `잘못된 항목 ${g8.badCount}건 · 비문자열 거부 ${g8.rows.slice(0, 4).filter((r) => !r.accepted).length}/4 · 정상 1건 수락=${g8.rows[4]?.accepted}`)
+
+    // G9 경로 이탈 — id 가 그대로 파일 이름이 된다. `../..` 이 프로필 밖에 쓰거나 지우면 안 된다.
+    const g9 = await evaluate(page, `(async () => {
+      const rows = []
+      for (const id of ['../../escaped-policy', '..\\escaped2', 'C:/Windows/evil', 'ok-normal-id']) {
+        let savedId = null, err = null
+        try { const r = await window.internalAPI.policy.save({ id, name: '탈출시도', match: ['*://x/*'] }); savedId = r?.id ?? null }
+        catch (e) { err = String(e && e.message || e) }
+        rows.push({ id, savedId, err })
+        // 여기서 지우지 않는다 — 지우면 이탈 삭제가 흔적까지 없애 파일 검사가 무의미해진다.
+        // (2026-09-07 음성 대조에서 실제로 그랬다: 저장은 이탈했는데 파일 0건으로 보였다.)
+      }
+      // 프로필 밖 삭제도 시도 — 조용히 무시되어야 한다(예외로 앱이 죽어도 안 된다)
+      let removeSurvived = true
+      try { await window.internalAPI.policy.remove('../../../anything') } catch { removeSurvived = false }
+      const listWorks = Array.isArray(await window.internalAPI.policy.list())
+      return { rows, removeSurvived, listWorks }
+    })()`)
+    const escapedIds = g9.rows.slice(0, 3).filter((r) => r.savedId && /[\/]|\.\./.test(r.savedId))
+    // 프로필 디렉터리 **밖**에 파일이 생겼는지 실제로 확인한다
+    // 정리 **전에** 프로필 밖을 본다.
+    const profileParent = path.dirname(profileDir)
+    const strayFiles = fs.existsSync(profileParent)
+      ? fs.readdirSync(profileParent).filter((f) => /escaped|evil/i.test(f))
+      : []
+    for (const f of strayFiles) { try { fs.unlinkSync(path.join(profileParent, f)) } catch { /* 정리 실패는 무시 */ } }
+    // 정상 id 로 만든 룰만 되돌린다
+    await evaluate(page, `(async () => {
+      const ok = (await window.internalAPI.policy.list()).filter((r) => r.name === '탈출시도')
+      for (const r of ok) { try { await window.internalAPI.policy.remove(r.id) } catch {} }
+      return ok.length
+    })()`).catch(() => null)
+    check('G9', '정책 id 가 프로필 밖으로 파일을 쓰거나 지우지 못한다',
+      escapedIds.length === 0 && strayFiles.length === 0 && g9.listWorks,
+      `이탈 id 저장 ${escapedIds.length}건 · 프로필 밖 파일 ${strayFiles.length}건 · 정상 id 저장=${!!g9.rows[3]?.savedId}`)
+
     // G6 전체 생존 — 찌른 뒤에도 앱이 살아 있고 기본 동작이 되는가
     const alive = await evaluate(shell, `(async () => {
       const tabs = await window.browserAPI.tabs.list(${JSON.stringify(windowId)})
@@ -190,7 +273,7 @@ async function main() {
       alive.tabs > 0 && typeof alive.density === 'string',
       `탭 ${alive.tabs}개 · 설정 읽기 "${alive.density}"`)
 
-    fs.writeFileSync(path.join(args.out, 'probe-detail.json'), JSON.stringify({ g1, g2, g3, g4, g5 }, null, 2))
+    fs.writeFileSync(path.join(args.out, 'probe-detail.json'), JSON.stringify({ g1, g2, g3, g4, g5, g7, g8, g9 }, null, 2))
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)
   } finally {

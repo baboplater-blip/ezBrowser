@@ -116,14 +116,26 @@ async function loadAll(): Promise<void> {
   loaded = true
 }
 
+
+// id 는 그대로 파일 이름이 된다. `../..` 같은 값이 오면 프로필 **밖**에 쓰거나 지운다.
+// 파일을 만지는 두 함수에서 막는다 — 어느 호출자를 거쳐도 새지 않게.
+// (2026-09-07 임무 19: 데이터 가져오기에는 같은 방어가 있었는데 여기엔 없었다.)
+function safeId(id: unknown): string | null {
+  return typeof id === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(id) && !id.includes('..') ? id : null
+}
+
 async function persist(us: Userscript): Promise<void> {
+  const safe = safeId(us.id)
+  if (!safe) throw new Error('저장 id 가 올바르지 않습니다')
   await ensureDir()
-  const p = path.join(dir(), `${us.id}.json`)
+  const p = path.join(dir(), `${safe}.json`)
   await writeFile(p, JSON.stringify(us, null, 2), 'utf-8')
 }
 
 async function removeFile(id: string): Promise<void> {
-  const p = path.join(dir(), `${id}.json`)
+  const safe = safeId(id)
+  if (!safe) return
+  const p = path.join(dir(), `${safe}.json`)
   if (existsSync(p)) await unlink(p)
 }
 
