@@ -18,17 +18,24 @@
 // ⚠ 세션당 webRequest 리스너는 **하나만** 유효하다(회귀 #5 계열). 그래서 이 모듈은 리스너를
 //    직접 걸지 않고 **순수 판정 함수**만 제공하고, adblock 모듈의 단일 리스너가 호출한다.
 
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 
 type ActionType = 'block' | 'allow' | 'redirect' | 'upgradeScheme' | 'allowAllRequests' | 'modifyHeaders'
 
+interface HeaderOp { header?: string; operation?: string; value?: string }
+
 interface RawRule {
   id?: number
   priority?: number
-  action?: { type?: string; redirect?: { url?: string; extensionPath?: string } }
+  action?: {
+    type?: string
+    redirect?: { url?: string; extensionPath?: string }
+    requestHeaders?: HeaderOp[]
+    responseHeaders?: HeaderOp[]
+  }
   condition?: {
     urlFilter?: string
     regexFilter?: string
@@ -51,6 +58,8 @@ interface CompiledRule {
   action: ActionType
   redirectUrl?: string
   redirectExtensionPath?: string
+  requestHeaders?: HeaderOp[]
+  responseHeaders?: HeaderOp[]
   test: (url: string) => boolean
   resourceTypes?: Set<string>
   excludedResourceTypes?: Set<string>
@@ -60,7 +69,37 @@ interface CompiledRule {
   excludedRequestDomains?: string[]
 }
 
+let staticRules: CompiledRule[] = []
+// 확장이 런타임에 넣는 룰. dynamic 은 **재시작 후에도 유지**(크롬과 같다), session 은 메모리만.
+const dynamicRaw = new Map<string, RawRule[]>()
+const sessionRaw = new Map<string, RawRule[]>()
+let dynamicCompiled: CompiledRule[] = []
+let sessionCompiled: CompiledRule[] = []
+// 매칭에 쓰는 최종 목록(정적 + 동적 + 세션을 우선순위로 정렬해 합친 것).
 let rules: CompiledRule[] = []
+
+function rankOf(a: CompiledRule): number {
+  return a.action === 'allow' || a.action === 'allowAllRequests' ? 0 : 1
+}
+
+function rebuildMerged(): void {
+  rules = [...staticRules, ...dynamicCompiled, ...sessionCompiled]
+    .sort((a, b) => (b.priority - a.priority) || (rankOf(a) - rankOf(b)))
+}
+
+function compileList(extId: string, list: RawRule[]): CompiledRule[] {
+  const out: CompiledRule[] = []
+  for (const raw of list) { const c = compile(extId, raw); if (c) out.push(c) }
+  return out
+}
+
+function recompileRuntime(): void {
+  dynamicCompiled = []
+  for (const [id, list] of dynamicRaw) dynamicCompiled.push(...compileList(id, list))
+  sessionCompiled = []
+  for (const [id, list] of sessionRaw) sessionCompiled.push(...compileList(id, list))
+  rebuildMerged()
+}
 
 export function dnrRuleCount(): number { return rules.length }
 
@@ -113,8 +152,6 @@ function compile(extId: string, raw: RawRule): CompiledRule | null {
   const c = raw.condition ?? {}
   const type = String(raw.action?.type ?? '') as ActionType
   if (!type) return null
-  // 아직 지원하지 않는 액션은 조용히 건너뛴다(있는 척하지 않는다).
-  if (type === 'modifyHeaders') return null
 
   let test: (url: string) => boolean
   if (typeof c.regexFilter === 'string' && c.regexFilter) {
@@ -136,6 +173,8 @@ function compile(extId: string, raw: RawRule): CompiledRule | null {
     action: type,
     redirectUrl: raw.action?.redirect?.url,
     redirectExtensionPath: raw.action?.redirect?.extensionPath,
+    requestHeaders: Array.isArray(raw.action?.requestHeaders) ? raw.action.requestHeaders : undefined,
+    responseHeaders: Array.isArray(raw.action?.responseHeaders) ? raw.action.responseHeaders : undefined,
     test,
     resourceTypes: Array.isArray(c.resourceTypes) ? new Set(c.resourceTypes) : undefined,
     excludedResourceTypes: Array.isArray(c.excludedResourceTypes) ? new Set(c.excludedResourceTypes) : undefined,
@@ -194,10 +233,72 @@ export async function reloadDnrRules(disabledIds?: Set<string>): Promise<number>
   }
 
   // 우선순위가 높은 것부터. 같은 우선순위면 allow 계열이 먼저 오게 해 block 을 이긴다.
-  const rank = (a: CompiledRule): number => (a.action === 'allow' || a.action === 'allowAllRequests' ? 0 : 1)
-  next.sort((a, b) => (b.priority - a.priority) || (rank(a) - rank(b)))
-  rules = next
-  return rules.length
+  staticRules = next
+  rebuildMerged()
+  return staticRules.length
+}
+
+// ===== 동적·세션 룰 (chrome.declarativeNetRequest.updateDynamicRules 등) =====
+
+const DYN_FILE = (): string => path.join(app.getPath('userData'), 'dnr-dynamic.json')
+
+/** 디스크에 저장된 동적 룰을 읽어 온다(부팅 시 1회). */
+export async function loadDynamicRules(): Promise<void> {
+  try {
+    const raw = JSON.parse(await readFile(DYN_FILE(), 'utf-8')) as Record<string, RawRule[]>
+    for (const [id, list] of Object.entries(raw)) if (Array.isArray(list)) dynamicRaw.set(id, list)
+  } catch { /* 없으면 그만 */ }
+  recompileRuntime()
+}
+
+let saveTimer: NodeJS.Timeout | null = null
+function scheduleSave(): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    const obj: Record<string, RawRule[]> = {}
+    for (const [id, list] of dynamicRaw) obj[id] = list
+    void writeFile(DYN_FILE(), JSON.stringify(obj), 'utf-8').catch(() => undefined)
+  }, 300)
+}
+
+const MAX_RUNTIME_RULES = 30000
+
+/** 확장이 룰을 추가·제거한다. 크롬과 같은 의미: 먼저 removeRuleIds, 그다음 addRules. */
+export function updateRuntimeRules(
+  extId: string, scope: 'dynamic' | 'session',
+  args: { addRules?: RawRule[]; removeRuleIds?: number[] },
+): { ok: boolean; count: number; error?: string } {
+  if (!extId) return { ok: false, count: 0, error: '확장 id 없음' }
+  const store = scope === 'dynamic' ? dynamicRaw : sessionRaw
+  const cur = store.get(extId) ?? []
+  const removeSet = new Set((args.removeRuleIds ?? []).map((n) => Number(n)))
+  let next = cur.filter((r) => !removeSet.has(Number(r?.id)))
+  if (Array.isArray(args.addRules)) {
+    // 같은 id 를 다시 넣으면 교체한다(크롬은 중복 id 를 오류로 보지만, 관대한 쪽이 안전하다).
+    const addIds = new Set(args.addRules.map((r) => Number(r?.id)))
+    next = next.filter((r) => !addIds.has(Number(r?.id)))
+    next = next.concat(args.addRules.filter((r) => r && typeof r === 'object'))
+  }
+  if (next.length > MAX_RUNTIME_RULES) {
+    return { ok: false, count: cur.length, error: `룰이 너무 많습니다(최대 ${MAX_RUNTIME_RULES})` }
+  }
+  store.set(extId, next)
+  recompileRuntime()
+  if (scope === 'dynamic') scheduleSave()
+  return { ok: true, count: next.length }
+}
+
+export function getRuntimeRules(extId: string, scope: 'dynamic' | 'session'): RawRule[] {
+  return (scope === 'dynamic' ? dynamicRaw : sessionRaw).get(extId) ?? []
+}
+
+/** 확장이 제거되면 그 확장의 런타임 룰도 함께 버린다. */
+export function dropRuntimeRules(extId: string): void {
+  dynamicRaw.delete(extId)
+  sessionRaw.delete(extId)
+  recompileRuntime()
+  scheduleSave()
 }
 
 export interface DnrDetails {
@@ -250,9 +351,96 @@ export function dnrDecide(details: DnrDetails): DnrDecision {
         }
         return null
       }
+      case 'modifyHeaders':
+        // 헤더만 바꾸는 룰은 요청을 막지 않는다 — 아래 헤더 함수가 따로 적용한다.
+        continue
       default:
         return null
     }
   }
   return null
+}
+
+// ===== modifyHeaders =====
+// 크롬 DNR 의 헤더 변형(set·remove·append). 요청 헤더는 onBeforeSendHeaders,
+// 응답 헤더는 onHeadersReceived 에서 적용한다 — 둘 다 세션당 리스너가 하나뿐이라
+// 기존 소유자(policy·adblock)가 이 함수를 호출하는 팬아웃 구조를 쓴다.
+
+function matchesRule(r: CompiledRule, details: DnrDetails): boolean {
+  const rt = toDnrResourceType(String(details.resourceType ?? ''))
+  const initiator = hostOf(details.frame?.url ?? details.referrer ?? '')
+  const reqHost = hostOf(details.url)
+  if (r.resourceTypes && rt && !r.resourceTypes.has(rt)) return false
+  if (r.excludedResourceTypes && rt && r.excludedResourceTypes.has(rt)) return false
+  if (r.requestDomains && !domainMatches(reqHost, r.requestDomains)) return false
+  if (r.excludedRequestDomains && domainMatches(reqHost, r.excludedRequestDomains)) return false
+  if (r.initiatorDomains && initiator && !domainMatches(initiator, r.initiatorDomains)) return false
+  if (r.excludedInitiatorDomains && initiator && domainMatches(initiator, r.excludedInitiatorDomains)) return false
+  return r.test(details.url)
+}
+
+// 요청 헤더는 문자열만, 응답 헤더는 배열도 가능 — Electron 의 실제 타입에 맞춘다.
+type ReqHeaders = Record<string, string>
+type ResHeaders = Record<string, string | string[]>
+
+/** 헤더 이름은 대소문자를 가리지 않는다 — 실제 키를 찾아 준다. */
+function findKey(headers: Record<string, unknown>, name: string): string | undefined {
+  const lower = name.toLowerCase()
+  return Object.keys(headers).find((k) => k.toLowerCase() === lower)
+}
+
+function applyOps<T extends Record<string, string | string[]>>(headers: T, ops: HeaderOp[]): T {
+  const out = { ...headers } as Record<string, string | string[]>
+  for (const op of ops) {
+    const name = String(op?.header ?? '').trim()
+    if (!name) continue
+    const key = findKey(out, name)
+    switch (String(op?.operation ?? '')) {
+      case 'remove':
+        if (key) delete out[key]
+        break
+      case 'set':
+        if (key) delete out[key]
+        out[name] = String(op.value ?? '')
+        break
+      case 'append': {
+        const v = String(op.value ?? '')
+        if (key) {
+          const cur = out[key]
+          out[key] = Array.isArray(cur) ? [...cur, v] : [String(cur), v]
+        } else out[name] = v
+        break
+      }
+      default: break
+    }
+  }
+  return out as T
+}
+
+/** 확장 룰에 따른 **요청** 헤더 변형. 바뀐 게 없으면 원본을 그대로 돌려준다. */
+export function dnrRequestHeaders(details: DnrDetails, headers: ReqHeaders | undefined): ReqHeaders | undefined {
+  if (!headers || !rules.length) return headers
+  let out = headers
+  let touched = false
+  for (const r of rules) {
+    if (r.action !== 'modifyHeaders' || !r.requestHeaders) continue
+    if (!matchesRule(r, details)) continue
+    out = applyOps(out, r.requestHeaders)
+    touched = true
+  }
+  return touched ? out : headers
+}
+
+/** 확장 룰에 따른 **응답** 헤더 변형. */
+export function dnrResponseHeaders(details: DnrDetails, headers: ResHeaders | undefined): ResHeaders | undefined {
+  if (!headers || !rules.length) return headers
+  let out = headers
+  let touched = false
+  for (const r of rules) {
+    if (r.action !== 'modifyHeaders' || !r.responseHeaders) continue
+    if (!matchesRule(r, details)) continue
+    out = applyOps(out, r.responseHeaders)
+    touched = true
+  }
+  return touched ? out : headers
 }

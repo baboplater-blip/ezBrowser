@@ -7,7 +7,7 @@ import type { AdblockRecentBlock, AdblockStats } from '../../../shared/types'
 import { getSetting, setNestedSetting } from '../../storage/settings'
 import { addSessionInitHook, forEachInstalledSession } from '../../session-bootstrap'
 import { applyToResponseHeaders } from '../policy'
-import { dnrDecide } from '../extensions/dnr'
+import { dnrDecide, dnrResponseHeaders } from '../extensions/dnr'
 import { nudgeGc } from '../gc-nudge'
 
 // @ghostery 코스메틱/scriptlet 주입용 content preload 경로. enableBlockingInSession 이 첫 세션에
@@ -235,7 +235,11 @@ function attachOverridingListeners(ses: Session, b: BlockerInstance): void {
     const applyPolicy = (
       headers: Record<string, string | string[]> | undefined,
     ): Record<string, string | string[]> | undefined => {
-      try { return applyToResponseHeaders(details.url, headers) } catch { return headers }
+      // 확장 DNR 먼저, 사용자 정책이 그 위에(사용자 룰 최종 결정권 — 요청 헤더와 같은 순서).
+      try {
+        const withDnr = dnrResponseHeaders(details, headers) ?? headers
+        return applyToResponseHeaders(details.url, withDnr)
+      } catch { return headers }
     }
     if (isSiteAllowlisted(sourceUrl)) {
       callback({ responseHeaders: applyPolicy(details.responseHeaders) })
@@ -261,8 +265,10 @@ function clearListeners(ses: Session): void {
   // null 로 두면 policy 응답헤더 룰까지 죽는다(policy installOn 은 WeakSet 가드로 재설치 안 됨)
   // → adblock 없이도 policy 만 적용하는 리스너로 교체
   ses.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, cb) => {
-    try { cb({ cancel: false, responseHeaders: applyToResponseHeaders(details.url, details.responseHeaders) }) }
-    catch { cb({ cancel: false, responseHeaders: details.responseHeaders }) }
+    try {
+      const withDnr = dnrResponseHeaders(details, details.responseHeaders) ?? details.responseHeaders
+      cb({ cancel: false, responseHeaders: applyToResponseHeaders(details.url, withDnr) })
+    } catch { cb({ cancel: false, responseHeaders: details.responseHeaders }) }
   })
 }
 

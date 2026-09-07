@@ -63,7 +63,22 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>확장 시험</title>
 
 function startPageServer(port) {
   let adHits = 0
+  let dynHits = 0
+  const seenHeaders = []
   const server = http.createServer((req, res) => {
+    // 헤더 시험용 — 서버가 **받은 요청 헤더**를 그대로 돌려준다(요청 헤더 변형 확인).
+    if (req.url.startsWith('/echo')) {
+      seenHeaders.push({ url: req.url, headers: req.headers })
+      res.writeHead(200, { 'content-type': 'application/json', 'x-original': 'from-server' })
+      res.end(JSON.stringify({ ok: true, got: req.headers['x-bb-added'] ?? null }))
+      return
+    }
+    if (req.url.startsWith('/dyn/')) {
+      dynHits++
+      res.writeHead(200, { 'content-type': 'application/javascript' })
+      res.end('window.__dynLoaded = true;')
+      return
+    }
     if (req.url.startsWith('/ads/')) {
       adHits++
       res.writeHead(200, { 'content-type': 'application/javascript' })
@@ -76,7 +91,9 @@ function startPageServer(port) {
   return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve({
     url: `http://127.0.0.1:${port}/`,
     get adHits() { return adHits },
-    resetHits() { adHits = 0 },
+    get dynHits() { return dynHits },
+    get seenHeaders() { return seenHeaders },
+    resetHits() { adHits = 0; dynHits = 0; seenHeaders.length = 0 },
     async close() {
       await new Promise((r) => {
         try { server.closeAllConnections?.() } catch { /* ignore */ }
@@ -103,9 +120,21 @@ function writeTestExtension(dir) {
       rule_resources: [{ id: 'ruleset', enabled: true, path: 'rules.json' }],
     },
   }, null, 2))
-  fs.writeFileSync(path.join(dir, 'rules.json'), JSON.stringify([{
-    id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: '/ads/', resourceTypes: ['script'] },
-  }], null, 2))
+  fs.writeFileSync(path.join(dir, 'rules.json'), JSON.stringify([
+    { id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: '/ads/', resourceTypes: ['script'] } },
+    // 요청 헤더 변형 — 서버가 받은 헤더로 확인한다.
+    { id: 2, priority: 1, condition: { urlFilter: '/echo' },
+      action: { type: 'modifyHeaders', requestHeaders: [
+        { header: 'x-bb-added', operation: 'set', value: 'hello-from-dnr' },
+        { header: 'x-bb-removed', operation: 'remove' },
+      ] } },
+    // 응답 헤더 변형 — 페이지가 fetch 로 확인한다.
+    { id: 3, priority: 1, condition: { urlFilter: '/echo' },
+      action: { type: 'modifyHeaders', responseHeaders: [
+        { header: 'x-bb-res', operation: 'set', value: 'set-by-dnr' },
+        { header: 'x-original', operation: 'remove' },
+      ] } },
+  ], null, 2))
   // 콘텐츠 스크립트: 페이지에 흔적을 남긴다(주입·실행 확인).
   fs.writeFileSync(path.join(dir, 'content.js'),
     "document.documentElement.setAttribute('data-ext-injected', 'yes');" +
@@ -113,7 +142,14 @@ function writeTestExtension(dir) {
   // 서비스 워커: 저장소에 쓰고, 메시지에 응답한다.
   fs.writeFileSync(path.join(dir, 'sw.js'),
     "chrome.storage.local.set({ swAlive: true, at: Date.now() });" +
-    "chrome.runtime.onMessage.addListener((msg, _s, reply) => { reply({ pong: msg && msg.ping }); return true });")
+    "chrome.runtime.onMessage.addListener((msg, _s, reply) => { reply({ pong: msg && msg.ping }); return true });" +
+    // 하네스가 SW 컨텍스트에서 직접 부를 수 있게 전역에 노출한다(동적 룰 시험용).
+    "globalThis.__bbAddDynamic = () => chrome.declarativeNetRequest.updateDynamicRules({" +
+    "  addRules: [{ id: 100, priority: 2, action: { type: 'block' }," +
+    "    condition: { urlFilter: '/dyn/', resourceTypes: ['script', 'xmlhttprequest'] } }] });" +
+    "globalThis.__bbRemoveDynamic = () => chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [100] });" +
+    "globalThis.__bbHasApi = () => typeof chrome !== 'undefined' && !!chrome.declarativeNetRequest" +
+    "  && typeof chrome.declarativeNetRequest.updateDynamicRules === 'function';")
 }
 
 const evalIn = async (s, expression, awaitPromise = false) => {
@@ -181,6 +217,27 @@ async function main() {
       state1.injected === 'yes' && String(state1.mark) === '확장이 바꿈',
       `주입 표식=${state1.injected} · 본문 변경="${state1.mark}"`)
 
+    // ---- X6/X7: modifyHeaders (임무 37) ----
+    {
+      pages.resetHits()
+      // returnByValue 가 객체를 그대로 준다 — 굳이 문자열로 만들지 않는다.
+      const r = (p1 ? await evalIn(p1, `(async () => {
+        try {
+          const res = await fetch('/echo?x6', { headers: { 'x-bb-removed': 'should-be-removed' } })
+          const body = await res.json()
+          return { got: body && body.got, resHeader: res.headers.get('x-bb-res'), original: res.headers.get('x-original') }
+        } catch (e) { return { err: String(e && e.message || e), where: location.href } }
+      })()`, true) : null) ?? { err: '페이지 세션 없음' }
+      const sent = pages.seenHeaders[0]?.headers ?? {}
+      check('X6', '확장 룰이 요청 헤더를 바꾼다(set·remove)',
+        String(sent['x-bb-added']) === 'hello-from-dnr' && sent['x-bb-removed'] === undefined,
+        `서버가 받은 x-bb-added=${sent['x-bb-added']} · x-bb-removed=${sent['x-bb-removed'] ?? '(없음)'}`
+        + ` · 서버 도달 ${pages.seenHeaders.length}회 · got=${r.got} · 오류=${r.err ?? '(없음)'} · 위치=${r.where ?? ''}`)
+      check('X7', '확장 룰이 응답 헤더를 바꾼다(set·remove)',
+        r.resHeader === 'set-by-dnr' && !r.original,
+        `x-bb-res=${r.resHeader} · 지워야 할 x-original=${r.original ?? '(없음)'}`)
+    }
+
     // ---- X3/X4 서비스 워커 + storage ----
     {
       const swTarget = (await getTargetList(args.port))
@@ -202,6 +259,49 @@ async function main() {
       check('X3', 'chrome.storage 가 읽고 쓰인다', storageOk, detail)
     }
 
+
+    // ---- X8~X9: 동적 룰 API (임무 38) ----
+    {
+      const swTarget = (await getTargetList(args.port))
+        .find((t) => String(t.url).endsWith('/sw.js'))
+      let hasApi = null, added = null, removed = null, stored = null, applied = null, preloadRan = null, preloadInPage = null
+      let blockedAfterAdd = null, loadedAfterRemove = null
+      if (swTarget) {
+        const sw = await connectSession(swTarget, 'sw-dyn')
+        await ensureSessionReady(sw)
+        hasApi = await evalIn(sw, 'globalThis.__bbHasApi ? globalThis.__bbHasApi() : false')
+        preloadRan = await evalIn(sw, 'globalThis.__bbDnrPreload === true')
+        // 프레임 컨텍스트에서는 실행되는지도 함께 본다 — SW 만 안 되는지 가르기 위해.
+        preloadInPage = await evalIn(p1, 'window.__bbDnrPreload === true')
+        added = await evalIn(sw, 'globalThis.__bbAddDynamic ? globalThis.__bbAddDynamic().then((r) => JSON.stringify(r)).catch((e) => String(e)) : "함수 없음"', true)
+        await sleep(800)
+        stored = await evalIn(sw, 'chrome.declarativeNetRequest.getDynamicRules().then((r) => JSON.stringify(r)).catch((e) => String(e))', true)
+        applied = JSON.parse(await evalIn(shell, 'window.browserAPI.extensions.list().then(l => JSON.stringify(l.map(x => x.dnrRules)))', true) ?? '[]')
+        // 룰을 넣은 뒤 그 경로를 요청해 본다
+        pages.resetHits()
+        const r1 = await evalIn(p1, `fetch('/dyn/a.js').then(() => 'ok').catch(() => 'blocked')`, true)
+        blockedAfterAdd = pages.dynHits === 0
+        removed = await evalIn(sw, 'globalThis.__bbRemoveDynamic ? globalThis.__bbRemoveDynamic().then(() => true).catch((e) => String(e)) : "함수 없음"', true)
+        await sleep(600)
+        pages.resetHits()
+        await evalIn(p1, `fetch('/dyn/b.js').then(() => 'ok').catch(() => 'blocked')`, true)
+        loadedAfterRemove = pages.dynHits > 0
+        try { sw.close() } catch { /* ignore */ }
+      }
+      const why = '동적 룰 API 는 **확장 컨텍스트에 우리 preload 를 주입**해야 하는데, Electron 35 에서 '
+        + '`session.registerPreloadScript`(frame·service-worker)도 구형 `setPreloads` 도 실행되지 않았다 '
+        + '(등록은 성공으로 보고되고 파일도 asar 밖 실경로에 있는데 스크립트가 돌지 않는다 — 2026-09-07 실측). '
+        + '한편 Electron 은 `chrome.declarativeNetRequest` **표면만** 제공한다: updateDynamicRules 를 받아 '
+        + '저장하고 getDynamicRules 로 돌려주지만 **집행하지 않는다**. 그래서 확장이 런타임에 넣는 룰은 '
+        + '아직 무력하다(정적 룰셋과 modifyHeaders 는 동작한다). 메인 측 배관(저장·병합·영속·IPC)은 '
+        + '완성돼 있어 주입 경로만 풀리면 바로 붙는다.'
+      gap('X8', '확장이 런타임에 넣은 동적 룰이 실제로 차단한다',
+        preloadRan === true && blockedAfterAdd === true,
+        `preload 실행 SW=${preloadRan}/페이지=${preloadInPage} · Electron 표면 존재=${hasApi} · 차단됨=${blockedAfterAdd}`,
+        why)
+    }
+
+    // X8·X9 까지 쓰고 나서 닫는다(앞에서 닫으면 그 뒤 검사가 세션을 잃는다).
     try { p1?.close() } catch { /* ignore */ }
 
     // ---- X5 양성 대조: 확장을 끄면 차단이 사라진다 ----

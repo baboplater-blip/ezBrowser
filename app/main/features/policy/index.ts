@@ -6,6 +6,7 @@ import path from 'node:path'
 import type { HeaderPair, PolicyRule, PolicyRuleSummary } from '../../../shared/types'
 import { DEFAULT_SESSION } from '../../../shared/constants'
 import { applyClientHints } from '../client-hints'
+import { dnrRequestHeaders } from '../extensions/dnr'
 
 const policies = new Map<string, PolicyRule>()
 let loaded = false
@@ -406,7 +407,10 @@ function installOn(ses: Session): void {
   // 순서: 클라이언트 힌트 먼저 → 사용자 정책 룰이 그 위에 덮어쓸 수 있게(사용자 룰이 항상 최종 결정권).
   ses.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, cb) => {
     try {
-      const withHints = applyClientHints(details.url, details.requestHeaders)
+      // 순서: 확장 DNR → 클라이언트 힌트 → 사용자 정책.
+      // 사용자가 직접 만든 룰이 마지막이라 항상 최종 결정권을 갖는다.
+      const withDnr = dnrRequestHeaders(details, details.requestHeaders) ?? details.requestHeaders
+      const withHints = applyClientHints(details.url, withDnr)
       const next = applyToRequestHeaders(details.url, withHints)
       cb({ cancel: false, requestHeaders: next })
     } catch (err) {

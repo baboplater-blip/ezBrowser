@@ -1,6 +1,6 @@
-import { app, session, type Extension, type Session } from 'electron'
+import { app, ipcMain, session, type Extension, type Session } from 'electron'
 import { EventEmitter } from 'node:events'
-import { promises as fsp, existsSync, createWriteStream } from 'node:fs'
+import { promises as fsp, existsSync, createWriteStream, readFileSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createHash, generateKeyPairSync } from 'node:crypto'
@@ -10,7 +10,10 @@ import { createTab, getWebContentsByTabId } from '../tabs/tab-service'
 import { getAllWindows } from '../windows/window-service'
 import { addSessionInitHook, forEachInstalledSession } from '../session-bootstrap'
 import type { ExtensionSummary } from '../../shared/types'
-import { reloadDnrRules, dnrRuleCountFor } from '../features/extensions/dnr'
+import {
+  reloadDnrRules, dnrRuleCountFor, loadDynamicRules,
+  updateRuntimeRules, getRuntimeRules, dropRuntimeRules,
+} from '../features/extensions/dnr'
 
 let extensionsAdapter: unknown = null
 
@@ -62,6 +65,31 @@ export const extensionEvents = new EventEmitter()
 
 // 확장이 바뀌면(설치·제거·활성 변경) declarativeNetRequest 정적 룰셋을 다시 읽는다.
 // 한 곳에서 잡아야 어느 경로로 바뀌든 빠지지 않는다(임무 36).
+// 확장이 부르는 chrome.declarativeNetRequest 동적 룰 API 를 받는다(preload 가 invoke 한다).
+// 확장 컨텍스트에서만 오므로 별도 신뢰 검사는 두지 않되, extId 는 **보낸 쪽 값을 그대로 믿지 않고**
+// 형식만 확인한다(디렉터리명과 같은 형태).
+let dnrIpcRegistered = false
+function registerDnrIpc(): void {
+  if (dnrIpcRegistered) return
+  dnrIpcRegistered = true
+  const okId = (v: unknown): v is string => typeof v === 'string' && /^[a-p]{32}$|^[A-Za-z0-9._-]{1,80}$/.test(v)
+  ipcMain.handle('bb-dnr:update', (_e, a: { extId?: string; scope?: string; addRules?: unknown[]; removeRuleIds?: number[] }) => {
+    if (!okId(a?.extId)) return { ok: false, error: '확장 id 형식 오류' }
+    const scope = a.scope === 'session' ? 'session' : 'dynamic'
+    return updateRuntimeRules(a.extId, scope, {
+      addRules: Array.isArray(a.addRules) ? (a.addRules as never[]) : undefined,
+      removeRuleIds: Array.isArray(a.removeRuleIds) ? a.removeRuleIds.map((n) => Number(n)) : undefined,
+    })
+  })
+  ipcMain.handle('bb-dnr:get', (_e, a: { extId?: string; scope?: string }) => {
+    if (!okId(a?.extId)) return []
+    return getRuntimeRules(a.extId, a.scope === 'session' ? 'session' : 'dynamic')
+  })
+  // 룰셋 활성/비활성은 아직 정적 룰셋 전체를 다시 읽는 것으로만 대응한다(부분 토글 미지원).
+  ipcMain.handle('bb-dnr:rulesets', async () => ({ ok: true }))
+  ipcMain.handle('bb-dnr:rulesets-get', () => [])
+}
+
 extensionEvents.on('changed', () => {
   void (async () => {
     try {
@@ -81,7 +109,49 @@ function sessions(): Session[] {
 }
 
 // 새로 만들어지는 세션(예: 새 워크스페이스 partition)에 활성 확장을 로드한다. idempotent.
+/**
+ * 확장 컨텍스트에 우리 `chrome.declarativeNetRequest` 동적 룰 API preload 를 얹는다.
+ * `electron-chrome-extensions` 가 자기 API 를 넣는 것과 **같은 방식**('frame' + 'service-worker').
+ * id 를 고정해 두면 같은 세션에 두 번 등록돼도 교체된다(멱등).
+ */
+/**
+ * ⚠ 현재 이 등록은 **효과가 없다**(2026-09-07 실측). Electron 35 에서 세션 preload 가
+ * frame·service-worker 어느 쪽으로도 실행되지 않았다(등록은 성공으로 보고되고 파일도
+ * asar 밖 실경로에 있는데 스크립트가 돌지 않는다). 구형 `setPreloads` 도 마찬가지다.
+ *
+ * 그래서 확장의 **동적 룰 API**(updateDynamicRules 등)는 아직 우리 엔진에 닿지 못한다.
+ * 메인 측 배관(저장·병합·영속·IPC)은 완성돼 있으므로 **주입 경로만 풀리면 바로 붙는다**.
+ * 지우지 않고 남겨 두는 이유다 — 검사 X8 이 이 상태를 매 실행 GAP 으로 보고한다.
+ */
+function registerDnrPreload(ses: Session): void {
+  try {
+    // ⚠ 세션 preload(`registerPreloadScript`)는 **asar 안 파일을 읽지 못한다**(2026-09-07 실측:
+    //   등록은 성공했다고 하는데 스크립트가 실행되지 않았다). 그래서 asar 밖(userData)으로
+    //   한 번 복사해 그 실경로를 등록한다.
+    const src = path.join(__dirname, '..', '..', 'preload', 'ext-dnr.js')
+    const file = path.join(app.getPath('userData'), 'ext-dnr-preload.js')
+    try {
+      if (existsSync(src)) {
+        const cur = existsSync(file) ? readFileSync(file, 'utf-8') : ''
+        const next = readFileSync(src, 'utf-8')
+        if (cur !== next) writeFileSync(file, next, 'utf-8')
+      }
+    } catch (err) { console.warn('[dnr-preload] 복사 실패', err) }
+    const exists = existsSync(file)
+    const canRegister = 'registerPreloadScript' in ses
+    if (!exists || !canRegister) return
+    ses.registerPreloadScript({ id: 'bb-dnr-frame', type: 'frame', filePath: file })
+    ses.registerPreloadScript({ id: 'bb-dnr-sw', type: 'service-worker', filePath: file })
+    // 구형 경로도 함께 — registerPreloadScript 만으로는 실행되지 않는 경우를 봤다.
+    try {
+      const cur = typeof ses.getPreloads === 'function' ? ses.getPreloads() : []
+      if (!cur.includes(file)) ses.setPreloads([...cur, file])
+    } catch (err) { console.warn('[dnr-preload] setPreloads 실패', err) }
+  } catch (err) { console.warn('[extensions] DNR preload 등록 실패', err) }
+}
+
 async function loadEnabledInto(ses: Session): Promise<void> {
+  registerDnrPreload(ses)
   const root = extensionsRoot()
   let entries: string[] = []
   try { entries = await fsp.readdir(root) } catch { return }
@@ -100,6 +170,10 @@ async function loadEnabledInto(ses: Session): Promise<void> {
 }
 
 export async function initExtensions(): Promise<void> {
+  // 확장 라이브러리 유무와 무관하게 DNR 배관은 세운다 — 동적 룰은 디스크에서 복원한다.
+  registerDnrIpc()
+  await loadDynamicRules()
+
   const mod = await loadModule()
   if (!mod) return
 
@@ -634,7 +708,9 @@ export async function installFromUrl(url: string): Promise<{ ok: boolean; id?: s
   }
 }
 
-export async function removeExtension(id: string): Promise<{ ok: boolean; error?: string }> {
+export async function removeExtension(id: string): Promise<{
+  ok: boolean; error?: string }> {
+  dropRuntimeRules(id)   // 확장이 사라지면 그 확장의 런타임 룰도 버린다
   if (!/^[a-z]{32}$/i.test(id) && !/^[a-z0-9_-]+$/i.test(id)) {
     return { ok: false, error: 'invalid id' }
   }

@@ -1697,3 +1697,13 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **`ext-matrix` 에 DNR 동작 단계 추가**: 확장이 룰셋을 선언했는데 **적용 룰이 0개면 무력**임을 표에 드러낸다 — "로드=성공" 착시 제거. `ExtensionSummary.dnrRules` 로 확장별 적용 룰 수를 노출(설정 화면에서도 쓸 수 있다).
   - **무회귀 확인**(네트워크 경로를 건드렸으므로): 스모크 16/16(광고차단 S10·워크스페이스 partition R13 포함) · dl-matrix 10 PASS/1 SKIP · extension-behavior 5/5 · `npm run verify` 8/8.
   - **남은 것**: 동적 룰 API 와 `modifyHeaders`. 이 둘을 쓰는 확장은 아직 그 부분이 동작하지 않는다.
+- 2026-09-07: **임무 37~38 - DNR `modifyHeaders` 지원 + 동적 룰 API 시도(배관 완성, 주입 경로 막힘)**.
+  - **임무 37 `modifyHeaders` (동작 확인)**: 확장 룰의 요청·응답 헤더 변형(`set`·`remove`·`append`)을 지원한다. 세션당 리스너 1개 제약 때문에 **기존 소유자 안에서 팬아웃**한다 — 요청 헤더는 policy 의 `onBeforeSendHeaders`, 응답 헤더는 adblock 의 `onHeadersReceived` + 광고차단 꺼짐 폴백. **순서는 확장 DNR → 클라이언트 힌트 → 사용자 정책**으로, 사용자가 만든 룰이 항상 최종 결정권을 갖는다.
+    - 검사 **X6**(요청 헤더 set·remove) · **X7**(응답 헤더 set·remove) 신설, 둘 다 통과.
+    - 하네스 함정: 시험 헤더 값에 한글을 써서 `fetch` 가 `String contains non ISO-8859-1 code point` 로 실패했다(HTTP 헤더는 ISO-8859-1). 제품이 아니라 시험 데이터 문제.
+  - **임무 38 동적 룰 API — 배관은 완성했으나 주입 경로가 막혀 아직 무력하다(정직한 미완)**:
+    - 완성한 것: 확장별 **동적 룰(재시작 후에도 유지)·세션 룰(메모리)** 저장소, 정적+동적+세션 **우선순위 병합**, IPC 핸들러, 확장 제거 시 정리, `chrome.declarativeNetRequest` preload 구현.
+    - 막힌 것: **확장 컨텍스트에 preload 를 넣지 못한다.** Electron 35 에서 `session.registerPreloadScript`(frame·service-worker)도 구형 `setPreloads` 도 **실행되지 않았다** — 등록은 성공으로 보고되고 파일도 asar 밖 실경로에 두었는데 스크립트가 돌지 않는다(표식 변수로 확인).
+    - 그 과정에서 알게 된 것: **Electron 은 `chrome.declarativeNetRequest` 표면만 제공한다** — `updateDynamicRules` 를 받아 저장하고 `getDynamicRules` 로 돌려주지만 **집행하지 않는다**. 그래서 "API 가 있으니 동작하겠지" 로 보이지만 실제로는 무력하다. 이 착각을 피하려면 **집행 여부를 직접 확인**해야 한다.
+    - 검사 **X8** 을 GAP 으로 두어 매 실행 이 상태와 이유를 크게 출력한다. 코드에도 `registerDnrPreload` 주석으로 남겼다 — **주입 경로만 풀리면 바로 붙는다.**
+  - **무회귀**(헤더·네트워크 경로를 건드렸으므로): 스모크 16/16 · dl-matrix 10/11 · input-guards 9/9 · fingerprint 클라이언트 힌트 정상 · **ext-matrix uBO Lite 룰 18,502개 적용 유지** · `npm run verify` 8/8.
