@@ -110,7 +110,7 @@
 
           + '<div class="grid">'
           + statBox('탭 (총)', m.tabs.total, '개')
-          + statBox('활성', m.tabs.active, '개')
+          + statBox('깨어 있음', m.tabs.active, '개')  // = 총 − 슬립. '활성 탭'(포커스)과 혼동 방지
           + statBox('💤 슬립', m.tabs.discarded, '개')
           + statBox('슬립 임계', Math.round(m.sleep.thresholdMs / 60000), '분')
           + '</div>'

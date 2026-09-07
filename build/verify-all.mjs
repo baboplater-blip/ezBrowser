@@ -70,6 +70,12 @@ function steps(outRoot) {
       timeoutMs: 12 * 60000, desc: 'AI 에이전트 안전·조작 A1~A14',
     },
     {
+      id: 'memory-page', kind: 'harness', modes: ['full'],
+      script: 'verify-memory-page-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'memory-page', 'memory-page-results.json'),
+      timeoutMs: 8 * 60000, desc: 'browser://memory 표시값 실측 대조 M1~M6',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',
