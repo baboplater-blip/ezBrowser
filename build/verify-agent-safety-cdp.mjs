@@ -441,6 +441,19 @@ async function main() {
       const FAST = pa.inputProfileFor('https://example.com/', 'auto')
       const STRICT = pa.inputProfileFor('https://instagram.com/', 'auto')
       if (FAST === STRICT) throw new Error('일반 사이트인데 strict 프로파일이 선택됨(사이트 판정 오류)')
+
+      // 앞선 시나리오가 주입한 DOM(A6 오버레이·A13 드롭존 등)을 걷어내고 맨 위로 올린다.
+      // 남은 요소가 대상 버튼을 덮거나 화면 밖으로 밀어내면 **제품이 멀쩡한데도** 실제 클릭이
+      // 합성 폴백으로 떨어져 이 시나리오가 실패한다(2026-09-07 종결 게이트에서 실제 발생).
+      // 테스트는 앞 테스트의 잔재에 기대면 안 된다 — 자기 상태를 스스로 만든다.
+      await evaluate(content, `(function(){
+        for (const sel of ['#ov', '.upload-dropzone', '#wrap', '.menu-dropdown', '#zone']) {
+          document.querySelectorAll(sel).forEach((el) => el.remove())
+        }
+        window.scrollTo(0, 0)
+        return true
+      })()`)
+      await sleep(150)
       await evaluate(content, 'window.__clicked = [], true')
       let clicks = 0
       for (let i = 0; i < 10; i++) {
@@ -449,7 +462,26 @@ async function main() {
         if (!t) throw new Error('대상 없음')
         const r = await pa.executeInPageAction(fakeWc, { action: 'click', ref: t.ref }, { humanInput: true, profile: FAST })
         if (!r.ok) throw new Error(`${i + 1}번째 클릭 실패: ${r.detail}`)
-        if (/합성 이벤트/.test(r.detail)) throw new Error(`${i + 1}번째가 합성 폴백으로 떨어짐: ${r.detail}`)
+        if (/합성 이벤트/.test(r.detail)) {
+          // 폴백이 났으면 **왜** 났는지 남긴다 — 좌표·가림 요소가 없으면 다음에도 원인을 못 찾는다.
+          let diag = '(진단 실패)'
+          try {
+            diag = await evaluate(content, `(function(){
+              const el = document.getElementById('postB') || [...document.querySelectorAll('button,div')].find(e => (e.textContent||'').includes('게시물 B'))
+              if (!el) return '대상 요소 없음'
+              const r = el.getBoundingClientRect()
+              const cx = Math.round(r.left + r.width / 2), cy = Math.round(r.top + r.height / 2)
+              const top = document.elementFromPoint(cx, cy)
+              return JSON.stringify({
+                rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+                scrollY: Math.round(window.scrollY), viewport: innerWidth + 'x' + innerHeight,
+                topElement: top ? (top.id || top.className || top.tagName) : null,
+                covered: top ? !el.contains(top) && top !== el : null,
+              })
+            })()`)
+          } catch { /* 진단 실패는 원래 오류를 가리지 않는다 */ }
+          throw new Error(`${i + 1}번째가 합성 폴백으로 떨어짐: ${r.detail} · 진단=${diag}`)
+        }
         clicks++
       }
       await sleep(200)
