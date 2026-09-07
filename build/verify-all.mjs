@@ -65,6 +65,14 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '게이트 1 스모크 16종',
     },
     {
+      // 정적 검사라 즉시 끝난다. 한글 옆 \b 는 겉보기엔 멀쩡한 채 죽어 있어
+      // 사람 눈으로는 안 보인다 — 그래서 매 라운드 기계가 본다.
+      id: 'korean-regex', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-korean-regex.mjs', outArg: true,
+      result: (o) => path.join(o, 'korean-regex', 'korean-regex-results.json'),
+      timeoutMs: 2 * 60000, desc: '한글에서 성립하지 않는 정규식 가정(단어경계·w) K1~K2',
+    },
+    {
       // 순수 함수라 앱을 띄우지 않고 1초 안에 끝난다 — 마감 게이트(quick)에도 넣는다.
       // 이 판정이 느슨해지면 결제·삭제가 확인 없이 실행되므로 자주 볼수록 좋다.
       id: 'agent-gate', kind: 'harness', modes: ['quick', 'full'],

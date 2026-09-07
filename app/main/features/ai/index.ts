@@ -243,7 +243,7 @@ function isNonFactLine(line: string): boolean {
   // 후행 문장부호까지 벗겨 "NONE." / "None found." 같은 변형도 걸러낸다.
   const s = line.replace(/[()[\]*_`~]/g, '').replace(/[.!?。,·:\s]+$/, '').trim()
   if (s.length < 3) return true
-  if (/^none\b|없음|없습니다|없다\b|없어|해당\s*없|^n\/?a$|not\s+applicable|^nothing\b|특별한\s*(사실|정보)/i.test(s)) return true
+  if (/^none\b|없음|없습니다|없다|없어|해당\s*없|^n\/?a$|not\s+applicable|^nothing\b|특별한\s*(사실|정보)/i.test(s)) return true
   // 머리말·메타·설명형 문장 거부(사실이 아님) — 실제 사실 문장은 통과해야 하므로 메타 표지만 좁게.
   if (/참고|형식에\s*맞|출력하면|다음과\s*같|아래와\s*같|예\s*[):]|죄송|말씀하신|정리하면/i.test(s)) return true
   if (/^\(/.test(line.trim())) return true
