@@ -1545,3 +1545,9 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - **6/6 PASS**.
   - **하네스가 계약을 잘못 알고 있었던 것도 함께 교정**: `keymap.get()` 은 `{ keymap:{version,bindings}, conflicts }` 를 주고 바인딩 필드는 `action`(내가 `actionId` 로 가정). API 계약은 추측하지 말고 소스에서 확인할 것.
   - **검증**: 하네스 6/6 · 러너 경유 PASS(6초) · typecheck 0 · 종결 게이트 `npm run verify` 4/4 PASS.
+- 2026-09-07: **임무 19 — 사용자 입력을 파일에 쓰는 저장 경로 5곳 검증·방어**. 임무 18 에서 `saveKeymap` 이 **어떤 값이든 받아 그대로 파일에 쓰는 것**을 발견했으므로, 같은 모양의 경로를 전부 훑었다.
+  - **신규 하네스 [build/verify-input-guards-cdp.mjs](browser-build/build/verify-input-guards-cdp.mjs)** (G1~G6, `verify-all --full` 등록): 정책·userscript·매크로·워크스페이스·읽기목록의 저장 API 에 `null`·`42`·`'string'`·`[]`·타입 틀린 객체를 실제로 밀어 넣고, ① 거부되는가 ② 목록이 여전히 읽히는가 ③ 찌른 뒤에도 앱이 정상인가를 본다.
+  - **발견한 결함 1건 (워크스페이스)**: `updateWorkspace` 의 `color: patch.color ?? ws.color` 에 검증이 없어 **객체 `{}` 가 색으로 저장·영속**됐다(외피가 그 값을 CSS 로 쓴다). `name` 은 `.trim()` 이 예외를 던져 우연히 막혀 있었을 뿐이다. → `name`·`color`·`homeUrl` 을 **문자열일 때만** 반영하고 아니면 기존 값을 유지하도록 수정.
+  - **최소 방어 3곳**: 정책·매크로·userscript 의 저장 입구에서 **객체가 아닌 입력만** 거부한다(`null`·숫자·문자열·배열). 빈 객체는 "+ 새 룰/새 매크로/새 스크립트" 흐름이 실제로 쓰므로 **막지 않았다** — 여기서 더 조이면 기능이 깨진다. userscript 는 `source` 가 문자열이어야 한다.
+  - **하네스 자체의 판정도 고쳤다**: 첫 판에서 "목록이 여전히 읽히는가" 만 봐서 **쓰레기 4~5건이 저장되는데도 PASS** 가 났다. 판정을 "비객체 입력은 전부 거부되어야 한다"로 조인 뒤 결함이 드러났다 — 느슨한 통과 기준은 검증이 아니다.
+  - **검증**: 하네스 6/6 PASS(수정 전 G4 FAIL 재현 → 수정 후 색 `"gray"` 유지) · typecheck 3/3 · `npm run verify` 4/4 PASS(스모크 16/16, 회귀 0).

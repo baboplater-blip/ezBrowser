@@ -99,6 +99,10 @@ export function getMacro(id: string): Macro | null {
 }
 
 export async function saveMacro(input: Partial<Macro>): Promise<Macro> {
+  // 객체가 아닌 입력은 거부(빈 객체는 "새 매크로" 흐름이라 허용) — 임무 19 실측 근거.
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('매크로 형식이 올바르지 않습니다 — 객체여야 합니다')
+  }
   const existing = input.id ? macros.get(input.id) : null
   const m = normalize({
     ...input,

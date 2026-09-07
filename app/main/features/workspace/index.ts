@@ -173,11 +173,16 @@ export async function createWorkspace(input?: Partial<Workspace>): Promise<Works
 export async function updateWorkspace(id: string, patch: Partial<Workspace>): Promise<Workspace | null> {
   const ws = workspaces.get(id)
   if (!ws) return null
+  // 렌더러가 보낸 값을 **타입까지 확인**하고 받는다. 2026-09-07 임무 19 실측:
+  // 검증이 없어 `color` 에 객체 `{}` 가 그대로 저장·영속됐다(UI 가 그 값을 CSS 로 쓴다).
+  // `name` 은 문자열이 아니면 `.trim()` 에서 예외가 나 업데이트 자체가 실패했다.
+  const str = (v: unknown, fallback: string): string =>
+    (typeof v === 'string' && v.trim() ? v.trim() : fallback)
   const next: Workspace = {
     ...ws,
-    name: patch.name !== undefined ? (patch.name.trim() || ws.name) : ws.name,
-    color: patch.color ?? ws.color,
-    homeUrl: patch.homeUrl ?? ws.homeUrl,
+    name: patch.name !== undefined ? str(patch.name, ws.name) : ws.name,
+    color: patch.color !== undefined ? (str(patch.color, ws.color) as Workspace['color']) : ws.color,
+    homeUrl: patch.homeUrl !== undefined ? str(patch.homeUrl, ws.homeUrl) : ws.homeUrl,
     updatedAt: Date.now(),
   }
   workspaces.set(id, next)

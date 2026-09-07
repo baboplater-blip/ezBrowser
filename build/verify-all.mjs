@@ -88,6 +88,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '설정 되돌릴 수 없는 동작 — 내보내기/가져오기·키맵 D1~D3·K1~K3',
     },
     {
+      id: 'input-guards', kind: 'harness', modes: ['full'],
+      script: 'verify-input-guards-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'input-guards', 'input-guards-results.json'),
+      timeoutMs: 8 * 60000, desc: '사용자 입력을 파일에 쓰는 5경로가 잘못된 입력을 거부하는가 G1~G6',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',

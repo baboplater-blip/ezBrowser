@@ -272,6 +272,11 @@ export function getPolicy(id: string): PolicyRule | null {
 }
 
 export async function savePolicy(input: Partial<PolicyRule>): Promise<PolicyRule> {
+  // 객체가 아닌 입력(null·숫자·문자열·배열)은 거부한다. 빈 객체는 "새 룰 만들기" 흐름이라 허용.
+  // (2026-09-07 임무 19 실측: 검증이 없어 `42`·`'string'`·`[]` 가 정책으로 저장됐다.)
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('정책 형식이 올바르지 않습니다 — 객체여야 합니다')
+  }
   const existing = input.id ? policies.get(input.id) : null
   const merged = existing
     ? { ...existing, ...input, createdAt: existing.createdAt, updatedAt: Date.now() }

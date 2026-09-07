@@ -152,6 +152,11 @@ export function getUserscript(id: string): Userscript | null {
 }
 
 export async function saveUserscript(input: { id?: string; source: string }): Promise<Userscript> {
+  // 스크립트 본문은 **문자열**이어야 한다. 임무 19 실측: 검증이 없어 숫자·배열·null 이
+  // 스크립트로 저장됐다(파서가 관대해 빈 메타로 통과시켰다).
+  if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.source !== 'string') {
+    throw new Error('userscript 형식이 올바르지 않습니다 — { source: string } 이어야 합니다')
+  }
   const parsed = parseUserscript(input.source)
   const now = Date.now()
   const existing = input.id ? userscripts.get(input.id) : null
