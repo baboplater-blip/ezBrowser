@@ -82,6 +82,36 @@ const PUBLISHED_TEXT_RE = /발행(이|되)?\s*(완료|되었|됐)|게시(가|되
 // 프롬프트 지시만으로는 "저장" 대신 "발행" 오클릭을 막을 수 없다.
 export const NO_PUBLISH_MARK = '[모드: 발행 금지]'
 
+// ===== 완료 신호 표식 =====
+// 레시피(sns-publish 등)가 "게시가 끝나면 화면에 새로 나타날 문구 / 바뀔 URL" 을 작업 지시문 안에 표식으로 넣는다.
+// 에이전트 루프는 주 동작 뒤 관찰에서 이 신호가 **새로 나타났는지**(동작 전 관찰 기준선 대비) 판정해 모델 호출
+// 없이 done 한다. 모델이 가드(expect)를 붙이길 기다리지 않는 길 — 모델 채택률에 절감이 좌우되지 않는다.
+export interface CompletionSignal { texts: string[]; urlContains?: string; message?: string }
+export const COMPLETION_MARK = '[완료 신호]'
+const SEP_LINE = String.fromCharCode(10)
+export function buildCompletionMark(sig: { texts?: string[]; urlContains?: string; message?: string }): string {
+  const parts: string[] = []
+  const texts = (sig.texts ?? []).map((t) => String(t).replace(/[|;]/g, ' ').trim()).filter(Boolean)
+  if (texts.length) parts.push('문구=' + texts.join(' | '))
+  if (sig.urlContains) parts.push('URL=' + String(sig.urlContains).replace(/[;]/g, '').trim())
+  if (sig.message) parts.push('메시지=' + String(sig.message).replace(/[;]/g, ' ').trim())
+  return `${COMPLETION_MARK} ${parts.join(' ; ')}`
+}
+export function parseCompletionMark(task: string): CompletionSignal | null {
+  const t = String(task ?? '')
+  const i = t.indexOf(COMPLETION_MARK)
+  if (i < 0) return null
+  const line = t.slice(i + COMPLETION_MARK.length).split(SEP_LINE)[0] ?? ''
+  const sig: CompletionSignal = { texts: [] }
+  for (const seg of line.split(';')) {
+    const x = seg.trim()
+    if (x.startsWith('문구=')) sig.texts = x.slice(3).split('|').map((v) => v.trim()).filter(Boolean)
+    else if (x.startsWith('URL=')) sig.urlContains = x.slice(4).trim() || undefined
+    else if (x.startsWith('메시지=')) sig.message = x.slice(4).trim() || undefined
+  }
+  return sig.texts.length || sig.urlContains ? sig : null
+}
+
 export function isNoPublishTask(task: string): boolean {
   return String(task ?? '').includes(NO_PUBLISH_MARK)
 }

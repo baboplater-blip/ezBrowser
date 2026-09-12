@@ -16,6 +16,7 @@ import { listTriggers, addTrigger, updateTrigger, removeTrigger, setTriggerEnabl
 import { getProfile, setProfile, storageAvailable, PROFILE_FIELDS, profileEvents } from '../features/ai/profile'
 import { generateBlogDraft, generateSeriesPlan, refineBlogBody, type BlogDraftParams, type SeriesPlanParams, type RefineParams } from '../features/ai/blog-writer'
 import { buildBlogTask, NAVER_WRITE_URL, type BlogTaskParams } from '../features/ai/blog-publish'
+import { buildSnsTask, type SnsTaskParams } from '../features/ai/sns-publish'
 import {
   listBlogDrafts, getBlogDraft, saveBlogDraft, removeBlogDraft, blogDraftEvents, type BlogDraftSummary,
 } from '../features/ai/blog-drafts'
@@ -324,6 +325,17 @@ export function registerAiIpc(): void {
       tags: Array.isArray(params?.tags) ? params.tags : [], autoOpen: !!params?.autoOpen,
     })
     return { task, naverWriteUrl: NAVER_WRITE_URL }
+  })
+
+  // SNS 게시(인스타·유튜브·틱톡) 레시피 태스크 빌드 — 완료 신호 표식 포함
+  ipcMain.handle(IPC.ai.snsBuildTask, (e, params: SnsTaskParams) => {
+    if (!isTrustedSender(e)) return { task: '', openUrl: '' }
+    const platform = params?.platform === 'youtube' ? 'youtube' : params?.platform === 'tiktok' ? 'tiktok' : 'instagram'
+    return buildSnsTask({
+      platform, mode: params?.mode === 'publish' ? 'publish' : 'draft',
+      file: String(params?.file ?? '').slice(0, 300), caption: String(params?.caption ?? '').slice(0, 5000), title: typeof params?.title === 'string' ? params.title.slice(0, 200) : undefined,
+      tags: Array.isArray(params?.tags) ? params.tags.map(String) : [], autoOpen: !!params?.autoOpen,
+    })
   })
 
   // 사이트 분석 보고서 — 원클릭 태스크(읽기 전용) 빌드

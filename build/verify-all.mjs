@@ -100,6 +100,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 L1~L9·F1~F3',
     },
     {
+      id: 'sns-publish', kind: 'harness', modes: ['full'],
+      script: 'verify-sns-publish-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'sns-publish', 'sns-publish-results.json'),
+      timeoutMs: 10 * 60000, desc: 'SNS 게시 레시피(인스타·유튜브·틱톡) + 완료 신호 S1~S6(모의 페이지)',
+    },
+    {
       // 최소 간격(60초)을 실제로 기다리므로 약 3분 걸린다 - 반복이 멈추는지는 기다려야만 알 수 있다.
       id: 'agent-repeat', kind: 'harness', modes: ['full'],
       script: 'verify-agent-repeat-cdp.mjs', outArg: true,

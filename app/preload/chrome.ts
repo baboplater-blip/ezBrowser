@@ -432,6 +432,8 @@ const api = {
       ipcRenderer.invoke(IPC.ai.blogRefine, params),
     blogBuildTask: (params: { platform?: string; mode: 'insert' | 'draft' | 'publish'; title: string; body: string; tags?: string[]; autoOpen?: boolean }): Promise<{ task: string; naverWriteUrl: string }> =>
       ipcRenderer.invoke(IPC.ai.blogBuildTask, params),
+    snsBuildTask: (params: { platform: 'instagram' | 'youtube' | 'tiktok'; mode: 'publish' | 'draft'; file: string; caption: string; title?: string; tags?: string[]; autoOpen?: boolean }): Promise<{ task: string; openUrl: string }> =>
+      ipcRenderer.invoke(IPC.ai.snsBuildTask, params),
     reportBuildTask: (params: { url?: string; focus?: string; depth?: number }): Promise<{ task: string; readOnly: boolean }> =>
       ipcRenderer.invoke(IPC.ai.reportBuildTask, params),
     reportExport: (p: { title: string; markdown: string }): Promise<{ ok: boolean; path?: string }> =>

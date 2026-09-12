@@ -345,6 +345,7 @@ export const IPC = {
     exportWebhook: 'ai:export-webhook',
     blogGenerate: 'ai:blog-generate',
     blogBuildTask: 'ai:blog-build-task',
+    snsBuildTask: 'ai:sns-build-task',
     reportBuildTask: 'ai:report-build-task',
     reportExport: 'ai:report-export',
     blogRefine: 'ai:blog-refine',

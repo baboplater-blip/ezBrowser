@@ -74,7 +74,13 @@ const REF_KEY = '__' + Math.random().toString(36).slice(2, 10)
 // 그대로 클릭하면 엉뚱한 게시물에 좋아요·신고를 누르게 되므로 null 을 돌려 재관찰을 유도한다.
 const PICK_FN = `function pick(r){var A=window['${REF_KEY}'];if(!A)return null;var it=A[r];if(!it||!it.e)return null;var el=it.e;`
   + `try{if(!el.isConnected)return null;}catch(e){}`
-  + `if(it.n){var cur='';try{cur=((el.innerText||el.textContent||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.value||'')+'').replace(/\\s+/g,' ').trim();}catch(e){cur='';}`
+  // 이름 계산은 관찰(nameOf)과 **같은 순서**여야 한다 — 다르면 라벨로 이름 붙은 입력칸("설명")·라디오("공개")가
+  // value 와 비교돼 "다른 요소" 로 거부된다(2026-09-13, SNS 하네스 S3·S4).
+  + `if(it.n){var cur='';try{var tg=el.tagName;cur=el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('data-placeholder')||el.getAttribute('aria-placeholder')||'';`
+  + `if(!cur&&(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT')){try{var lb=(el.labels&&el.labels[0])||(el.closest?el.closest('label'):null);if(lb){var lt='';var cs=lb.childNodes;for(var ci=0;ci<cs.length;ci++){var cn=cs[ci];if(cn===el)continue;if(cn.nodeType===3)lt+=cn.textContent;else if(cn.nodeType===1&&!cn.contains(el))lt+=(cn.innerText||cn.textContent||'');}cur=lt;}}catch(e){}}`
+  + `if(!cur&&tg==='INPUT'&&String(el.type||'').toLowerCase()!=='password')cur=el.value||el.getAttribute('name')||el.getAttribute('title')||'';`
+  + `if(!cur)cur=(el.innerText||el.textContent||'');if(!cur)cur=el.getAttribute('title')||el.getAttribute('alt')||el.getAttribute('name')||'';`
+  + `cur=(cur+'').replace(/\\s+/g,' ').trim();}catch(e){cur='';}`
   + `var a=it.n.slice(0,20),b=cur.slice(0,20);if(a&&b&&a!==b)return null;}`
   + `return el;}`
 
@@ -805,6 +811,15 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
     // 이 속성에 "제목"·"내용을 입력하세요" 같은 안내를 담는다.
     var n = el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('data-placeholder') || el.getAttribute('aria-placeholder') || '';
     // 비밀번호/신용카드 입력값은 절대 이름·값으로 노출하지 않는다(LLM·클라우드로 유출 방지).
+    // 폼 컨트롤은 연결된 <label> 텍스트가 이름이다(<label>설명 <textarea>> 형태). 이게 없어 입력칸이 이름 없이 잡히고
+    // 라벨이 별도 요소로 잡혀 입력이 라벨로 가던 결함(2026-09-13, SNS 하네스 S3·S4 — 유튜브 제목·틱톡 설명).
+    if (!n && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) {
+      try {
+        var lb = (el.labels && el.labels[0]) || (el.closest ? el.closest('label') : null);
+        // 값 문자열을 치환해 빼는 방식은 짧은 값("i")이 라벨 글자를 훼손한다 → 컨트롤 자신을 뺀 자식 노드 텍스트만 모은다.
+        if (lb) { var lt = ''; var cs = lb.childNodes; for (var ci = 0; ci < cs.length; ci++) { var cn = cs[ci]; if (cn === el) continue; if (cn.nodeType === 3) lt += cn.textContent; else if (cn.nodeType === 1 && !cn.contains(el)) lt += (cn.innerText || cn.textContent || ''); } n = lt; }
+      } catch (e) {}
+    }
     if (!n && el.tagName === 'INPUT') n = (isSecret(el) ? '' : (el.value || '')) || el.getAttribute('name') || el.getAttribute('title') || '';
     if (!n) n = (el.innerText || el.textContent || '').trim();
     if (!n) n = el.getAttribute('title') || el.getAttribute('alt') || el.getAttribute('name') || '';
@@ -828,6 +843,9 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
       if (TAKEN.has(el)) continue;
       if (!visible(el)) continue;
       var tag = el.tagName.toLowerCase();
+      // 보이는 컨트롤을 가리키는 label 은 그 컨트롤이 대신 목록에 오른다(이름은 라벨 텍스트). 둘 다 올리면 모델이 라벨을 집어
+      // 입력이 허공에 간다. 컨트롤이 숨겨진 커스텀 UI(스타일된 라디오 등)에서는 label 을 그대로 둔다.
+      if (tag === 'label') { var ctl = null; try { ctl = el.control; } catch (e) {} if (ctl && !ctl.disabled && visible(ctl)) continue; }
       var type = tag === 'input' ? (el.getAttribute('type') || 'text') : (el.getAttribute('role') || tag);
       var name = nameOf(el);
       // 빈 편집 영역(contenteditable·role=textbox/combobox)은 이름이 없어도 목록에 남긴다 —

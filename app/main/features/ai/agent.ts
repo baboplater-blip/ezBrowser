@@ -16,7 +16,7 @@ import { downloadMedia, downloadStream, getCandidates } from '../video-download'
 import { getProfile, hasProfileData } from './profile'
 import { hasAgentFilesDir, listAgentFiles, resolveAgentFile } from './agent-files'
 import { writeDownloadMd, safeFileName } from './conversations'
-import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, type RiskVerdict } from './agent-gate'
+import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, type RiskVerdict, type CompletionSignal } from './agent-gate'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
 // 판단은 두 경로: 지원 제공자/모델이면 네이티브 tool-use(구조화 함수 호출, 더 안정적),
@@ -369,7 +369,7 @@ function guardHay(obs: PageObservation): string {
   return (obs.text + '\n' + obs.elements.map((e) => e.name).join('\n')).toLowerCase()
 }
 // 부정어가 바로 앞뒤(12자 안)에 붙은 출현은 세지 않는다 — "완료되지 않았습니다"·"저장 실패" 가 "완료"·"저장" 가드를 통과시키면 안 된다.
-const GUARD_NEGATION = /않|안 |안됨|안 됨|못|실패|오류|에러|취소|아직|불가|없습|없음|not |fail|error|cancel|invalid|unable/i
+const GUARD_NEGATION = /않|안 |안됨|안 됨|못|실패|오류|에러|취소|아직|불가|없습|없음|거부|제한|보류|위반|not |fail|error|cancel|invalid|unable|denied|blocked/i
 function cleanOccurrences(hay: string, needle: string): number {
   let n = 0
   let from = 0
@@ -400,6 +400,20 @@ function guardDiff(base: string[], now: string[]): { added: string[]; removed: s
   return { added: now.filter((l) => !b.has(l)), removed: base.filter((l) => !n.has(l)) }
 }
 export interface GuardBase { hay: string; url: string; lines: string[] }
+// 레시피 완료 신호 판정 — 가드와 같은 "새로 나타남" 기준. 만족하면 근거 문자열, 아니면 null.
+function completionSatisfied(sig: CompletionSignal, obs: PageObservation, base: GuardBase): string | null {
+  const urlChanged = obs.url !== base.url
+  if (sig.urlContains && urlChanged && obs.url.toLowerCase().includes(sig.urlContains.toLowerCase())) return `URL → ${obs.url.slice(0, 80)}`
+  const now = guardHay(obs)
+  for (const t of sig.texts) {
+    const needle = t.toLowerCase()
+    if (!needle) continue
+    const a = cleanOccurrences(now, needle)
+    const b = urlChanged ? 0 : cleanOccurrences(base.hay, needle)
+    if (a > b) return `문구 "${t}" 확인`
+  }
+  return null
+}
 // 확인 가드 판정 — 기대 문구가 동작 **전** 관찰에는 없다가(또는 그보다 더) 새로 나타났는지로 본다. 단순 포함 검사는
 // 동작 전부터 있던 버튼 라벨("제출")·메뉴 문구("완료")·부정문("완료되지 않았습니다")에 속는다(리뷰 지적).
 // urlContains 는 URL 이 실제로 바뀌었고 그 안에 포함될 때만. 둘 다 없으면 실패(빈 가드는 통과가 아니다).
@@ -459,6 +473,17 @@ function extractActions(reply: string): AgentAction[] {
 }
 
 // 행동의 지문(같은 동작 반복 감지용) — 종류+대상 요소+URL+입력값.
+// 페이지 지문 — URL + **요소(종류·이름·상태)** 해시. 본문은 넣지 않는다: 조회수·광고·피드 문구처럼 매 관찰 바뀌는 텍스트가
+// 있으면 같은 헛클릭이 매번 "다른 화면" 이 되어 막힘을 영영 못 잡는다(리뷰 지적). 마법사의 "다음" 은 단계마다 요소가 달라
+// 지문이 바뀌고, 같은 화면에서의 헛클릭은 요소가 그대로라 지문이 같다.
+function pageFingerprint(obs: PageObservation): string {
+  let h = 2166136261
+  const els = obs.elements.map((e) => `${e.type} ${e.name}${e.state ? ' [' + e.state + ']' : ''}`).join(String.fromCharCode(10))
+  for (const ch of obs.url + String.fromCharCode(10) + els) {
+    h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0
+  }
+  return h.toString(16)
+}
 function actionSig(a: AgentAction): string {
   return `${a.action}|${a.ref ?? ''}|${(a.url ?? '').slice(0, 60)}|${(a.text ?? '').slice(0, 24)}|${a.xPct ?? ''},${a.yPct ?? ''}`
 }
@@ -720,6 +745,10 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
   // 가드를 **로컬로** 검사해 통과하면 LLM 을 부르지 않고 꼬리를 실행한다(작업당 호출 2→1). 실패하면 버리고 평소대로 묻는다.
   let pendingTail: AgentAction[] = []
   let pendingTailBase: GuardBase = { hay: '', url: '', lines: [] } // 가드 판정 기준선 — 동작 **전** 관찰
+  // 레시피 완료 신호([완료 신호] 표식) — 주 동작 전 관찰을 기준선으로 두고, 동작 후 관찰에서 신호 문구가 **새로** 나타나면
+  // 모델 호출 없이 done. 발행 흐름의 마지막 호출을 없애고, 완료 근거(어떤 문구를 봤는지)를 보고에 남긴다.
+  const completion: CompletionSignal | null = parseCompletionMark(task)
+  let completionBase: GuardBase | null = null
   // CLI 세션 — 작업당 프로세스 하나(claude-code) / 서버측 스레드 재개(codex). 스텝마다 새 관찰만 보내고
   // 이력은 CLI 가 보유한다(부팅 고정비·캐시 손실 제거 — providers.ts 세션 절 참고). 세션이 죽으면 1회 재개를
   // 시도하고, 그래도 안 되면 기존 스텝별 호출(chatOnce, 로컬 history 전체 전송)로 자동 폴백해 작업을 잇는다.
@@ -825,6 +854,18 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         } else {
           emit({ type: 'result', ok: false, label: '기대 결과 미확인', detail: `${verdict.detail} — 새 화면을 보고 다시 판단` })
           pendingPrefix = (pendingPrefix ? pendingPrefix + ' ' : '') + `기대한 결과(${verdict.detail})가 화면에 나타나지 않았습니다. 화면을 다시 확인하고 판단하세요.`
+        }
+      }
+      // ===== 레시피 완료 신호 — 주 동작 뒤 첫 관찰에서 판정(가드가 이미 통과했으면 그쪽 우선) =====
+      if (!skipLlm && completion && completionBase && !injected && !noPublish && !readOnly) {
+        const why = completionSatisfied(completion, obs, completionBase)
+        completionBase = null // 한 동작당 한 번만 판정 — 다음 주 동작이 새 기준선을 놓는다
+        if (why) {
+          publishedEvidence = true
+          emit({ type: 'result', ok: true, label: '완료 신호 확인', detail: `${why} — 모델을 다시 부르지 않고 완료 처리` })
+          actions = [{ action: 'done', message: `${completion.message ?? '완료 신호를 확인했습니다'} (근거: ${why})` }]
+          skipLlm = true
+          pendingPrefix = ''
         }
       }
       const userContent = (pendingPrefix ? pendingPrefix + '\n\n' : '') + formatTabs(tabList, currentTabId) + formatObservation(obs, injected)
@@ -1369,7 +1410,9 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
 
       // 막힘 감지 — 같은 동작(클릭·입력·이동)을 반복하는데 진전이 없으면 멈추고 사용자에게 묻는다.
       if (action.action === 'click' || action.action === 'type' || action.action === 'navigate' || action.action === 'click_at') {
-        const sig = actionSig(action)
+        // 같은 동작이라도 **화면이 바뀌었으면** 진전이다 — 유튜브 업로드처럼 "다음" 을 세 번 누르는 마법사를
+        // "같은 동작 3회 반복" 으로 오판해 사용자에게 묻던 결함(2026-09-13, SNS 하네스 S3). 페이지 지문을 지문에 합친다.
+        const sig = actionSig(action) + '@' + pageFingerprint(obs)
         recentSigs.push(sig)
         if (recentSigs.length > 6) recentSigs.shift()
         if (recentSigs.filter((s) => s === sig).length >= STUCK_REPEAT) {
@@ -1386,6 +1429,9 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
       }
 
       let result: { ok: boolean; detail: string }
+      // 완료 신호 기준선 — **발행성 클릭**(게시·공유·업로드 확정) 직전 화면만. 입력·이동 뒤에도 판정하면 캡션에 들어간
+      // 완료 어휘("…공유되었습니다 라고 썼다")가 게시 전에 거짓 완료를 만든다(리뷰 지적). 발행 클릭이 아니면 판정하지 않는다.
+      if (completion && publishish && !noPublish && !readOnly) completionBase = { hay: guardHay(obs), url: obs.url, lines: guardLines(obs) }
       if (action.action === 'navigate') {
         if (!action.url || !/^https?:/i.test(action.url)) result = { ok: false, detail: '유효하지 않은 URL' }
         else { emit({ type: 'action', label }); await navigateAndWait(wc, action.url); result = { ok: true, detail: '이동함' } }

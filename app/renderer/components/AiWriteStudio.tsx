@@ -16,6 +16,9 @@ const LENGTHS: Array<{ v: 'short' | 'medium' | 'long'; label: string }> = [
 const PLATFORMS: Array<{ v: string; label: string }> = [
   { v: 'naver', label: '네이버 블로그' }, { v: 'tistory', label: '티스토리' },
   { v: 'wordpress', label: '워드프레스' }, { v: 'generic', label: '일반' },
+  { v: 'instagram', label: '인스타그램 (게시물)' },
+  { v: 'youtube', label: '유튜브 (동영상)' },
+  { v: 'tiktok', label: '틱톡 (동영상)' },
 ]
 
 function newId(): string { try { return crypto.randomUUID() } catch { return `${Date.now()}-${Math.round(Math.random() * 1e9)}` } }
@@ -56,6 +59,8 @@ export function AiWriteStudio({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [tags, setTags] = useState('')
+  const [snsFile, setSnsFile] = useState('')   // SNS: 자료 폴더 안 첨부 파일 이름
+  const isSns = platform === 'instagram' || platform === 'youtube' || platform === 'tiktok'
   const [preview, setPreview] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [autoOpen, setAutoOpen] = useState(true)   // 글쓰기 페이지가 아니면 에이전트가 먼저 이동
@@ -203,6 +208,21 @@ export function AiWriteStudio({
     if (!autoOpen && isInternal) { setNotice('블로그 글쓰기 페이지를 먼저 열거나, "글쓰기 페이지 자동 열기"를 켜세요.'); return }
     setHandoffBusy(true); setNotice(null)
     try {
+      if (isSns) {
+        // SNS 게시 레시피 — 첨부 파일(자료 폴더)·캡션·제목. 'insert' 는 SNS 에선 의미가 없어 draft(게시 직전까지)로 취급.
+        if (!snsFile.trim()) { setNotice('첨부할 파일 이름(에이전트 자료 폴더 안)을 입력하세요. 예: photos/cat.jpg'); return }
+        const sns = await window.browserAPI.ai.snsBuildTask({
+          platform: platform as 'instagram' | 'youtube' | 'tiktok', mode: mode === 'publish' ? 'publish' : 'draft',
+          file: snsFile.trim(), caption: body, title: title.trim() || undefined, tags: tagArr(), autoOpen,
+        })
+        if (autoOpen && isInternal && sns.openUrl) {
+          await window.browserAPI.omnibox.navigate(windowId, undefined, sns.openUrl)
+          await new Promise((r) => setTimeout(r, 1400))
+        }
+        onInsertToEditor(sns.task)
+        setNotice(mode === 'publish' ? '에이전트가 첨부·캡션 입력 후 게시합니다. 게시 완료 문구가 뜨면 자동으로 끝납니다.' : '에이전트가 게시 직전까지만 준비합니다(게시 버튼은 누르지 않음).')
+        return
+      }
       const res = await window.browserAPI.ai.blogBuildTask({ platform, mode, title: title.trim(), body, tags: tagArr(), autoOpen })
       // 내부 페이지(에이전트 시작 불가)에서 시작하는 경우엔, 먼저 활성 탭을 네이버 글쓰기로 이동시켜
       // 에이전트가 http 페이지에서 출발하게 한다(그 뒤 태스크가 로그인/에디터를 처리).
@@ -357,16 +377,23 @@ export function AiWriteStudio({
 
           <label className="ai-write-label">태그 (쉼표)</label>
           <input className="ai-input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="태그1, 태그2" />
+          {isSns && (
+            <>
+              <label className="ai-write-label">첨부 파일 (에이전트 자료 폴더 안 이름)</label>
+              <input className="ai-input" value={snsFile} onChange={(e) => setSnsFile(e.target.value)} placeholder={platform === 'instagram' ? 'photos/cat.jpg' : 'videos/clip.mp4'} title="설정 > AI > 에이전트 자료 폴더 안의 파일만 첨부할 수 있습니다" />
+              <div className="ai-write-seo">{platform === 'youtube' ? '제목은 위 제목 칸, 설명은 본문 칸을 씁니다.' : '본문 칸이 캡션이 됩니다. 태그는 해시태그로 붙습니다.'}</div>
+            </>
+          )}
           {draft.summary && <div className="ai-write-seo" title="검색 노출용 요약">🔎 {draft.summary}</div>}
           <label className="ai-write-autoopen" title="켜면 새 탭 등 글쓰기 화면이 아닐 때 에이전트가 먼저 네이버 글쓰기 페이지를 엽니다(로그인돼 있어야 함).">
             <input type="checkbox" checked={autoOpen} onChange={(e) => setAutoOpen(e.target.checked)} />
-            <span>글쓰기 페이지 자동 열기 {platform === 'naver' ? '(네이버)' : ''}</span>
+            <span>{isSns ? '게시 페이지 자동 열기' : '글쓰기 페이지 자동 열기'} {platform === 'naver' ? '(네이버)' : ''}</span>
           </label>
           <div className="ai-write-actions">
             <button className="ai-send ai-write-insert" onClick={() => void handoff('publish')} disabled={!canHandoff}
-              title="에이전트가 에디터에 작성하고 발행까지 합니다 (발행 순간 확인 요청)">📤 작성하고 발행</button>
+              title={isSns ? '에이전트가 첨부·캡션 입력 후 게시합니다' : '에이전트가 에디터에 작성하고 발행까지 합니다 (발행 순간 확인 요청)'}>{isSns ? '📤 게시' : '📤 작성하고 발행'}</button>
             <button className="ai-mini-btn" onClick={() => void handoff('draft')} disabled={!canHandoff}
-              title="에이전트가 작성 후 임시저장까지 합니다 (발행은 안 함)">📝 임시저장</button>
+              title={isSns ? '게시 직전까지만 준비합니다(게시 버튼은 누르지 않음)' : '에이전트가 작성 후 임시저장까지 합니다 (발행은 안 함)'}>{isSns ? '📝 게시 직전까지' : '📝 임시저장'}</button>
             <button className="ai-mini-btn" onClick={() => void handoff('insert')} disabled={!canHandoff}
               title="에이전트가 입력만 하고 저장·발행은 직접">✍️ 입력만</button>
             <button className="ai-mini-btn" onClick={saveDraft} disabled={!body.trim() && !title.trim()}>💾 초안저장</button>
