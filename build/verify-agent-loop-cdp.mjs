@@ -307,7 +307,16 @@ async function main() {
           return JSON.stringify({ action: 'close_tab', index: opened, thought: '현재 탭 닫기 시도' })
         } },
         // 내부 페이지(새 탭)가 아니라 **시험 페이지 탭**으로 전환한다(내부 페이지는 관찰 대상이 아니다).
-        { reply: () => JSON.stringify({ action: 'switch_tab', index: 1, thought: '시험 페이지 탭으로' }) },
+        // 인덱스를 1 로 박지 않는다 — 앱이 newtab 없이 시험 탭 하나로 시작한 실행(초기 탭 1개)에서는 시험 탭이 0 이라,
+        // 하드코딩하면 방금 연 탭으로 "전환" 해 두 번째 닫기도 현재 탭으로 거부된다(2026-09-13, 5회 중 2회 거짓 실패).
+        { reply: (ctx) => {
+          let idx = null
+          for (const line of String(ctx.lastUser).split(String.fromCharCode(10))) {
+            const m = /^\[탭(\d+)\](.*)$/.exec(line)
+            if (m && !m[2].includes('▶') && m[2].includes('에이전트 시험')) { idx = Number(m[1]); break }
+          }
+          return JSON.stringify({ action: 'switch_tab', index: idx ?? 1, thought: '시험 페이지 탭으로' })
+        } },
         { reply: () => JSON.stringify({ action: 'close_tab', index: opened, thought: '아까 연 탭 닫기' }) },
         doneStep,
       ]
