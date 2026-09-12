@@ -38,6 +38,8 @@ export interface AgentAction {
   text?: string
   url?: string
   urlContains?: string   // expect: 현재 URL 에 이 문자열이 포함돼야 통과
+  urlChanged?: boolean   // expect: 동작 전과 URL 이 달라졌으면 통과(문구를 모를 때)
+  changed?: boolean      // expect: 화면(본문·요소)이 유의미하게 바뀌었으면 통과(문구를 모를 때) — 바뀐 내용이 done 에 요약된다
   index?: number         // switch_tab 대상 탭 번호
   direction?: 'up' | 'down'
   message?: string

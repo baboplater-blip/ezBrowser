@@ -15,7 +15,7 @@
 //   L4 ask 로 물으면 답을 받아 이어가는가
 //   L5 done 으로 정상 종료하는가
 //   L6 무인 배치(autoConfirm)에서도 critical 은 자동 승인되지 않는가
-//   B1~B5 확인 가드(expect): 통과→호출 1회 / 실패→재질의 / 가드 뒤 ref 동작 거부 / 기존 문구·부정문 오탐 방지
+//   B1~B8 확인 가드(expect): 통과→호출 1회 / 실패→재질의 / 가드 뒤 ref 동작 거부 / 기존 문구·부정문 오탐 방지 / changed·urlChanged 문구 없는 가드
 //
 // 사용: node build/verify-agent-loop-cdp.mjs [--port <n>] [--out <dir>]
 
@@ -50,7 +50,7 @@ function check(id, name, ok, detail) {
 const PAGE = `<!doctype html><meta charset="utf-8"><title>에이전트 시험</title>
 <body style="font:16px system-ui;padding:40px">
 <h1>에이전트 시험 페이지</h1>
-<button id="ok">확인</button> <button id="neg">부정</button>
+<button id="ok">확인</button> <button id="neg">부정</button> <button id="noop">아무것도</button>
 <button id="pay">결제하기</button>
 <input id="f" type="file">
 <button id="pub">발행</button>
@@ -515,6 +515,35 @@ async function main() {
       check('B5', '부정문 안의 문구는 가드를 통과시키지 못한다("완료되지 않았습니다" vs "완료")',
         llm.count === 2 && !!failEv && String(doneEv?.message ?? '') === '완료',
         `LLM 호출=${llm.count}(2 이어야) · 미확인=${!!failEv} · 상세=${String(failEv?.detail ?? '').slice(0, 60)}`)
+    }
+    // ---- B6: 문구 없는 가드(changed) — 화면이 바뀌면 1호출로 끝나고 바뀐 내용이 done 에 붙는다 ----
+    {
+      const guardChanged = (label, tail) => ({
+        reply: (ctx) => {
+          const ref = ctx.refFor(label)
+          if (ref === null || ref === undefined) return JSON.stringify({ action: 'done', message: `${label} 못 찾음` })
+          return JSON.stringify([{ action: 'click', ref }, { action: 'expect', changed: true }, ...tail])
+        },
+      })
+      const r = await run({ reqId: 'B6', task: '확인 버튼을 눌러라', script: [guardChanged('확인', [{ action: 'done', message: '눌렀습니다' }]), askIfCalledAgain] })
+      const doneEv = r.evs.find((e) => e.type === 'done')
+      const msg = String(doneEv?.message ?? '')
+      check('B6', '문구 없는 가드(changed): 화면이 바뀌면 1호출로 끝나고 바뀐 내용이 done 에 요약된다',
+        r.state.clicked === true && llm.count === 1 && msg.startsWith('눌렀습니다') && msg.includes('확인된 변화') && msg.includes('눌림'),
+        `LLM 호출=${llm.count}(1 이어야) · done="${msg.slice(0, 90)}"`)
+      // ---- B7: 아무 변화도 없는 클릭이면 changed 가드는 실패하고 모델에 다시 묻는다 ----
+      const r2 = await run({ reqId: 'B7', task: '아무것도 버튼을 눌러라', script: [guardChanged('아무것도', [{ action: 'done', message: '오탐 완료' }]), doneStep] })
+      const failEv = r2.evs.find((e) => e.type === 'result' && e.label === '기대 결과 미확인')
+      const doneEv2 = r2.evs.find((e) => e.type === 'done')
+      check('B7', '변화 없는 클릭에서는 changed 가드가 실패해 모델에 다시 묻는다(거짓 완료 방지)',
+        llm.count === 2 && !!failEv && String(doneEv2?.message ?? '') === '완료',
+        `LLM 호출=${llm.count}(2 이어야) · 미확인=${!!failEv} · 상세=${String(failEv?.detail ?? '').slice(0, 60)}`)
+      // ---- B8: urlChanged 가드 — 이동 작업이 1호출로 끝난다 ----
+      const r3 = await run({ reqId: 'B8', task: '다른 페이지로 이동해라', script: [{ reply: () => JSON.stringify([{ action: 'navigate', url: pages.url + '?moved=1' }, { action: 'expect', urlChanged: true }, { action: 'done', message: '이동했습니다' }]) }, askIfCalledAgain] })
+      const doneEv3 = r3.evs.find((e) => e.type === 'done')
+      check('B8', 'urlChanged 가드: 이동 작업이 1호출로 끝난다',
+        llm.count === 1 && String(doneEv3?.message ?? '').startsWith('이동했습니다'),
+        `LLM 호출=${llm.count}(1 이어야) · done="${String(doneEv3?.message ?? '').slice(0, 60)}"`)
     }
 
     try { page.close() } catch { /* ignore */ }
