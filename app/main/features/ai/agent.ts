@@ -6,7 +6,7 @@ import {
 } from '../../tabs/tab-service'
 import { getAiKey } from './keys'
 import { memoryBlock, appendMemory } from './memory'
-import { chatOnce, chatWithTools, supportsNativeTools, supportsVision, isCliProvider, cliPathSettingKey, type AiMessage, type AiRequest, type ToolSpec, type ToolCall } from './providers'
+import { chatOnce, chatWithTools, supportsNativeTools, supportsVision, isCliProvider, cliPathSettingKey, openCliSession, supportsCliSession, CliSessionDead, type CliSession, type AiMessage, type AiRequest, type ToolSpec, type ToolCall } from './providers'
 import {
   observePage, executeInPageAction, setFileInputFiles, armFileChooser, dropFilesOnRef, extractFromPage,
   waitForOnPage, runPageJs, hoverElement, dragOnPage, pressKey, resolveHref, resolveMediaSrc, autofillPage, inputProfileFor, isFastSite,
@@ -637,9 +637,53 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
   // 직전 행동 결과·거부·사용자 답변을 다음 관찰 앞에 붙인다. history 는 오직 user/assistant 쌍으로만
   // 늘어나므로 엄격한 교대(alternation)가 항상 보장된다 — Anthropic/Gemini 는 연속 같은 role 을 거부한다.
   let pendingPrefix = ''
+  // CLI 세션 — 작업당 프로세스 하나(claude-code) / 서버측 스레드 재개(codex). 스텝마다 새 관찰만 보내고
+  // 이력은 CLI 가 보유한다(부팅 고정비·캐시 손실 제거 — providers.ts 세션 절 참고). 세션이 죽으면 1회 재개를
+  // 시도하고, 그래도 안 되면 기존 스텝별 호출(chatOnce, 로컬 history 전체 전송)로 자동 폴백해 작업을 잇는다.
+  let cli: CliSession | null = null
+  let cliResumeTried = false
+  const wantCliSession = !useTools && isCliProvider(provider) && supportsCliSession(provider) && st.cliSession !== false
+  // 세션 경로로 한 턴을 묻는다. 반환 null = 세션을 포기했으니 호출자가 스텝별 경로로 진행하라는 뜻.
+  // 오류는 throw(cancelled 는 호출자가 cancelledSet 으로 판별).
+  const askCliSession = async (step: number, userText: string, image: string | undefined): Promise<string | null> => {
+    while (cli) {
+      // 첫 턴(재개 세션의 첫 턴 포함)에는 system 을 같이 보낸다 — --resume 이 조용히 새 문맥으로 시작해도 지시가 빠지지 않게(1회 중복 비용).
+      const turn = cli.send({ system: cli.turns === 0 ? system : undefined, text: userText, image })
+      activeCall.set(reqId, turn.cancel)
+      try {
+        const r = await turn.promise
+        if (r.usage) emit({ type: 'usage', step, ...r.usage })
+        return r.text
+      } catch (err) {
+        if (cancelledSet.has(reqId)) throw err
+        if (!(err instanceof CliSessionDead)) throw err
+        // 세션 사망 — 재개 1회, 그 다음은 스텝별 폴백.
+        const dead = cli
+        cli = null
+        const sid = dead.sessionId
+        dead.close()
+        if (!cliResumeTried && sid) {
+          cliResumeTried = true
+          const k = cliPathSettingKey(provider)
+          cli = openCliSession({ provider, model, bin: k ? st[k] : '', resumeId: sid, allowRead: useVision })
+          emit({ type: 'result', ok: false, label: 'CLI 세션 재개', detail: `세션이 끊겨 다시 엽니다: ${err.message.split('\n')[0]}` })
+          continue
+        }
+        emit({ type: 'result', ok: false, label: 'CLI 세션 종료', detail: `단계별 호출로 전환합니다: ${err.message.split('\n')[0]}` })
+        return null
+      } finally { activeCall.delete(reqId) }
+    }
+    return null
+  }
   emit({ type: 'start', task })
 
   try {
+    // 세션 열기는 try 안에서 — 어떤 경로로 빠져나가도 finally 의 close() 가 프로세스·tmp 폴더를 정리한다.
+    if (wantCliSession) {
+      const k = cliPathSettingKey(provider)
+      cli = openCliSession({ provider, model, bin: k ? st[k] : '', allowRead: useVision })
+      if (cli) emit({ type: 'session', mode: 'cli', provider })
+    }
     for (let step = 1; step <= maxSteps; step++) {
       if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
 
@@ -677,15 +721,15 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
       if (injected) emit({ type: 'result', ok: false, label: '주의: 페이지에 지시성 문구', detail: `${obs.url} 의 내용에 에이전트를 조종하려는 문장이 있어 무시합니다.` })
       const userContent = (pendingPrefix ? pendingPrefix + '\n\n' : '') + formatTabs(tabList, currentTabId) + formatObservation(obs, injected)
       pendingPrefix = ''
-      const req = await resolveReq(system, [...history, { role: 'user', content: userContent }])
-      if (shot) req.image = shot
+      // 세션 경로에서는 전체 history 요청이 필요 없다 — 도구 경로·폴백에서만 만든다.
+      const buildReq = async (): Promise<AiRequest> => { const r = await resolveReq(system, [...history, { role: 'user', content: userContent }]); if (shot) r.image = shot; return r }
 
       let action: AgentAction | null = null
       let actions: AgentAction[] = []  // 한 응답에 여러 동작(선행 입력 연쇄) 가능
       let assistantText = ''
       if (useTools) {
         // 네이티브 tool-use — 구조화된 함수 호출로 행동 선택
-        const call = chatWithTools(req, tools)
+        const call = chatWithTools(await buildReq(), tools)
         activeCall.set(reqId, call.cancel)
         let res: { toolCalls: ToolCall[]; text: string }
         try { res = await call.promise } catch (err) {
@@ -697,15 +741,26 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         actions = res.toolCalls.map(toolCallToAction).filter((a): a is AgentAction => a !== null)
         if (!actions.length && assistantText) actions = extractActions(assistantText) // 도구 대신 텍스트로 답한 경우 폴백
       } else {
-        // JSON 액션 프로토콜(폴백)
-        const call = chatOnce(req)
-        activeCall.set(reqId, call.cancel)
-        let reply: string
-        try { reply = await call.promise } catch (err) {
+        // JSON 액션 프로토콜 — CLI 세션이 열려 있으면 새 관찰만 세션에 보내고, 아니면 스텝별 호출(전체 history).
+        let reply: string | null = null
+        if (cli) {
+          try { reply = await askCliSession(step, userContent, shot) } catch (err) {
+            if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+            emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) }); return
+          }
           if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
-          emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) }); return
-        } finally { activeCall.delete(reqId) }
-        if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+        }
+        if (reply === null) {
+          const call = chatOnce(await buildReq())
+          activeCall.set(reqId, call.cancel)
+          try { reply = await call.promise } catch (err) {
+            if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+            emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) }); return
+          } finally { activeCall.delete(reqId) }
+          if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+          const u = call.usage()
+          if (u) emit({ type: 'usage', step, ...u })
+        }
         assistantText = reply
         actions = extractActions(reply)
       }
@@ -1262,6 +1317,7 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
   } catch (err) {
     emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) })
   } finally {
+    if (cli) { try { cli.close() } catch { /* ignore */ } cli = null }
     activeCall.delete(reqId)
     pendingConfirm.delete(reqId)
     pendingAsk.delete(reqId)

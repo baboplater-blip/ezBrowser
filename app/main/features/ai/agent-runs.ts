@@ -17,6 +17,8 @@ export interface AgentRun {
   status: AgentRunStatus
   steps: AgentRunStep[]
   result?: string
+  // 토큰 합계(CLI 세션 경로가 스텝마다 usage 를 방출할 때만 채워진다) — 효율 벤치·사용자 확인용.
+  usage?: { input: number; cacheRead: number; cacheCreate: number; output: number; llmCalls: number }
 }
 export interface AgentRunSummary {
   id: string
@@ -168,6 +170,15 @@ export function recordAgentEvent(runId: string, task: string, evt: EventLike): v
     run = { id: runId, task: task || '작업', startedAt: Date.now(), status: 'running', steps: [] }
     list.unshift(run)
     if (list.length > MAX_RUNS) cache = list.slice(0, MAX_RUNS)
+  }
+
+  if (evt.type === 'usage') {
+    const n = (k: string): number => (typeof evt[k] === 'number' ? (evt[k] as number) : 0)
+    const u = run.usage ?? { input: 0, cacheRead: 0, cacheCreate: 0, output: 0, llmCalls: 0 }
+    u.input += n('input'); u.cacheRead += n('cacheRead'); u.cacheCreate += n('cacheCreate'); u.output += n('output'); u.llmCalls++
+    run.usage = u
+    schedulePersist()
+    return
   }
 
   const step = deriveStep(evt)

@@ -123,6 +123,9 @@ export interface AppSettings {
     // 전부 쓰고, 그 외 사이트에서는 같은 실제 입력 이벤트를 빠른 간격으로 보낸다(작업이 몇 배 빨라짐).
     // 'human': 항상 사람 속도(가장 안전, 느림). 'fast': 항상 빠르게.
     agentInputMode: 'auto' | 'human' | 'fast'
+    // CLI 제공자(claude-code·codex)에서 에이전트 작업 하나에 프로세스 하나를 유지(스텝을 이어 보냄 — 부팅 고정비·
+    // 캐시 손실 제거로 스텝당 지연이 크게 준다). false 면 예전처럼 스텝마다 새로 띄운다(문제 시 폴백 스위치).
+    cliSession: boolean
     webhookUrl: string      // 수집 데이터 연동 — 이 URL 로 JSON POST(Zapier·Make·구글시트 Apps Script 등)
   }
 }
@@ -227,6 +230,7 @@ const DEFAULTS: AppSettings = {
     agentAutoApprove: false,
     agentHumanInput: true,
     agentInputMode: 'auto',
+    cliSession: true,
     webhookUrl: '',
   },
 }

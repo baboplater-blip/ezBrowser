@@ -451,6 +451,7 @@
             { value: 'human', label: '항상 사람 속도' },
             { value: 'fast', label: '항상 빠르게' },
           ]))
+        html += row('CLI 세션 유지 (Claude Code·Codex)', 'Claude Code·Codex 로 에이전트를 돌릴 때 <b>작업 하나에 CLI 프로세스 하나</b>를 유지하고 단계를 이어 보냅니다. 단계마다 새로 띄우던 부팅 시간과 캐시 손실이 사라져 <b>단계당 지연이 크게 줄고 토큰도 절약</b>됩니다. 문제가 있으면 끄세요(예전처럼 단계마다 새로 실행).', toggleHtml('ai.cliSession', a.cliSession !== false))
         html += row('민감 동작 자동 승인 (무인 실행)', '기본은 <b>결제·구매·송금·삭제처럼 돈이 나가거나 데이터가 사라지는 동작만</b> 확인을 받습니다(검색·로그인·폼 제출·<b>글 게시/발행/업로드는 확인 없이 진행</b> — 자동 발행에 방해되지 않음). 이 옵션을 켜면 그 위험한 동작까지도 <b>확인 없이 자동 진행</b>합니다. 편하지만 위험하니 신뢰하는 작업에만 켜세요.', toggleHtml('ai.agentAutoApprove', a.agentAutoApprove === true))
         html += row('에이전트 최대 단계 수', '한 작업에서 에이전트가 시도하는 최대 단계. 로그인→업로드→게시처럼 긴 작업은 크게(기본 25, 6~80)', inputHtml('ai.agentMaxSteps', a.agentMaxSteps || 25, 'number'))
         html += row('최대 응답 길이 (토큰)', '한 번의 답변에서 생성할 최대 토큰 수', inputHtml('ai.maxTokens', a.maxTokens || 2048, 'number'))

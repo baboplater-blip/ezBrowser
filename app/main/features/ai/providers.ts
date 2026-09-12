@@ -1,6 +1,6 @@
 import { net } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { readFileSync, unlinkSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -74,6 +74,8 @@ export interface AiStreamHandlers {
   onDelta: (text: string) => void
   onDone: (full: string) => void
   onError: (message: string) => void
+  // 토큰 사용량(제공자가 알려 줄 때만 — 현재 claude-code 의 json 출력). 효율 계측용, 없어도 동작.
+  onUsage?: (usage: CliUsage) => void
 }
 
 export interface AiStreamHandle {
@@ -81,6 +83,14 @@ export interface AiStreamHandle {
 }
 
 const REQUEST_TIMEOUT_MS = 120_000
+
+// claude-code 에 넘기는 도구 제한. 에이전트는 CLI 의 도구가 아니라 우리 브라우저 액션으로 움직이므로 CLI 내부 도구
+// 루프(파일 탐색·Bash 실행)는 ① 스텝당 수십 초·수십만 토큰을 태우고(실측: 스텝별 실행에서 캐시 읽기 192만) ② 페이지
+// 내용이 프롬프트를 거쳐 사용자 PC 에서 명령을 실행하는 표면이 된다. 실측(2026-09-12, 3턴):
+//   기본                → 1턴 캐시 4.1만 · 이후 턴 2.5~3.6초
+//   --tools ""  / Read  → 1턴 1.1만이지만 **2턴에 12만 토큰이 새로 잡히는** CLI 특성(부적합)
+//   --disallowedTools … → 1턴 2.8만 · 이후 턴 2.2~3.1초 · 신규 150 토큰 안팎 ← 채택. Read 는 남겨 비전(스크린샷)을 읽는다.
+const CLAUDE_CODE_DISALLOWED_TOOLS = 'Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Agent,Task,TodoWrite,Glob,Grep'
 
 interface Endpoint {
   url: string
@@ -257,13 +267,15 @@ function renderCliPrompt(req: AiRequest, imgPath?: string): string {
 }
 
 // CLI 별 실행 스펙. mode='stdout' 이면 표준출력을 스트리밍, 'outfile' 이면 최종 답을 파일에서 읽는다(codex).
-interface CliSpec { name: string; defaultBin: string; mode: 'stdout' | 'outfile'; args: (model: string, outFile: string) => string[] }
+interface CliSpec { name: string; defaultBin: string; mode: 'stdout' | 'outfile' | 'json'; args: (model: string, outFile: string) => string[] }
 
 function cliSpecFor(provider: AiProviderId): CliSpec | null {
   switch (provider) {
     case 'claude-code':
-      return { name: 'Claude Code(claude)', defaultBin: 'claude', mode: 'stdout',
-        args: (model) => ['-p', '--output-format', 'text', ...(model ? ['--model', model] : [])] }
+      // json 모드: 한 줄 JSON {result, usage, session_id} — 텍스트 모드와 달리 토큰 사용량을 준다(스텝별 폴백 경로 계측).
+      // (-p 는 원래 최종 결과를 한 번에 내므로 "스트리밍" 을 잃는 것은 없다.)
+      return { name: 'Claude Code(claude)', defaultBin: 'claude', mode: 'json',
+        args: (model) => ['-p', '--output-format', 'json', '--no-session-persistence', '--disallowedTools', CLAUDE_CODE_DISALLOWED_TOOLS, ...(model ? ['--model', model] : [])] }
     case 'codex':
       // codex exec 는 에이전트 활동을 stdout 에 쏟으므로 최종 답만 --output-last-message 파일에서 읽는다.
       return { name: 'Codex(codex)', defaultBin: 'codex', mode: 'outfile',
@@ -310,12 +322,17 @@ function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
       try { writeFileSync(imgFile, Buffer.from(req.image, 'base64')) } catch { imgFile = '' }
     }
     const args = spec.args((req.model ?? '').trim(), outFile)
+    // 비전(스크린샷)이 없으면 Read 도 막는다 — 페이지 텍스트가 프롬프트로 들어오므로 로컬 파일 읽기 표면을 닫는다.
+    if (!imgFile) { const di = args.indexOf('--disallowedTools'); if (di >= 0 && typeof args[di + 1] === 'string') args[di + 1] = `${args[di + 1]},Read` }
     // Windows 의 CLI 는 .cmd 셰임이라 shell 로 해석. 프롬프트는 args 가 아니라 stdin 으로(주입·길이 안전).
     // 비전: claude 는 작업 디렉터리 밖 파일 읽기를 막으므로, 스크린샷이 있을 때는 그 임시 폴더를 cwd 로 준다.
-    const spawnOpts: Parameters<typeof spawn>[2] = { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32' }
-    if (imgFile) spawnOpts.cwd = dirname(imgFile)
+    // cwd 는 항상 임시 폴더 — 앱의 작업 디렉터리를 물려주면 claude 가 그 폴더의 CLAUDE.md 를 자동 로드한다
+    // (실측 2026-09-12: 저장소 루트에서 실행하니 호출당 캐시 생성 약 20만 토큰). 비전 파일도 이 폴더에서 읽는다.
+    const spawnOpts: Parameters<typeof spawn>[2] = { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32', cwd: imgFile ? dirname(imgFile) : tmpdir(), windowsHide: true }
     child = spawn(bin, args, spawnOpts)
-    child.stdout?.on('data', (c: Buffer) => { if (finished) return; const t = c.toString('utf8'); if (spec.mode === 'stdout') { full += t; handlers.onDelta(t) } })
+    // stdin 은 별도 Writable — 프로세스가 먼저 죽은 뒤 write/end 하면 EPIPE 가 스트림에서 비동기로 난다. 리스너 없으면 메인 크래시.
+    child.stdin?.on('error', () => { /* 프로세스 종료 경로가 처리 */ })
+    child.stdout?.on('data', (c: Buffer) => { if (finished) return; const t = c.toString('utf8'); if (spec.mode === 'stdout') { full += t; handlers.onDelta(t) } else if (spec.mode === 'json') { full += t } })
     child.stderr?.on('data', (c: Buffer) => { stderr += c.toString('utf8') })
     child.on('error', (e) => { cleanupFile(); finish(() => handlers.onError(cliErrorMessage(spec, e as NodeJS.ErrnoException, stderr))) })
     child.on('close', (code) => {
@@ -324,6 +341,22 @@ function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
         try { msg = readFileSync(outFile, 'utf8') } catch { /* 파일 없음 = 실패 */ }
         cleanupFile()
         if (msg.trim()) { handlers.onDelta(msg); finish(() => handlers.onDone(msg)) }
+        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || `종료 코드 ${code}`)))
+      } else if (spec.mode === 'json') {
+        cleanupFile()
+        // 한 줄 JSON. 파싱이 안 되면(구버전 CLI 등) 원문을 그대로 답으로 쓴다.
+        let text = full
+        try {
+          // stdout 에 경고 줄이 섞여도 JSON 본체만 집는다(첫 '{' ~ 마지막 '}').
+          const a = full.indexOf('{'); const b = full.lastIndexOf('}')
+          const j = JSON.parse(a >= 0 && b > a ? full.slice(a, b + 1) : full.trim()) as Record<string, unknown>
+          if (typeof j.result === 'string') text = j.result
+          const u = usageFromClaude(j.usage)
+          if (u && handlers.onUsage) handlers.onUsage(u)
+          // is_error 면 텍스트가 있어도 오류다(한도 초과·권한 거부 안내문을 정상 답으로 쓰면 안 된다).
+          if (j.is_error === true) { finish(() => handlers.onError(`Claude Code 응답 오류(${String(j.subtype ?? 'error')})${text.trim() ? ': ' + text.trim().slice(0, 300) : ''}`)); return }
+        } catch { /* 텍스트로 취급 */ }
+        if (text.trim() || code === 0) { handlers.onDelta(text); finish(() => handlers.onDone(text)) }
         else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || `종료 코드 ${code}`)))
       } else {
         if (code === 0 || full.trim()) finish(() => handlers.onDone(full))
@@ -489,9 +522,10 @@ export function streamChat(req: AiRequest, handlers: AiStreamHandlers): AiStream
 
 // 비스트리밍 1회 호출 — streamChat 을 그대로 재사용해 전체 응답 텍스트를 모아 반환.
 // 에이전트 루프의 각 스텝(이산 결정)에 사용. handle 을 통해 취소 가능.
-export function chatOnce(req: AiRequest): { promise: Promise<string>; cancel(): void } {
+export function chatOnce(req: AiRequest): { promise: Promise<string>; cancel(): void; usage(): CliUsage | null } {
   let handle: AiStreamHandle | null = null
   let acc = ''
+  let usage: CliUsage | null = null
   let settle: ((v: string) => void) | null = null
   const promise = new Promise<string>((resolve, reject) => {
     settle = resolve
@@ -499,10 +533,12 @@ export function chatOnce(req: AiRequest): { promise: Promise<string>; cancel(): 
       onDelta: (t) => { acc += t },
       onDone: (full) => resolve(full || acc),
       onError: (msg) => reject(new Error(msg)),
+      onUsage: (u) => { usage = u },
     })
   })
   return {
     promise,
+    usage: () => usage,
     // 취소 시 스트림을 멈추고 프로미스를 즉시 resolve(누적분) 한다 — 그러지 않으면
     // streamChat.cancel 이 어떤 핸들러도 부르지 않아 이 프로미스가 영원히 settle 되지 않고
     // 에이전트 루프의 await 가 무한 대기한다(중단 버튼 먹통의 근본 원인).
@@ -673,4 +709,325 @@ export function chatWithTools(req: AiRequest, tools: ToolSpec[]): { promise: Pro
     } catch (err) { done(() => reject(err instanceof Error ? err : new Error(String(err)))) }
   })
   return { promise, cancel: () => { aborted = true; try { request?.abort() } catch { /* ignore */ }; settleCancel?.() } }
+}
+
+// ===== CLI 세션 — 에이전트 작업 하나에 프로세스 하나 =====
+//
+// 왜 (2026-09-12): 에이전트가 스텝마다 `claude -p` 를 새로 띄우면 ① Node 부팅·인증·초기화 고정비가 매 스텝
+// 반복되고 ② 세션이 끊겨 프롬프트 캐시가 매번 버려진다(CLI 자체 시스템 컨텍스트만 약 4.1만 토큰 — 실측).
+// 그래서 작업 시작 때 프로세스 하나를 띄워 두고 스텝을 stream-json 으로 이어 보낸다. 이력은 CLI 가 보유하므로
+// 스텝마다 "새 관찰"만 보내면 된다. 실측(2턴): 첫 턴 캐시 생성 40,985 → 둘째 턴 캐시 읽기 40,985 · 신규 4,748.
+//
+// - claude-code: `--input-format stream-json --output-format stream-json` 한 프로세스. 죽으면 `--resume <id>` 로 재개.
+// - codex:       프로세스는 턴마다 뜨지만 `codex exec resume <thread_id>` 로 서버측 문맥·캐시를 잇는다.
+// - gemini-cli:  세션 방식 없음 → null(호출자가 기존 스텝별 spawn 사용).
+// 세션이 죽었을 때(프로세스 종료·타임아웃)는 CliSessionDead 로 알려 호출자가 재개/폴백을 결정한다 —
+// 모델 오류(파싱 실패 등)와 구분하기 위해서다. 어떤 경우에도 작업이 멈추지 않는 것이 목표.
+
+export interface CliUsage { input: number; cacheRead: number; cacheCreate: number; output: number }
+export interface CliTurnInput {
+  system?: string   // 첫 턴에만 — 이후 턴은 CLI 가 문맥을 갖고 있다
+  text: string      // 이번 턴의 사용자 내용(관찰 등)
+  image?: string    // 비전 — base64 PNG. 세션 디렉터리에 파일로 써서 경로를 알려 준다(claude 가 읽음)
+}
+export interface CliTurnResult { text: string; usage: CliUsage | null; sessionId: string | null }
+export interface CliSession {
+  readonly provider: AiProviderId
+  readonly sessionId: string | null   // claude: session_id · codex: thread_id — 재개용
+  readonly alive: boolean
+  readonly turns: number              // 완료된 턴 수
+  send(input: CliTurnInput): { promise: Promise<CliTurnResult>; cancel(): void }
+  close(): void
+}
+export class CliSessionDead extends Error {
+  constructor(msg: string) { super(msg); this.name = 'CliSessionDead' }
+}
+export interface CliSessionOptions { provider: AiProviderId; model: string; bin?: string; resumeId?: string | null; allowRead?: boolean /* 비전(스크린샷 읽기)일 때만 Read 허용 */ }
+
+// 세션 방식을 지원하는 CLI 인가(설정 토글과 별개 — 능력 판정).
+export function supportsCliSession(provider: AiProviderId): boolean {
+  return provider === 'claude-code' || provider === 'codex'
+}
+
+// Windows 의 shell:true spawn 은 cmd.exe 가 부모라 child.kill() 로는 실제 CLI(node)가 안 죽는다 → 트리째 종료.
+function killTree(child: ChildProcess | null): void {
+  if (!child || child.pid == null) return
+  if (process.platform === 'win32') {
+    try { spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).on('error', () => { /* taskkill 부재 — 무시 */ }) } catch { /* ignore */ }
+  } else {
+    try { child.kill('SIGKILL') } catch { /* ignore */ }
+  }
+}
+
+function renderTurnText(input: CliTurnInput, imgPath?: string): string {
+  const parts: string[] = []
+  if (input.system) parts.push(input.system, '')
+  if (imgPath) parts.push('## 화면 스크린샷', `먼저 아래 이미지 파일을 열어(Read) 현재 화면을 눈으로 확인한 뒤, 요소 목록과 함께 판단하세요:\n${imgPath}`, '')
+  if (input.system) parts.push('## 사용자')
+  parts.push(input.text)
+  return parts.join('\n')
+}
+
+function usageFromClaude(u: unknown): CliUsage | null {
+  if (!u || typeof u !== 'object') return null
+  const o = u as Record<string, unknown>
+  const n = (k: string): number => (typeof o[k] === 'number' ? (o[k] as number) : 0)
+  return { input: n('input_tokens'), cacheRead: n('cache_read_input_tokens'), cacheCreate: n('cache_creation_input_tokens'), output: n('output_tokens') }
+}
+
+// --- claude-code: stream-json 한 프로세스 ---
+class ClaudeStreamSession implements CliSession {
+  readonly provider: AiProviderId = 'claude-code'
+  sessionId: string | null
+  alive = false
+  turns = 0
+  private child: ChildProcess | null = null
+  private buf = ''
+  private stderr = ''
+  private dir: string
+  private pending: { resolve: (r: CliTurnResult) => void; reject: (e: Error) => void; text: string; timer: NodeJS.Timeout } | null = null
+  private closed = false
+
+  constructor(private opts: CliSessionOptions) {
+    this.sessionId = opts.resumeId ?? null
+    this.dir = join(tmpdir(), `bb-cli-${randomUUID()}`)
+    try { mkdirSync(this.dir, { recursive: true }) } catch { /* 비전 파일만 영향 */ }
+    this.spawnProcess()
+  }
+
+  private spawnProcess(): void {
+    const bin = (this.opts.bin && this.opts.bin.trim()) ? this.opts.bin.trim() : 'claude'
+    const model = (this.opts.model ?? '').trim()
+    const args = ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
+      '--disallowedTools', this.opts.allowRead ? CLAUDE_CODE_DISALLOWED_TOOLS : `${CLAUDE_CODE_DISALLOWED_TOOLS},Read`,
+      ...(model ? ['--model', model] : []),
+      ...(this.opts.resumeId ? ['--resume', this.opts.resumeId] : [])]
+    // 비전 파일을 읽으려면 그 폴더가 작업 디렉터리여야 한다(claude 는 cwd 밖 파일 읽기를 막는다).
+    const spawnOpts: Parameters<typeof spawn>[2] = { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32', cwd: this.dir, windowsHide: true }
+    try {
+      this.child = spawn(bin, args, spawnOpts)
+    } catch (err) {
+      this.alive = false
+      this.failPending(new CliSessionDead(err instanceof Error ? err.message : String(err)))
+      return
+    }
+    this.alive = true
+    this.child.stdin?.on('error', () => { /* 프로세스 종료(close) 경로가 pending 을 정리한다 */ })
+    this.child.stdout?.on('data', (c: Buffer) => this.onStdout(c.toString('utf8')))
+    this.child.stderr?.on('data', (c: Buffer) => { this.stderr = (this.stderr + c.toString('utf8')).slice(-2000) })
+    this.child.on('error', (e) => { this.alive = false; this.failPending(new CliSessionDead(cliErrorMessage(cliSpecFor('claude-code')!, e as NodeJS.ErrnoException, this.stderr))) })
+    this.child.on('close', (code) => {
+      this.alive = false
+      this.failPending(new CliSessionDead(`Claude Code 세션이 종료됐습니다(코드 ${code}).${this.stderr ? '\n' + this.stderr.slice(-400).trim() : ''}`))
+    })
+  }
+
+  private failPending(err: Error): void {
+    const p = this.pending
+    if (!p) return
+    this.pending = null
+    clearTimeout(p.timer)
+    p.reject(err)
+  }
+
+  private onStdout(chunk: string): void {
+    this.buf += chunk
+    let i: number
+    while ((i = this.buf.indexOf('\n')) >= 0) {
+      const line = this.buf.slice(0, i).trim()
+      this.buf = this.buf.slice(i + 1)
+      if (!line) continue
+      let j: Record<string, unknown>
+      try { j = JSON.parse(line) as Record<string, unknown> } catch { continue }
+      this.onEvent(j)
+    }
+  }
+
+  private onEvent(j: Record<string, unknown>): void {
+    const sid = typeof j.session_id === 'string' ? j.session_id : null
+    if (sid) this.sessionId = sid
+    const p = this.pending
+    if (!p) return
+    if (j.type === 'assistant') {
+      // message.content: [{type:'text', text}] — 텍스트 블록만 누적(도구 호출 블록은 무시)
+      const msg = j.message as { content?: unknown } | undefined
+      const content = Array.isArray(msg?.content) ? (msg!.content as Array<Record<string, unknown>>) : []
+      for (const b of content) if (b && b.type === 'text' && typeof b.text === 'string') p.text += (p.text ? '\n' : '') + b.text
+      return
+    }
+    if (j.type === 'result') {
+      this.pending = null
+      clearTimeout(p.timer)
+      this.turns++
+      const isError = j.is_error === true || (typeof j.subtype === 'string' && j.subtype !== 'success')
+      const resultText = typeof j.result === 'string' ? j.result : ''
+      if (isError) {
+        // 텍스트가 있어도 오류로 전파 — 한도 초과·권한 거부 안내문을 행동 응답으로 파싱하면 "이해 못함" 으로 오진된다.
+        const errs = Array.isArray(j.errors) ? (j.errors as unknown[]).map(String).join('; ') : ''
+        const detail = errs || (resultText || p.text).trim().slice(0, 300)
+        p.reject(new Error(`Claude Code 응답 오류(${String(j.subtype ?? 'error')})${detail ? ': ' + detail : ''}`))
+        return
+      }
+      p.resolve({ text: resultText || p.text, usage: usageFromClaude(j.usage), sessionId: this.sessionId })
+    }
+  }
+
+  send(input: CliTurnInput): { promise: Promise<CliTurnResult>; cancel(): void } {
+    if (!this.alive || !this.child || this.closed) {
+      return { promise: Promise.reject(new CliSessionDead('Claude Code 세션이 살아 있지 않습니다.')), cancel() { /* noop */ } }
+    }
+    if (this.pending) {
+      return { promise: Promise.reject(new Error('이전 턴이 아직 진행 중입니다.')), cancel() { /* noop */ } }
+    }
+    let imgPath: string | undefined
+    if (input.image) {
+      imgPath = join(this.dir, `shot-${this.turns + 1}.png`)
+      try { writeFileSync(imgPath, Buffer.from(input.image, 'base64')) } catch { imgPath = undefined }
+    }
+    const promise = new Promise<CliTurnResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        // 턴 타임아웃 = 프로세스가 막힌 것으로 보고 세션을 죽인다(호출자가 재개/폴백).
+        this.pending = null
+        this.alive = false
+        killTree(this.child)
+        reject(new CliSessionDead('시간 초과 (120초). 세션을 다시 엽니다.'))
+      }, REQUEST_TIMEOUT_MS)
+      this.pending = { resolve, reject, text: '', timer }
+      const payload = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: renderTurnText(input, imgPath) }] } }) + '\n'
+      try { this.child!.stdin?.write(payload) } catch (err) {
+        this.pending = null
+        clearTimeout(timer)
+        this.alive = false
+        reject(new CliSessionDead(err instanceof Error ? err.message : String(err)))
+      }
+    })
+    return {
+      promise,
+      cancel: () => {
+        // 취소 = 프로세스 종료(현재 턴 즉시 중단). 세션은 죽는다 — 취소된 작업은 어차피 끝난다.
+        const p = this.pending
+        this.pending = null
+        if (p) { clearTimeout(p.timer); p.reject(new Error('cancelled')) }
+        this.alive = false
+        killTree(this.child)
+      },
+    }
+  }
+
+  close(): void {
+    if (this.closed) return
+    this.closed = true
+    this.failPending(new CliSessionDead('세션이 닫혔습니다.'))
+    const child = this.child
+    try { child?.stdin?.end() } catch { /* ignore */ }
+    // 우아한 종료를 3초 주고, 안 죽으면 트리째.
+    setTimeout(() => { if (this.alive) killTree(child) }, 3000).unref()
+    setTimeout(() => { try { rmSync(this.dir, { recursive: true, force: true }) } catch { /* ignore */ } }, 5000).unref()
+  }
+}
+
+// --- codex: 턴마다 `codex exec` / `codex exec resume <thread>` (서버측 문맥 유지) ---
+class CodexResumeSession implements CliSession {
+  readonly provider: AiProviderId = 'codex'
+  sessionId: string | null
+  alive = true
+  turns = 0
+  private child: ChildProcess | null = null
+  private dir: string
+  private closed = false
+
+  constructor(private opts: CliSessionOptions) {
+    this.sessionId = opts.resumeId ?? null
+    this.dir = join(tmpdir(), `bb-cli-${randomUUID()}`)
+    try { mkdirSync(this.dir, { recursive: true }) } catch { /* ignore */ }
+  }
+
+  send(input: CliTurnInput): { promise: Promise<CliTurnResult>; cancel(): void } {
+    if (this.closed) return { promise: Promise.reject(new CliSessionDead('Codex 세션이 닫혔습니다.')), cancel() { /* noop */ } }
+    if (this.child) return { promise: Promise.reject(new Error('이전 턴이 아직 진행 중입니다.')), cancel() { /* noop */ } }
+    const bin = (this.opts.bin && this.opts.bin.trim()) ? this.opts.bin.trim() : 'codex'
+    const model = (this.opts.model ?? '').trim()
+    const outFile = join(this.dir, `out-${this.turns + 1}.txt`)
+    let imgPath: string | undefined
+    if (input.image) {
+      imgPath = join(this.dir, `shot-${this.turns + 1}.png`)
+      try { writeFileSync(imgPath, Buffer.from(input.image, 'base64')) } catch { imgPath = undefined }
+    }
+    const common = ['--json', '--skip-git-repo-check', '--sandbox', 'read-only', '--output-last-message', outFile,
+      ...(model ? ['-m', model] : []), ...(imgPath ? ['-i', imgPath] : [])]
+    const args = this.sessionId ? ['exec', 'resume', this.sessionId, ...common, '-'] : ['exec', ...common, '-']
+    let stderr = ''
+    let buf = ''
+    let usage: CliUsage | null = null
+    let failMsg = ''
+    let finished = false
+    const promise = new Promise<CliTurnResult>((resolve, reject) => {
+      const finish = (fn: () => void): void => { if (finished) return; finished = true; clearTimeout(timer); this.child = null; fn() }
+      const timer = setTimeout(() => { killTree(this.child); finish(() => reject(new CliSessionDead('시간 초과 (120초).'))) }, REQUEST_TIMEOUT_MS)
+      const spawnOpts: Parameters<typeof spawn>[2] = { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32', cwd: this.dir, windowsHide: true }
+      try { this.child = spawn(bin, args, spawnOpts) } catch (err) { finish(() => reject(new CliSessionDead(err instanceof Error ? err.message : String(err)))); return }
+      const onLine = (line: string): void => {
+        let j: Record<string, unknown>
+        try { j = JSON.parse(line) as Record<string, unknown> } catch { return }
+        if (j.type === 'thread.started' && typeof j.thread_id === 'string') this.sessionId = j.thread_id
+        else if (j.type === 'turn.completed' && j.usage && typeof j.usage === 'object') {
+          const u = j.usage as Record<string, unknown>
+          const n = (k: string): number => (typeof u[k] === 'number' ? (u[k] as number) : 0)
+          usage = { input: n('input_tokens'), cacheRead: n('cached_input_tokens'), cacheCreate: 0, output: n('output_tokens') }
+        } else if ((j.type === 'turn.failed' || j.type === 'error') && !failMsg) {
+          const e = j.error as { message?: string } | undefined
+          failMsg = (e && typeof e.message === 'string') ? e.message : (typeof j.message === 'string' ? j.message : 'turn.failed')
+        }
+      }
+      this.child.stdout?.on('data', (c: Buffer) => {
+        buf += c.toString('utf8')
+        let i: number
+        while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (line) onLine(line) }
+      })
+      this.child.stderr?.on('data', (c: Buffer) => { stderr = (stderr + c.toString('utf8')).slice(-2000) })
+      this.child.stdin?.on('error', () => { /* close 경로가 처리 */ })
+      this.child.on('error', (e) => finish(() => reject(new CliSessionDead(cliErrorMessage(cliSpecFor('codex')!, e as NodeJS.ErrnoException, stderr)))))
+      this.child.on('close', (code) => {
+        let text = ''
+        try { text = readFileSync(outFile, 'utf8') } catch { /* 없음 = 실패 */ }
+        if (text.trim()) { this.turns++; finish(() => resolve({ text, usage, sessionId: this.sessionId })) }
+        else if (failMsg) finish(() => reject(new Error(`Codex 응답 오류: ${failMsg.slice(0, 400)}`)))
+        else finish(() => reject(new CliSessionDead(cliErrorMessage(cliSpecFor('codex')!, null, stderr || `종료 코드 ${code}`))))
+      })
+      try { this.child.stdin?.write(renderTurnText(input)); this.child.stdin?.end() } catch { /* error 이벤트가 처리 */ }
+    })
+    return {
+      promise,
+      cancel: () => { killTree(this.child) },
+    }
+  }
+
+  close(): void {
+    if (this.closed) return
+    this.closed = true
+    this.alive = false
+    killTree(this.child)
+    setTimeout(() => { try { rmSync(this.dir, { recursive: true, force: true }) } catch { /* ignore */ } }, 5000).unref()
+  }
+}
+
+// 세션을 연다. 세션 방식을 지원하지 않는 제공자면 null(호출자는 기존 스텝별 호출 사용).
+// 앱이 강제 종료되면 5초 지연 정리가 못 돌아 세션 tmp 폴더(스크린샷 포함)가 남는다 → 다음 세션을 열 때 2시간 지난 것을 치운다.
+function sweepStaleSessionDirs(): void {
+  try {
+    const base = tmpdir()
+    const cutoff = Date.now() - 2 * 3600_000
+    for (const name of readdirSync(base)) {
+      if (!name.startsWith('bb-cli-')) continue
+      const full = join(base, name)
+      try { if (statSync(full).mtimeMs < cutoff) rmSync(full, { recursive: true, force: true }) } catch { /* 사용 중이면 다음에 */ }
+    }
+  } catch { /* tmp 목록 실패는 무시 */ }
+}
+
+export function openCliSession(opts: CliSessionOptions): CliSession | null {
+  sweepStaleSessionDirs()
+  if (opts.provider === 'claude-code') return new ClaudeStreamSession(opts)
+  if (opts.provider === 'codex') return new CodexResumeSession(opts)
+  return null
 }

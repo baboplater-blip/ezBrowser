@@ -38,6 +38,7 @@ npm run dev         # vite + electron (cross-env 로 VITE_DEV_SERVER_URL 주입)
 | `perf-measure.mjs` / `perf-breakdown.mjs` / `perf-check.mjs` | 성능 예산 (private WS 기준) |
 | `stress-cdp.mjs` / `session-restore-cdp.mjs` | 50탭 스트레스 / 강제 kill 후 복원 |
 | `probe-fingerprint-cdp.mjs` / `bench-agent-cdp.mjs` | 자동화 지문 노출 / 에이전트 동작 속도 |
+| `bench-agent-efficiency-cdp.mjs` | **에이전트 작업 전체 효율**(스텝·시간·토큰·성공률) — 실제 구독 CLI(claude-code/codex)로 세션 유지 vs 스텝별 실행 비교. **게이트 미등록·수동 실행**(구독 호출·비결정론) |
 | `probe-download.mjs` | 단일 URL 다운로드 가능성 진단 CLI |
 
 라운드 검증은 개별 하네스를 기억해 돌리지 말고 **`npm run verify`** 로 시작한다(무엇을 돌릴지는 러너 등록부가 정본).

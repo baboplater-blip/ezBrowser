@@ -1726,3 +1726,11 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
     - U4 는 처음에 uBO 의 실제 예외 룰로 시험하려다 실패했는데, **원인은 엔진이 아니라 시험 구성**이었다(예외 룰의 조건이 경로·발신 목록까지 지정해 내가 만든 URL 이 그 룰을 만족하지 못했다). 확인하려던 성질은 **크롬의 판정 규칙**이므로 합성 룰로 직접 시험하도록 바꿨다 — **엔진을 시험에 맞추지 않고 시험을 목적에 맞췄다.**
   - **무회귀**: extension-behavior 9/9 · dl-matrix 10/11 · 스모크 16/16 · `npm run verify` 8/8.
   - **교훈**: "적용됐다" 와 "제대로 막는다" 는 다르다. 개수만 보고 넘어갔다면 **uBO Lite 사용자의 브라우저가 정상 사이트를 막는 채로 출시**됐을 것이다.
+- 2026-09-12: **auto-dev 임무 — 에이전트 CLI 세션 유지(작업당 claude 프로세스 1개) + 효율 벤치 하네스**. 사용자 기준: 로컬 모델 없이 Claude·GPT 구독 CLI 만, Codex 컴퓨터 유즈보다 효율이 좋아야 한다.
+  - **문제**: 에이전트가 스텝마다 `claude -p` 를 새로 띄워 부팅 고정비가 반복되고 세션이 끊겨 캐시가 매번 버려졌다(CLI 자체 시스템 컨텍스트만 ≈4.1만 토큰). 스텝당 10~30초의 주범.
+  - **`providers.ts` "CLI 세션" 절**: `ClaudeStreamSession`(`--input-format/--output-format stream-json` 한 프로세스, NDJSON 파서, 턴 120초 타임아웃, Windows 트리 종료, tmp 디렉터리) · `CodexResumeSession`(`codex exec --json` → `thread.started.thread_id` → `exec resume <id>`) · 세션 사망은 `CliSessionDead` 로 구분. `agent.ts` 는 스텝마다 **새 관찰만** 세션에 보내고, 죽으면 `--resume` 1회 → 스텝별 `chatOnce`(로컬 history) 폴백. 설정 `ai.cliSession`(기본 ON). `usage` 이벤트 → 실행 이력 `run.usage`.
+  - **CLI 내부 도구 차단 — 속도이자 보안**: `--disallowedTools Bash,Edit,Write,…`(비전 OFF 면 Read 까지). 페이지 텍스트→프롬프트→CLI Bash 실행 경로가 막힌다. 3턴 프로브 실측: 기본 1턴 4.1만 / `--tools ""`·`Read` 는 **2턴째 12만 토큰이 새로 캐시되는 CLI 특성**(부적합) / `--disallowedTools` 1턴 2.8만·이후 2~3초 ← 채택.
+  - **cwd 함정**: 스텝별 경로가 앱 cwd 를 물려받아 저장소 루트에서 띄우면 claude 가 **CLAUDE.md 를 자동 로드**(호출당 캐시 생성 ≈20만 토큰, 첫 측정 160초/3스텝의 정체). CLI cwd 는 항상 tmp. Windows `shell:true` 는 빈 문자열 인자를 **삼킨다**(`'""'` 필요).
+  - **벤치 [build/bench-agent-efficiency-cdp.mjs](build/bench-agent-efficiency-cdp.mjs)**: 로컬 결정적 3작업을 실제 구독 CLI 로 세션/스텝별 실행 비교(스텝·시간·스텝당 LLM 지연·토큰·성공률). **게이트 미등록·수동**(구독 호출·비결정론). 실측(claude-code, 6회): 세션 **12.4s/작업 · 5.2s/스텝 · 신규 8.1k 토큰/스텝** vs 공정 기존 17.1s · 7.8s · 10.3k vs 수정 전(도구 무제한+앱 cwd) 160s · 25.9s · 229k. 12/12 성공.
+  - **리뷰 반영**(code-reviewer): 세션 열기를 try 안으로(누수 차단) · stdin `error` 리스너(EPIPE 메인 크래시 차단) · `is_error` 는 텍스트 있어도 오류 · 재개 세션 첫 턴에도 system · assistant 블록 구분자 · 2시간 지난 tmp 세션 폴더 청소.
+  - **못 한 것**: Codex 실측 — 이 PC 의 codex 0.130.0 이 사용자 config(`gpt-6-astra`·`service_tier=priority`)를 지원하지 않아 실행 불가(배선만). 턴 후 요약 대기 1~4초는 CLI 내부.
