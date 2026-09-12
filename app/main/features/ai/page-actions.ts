@@ -33,10 +33,11 @@ export interface PageObservation {
 export interface AgentAction {
   thought?: string
   action: 'click' | 'type' | 'navigate' | 'scroll' | 'read' | 'wait' | 'done' | 'ask' | 'open_tab' | 'switch_tab' | 'close_tab' | 'remember' | 'upload_file' | 'click_at' | 'extract'
-    | 'wait_for' | 'key' | 'hover' | 'drag' | 'download' | 'run_js' | 'autofill' | 'note' | 'report'
+    | 'wait_for' | 'key' | 'hover' | 'drag' | 'download' | 'run_js' | 'autofill' | 'note' | 'report' | 'expect'
   ref?: number
   text?: string
   url?: string
+  urlContains?: string   // expect: 현재 URL 에 이 문자열이 포함돼야 통과
   index?: number         // switch_tab 대상 탭 번호
   direction?: 'up' | 'down'
   message?: string

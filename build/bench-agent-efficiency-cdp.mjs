@@ -271,7 +271,7 @@ async function main() {
             try {
               const r = await runTask(app, args.port, pages.url, taskId, mode, rep)
               results.push(r)
-              console.log(`${r.success ? '✓' : '✗'} ${r.end} · 스텝 ${r.steps} · ${fmt(r.wallMs / 1000)}s · 스텝지연 중앙 ${fmt(r.stepLatencyMedianMs / 1000)}s` + (r.tokens ? ` · 토큰 in ${fmt(r.tokens.input)} / cacheR ${fmt(r.tokens.cacheRead)} / cacheW ${fmt(r.tokens.cacheCreate)} / out ${fmt(r.tokens.output)}` : ' · 토큰 미측정') + (r.fallback ? ' · ⚠ 세션 폴백 발생' : '') + (r.errorMessage ? ` · 오류: ${r.errorMessage}` : ''))
+              console.log(`${r.success ? '✓' : '✗'} ${r.end} · 스텝 ${r.steps} · LLM 호출 ${r.llmCalls} · ${fmt(r.wallMs / 1000)}s · 스텝지연 중앙 ${fmt(r.stepLatencyMedianMs / 1000)}s` + (r.tokens ? ` · 토큰 in ${fmt(r.tokens.input)} / cacheR ${fmt(r.tokens.cacheRead)} / cacheW ${fmt(r.tokens.cacheCreate)} / out ${fmt(r.tokens.output)}` : ' · 토큰 미측정') + (r.fallback ? ' · ⚠ 세션 폴백 발생' : '') + (r.errorMessage ? ` · 오류: ${r.errorMessage}` : ''))
             } catch (err) {
               results.push({ mode, task: taskId, rep, success: false, end: 'harness-error', errorMessage: err.message })
               console.log(`✗ 하네스 오류: ${err.message}`)
@@ -296,7 +296,7 @@ async function main() {
     const stepsTotal = rs.reduce((a, r) => a + (r.steps || 0), 0)
     summary[mode] = {
       runs: rs.length, success: ok.length, successRate: rs.length ? ok.length / rs.length : 0,
-      stepsMedian: median(rs.map((r) => r.steps || 0)), stepsTotal,
+      stepsMedian: median(rs.map((r) => r.steps || 0)), stepsTotal, llmCallsTotal: rs.reduce((a, r) => a + (r.llmCalls || 0), 0),
       wallMedianMs: median(rs.map((r) => r.wallMs || 0)), wallTotalMs: rs.reduce((a, r) => a + (r.wallMs || 0), 0),
       stepLatencyMedianMs: median(rs.flatMap((r) => r.stepLatencyMs || [])),
       tokens: withTok.length ? { input: tok('input'), cacheRead: tok('cacheRead'), cacheCreate: tok('cacheCreate'), output: tok('output'), perStepNew: stepsTotal ? Math.round((tok('input') + tok('cacheCreate') + tok('output')) / stepsTotal) : 0 } : null,
@@ -310,11 +310,11 @@ async function main() {
   md.push(`# 에이전트 효율 벤치 — ${new Date().toISOString()}`)
   md.push(`provider=${args.provider}${args.model ? ' model=' + args.model : ''} · tasks=${args.tasks.join(',')} · repeat=${args.repeat} · maxSteps=${args.maxSteps} · vision=off · humanInput=off`)
   md.push('')
-  md.push('| 모드 | 실행 | 성공률 | 스텝(중앙) | 총 시간(중앙) | 스텝당 LLM 지연(중앙) | 신규 토큰/스텝 (input+cacheW+out) | 캐시 읽기 합 | 폴백 |')
-  md.push('|---|---|---|---|---|---|---|---|---|')
+  md.push('| 모드 | 실행 | 성공률 | 스텝(중앙) | LLM 호출 합 | 총 시간(중앙) | 스텝당 LLM 지연(중앙) | 신규 토큰/스텝 (input+cacheW+out) | 캐시 읽기 합 | 폴백 |')
+  md.push('|---|---|---|---|---|---|---|---|---|---|')
   for (const mode of args.modes) {
     const s = summary[mode]
-    md.push(`| ${mode === 'session' ? '세션 유지(신규)' : '스텝별 실행(기존)'} | ${s.runs} | ${Math.round(s.successRate * 100)}% (${s.success}/${s.runs}) | ${fmt(s.stepsMedian)} | ${fmt(s.wallMedianMs / 1000)}s | ${fmt(s.stepLatencyMedianMs / 1000)}s | ${s.tokens ? fmt(s.tokens.perStepNew) : '미측정'} | ${s.tokens ? fmt(s.tokens.cacheRead) : '미측정'} | ${s.fallbacks} |`)
+    md.push(`| ${mode === 'session' ? '세션 유지(신규)' : '스텝별 실행(기존)'} | ${s.runs} | ${Math.round(s.successRate * 100)}% (${s.success}/${s.runs}) | ${fmt(s.stepsMedian)} | ${s.llmCallsTotal} | ${fmt(s.wallMedianMs / 1000)}s | ${fmt(s.stepLatencyMedianMs / 1000)}s | ${s.tokens ? fmt(s.tokens.perStepNew) : '미측정'} | ${s.tokens ? fmt(s.tokens.cacheRead) : '미측정'} | ${s.fallbacks} |`)
   }
   md.push('')
   md.push(`**Codex 컴퓨터 유즈 추정 기준치(실측 아님)**: 같은 스텝 수 × (스크린샷 ≈${CU_IMAGE_TOKENS} + 텍스트 ≈${CU_TEXT_TOKENS}) 토큰/스텝 → ` + args.modes.map((m) => `${m}: ${fmt(summary[m].computerUseEstimateTokens)}`).join(' · ') + '. 컴퓨터 유즈는 좌표 클릭 빗나감·OS 창 대응으로 스텝이 더 늘어나는 경향이 있으나 그 배수는 여기서 가정하지 않는다.')

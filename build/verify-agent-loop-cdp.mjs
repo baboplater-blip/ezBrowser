@@ -15,6 +15,7 @@
 //   L4 ask 로 물으면 답을 받아 이어가는가
 //   L5 done 으로 정상 종료하는가
 //   L6 무인 배치(autoConfirm)에서도 critical 은 자동 승인되지 않는가
+//   B1~B5 확인 가드(expect): 통과→호출 1회 / 실패→재질의 / 가드 뒤 ref 동작 거부 / 기존 문구·부정문 오탐 방지
 //
 // 사용: node build/verify-agent-loop-cdp.mjs [--port <n>] [--out <dir>]
 
@@ -49,7 +50,7 @@ function check(id, name, ok, detail) {
 const PAGE = `<!doctype html><meta charset="utf-8"><title>에이전트 시험</title>
 <body style="font:16px system-ui;padding:40px">
 <h1>에이전트 시험 페이지</h1>
-<button id="ok">확인</button>
+<button id="ok">확인</button> <button id="neg">부정</button>
 <button id="pay">결제하기</button>
 <input id="f" type="file">
 <button id="pub">발행</button>
@@ -58,6 +59,7 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>에이전트 시험</t
 <script>
   window.__clicked = false; window.__paid = false; window.__published = false;
   document.getElementById('ok').onclick = () => { window.__clicked = true; document.getElementById('state').textContent = '눌림' }
+  document.getElementById('neg').onclick = () => { document.getElementById('state').textContent = '완료되지 않았습니다' }
   document.getElementById('pay').onclick = () => { window.__paid = true; document.getElementById('state').textContent = '결제됨' }
   document.getElementById('pub').onclick = () => { window.__published = true; document.getElementById('state').textContent = '발행됨' }
 </script></body>`
@@ -168,7 +170,8 @@ async function main() {
     /** 한 시나리오 실행: 각본을 걸고 에이전트를 돌린 뒤 이벤트를 모은다. */
     async function run({ script, reqId, task, onConfirm, onAsk, rows, autoConfirm, readOnly, timeoutMs = 30000 }) {
       llm.setScript(script)
-      await evalIn(page, 'window.__clicked = false; window.__paid = false; window.__published = false; true')
+      // 상태 문구도 되돌린다 — 앞 시나리오가 남긴 "눌림" 이 남아 있으면 expect 가드가 "동작 전부터 있던 문구" 로 정확히 거부한다(B1 거짓 실패, 2026-09-13).
+      await evalIn(page, 'window.__clicked = false; window.__paid = false; window.__published = false; (document.getElementById("state") || {}).textContent = "대기"; true')
       await evalIn(shell, 'window.__ev = []; true')
       const startArgs = { reqId, tabId, task, ...(readOnly ? { readOnly: true } : {}), ...(rows ? { rows, autoConfirm: !!autoConfirm } : {}) }
       await evalIn(shell, `window.browserAPI.ai.agentStart(${JSON.stringify(startArgs)})`, true)
@@ -455,6 +458,63 @@ async function main() {
       check('SR1', '보고서가 .md 파일로 저장되고 노트 내용이 담긴다',
         !!reportEv && fileOk && hasNote && (reportEv.notes ?? 0) >= 2,
         `노트 ${reportEv?.notes ?? 0}개 · 파일=${savedPath ? path.basename(savedPath) : '(없음)'} · 내용포함=${hasNote}`)
+    }
+
+    // ===== B: 확인 가드(expect) — 작업당 LLM 호출 2→1 (2026-09-13) =====
+    // 가드는 모델을 부르지 않고 로컬로 판정하므로, "몇 번 물었는가" 를 fake-llm 요청 수로 센다.
+    const guardClick = (label, expectText, tail) => ({
+      reply: (ctx) => {
+        const ref = ctx.refFor(label)
+        if (ref === null || ref === undefined) return JSON.stringify({ action: 'done', message: `${label} 못 찾음` })
+        return JSON.stringify([{ action: 'click', ref, thought: `${label} 누름` }, { action: 'expect', text: expectText }, ...tail])
+      },
+    })
+    const askIfCalledAgain = { reply: () => JSON.stringify({ action: 'done', message: '두 번째 호출(가드가 일을 안 함)' }) }
+
+    // ---- B1: 가드 통과 → 모델을 다시 부르지 않고 done ----
+    {
+      const r = await run({ reqId: 'B1', task: '확인 버튼을 눌러라', script: [guardClick('확인', '눌림', [{ action: 'done', message: '가드 통과 완료' }]), askIfCalledAgain] })
+      const doneEv = r.evs.find((e) => e.type === 'done')
+      const passEv = r.evs.find((e) => e.type === 'result' && e.label === '기대 결과 확인')
+      check('B1', '가드가 맞으면 LLM 호출 1회로 클릭 후 done 까지 끝난다',
+        r.state.clicked === true && llm.count === 1 && !!passEv && String(doneEv?.message ?? '').includes('가드 통과'),
+        `클릭됨=${r.state.clicked} · LLM 호출=${llm.count}(1 이어야) · 가드확인=${!!passEv} · done="${String(doneEv?.message ?? '').slice(0, 30)}"`)
+    }
+    // ---- B2: 가드 실패 → 꼬리를 버리고 모델에 다시 묻는다 ----
+    {
+      const r = await run({ reqId: 'B2', task: '확인 버튼을 눌러라', script: [guardClick('확인', '없는문구XYZ', [{ action: 'done', message: '잘못된 완료' }]), doneStep] })
+      const failEv = r.evs.find((e) => e.type === 'result' && e.label === '기대 결과 미확인')
+      const doneEv = r.evs.find((e) => e.type === 'done')
+      check('B2', '가드가 틀리면 꼬리를 버리고 모델에 다시 묻는다(잘못된 done 미실행)',
+        r.state.clicked === true && llm.count === 2 && !!failEv && String(doneEv?.message ?? '') === '완료',
+        `LLM 호출=${llm.count}(2 이어야) · 미확인이벤트=${!!failEv} · done="${String(doneEv?.message ?? '')}"`)
+    }
+    // ---- B3: 가드 뒤에 ref 동작(클릭)이 오면 꼬리 전체를 무시하고 다시 묻는다 ----
+    {
+      const r = await run({ reqId: 'B3', task: '확인 버튼을 눌러라', script: [guardClick('확인', '눌림', [{ action: 'click', ref: 0 }, { action: 'done', message: '위험한 완료' }]), doneStep] })
+      const ignEv = r.evs.find((e) => e.type === 'result' && e.label === '확인 가드 무시')
+      const doneEv = r.evs.find((e) => e.type === 'done')
+      check('B3', 'expect 뒤의 ref 동작은 거부되고(옛 ref 오클릭 방지) 모델에 다시 묻는다',
+        llm.count === 2 && !!ignEv && String(doneEv?.message ?? '') === '완료',
+        `LLM 호출=${llm.count}(2 이어야) · 무시이벤트=${!!ignEv} · done="${String(doneEv?.message ?? '')}"`)
+    }
+    // ---- B4: 동작 전부터 있던 문구(버튼 라벨 "확인")는 가드를 통과시키지 못한다(오탐 방지) ----
+    {
+      const r = await run({ reqId: 'B4', task: '확인 버튼을 눌러라', script: [guardClick('확인', '확인', [{ action: 'done', message: '오탐 완료' }]), doneStep] })
+      const failEv = r.evs.find((e) => e.type === 'result' && e.label === '기대 결과 미확인')
+      const doneEv = r.evs.find((e) => e.type === 'done')
+      check('B4', '동작 전부터 화면에 있던 문구는 가드를 통과시키지 못한다(버튼 라벨 오탐 방지)',
+        llm.count === 2 && !!failEv && String(doneEv?.message ?? '') === '완료',
+        `LLM 호출=${llm.count}(2 이어야) · 미확인=${!!failEv} · 상세=${String(failEv?.detail ?? '').slice(0, 60)}`)
+    }
+    // ---- B5: 부정문("완료되지 않았습니다")은 "완료" 가드를 통과시키지 못한다 ----
+    {
+      const r = await run({ reqId: 'B5', task: '부정 버튼을 눌러라', script: [guardClick('부정', '완료', [{ action: 'done', message: '오탐 완료' }]), doneStep] })
+      const failEv = r.evs.find((e) => e.type === 'result' && e.label === '기대 결과 미확인')
+      const doneEv = r.evs.find((e) => e.type === 'done')
+      check('B5', '부정문 안의 문구는 가드를 통과시키지 못한다("완료되지 않았습니다" vs "완료")',
+        llm.count === 2 && !!failEv && String(doneEv?.message ?? '') === '완료',
+        `LLM 호출=${llm.count}(2 이어야) · 미확인=${!!failEv} · 상세=${String(failEv?.detail ?? '').slice(0, 60)}`)
     }
 
     try { page.close() } catch { /* ignore */ }
