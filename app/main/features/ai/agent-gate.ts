@@ -74,7 +74,9 @@ export function isTrustedJs(code: string): boolean {
 // ===== 게시(발행) 인식 =====
 // 게시는 확인 게이트 대상이 아니지만(정상 작업), "이미 게시된 뒤 또 누르는 것"은 중복 게시라 막아야 한다.
 // 그래서 위험 판정과 별개로 "이 클릭이 게시성인가"를 알아본다.
-const PUBLISH_RE = /발행|게시(하기|물\s*올리기)?|등록하기|올리기|업로드하기|공유하기|공유$|저장하기|publish|post now|share$|submit post|upload$/i
+// "게시" 단독은 발행 버튼(유튜브 "게시")이지만, "게시물"·"게시 예약"·"게시물 미리보기" 는 아니다 — 인스타의 메뉴
+// "새로운 게시물 만들기"·"게시물" 이 발행성으로 오인돼 draft 모드에서 차단되던 결함(실사이트 파일럿 2026-09-13).
+const PUBLISH_RE = /발행|게시(?!\s*(물|예약|미리|정책))|등록하기|올리기|업로드하기|공유하기|공유$|저장하기|publish|post now|share$|submit post|upload$/i
 // 게시 완료 신호 — 화면에 이런 문구가 뜨거나 URL 이 글 주소로 바뀌면 발행이 끝난 것으로 본다.
 const PUBLISHED_TEXT_RE = /발행(이|되)?\s*(완료|되었|됐)|게시(가|되)?\s*(완료|되었|됐)|등록(이|되)?\s*(완료|되었|됐)|성공적으로\s*(발행|게시|등록)|published|posted successfully|your post is live/i
 

@@ -1750,3 +1750,8 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **함정 재발**: 정규식 `
 ` 이스케이프가 python→.mjs 레이어를 거치며 실제 개행(이 세션 3번째) — 하네스 문자열에 개행 이스케이프를 쓰지 말고 `String.fromCharCode(10)` 으로. `wait_for.timeout` 은 **ms**(최소 500). 각본 라벨 매칭은 정확 일치 우선("공개" vs "비공개").
   - **미반영(다음)**: `PUBLISH_RE` 의 "게시" 단독 매치(게시 예약·미리보기 버튼까지 발행성으로) · `visible()` 화면 밖 판정.
+- 2026-09-13: **실사이트 파일럿 — 인스타그램 실제 게시 1건 성공**(사용자 승인 "테스트 게시 1건"). 드라이버 `build/pilot-sns-cdp.mjs`(게이트 미등록·수동: 최신 win-unpacked 를 **실제 프로필**로 띄워 로그인 확인 → `snsBuildTask` → `agentStart`). 결과: draft 1차 ✗(제품 결함 2건) → 수정 → draft 2차 ✓(10스텝) → **publish ✓ "게시물이 공유되었습니다"**(12스텝·12호출·102초).
+  - **결함 A `PUBLISH_RE`**: "게시" 단독 매치라 인스타 메뉴 "새로운 게시물 만들기"·"게시물" 이 발행성으로 분류돼 **draft 모드에서 차단**(리뷰 M5 가 실사이트에서 즉시 재현). → `게시(?!\s*(물|예약|미리|정책))`, R7 오탐 케이스 추가.
+  - **결함 B accept MIME**: `scoreAccept` 가 확장자만 비교해 인스타 `accept="image/jpeg,…"` 에 `.jpg` 를 "다른 형식" 으로 거부. → 확장자→MIME 표로 정확 일치.
+  - **관찰**: 대화상자 버튼("다음"·"공유하기")이 콘텐츠 영역 밖(사이드 패널 열린 창)이라 관찰 목록에 없어 모델이 `run_js` 로 클릭 → 발행 `click` 경로가 아니라 **완료 신호 미발동**(모델이 wait_for + 1호출로 자체 확인, 정직한 done 유지). **다음 과제**: 열린 대화상자 안 요소는 화면 밖이어도 관찰 포함 + 클릭 시 scrollIntoView. 첨부 후 미리보기 지연으로 "컴퓨터에서 선택" 재클릭 → 레시피에 wait_for 안내.
+  - 파일럿 부산물: 사용자 설정 `ai.agentFilesDir = Documents/ezBrowser-agent-files`(백업 `settings.json.bak-pilot-*`), 시험 이미지 `photos/test-post.jpg`. 인스타 로그인 시 Windows "암호 키로 로그인" 창 = 사이트의 WebAuthn 요청을 Electron 이 OS 모달로 올린 것(크롬은 자동완성에 조용히 표시) — 정책 룰(customJs 로 `navigator.credentials` 거부)로 회피 가능, 제품 과제로 기록.

@@ -1154,9 +1154,16 @@ function scoreAccept(accept: string, filePath: string): number {
   const isVideo = ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.m4v'].includes(ext)
   const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.heic', '.avif'].includes(ext)
   if (!a) return 1 // accept 미지정 = 아무거나 받는다(중립)
+  // MIME 형태 accept(image/jpeg,video/mp4 …)도 맞춘다 — 인스타그램 웹은 확장자가 아니라 MIME 목록을 쓴다
+  // (실사이트 파일럿 2026-09-13: accept="image/avif,image/jpeg,…" 에 .jpg 가 "다른 형식" 으로 거부됐다).
+  const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.heic': 'image/heic', '.heif': 'image/heif', '.avif': 'image/avif',
+    '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.avi': 'video/x-msvideo', '.m4v': 'video/x-m4v',
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.flac': 'audio/flac' }
+  const mime = MIME[ext] ?? ''
   const parts = a.split(',').map((s) => s.trim()).filter(Boolean)
   for (const p of parts) {
-    if (p === ext) return 5                                   // 확장자 정확 일치
+    if (p === ext || (p.startsWith('.') === false && p === ext.slice(1))) return 5   // 확장자 정확 일치(.jpg / jpg)
+    if (mime && p === mime) return 5                                                  // MIME 정확 일치
     if (p === 'video/*' && isVideo) return 4
     if (p === 'image/*' && isImage) return 4
     if (p === 'audio/*' && ['.mp3', '.wav', '.m4a', '.aac', '.flac'].includes(ext)) return 4

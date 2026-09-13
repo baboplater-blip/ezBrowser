@@ -199,8 +199,9 @@ function level(action, observation, ctx) {
 // R7 — 게시 인식 + 발행 금지 모드
 // ===========================================================================
 {
-  const pub = ['발행', '게시하기', '등록하기', '올리기', '공유하기', 'Publish', 'Upload', 'post now']
-  const notPub = ['임시저장', '미리보기', '취소', '뒤로', '설정']
+  const pub = ['발행', '게시', '게시하기', '등록하기', '올리기', '공유하기', 'Publish', 'Upload', 'post now']
+  // 인스타 메뉴 "새로운 게시물 만들기"·"게시물" 이 발행성으로 오인돼 draft 모드에서 차단되던 결함(실사이트 파일럿 2026-09-13)
+  const notPub = ['임시저장', '미리보기', '취소', '뒤로', '설정', '새로운 게시물 만들기', '게시물', '게시 예약', '게시물 미리보기']
   const missed = pub.filter((s) => !gate.isPublishAction(s))
   const wrong = notPub.filter((s) => gate.isPublishAction(s))
 
