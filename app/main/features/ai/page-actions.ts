@@ -81,7 +81,9 @@ const PICK_FN = `function pick(r){var A=window['${REF_KEY}'];if(!A)return null;v
   + `if(!cur&&tg==='INPUT'&&String(el.type||'').toLowerCase()!=='password')cur=el.value||el.getAttribute('name')||el.getAttribute('title')||'';`
   + `if(!cur)cur=(el.innerText||el.textContent||'');if(!cur)cur=el.getAttribute('title')||el.getAttribute('alt')||el.getAttribute('name')||'';`
   + `cur=(cur+'').replace(/\\s+/g,' ').trim();}catch(e){cur='';}`
-  + `var a=it.n.slice(0,20),b=cur.slice(0,20);if(a&&b&&a!==b)return null;}`
+  // 접두 일치 허용 — 호버·펼침으로 라벨이 늘어나는 요소(인스타 사이드바 "새로운 게시물" → "새로운 게시물만들기")를 "다른 요소" 로
+  // 거부하던 것(실사이트 draft 재실행 2026-09-13). 재활용 노드는 이름이 통째로 바뀌므로 접두 검사로도 여전히 걸러진다(A4).
+  + `var a=it.n.slice(0,20),b=cur.slice(0,20);if(a&&b&&a!==b&&!(it.n.indexOf(cur)===0||cur.indexOf(it.n)===0))return null;}`
   + `return el;}`
 
 // 요소가 same-origin iframe 안에 있으면 getBoundingClientRect 는 그 iframe 뷰포트 기준이다. sendInputEvent
