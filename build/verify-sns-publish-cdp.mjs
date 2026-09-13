@@ -58,6 +58,7 @@ const PAGES = {
   <div id="s2" hidden><p>자르기</p><button id="n1">다음</button></div>
   <div id="s3" hidden><p>수정</p><button id="n2">다음</button></div>
   <div id="s4" hidden><div id="cap" contenteditable="true" aria-label="문구 입력..." style="border:1px solid #999;min-height:40px;width:300px"></div><br><button id="share">공유하기</button></div>
+  <div id="busy" hidden><p>공유 중...</p></div>
   <div id="ok" hidden><h3>게시물이 공유되었습니다.</h3></div>
   <div id="bad" hidden><h3>게시물을 공유하지 못했습니다. 다시 시도하세요.</h3></div>
 </div>
@@ -71,7 +72,8 @@ const PAGES = {
   $('file').onchange=()=>{ window.__file=$('file').files[0]?.name||''; $('s1').hidden=true; $('s2').hidden=false }
   $('n1').onclick=()=>{ $('s2').hidden=true; $('s3').hidden=false }
   $('n2').onclick=()=>{ $('s3').hidden=true; $('s4').hidden=false }
-  $('share').onclick=()=>{ window.__caption=$('cap').textContent; $('s4').hidden=true; if(fail){ $('bad').hidden=false } else { window.__shared=true; $('ok').hidden=false } }
+  // 실제 인스타처럼 "공유 중" 을 1.5초 보여준 뒤 완료 문구 — 클릭 직후 첫 관찰에는 완료 신호가 없다(실사이트 2026-09-13).
+  $('share').onclick=()=>{ window.__caption=$('cap').textContent; $('s4').hidden=true; if(fail){ $('bad').hidden=false } else { $('busy').hidden=false; setTimeout(()=>{ $('busy').hidden=true; window.__shared=true; $('ok').hidden=false }, 1500) } }
 </script></body>`,
   // 유튜브 스튜디오 모사 — 만들기 → 동영상 업로드 → 파일 → 제목·설명·아동용 → 다음×3 → 공개 → 게시 → "동영상 게시됨"
   '/yt': HEAD + `<title>YouTube Studio</title><body>
@@ -258,13 +260,15 @@ async function main() {
     {
       await openPage('/ig')
       const task = await snsTask({ platform: 'instagram', mode: 'publish', file: 'cat.jpg', caption: '오늘의 고양이', tags: ['cat', '고양이'], autoOpen: false })
-      const script = [clickL('만들기'), upload('cat.jpg'), clickL('다음'), clickL('다음'), typeThenClick('문구 입력...', '오늘의 고양이 #cat #고양이', '공유하기'), extraCall]
+      // 공유 클릭 직후는 "공유 중" → 모델이 wait_for 로 완료 문구를 기다림(실제 흐름) → 그 뒤 관찰에서 완료 신호가 잡혀야 한다.
+      const waitDone = { reply: () => JSON.stringify({ action: 'wait_for', text: '게시물이 공유되었습니다', timeout: 8000 }) }
+      const script = [clickL('만들기'), upload('cat.jpg'), clickL('다음'), clickL('다음'), typeThenClick('문구 입력...', '오늘의 고양이 #cat #고양이', '공유하기'), waitDone, extraCall]
       const r = await run({ reqId: 'S1', task, script })
       const st = { shared: await evalIn(page, 'window.__shared'), caption: await evalIn(page, 'window.__caption'), file: await evalIn(page, 'window.__file') }
       const sig = r.evs.find((e) => e.type === 'result' && e.label === '완료 신호 확인')
-      check('S1', '인스타 게시: 첨부·캡션·공유 후 완료 신호로 모델 호출 없이 done',
-        st.shared === true && st.file === 'cat.jpg' && st.caption.includes('오늘의 고양이') && !!sig && llm.count === 5 && String(r.done?.message ?? '').includes('인스타그램 게시 완료') && !String(r.done?.message ?? '').includes('⚠'),
-        `shared=${st.shared} file=${st.file} caption="${st.caption.slice(0, 20)}" 신호=${!!sig} LLM 호출=${llm.count}(5 이어야) done="${String(r.done?.message ?? '').slice(0, 60)}" · ${r.labels.join(' ')}`)
+      check('S1', '인스타 게시: 공유 → "공유 중" → 완료 문구를 wait_for 로 본 뒤 완료 신호로 모델 호출 없이 done(경고 없음)',
+        st.shared === true && st.file === 'cat.jpg' && st.caption.includes('오늘의 고양이') && !!sig && llm.count === 6 && String(r.done?.message ?? '').includes('인스타그램 게시 완료') && !String(r.done?.message ?? '').includes('⚠'),
+        `shared=${st.shared} file=${st.file} caption="${st.caption.slice(0, 20)}" 신호=${!!sig} LLM 호출=${llm.count}(6 이어야) done="${String(r.done?.message ?? '').slice(0, 60)}" · ${r.labels.join(' ')}`)
     }
     // ---- S2: 인스타 게시 직전까지(draft) — 공유 클릭 차단 ----
     {
@@ -313,14 +317,14 @@ async function main() {
       missed.length = 0
       await openPage('/ig')
       const task = await snsTask({ platform: 'instagram', mode: 'publish', file: 'cat.jpg', caption: '어제 게시물이 공유되었습니다 라고 쓴 글 이어서', autoOpen: false })
-      const script = [clickL('만들기'), upload('cat.jpg'), clickL('다음'), clickL('다음'), typeThenClick('문구 입력...', '어제 게시물이 공유되었습니다 라고 쓴 글 이어서', '공유하기'), extraCall]
+      const script = [clickL('만들기'), upload('cat.jpg'), clickL('다음'), clickL('다음'), typeThenClick('문구 입력...', '어제 게시물이 공유되었습니다 라고 쓴 글 이어서', '공유하기'), { reply: () => JSON.stringify({ action: 'wait_for', text: '게시물이 공유되었습니다.', timeout: 8000 }) }, extraCall]
       const r = await run({ reqId: 'S7', task, script })
       const st = { shared: await evalIn(page, 'window.__shared'), caption: await evalIn(page, 'window.__caption') }
       const sigIdx = r.evs.findIndex((e) => e.type === 'result' && e.label === '완료 신호 확인')
       const shareIdx = r.evs.findIndex((e) => e.type === 'result' && String(e.label ?? '').includes('공유하기'))
       check('S7', '캡션에 완료 어휘가 있어도 게시 클릭 전에는 완료로 보지 않는다(신호는 공유 클릭 뒤에만)',
-        st.shared === true && String(st.caption).includes('공유되었습니다') && sigIdx > shareIdx && shareIdx >= 0 && llm.count === 5,
-        `shared=${st.shared} 신호idx=${sigIdx} 공유클릭idx=${shareIdx}(신호가 뒤여야) LLM 호출=${llm.count}(5 이어야) · ${r.labels.join(' ')}`)
+        st.shared === true && String(st.caption).includes('공유되었습니다') && sigIdx > shareIdx && shareIdx >= 0 && llm.count === 6,
+        `shared=${st.shared} 신호idx=${sigIdx} 공유클릭idx=${shareIdx}(신호가 뒤여야) LLM 호출=${llm.count}(6 이어야) · ${r.labels.join(' ')}`)
     }
     // ---- S5: 완료 신호가 안 뜨면 재질의 + 미확인 경고 ----
     {

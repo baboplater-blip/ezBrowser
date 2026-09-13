@@ -78,7 +78,7 @@ export function isTrustedJs(code: string): boolean {
 // "새로운 게시물 만들기"·"게시물" 이 발행성으로 오인돼 draft 모드에서 차단되던 결함(실사이트 파일럿 2026-09-13).
 const PUBLISH_RE = /발행|게시(?!\s*(물|예약|미리|정책))|등록하기|올리기|업로드하기|공유하기|공유$|저장하기|publish|post now|share$|submit post|upload$/i
 // 게시 완료 신호 — 화면에 이런 문구가 뜨거나 URL 이 글 주소로 바뀌면 발행이 끝난 것으로 본다.
-const PUBLISHED_TEXT_RE = /발행(이|되)?\s*(완료|되었|됐)|게시(가|되)?\s*(완료|되었|됐)|등록(이|되)?\s*(완료|되었|됐)|성공적으로\s*(발행|게시|등록)|published|posted successfully|your post is live/i
+const PUBLISHED_TEXT_RE = /발행(이|되)?\s*(완료|되었|됐)|게시(가|되|물이)?\s*(완료|되었|됐|공유되었)|공유(가|되)?\s*(완료|되었|됐)|등록(이|되)?\s*(완료|되었|됐)|성공적으로\s*(발행|게시|등록)|published|posted successfully|your post is live|has been shared/i
 
 // 작업 지시에 이 표식이 있으면 발행성 클릭을 코드로 차단한다(임시저장·입력만 모드).
 // 프롬프트 지시만으로는 "저장" 대신 "발행" 오클릭을 막을 수 없다.

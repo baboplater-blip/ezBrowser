@@ -73,7 +73,8 @@ const REF_KEY = '__' + Math.random().toString(36).slice(2, 10)
 // 가상 스크롤(피드)은 DOM 노드를 재활용하므로, 관찰 때 본 이름과 지금 이름이 다르면 다른 항목이 된 것이다.
 // 그대로 클릭하면 엉뚱한 게시물에 좋아요·신고를 누르게 되므로 null 을 돌려 재관찰을 유도한다.
 const PICK_FN = `function pick(r){var A=window['${REF_KEY}'];if(!A)return null;var it=A[r];if(!it||!it.e)return null;var el=it.e;`
-  + `try{if(!el.isConnected)return null;}catch(e){}`
+  // React 재렌더로 관찰 때 요소가 DOM 에서 떨어지면(인스타 사이드바 "새로운 게시물" — 실사이트 2회 재현) 같은 이름의 요소를 다시 찾는다.
+  + `try{if(!el.isConnected){var Q='a[href],button,input,select,textarea,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[contenteditable=true],[onclick],[tabindex]';var cand=document.querySelectorAll(Q);var found=null;for(var qi=0;qi<cand.length&&!found;qi++){var ce=cand[qi];var cn='';try{cn=(ce.getAttribute('aria-label')||ce.getAttribute('placeholder')||ce.innerText||ce.textContent||'').replace(/\\s+/g,' ').trim();}catch(e){}if(cn&&it.n&&(cn===it.n||cn.indexOf(it.n)===0)){var cr=ce.getBoundingClientRect();if(cr.width>0&&cr.height>0)found=ce;}}if(!found)return null;el=found;it.e=found;}}catch(e){}`
   // 이름 계산은 관찰(nameOf)과 **같은 순서**여야 한다 — 다르면 라벨로 이름 붙은 입력칸("설명")·라디오("공개")가
   // value 와 비교돼 "다른 요소" 로 거부된다(2026-09-13, SNS 하네스 S3·S4).
   + `if(it.n){var cur='';try{var tg=el.tagName;cur=el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('data-placeholder')||el.getAttribute('aria-placeholder')||'';`

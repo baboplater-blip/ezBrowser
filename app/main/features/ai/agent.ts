@@ -823,7 +823,9 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
       // 페이지가 에이전트를 조종하려 드는지 탐지 — 발견 시 프롬프트에 경고를 넣고 사용자 트레이스에도 표시한다.
       // 발행 완료 신호 감지 — 화면에 "발행되었습니다" 류 문구가 뜨면 게시가 끝난 것으로 본다.
       // (이후의 추가 발행 클릭은 중복 게시이므로 아래 게이트가 확인을 요구한다.)
-      if (publishClicks > 0 && !publishedEvidence && looksPublished(obs.text)) {
+      // 레시피의 완료 신호 문구가 화면에 있으면 그것도 발행 증거다(인스타 "게시물이 공유되었습니다" 는 일반 정규식에 없다).
+      const completionTextSeen = !!completion && completion.texts.some((t) => t && obs.text.toLowerCase().includes(t.toLowerCase()))
+      if (publishClicks > 0 && !publishedEvidence && (looksPublished(obs.text) || completionTextSeen)) {
         publishedEvidence = true
         emit({ type: 'result', ok: true, label: '발행 완료 확인', detail: `${obs.url} — 완료 문구를 확인했습니다.` })
       }
@@ -857,10 +859,12 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         }
       }
       // ===== 레시피 완료 신호 — 주 동작 뒤 첫 관찰에서 판정(가드가 이미 통과했으면 그쪽 우선) =====
+      // 발행 클릭 직후 첫 관찰은 "공유 중" 같은 진행 상태라 신호가 아직 없다(인스타 실측). 기준선은 신호를 확인할 때까지
+      // 유지하고 관찰마다 다시 본다 — 모델이 wait_for 로 완료 문구를 띄운 뒤의 관찰에서도 잡히도록.
       if (!skipLlm && completion && completionBase && !injected && !noPublish && !readOnly) {
         const why = completionSatisfied(completion, obs, completionBase)
-        completionBase = null // 한 동작당 한 번만 판정 — 다음 주 동작이 새 기준선을 놓는다
         if (why) {
+          completionBase = null
           publishedEvidence = true
           emit({ type: 'result', ok: true, label: '완료 신호 확인', detail: `${why} — 모델을 다시 부르지 않고 완료 처리` })
           actions = [{ action: 'done', message: `${completion.message ?? '완료 신호를 확인했습니다'} (근거: ${why})` }]
