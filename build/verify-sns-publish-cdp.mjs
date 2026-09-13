@@ -51,7 +51,8 @@ const PAGES = {
   '/ig': HEAD + `<title>Instagram</title><body>
 <h1>Instagram</h1>
 <nav><button id="home">홈</button><button id="create">만들기</button><button id="profile">프로필</button></nav>
-<div id="modal" hidden>
+<ul id="feed"></ul>
+<div id="modal" role="dialog" aria-modal="true" hidden>
   <h2>새 게시물 만들기</h2>
   <div id="s1"><p>사진과 동영상을 여기에 드래그하세요</p><input id="file" type="file" accept="image/*,video/*" hidden><button id="pick">컴퓨터에서 선택</button></div>
   <div id="s2" hidden><p>자르기</p><button id="n1">다음</button></div>
@@ -63,6 +64,8 @@ const PAGES = {
 <script>
   window.__shared=false; window.__caption=''; window.__file='';
   const $=(i)=>document.getElementById(i); const fail=new URL(location.href).searchParams.get('fail')==='1'
+  // 피드 링크 120개 — 실제 인스타처럼 DOM 앞쪽에 요소가 많아 관찰 상한(80)에 대화상자 버튼이 잘리던 결함(2026-09-13 실사이트) 재현
+  for (let i = 0; i < 120; i++) { const li = document.createElement('li'); const a = document.createElement('a'); a.href = '#p' + i; a.textContent = '게시물 ' + i + ' 보기'; li.appendChild(a); $('feed').appendChild(li) }
   $('create').onclick=()=>{ $('modal').hidden=false }
   $('pick').onclick=()=>{ $('file').click() }
   $('file').onchange=()=>{ window.__file=$('file').files[0]?.name||''; $('s1').hidden=true; $('s2').hidden=false }
@@ -75,7 +78,7 @@ const PAGES = {
 <h1>채널 대시보드</h1>
 <button id="create">만들기</button>
 <div id="menu" hidden><button id="upload">동영상 업로드</button><button id="live">라이브 스트리밍 시작</button></div>
-<div id="dlg" hidden>
+<div id="dlg" role="dialog" aria-modal="true" hidden>
   <div id="u1"><p>업로드할 동영상 파일을 드래그 앤 드롭하세요</p><input id="file" type="file" accept="video/*" hidden><button id="pick">파일 선택</button></div>
   <div id="u2" hidden>
     <h2>세부정보</h2>

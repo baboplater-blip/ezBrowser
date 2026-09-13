@@ -451,6 +451,7 @@
             { value: 'human', label: '항상 사람 속도' },
             { value: 'fast', label: '항상 빠르게' },
           ]))
+        html += row('실행 중 패널 자동 접기', '에이전트가 도는 동안 <b>다운로드·동영상 도크와 왼쪽 사이드 패널</b>을 접어 페이지 영역을 넓히고, 끝나면 원래대로 돌립니다(AI 패널은 유지). 인스타그램 게시 창처럼 큰 대화상자가 잘려 버튼을 못 보는 일을 줄입니다.', toggleHtml('ai.agentCollapsePanels', a.agentCollapsePanels !== false))
         html += row('CLI 세션 유지 (Claude Code·Codex)', 'Claude Code·Codex 로 에이전트를 돌릴 때 <b>작업 하나에 CLI 프로세스 하나</b>를 유지하고 단계를 이어 보냅니다. 단계마다 새로 띄우던 부팅 시간과 캐시 손실이 사라져 <b>단계당 지연이 크게 줄고 토큰도 절약</b>됩니다. 문제가 있으면 끄세요(예전처럼 단계마다 새로 실행).', toggleHtml('ai.cliSession', a.cliSession !== false))
         html += row('민감 동작 자동 승인 (무인 실행)', '기본은 <b>결제·구매·송금·삭제처럼 돈이 나가거나 데이터가 사라지는 동작만</b> 확인을 받습니다(검색·로그인·폼 제출·<b>글 게시/발행/업로드는 확인 없이 진행</b> — 자동 발행에 방해되지 않음). 이 옵션을 켜면 그 위험한 동작까지도 <b>확인 없이 자동 진행</b>합니다. 편하지만 위험하니 신뢰하는 작업에만 켜세요.', toggleHtml('ai.agentAutoApprove', a.agentAutoApprove === true))
         html += row('에이전트 최대 단계 수', '한 작업에서 에이전트가 시도하는 최대 단계. 로그인→업로드→게시처럼 긴 작업은 크게(기본 25, 6~80)', inputHtml('ai.agentMaxSteps', a.agentMaxSteps || 25, 'number'))
@@ -497,6 +498,10 @@
               { value: '3m', label: '3개월' }, { value: '1m', label: '1개월' }, { value: '1w', label: '1주' },
             ]))
           + row('서드파티 쿠키 차단', '광고·트래커 영향 큰 설정', toggleHtml('privacy.blockThirdPartyCookies', p.blockThirdPartyCookies))
+          + row('패스키 자동 요청', '사이트가 페이지를 열자마자 보내는 패스키(WebAuthn) 자동 요청. 크롬은 자동완성 목록에 조용히 넣지만 이 브라우저에는 그 UI 가 없어 <b>Windows "암호 키로 로그인" 창</b>이 튀어나옵니다. <b>차단</b>(기본)이면 그 자동 요청만 거부하고, 사용자가 직접 "패스키로 로그인" 을 누르는 요청은 그대로 둡니다. 사이트별 예외는 주소창 자물쇠에서.', selectHtml('privacy.passkeyAutoPrompt', p.passkeyAutoPrompt || 'block', [
+            { value: 'block', label: '자동 요청 차단 (권장)' },
+            { value: 'allow', label: '허용 (OS 창이 뜰 수 있음)' },
+          ]))
           + '</div>'
       }
 
@@ -505,6 +510,7 @@
         { key: 'geolocation', label: '위치' },
         { key: 'notifications', label: '알림' },
         { key: 'clipboard-read', label: '클립보드' },
+        { key: 'passkey', label: '패스키 로그인 창' },
       ]
       function permSelect(origin, key, cur) {
         const opt = (v, l) => '<option value="' + v + '"' + (v === (cur || 'default') ? ' selected' : '') + '>' + l + '</option>'

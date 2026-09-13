@@ -20,6 +20,9 @@ export interface AppSettings {
   privacy: {
     historyRetention: 'unlimited' | '1w' | '1m' | '3m' | '1y'
     blockThirdPartyCookies: boolean
+    // 패스키 자동 요청(mediation: conditional). 크롬은 자동완성 목록에 조용히 넣지만 우리는 그 UI 가 없어 OS 창이 튀어나온다 →
+    // 'block'(기본): 조건부 요청만 거부(명시적 "패스키로 로그인" 은 그대로) · 'allow': 크롬과 다르게 OS 창이 뜨더라도 통과.
+    passkeyAutoPrompt: 'block' | 'allow'
   }
   adblock: {
     enabled: boolean
@@ -126,6 +129,8 @@ export interface AppSettings {
     // CLI 제공자(claude-code·codex)에서 에이전트 작업 하나에 프로세스 하나를 유지(스텝을 이어 보냄 — 부팅 고정비·
     // 캐시 손실 제거로 스텝당 지연이 크게 준다). false 면 예전처럼 스텝마다 새로 띄운다(문제 시 폴백 스위치).
     cliSession: boolean
+    // 에이전트 실행 중 다운로드·동영상 도크와 좌측 사이드패널을 접어 콘텐츠 영역을 넓힌다(끝나면 복구). 큰 대화상자가 잘리는 것 방지.
+    agentCollapsePanels: boolean
     webhookUrl: string      // 수집 데이터 연동 — 이 URL 로 JSON POST(Zapier·Make·구글시트 Apps Script 등)
   }
 }
@@ -137,7 +142,7 @@ const DEFAULTS: AppSettings = {
   },
   startup: { mode: 'newtab', urls: [] },
   search: { defaultEngine: 'google', suggestEnabled: true, bangsEnabled: true },
-  privacy: { historyRetention: '1y', blockThirdPartyCookies: true },
+  privacy: { historyRetention: '1y', blockThirdPartyCookies: true, passkeyAutoPrompt: 'block' },
   adblock: {
     enabled: true, level: 'standard',
     filters: {
@@ -231,6 +236,7 @@ const DEFAULTS: AppSettings = {
     agentHumanInput: true,
     agentInputMode: 'auto',
     cliSession: true,
+    agentCollapsePanels: true,
     webhookUrl: '',
   },
 }

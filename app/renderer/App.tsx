@@ -97,6 +97,11 @@ export function App() {
     } catch { return 'top' }
   })
   const [chromeHeight, setChromeHeight] = useState(72)
+  // 에이전트 실행 중 도크 자동 접기(설정 ai.agentCollapsePanels, 기본 ON) — 시작 시 다운로드·동영상 도크와 왼쪽 패널을 접고
+  // 끝나면 원래대로. 큰 대화상자(인스타 게시 창)가 잘려 버튼을 못 보던 문제(실사이트 파일럿 2026-09-13) 완화.
+  const collapseEnabledRef = useRef(true)
+  const collapsedSnapRef = useRef<{ reqId: string; downloads: boolean; video: boolean; left: boolean } | null>(null)
+  const panelStateRef = useRef({ downloads: false, video: false, left: false })
   const [paneLayout, setPaneLayout] = useState<PaneLayout>({
     split: null, splitRatio: 0.5, activePaneIdx: 0, panes: [{ tabId: null }],
   })
@@ -169,6 +174,33 @@ export function App() {
     try { localStorage.setItem(WORKSPACE_RAIL_KEY, workspaceRailOpen ? '1' : '0') } catch { /* ignore */ }
     if (hydratedRef.current) void window.browserAPI.settings.set('ui.workspaceRailOpen', workspaceRailOpen)
   }, [workspaceRailOpen])
+
+  useEffect(() => { panelStateRef.current = { downloads: downloadsOpen, video: videoOpen, left: leftPanelOpen } }, [downloadsOpen, videoOpen, leftPanelOpen])
+  useEffect(() => {
+    void window.browserAPI.settings.all().then((s) => { const ai = (s as { ai?: { agentCollapsePanels?: boolean } }).ai; collapseEnabledRef.current = ai?.agentCollapsePanels !== false }).catch(() => { /* 기본값 유지 */ })
+    const offS = window.browserAPI.settings.onChange((all: unknown) => { const ai = (all as { ai?: { agentCollapsePanels?: boolean } } | null)?.ai; if (ai) collapseEnabledRef.current = ai.agentCollapsePanels !== false })
+    const offA = window.browserAPI.ai.onAgentEvent((e) => {
+      if (e.type === 'start') {
+        if (!collapseEnabledRef.current || collapsedSnapRef.current) return
+        const cur = panelStateRef.current
+        if (!cur.downloads && !cur.video && !cur.left) return
+        collapsedSnapRef.current = { reqId: String(e.reqId ?? ''), ...cur }
+        setDownloadsOpen(false); setVideoOpen(false); setLeftPanelOpen(false)
+      } else if (e.type === 'done' || e.type === 'error' || e.type === 'cancelled') {
+        const snap = collapsedSnapRef.current
+        if (!snap) return
+        // 다른 실행(reqId)의 종료로는 복구하지 않는다(같은 창에서 병행 실행 시 조기 복구 방지 — 리뷰).
+        if (snap.reqId && String(e.reqId ?? '') !== snap.reqId) return
+        collapsedSnapRef.current = null
+        // 실행 중 사용자가 직접 연 패널은 그대로 둔다 — 접힌 채(false)로 남아 있는 것만 원상 복구.
+        const cur = panelStateRef.current
+        if (snap.downloads && !cur.downloads) setDownloadsOpen(true)
+        if (snap.left && !cur.left) setLeftPanelOpen(true)
+        if (snap.video && !cur.video) setVideoOpen(true)
+      }
+    })
+    return () => { try { offS?.() } catch { /* ignore */ } try { offA?.() } catch { /* ignore */ } }
+  }, [])
 
   // 부팅 시 settings.ui 로 정정 + 다른 창 동기
   useEffect(() => {

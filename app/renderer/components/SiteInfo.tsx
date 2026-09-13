@@ -14,6 +14,8 @@ const PERMS = [
   { key: 'geolocation', label: '위치' },
   { key: 'notifications', label: '알림' },
   { key: 'clipboard-read', label: '클립보드' },
+  // 의사권한 — 패스키(WebAuthn) 자동 요청. 기본=조건부 요청만 차단(OS 창 방지), 허용=크롬처럼 두되 OS 창이 뜰 수 있음, 차단=패스키 전부 거부.
+  { key: 'passkey', label: '패스키 로그인 창' },
 ] as const
 
 function originOf(url: string): string | null {

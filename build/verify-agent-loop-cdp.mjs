@@ -15,6 +15,7 @@
 //   L4 ask 로 물으면 답을 받아 이어가는가
 //   L5 done 으로 정상 종료하는가
 //   L6 무인 배치(autoConfirm)에서도 critical 은 자동 승인되지 않는가
+//   PC1 에이전트 실행 중 도크 자동 접기·복구
 //   B1~B8 확인 가드(expect): 통과→호출 1회 / 실패→재질의 / 가드 뒤 ref 동작 거부 / 기존 문구·부정문 오탐 방지 / changed·urlChanged 문구 없는 가드
 //
 // 사용: node build/verify-agent-loop-cdp.mjs [--port <n>] [--out <dir>]
@@ -506,6 +507,32 @@ async function main() {
       check('B3', 'expect 뒤의 ref 동작은 거부되고(옛 ref 오클릭 방지) 모델에 다시 묻는다',
         llm.count === 2 && !!ignEv && String(doneEv?.message ?? '') === '완료',
         `LLM 호출=${llm.count}(2 이어야) · 무시이벤트=${!!ignEv} · done="${String(doneEv?.message ?? '')}"`)
+    }
+    // ---- PC1: 에이전트 실행 중 다운로드 도크 자동 접기 → 끝나면 복구 (설정 ai.agentCollapsePanels 기본 ON) ----
+    {
+      await evalIn(shell, `window.browserAPI.actions.run('action.downloads.open', { windowId: ${JSON.stringify(windowId)} })`, true).catch(() => {})
+      await sleep(400)
+      const before = await evalIn(shell, '!!document.querySelector(".downloads-dock")')
+      let during = null
+      // 각본: 첫 응답을 잠시 지연시켜 실행 중 상태를 잡는다 — wait 액션(1.2초) 뒤 done.
+      const script = [{ reply: () => JSON.stringify({ action: 'wait' }) }, doneStep]
+      llm.setScript(script)
+      await evalIn(shell, 'window.__ev = []; true')
+      await evalIn(shell, `window.browserAPI.ai.agentStart(${JSON.stringify({ reqId: 'PC1', tabId, task: '잠깐 기다려라' })})`, true)
+      for (let i = 0; i < 40; i++) {
+        await sleep(150)
+        const evs = JSON.parse(await evalIn(shell, 'JSON.stringify(window.__ev)') ?? '[]')
+        if (evs.some((e) => e.type === 'start') && during === null) { await sleep(200); during = await evalIn(shell, '!!document.querySelector(".downloads-dock")') }
+        if (evs.some((e) => e.type === 'done' || e.type === 'error')) break
+      }
+      await sleep(600)
+      const after = await evalIn(shell, '!!document.querySelector(".downloads-dock")')
+      check('PC1', '에이전트 실행 중 다운로드 도크가 접히고 끝나면 복구된다',
+        before === true && during === false && after === true,
+        `전=${before} 실행중=${during}(false 여야) 후=${after}(true 여야)`)
+      // 원상: 도크 닫기(다음 시나리오 방해 방지)
+      await evalIn(shell, `window.browserAPI.actions.run('action.downloads.open', { windowId: ${JSON.stringify(windowId)} })`, true).catch(() => {})
+      await sleep(300)
     }
     // ---- B4: 동작 전부터 있던 문구(버튼 라벨 "확인")는 가드를 통과시키지 못한다(오탐 방지) ----
     {

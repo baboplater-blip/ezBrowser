@@ -854,7 +854,8 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
       if (!name && tag !== 'input' && tag !== 'textarea' && tag !== 'select' && !editable) continue;
       if (!name && editable) name = '(입력 영역)';
       reg(el, name);
-      var rec = { ref: ref.n, tag: tag, type: type, name: (depth > 0 ? '(프레임) ' : '') + name };
+      var off = false; try { var rr = el.getBoundingClientRect(); off = (rr.bottom < 0 || rr.top > window.innerHeight || rr.right < 0 || rr.left > window.innerWidth); } catch (e) {}
+      var rec = { ref: ref.n, tag: tag, type: type, name: (depth > 0 ? '(프레임) ' : '') + name + (off ? ' (화면 밖 — 클릭하면 자동 스크롤)' : '') };
       if ((tag === 'input' || tag === 'textarea') && el.value && !isSecret(el)) rec.value = String(el.value).slice(0, 80);
       // 드롭다운의 현재 선택값 — 카테고리·시청자층 등이 무엇으로 돼 있는지 보이게 한다.
       if (tag === 'select') { try { var so = el.options[el.selectedIndex]; if (so) rec.value = String(so.text || so.value || '').slice(0, 80); } catch (e) {} }
@@ -931,6 +932,24 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
       }
     }
   }
+  // 열린 대화상자(role=dialog·aria-modal·<dialog open>)가 있으면 **그 안을 먼저** 수집한다. 상한(MAX)에 피드 링크가 먼저 차서
+  // 대화상자의 "다음"·"공유하기" 가 잘려 나가던 결함(인스타 실사이트 파일럿 2026-09-13 — 모델이 run_js 로 우회, 스텝 4개 낭비).
+  // 뷰포트 밖 요소도 담고 이름에 "(화면 밖)" 을 붙인다(클릭은 scrollIntoView 로 처리된다).
+  try {
+    // DOM 순서(마지막 매치)로 고르면 body 끝에 포탈된 토스트·쿠키 배너(role=dialog 오용)가 진짜 모달을 밀어낸다(리뷰) →
+    // 보이는 것 중 **화면 안 면적이 가장 큰** 대화상자를 고르고, aria-modal="true" 는 가산점.
+    var dlgs = document.querySelectorAll('[role=dialog], [aria-modal="true"], dialog[open]');
+    var top = null, best = -1;
+    for (var di = 0; di < dlgs.length; di++) {
+      var dEl = dlgs[di]; if (!visible(dEl)) continue;
+      var dr = dEl.getBoundingClientRect();
+      var iw = Math.max(0, Math.min(dr.right, window.innerWidth) - Math.max(dr.left, 0));
+      var ih = Math.max(0, Math.min(dr.bottom, window.innerHeight) - Math.max(dr.top, 0));
+      var score = iw * ih * (dEl.getAttribute('aria-modal') === 'true' ? 1.5 : 1);
+      if (score > best) { best = score; top = dEl; }
+    }
+    if (top) collect(top, 0);
+  } catch (e) {}
   collect(document, 0);
   // 반복 구조 힌트 — 같은 (tag.첫class) 서명을 가진 요소가 3개 이상이면 목록으로 보고 rowSelector 후보로 제시(extract 용).
   var listHint = null;

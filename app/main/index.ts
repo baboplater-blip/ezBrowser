@@ -29,6 +29,7 @@ import { initBookmarks } from './storage/bookmarks'
 import { initHistory, recordVisit, updateVisitTitle } from './storage/history'
 import { DEFAULT_SESSION } from '../shared/constants'
 import { bindNativeTheme, trackWebContents as trackDarkMode } from './features/dark-mode'
+import { trackWebContents as trackPasskey } from './features/passkey'
 import { getWebContentsByTabId } from './tabs/tab-service'
 import { initGesture } from './features/gesture'
 import { initQuickSearch } from './features/quick-search'
@@ -187,6 +188,7 @@ if (!app.requestSingleInstanceLock()) {
         const wc = getWebContentsByTabId(id)
         if (wc) {
           trackDarkMode(wc)
+          trackPasskey(wc)
           trackUserscripts(wc)
           trackPolicies(wc)
           trackFind(wc, id)

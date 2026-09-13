@@ -100,6 +100,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 L1~L9·F1~F3',
     },
     {
+      id: 'passkey', kind: 'harness', modes: ['full'],
+      script: 'verify-passkey-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'passkey', 'passkey-results.json'),
+      timeoutMs: 8 * 60000, desc: '패스키(WebAuthn) 자동 요청 차단·사이트별 허용/차단 P1~P4',
+    },
+    {
       id: 'sns-publish', kind: 'harness', modes: ['full'],
       script: 'verify-sns-publish-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'sns-publish', 'sns-publish-results.json'),

@@ -457,6 +457,37 @@ async function main() {
       if (zones.some((z) => /dropdown|메뉴/.test(z.name))) throw new Error(`dropdown 을 드롭존으로 오인: ${zones.map((z) => z.name).join(', ')}`)
       return `문구 없는 드롭존 ${zones.length}개 인식(${zones.map((z) => z.name.slice(0, 24)).join(' / ')}), dropdown 오탐 없음`
     })
+    await scenario('A15', '열린 대화상자 안 요소는 피드가 많아도·화면 밖이어도 관찰 첫 부분에 오고 ref 클릭이 된다', async () => {
+      // 인스타 실사이트 파일럿(2026-09-13): 관찰 상한 80 에 피드 링크가 먼저 차서 대화상자의 "다음"·"공유하기" 가 목록에서 잘렸고,
+      // 모델이 run_js 로 우회해 스텝을 낭비했다. 피드 링크 200개 + 뷰포트 아래로 밀린 대화상자 버튼으로 재현한다.
+      await evaluate(content, `(function(){
+        for (const sel of ['#a15feed', '#a15dlg']) document.querySelectorAll(sel).forEach((el) => el.remove())
+        const feed = document.createElement('ul'); feed.id = 'a15feed'
+        for (let i = 0; i < 200; i++) { const li = document.createElement('li'); const a = document.createElement('a'); a.href = '#f' + i; a.textContent = '피드 항목 ' + i; li.appendChild(a); feed.appendChild(li) }
+        document.body.prepend(feed)
+        const dlg = document.createElement('div'); dlg.id = 'a15dlg'; dlg.setAttribute('role', 'dialog'); dlg.setAttribute('aria-modal', 'true')
+        dlg.style.cssText = 'position:fixed;left:40px;top:40px;width:420px;height:' + (window.innerHeight + 400) + 'px;background:#fff;border:2px solid #333;overflow:hidden;z-index:99999'
+        const btn = document.createElement('button'); btn.id = 'a15share'; btn.textContent = '공유하기'
+        btn.style.cssText = 'position:absolute;left:20px;top:' + (window.innerHeight + 200) + 'px'
+        window.__a15 = false; btn.onclick = () => { window.__a15 = true }
+        dlg.appendChild(btn); document.body.appendChild(dlg)
+        return true
+      })()`)
+      await sleep(200)
+      const o = await pa.observePage(fakeWc)
+      const idx = o.elements.findIndex((e) => e.name.includes('공유하기'))
+      if (idx < 0) throw new Error(`대화상자 버튼이 관찰 목록에 없음(요소 ${o.elements.length}개 — 피드에 밀려 잘림)`)
+      if (idx > 5) throw new Error(`대화상자 버튼이 목록 앞쪽이 아님(index ${idx})`)
+      const t = o.elements[idx]
+      if (!t.name.includes('화면 밖')) throw new Error(`화면 밖 표기 없음: "${t.name}"`)
+      const r = await pa.executeInPageAction(fakeWc, { action: 'click', ref: t.ref }, { humanInput: true, profile: pa.inputProfileFor('https://example.com/', 'auto') })
+      if (!r.ok) throw new Error(`클릭 실패: ${r.detail}`)
+      const clicked = await evaluate(content, 'window.__a15 === true')
+      if (!clicked) throw new Error('클릭이 버튼에 닿지 않음')
+      await evaluate(content, `(function(){ for (const sel of ['#a15feed', '#a15dlg']) document.querySelectorAll(sel).forEach((el) => el.remove()); window.scrollTo(0,0); return true })()`)
+      return `대화상자 버튼 index ${idx} · 이름 "${t.name}" · 클릭 ${/합성/.test(r.detail) ? '(합성 폴백)' : '실제'} · 눌림`
+    })
+
     await scenario('A14', '빠른 프로파일(일반 사이트)에서도 클릭·입력 정확도 유지', async () => {
       // 속도를 얻자고 정확도를 잃으면 의미가 없다 — fast 프로파일로 20회 연속 클릭/입력해 전부 맞는지 본다.
       const FAST = pa.inputProfileFor('https://example.com/', 'auto')
@@ -468,7 +499,7 @@ async function main() {
       // 합성 폴백으로 떨어져 이 시나리오가 실패한다(2026-09-07 종결 게이트에서 실제 발생).
       // 테스트는 앞 테스트의 잔재에 기대면 안 된다 — 자기 상태를 스스로 만든다.
       await evaluate(content, `(function(){
-        for (const sel of ['#ov', '.upload-dropzone', '#wrap', '.menu-dropdown', '#zone']) {
+        for (const sel of ['#ov', '.upload-dropzone', '#wrap', '.menu-dropdown', '#zone', '#a15feed', '#a15dlg']) {
           document.querySelectorAll(sel).forEach((el) => el.remove())
         }
         window.scrollTo(0, 0)
