@@ -422,7 +422,7 @@ const api = {
     onOpen: (cb: (p: { tabId?: string }) => void) => on('ai:open', cb),
     onSummarize: (cb: (p: { tabId?: string }) => void) => on('ai:summarize', cb),
     onWrite: (cb: (p: { tabId?: string }) => void) => on('ai:write', cb),
-    agentStart: (args: { reqId: string; tabId?: string; task: string; rows?: Array<Record<string, string>>; autoConfirm?: boolean; readOnly?: boolean }): Promise<{ ok: boolean }> =>
+    agentStart: (args: { reqId: string; tabId?: string; task: string; rows?: Array<Record<string, string>>; autoConfirm?: boolean; readOnly?: boolean; allowedHosts?: string[] }): Promise<{ ok: boolean }> =>
       ipcRenderer.invoke(IPC.ai.agentStart, args),
     exportWebhook: (rows: unknown[], url?: string): Promise<{ ok: boolean; detail: string }> =>
       ipcRenderer.invoke(IPC.ai.exportWebhook, { rows, url }),

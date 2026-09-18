@@ -131,6 +131,12 @@ function deriveStep(evt: EventLike): AgentRunStep | null {
     case 'result': return { icon: evt.ok ? '✔️' : '✖️', text: s('detail'), tone: evt.ok ? 'ok' : 'warn' }
     case 'confirm': return { icon: '⏸️', text: `확인 필요: ${s('label')}`, tone: 'warn' }
     case 'ask': return { icon: '❓', text: s('message') }
+    // 로그인/CAPTCHA 감지 — 왜 멈췄는지 이력에 남는다(예산을 태우다 막힌 게 아니라, 보자마자 넘겼다는 근거).
+    case 'challenge': return {
+      icon: evt.kind === 'captcha' ? '🧩' : '🔐',
+      text: `${evt.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면 감지 — 사용자에게 넘김 (근거: ${s('evidence')})`,
+      tone: 'warn',
+    }
     // 사용자 답변은 디스크(ai-agent-runs.json)에 영구 저장된다 → 비밀번호·카드번호가 평문으로 남지 않게 가린다.
     case 'answer': return { icon: '🗣️', text: `답변: ${maskSecrets(s('text'))}`, tone: 'muted' }
     case 'report': return { icon: '📄', text: `보고서: ${s('title')} (노트 ${s('notes')}개)`, tone: 'ok' }

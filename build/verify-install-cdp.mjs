@@ -36,7 +36,6 @@ import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(__dirname, '..')
-const INSTALLER = path.join(REPO, 'dist', 'ezBrowser-0.1.0-win-x64.exe')
 
 const args = { port: 9267, out: path.join(REPO, 'verify-out', 'install') }
 for (let i = 2; i < process.argv.length; i++) {
@@ -56,8 +55,80 @@ const ps = (cmd) => {
   catch { return '' }
 }
 
+/**
+ * 설치할 NSIS 파일을 고른다. 예전엔 `ezBrowser-0.1.0-win-x64.exe` 로 **버전이 하드코딩**돼 있었다 —
+ * dist 에 그 파일이 여전히 남아 있으면(옛 빌드가 안 지워지면) 검사가 **아무 경고 없이 몇 달 지난
+ * 설치본을 테스트**한다(2026-09-18 실측: dist 에 0.1.0 과 0.2.0-rc.1 이 공존, 하드코딩은 0.1.0 을 골랐다).
+ *
+ * package.json 의 버전과 정확히 일치하는 파일을 최우선으로 찾고, 없으면 dist 안의 win-x64 설치본
+ * 중 **가장 최근에 수정된 파일**로 폴백한다(그 경우 어떤 파일을 왜 골랐는지 반드시 로그로 남긴다).
+ */
+function resolveInstaller() {
+  const distDir = path.join(REPO, 'dist')
+  let version = null
+  try { version = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8')).version } catch { /* 폴백으로 진행 */ }
+
+  if (version) {
+    const exact = path.join(distDir, `ezBrowser-${version}-win-x64.exe`)
+    if (fs.existsSync(exact)) return { file: exact, note: `package.json 버전(${version})과 정확히 일치` }
+  }
+
+  const candidates = fs.existsSync(distDir)
+    ? fs.readdirSync(distDir).filter((f) => /^ezBrowser-.*-win-x64\.exe$/i.test(f))
+    : []
+  if (!candidates.length) {
+    throw new Error(`설치본 없음: ${path.join(distDir, `ezBrowser-${version ?? '<버전>'}-win-x64.exe`)} — 먼저 npm run package:win`)
+  }
+  candidates.sort((a, b) => fs.statSync(path.join(distDir, b)).mtimeMs - fs.statSync(path.join(distDir, a)).mtimeMs)
+  const picked = candidates[0]
+  const staleWarn = version && !picked.includes(version)
+    ? ` ⚠ package.json 버전(${version})과 파일명이 다르다 — dist 에 옛 빌드가 섞여 있을 수 있으니 확인하라.`
+    : ''
+  return { file: path.join(distDir, picked), note: `버전 일치 파일 없음 → dist 안 최신 수정 파일로 폴백: ${picked}.${staleWarn}` }
+}
+
+/**
+ * 이 머신에 ezBrowser 가 **이미** 설치돼 있는 흔적이 있는지 본다. 사용자의 실제 설치일 수 있으므로,
+ * 설치를 시도하기 전에 반드시 이 검사를 먼저 한다.
+ *
+ *   - 레지스트리 제거 목록에 ezBrowser 항목이 있다 → Windows 가 지금 "설치됨"으로 안다. 실치명적.
+ *   - installRoot 에 제거기 잔재(Uninstall *.exe)가 아닌 다른 파일이 있다 → 실제 프로그램 파일.
+ *   - HKCU\Software 아래 이름이 겹치는 키만 있는 경우는 **막지 않는다** — NSIS 는 정상 제거 후에도
+ *     "마지막 설치 위치 기억" 키를 지우지 않는 것으로 보이며(2026-09-07 실측 기록), 이것만으로는
+ *     지금 뭔가 설치돼 있다는 뜻이 아니다. 이것까지 막으면 이 하네스는 **한 번 통과한 뒤 영원히
+ *     스스로를 차단**하게 된다 — 참고로만 보고한다.
+ */
+function detectPreexisting(installRoot) {
+  const regCount = Number(ps('(Get-ChildItem "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall" '
+    + '-ErrorAction SilentlyContinue | Where-Object { $_.GetValue("DisplayName") -like "*ezBrowser*" }).Count') || 0)
+
+  const pathKeysRaw = ps('(Get-ChildItem "HKCU:\\Software" -ErrorAction SilentlyContinue | '
+    + 'Where-Object { $_.PSChildName -like "*ezBrowser*" -or $_.PSChildName -like "*browser-build*" } '
+    + '| Select-Object -ExpandProperty PSChildName) -join ","')
+  const pathKeys = pathKeysRaw ? pathKeysRaw.split(',').map((s) => s.trim()).filter(Boolean) : []
+
+  const dirFiles = fs.existsSync(installRoot) ? fs.readdirSync(installRoot) : []
+  const residueOnly = dirFiles.length > 0 && dirFiles.every((f) => /^Uninstall .*\.exe$/i.test(f))
+  const hasRealFiles = dirFiles.length > 0 && !residueOnly
+
+  const blockingReason = regCount > 0
+    ? `Windows 제거 목록에 ezBrowser 가 이미 등록돼 있다(${regCount}개) — 사용자가 실제로 설치해 쓰고 있을 수 있다`
+    : hasRealFiles
+      ? `${installRoot} 에 이미 프로그램 파일이 있다(제거기 잔재가 아니다: ${dirFiles.join(', ')}) — 실제 설치일 수 있다`
+      : null
+
+  return { regCount, pathKeys, dirFiles, residueOnly, hasRealFiles, blockingReason }
+}
+
+function blocked(reason, detail) {
+  results.push({ id: 'BLOCKED', name: reason, status: 'BLOCKED', detail })
+  console.error(`  ⛔ BLOCKED — ${reason}\n     ${detail}`)
+}
+
 async function main() {
-  if (!fs.existsSync(INSTALLER)) throw new Error(`설치본 없음: ${INSTALLER} — 먼저 npm run package:win`)
+  const { file: installerPath, note: installerNote } = resolveInstaller()
+  console.log(`  설치본: ${installerPath}`)
+  console.log(`  (${installerNote})`)
   fs.mkdirSync(args.out, { recursive: true })
   args.port = await preferFreePort(args.port, 'install')
 
@@ -66,15 +137,38 @@ async function main() {
   const realProfileBefore = fs.existsSync(realProfile)
     ? fs.readdirSync(realProfile).length : -1
 
+  // ---- 설치 전 안전 게이트: 이 머신에 이미 ezBrowser 가 설치돼 있는가 ----
+  //   있으면 그것은 사용자의 실제 설치일 수 있다. 우리는 그 설치를 "스냅샷 후 복구" 할 방법이
+  //   없다(바이너리 설치를 신뢰성 있게 되돌리는 것은 사실상 불가능하다) — 그래서 복구를 시도하는
+  //   대신 **아무것도 건드리지 않고 여기서 멈춘다**. 사람이 다른 머신에서 돌리거나, 기존 설치를
+  //   직접 정리한 뒤 다시 시도해야 한다.
+  const pre = detectPreexisting(installRoot)
+  if (pre.blockingReason) {
+    blocked(
+      '이 머신에 ezBrowser 설치 흔적이 있어 검사를 진행하지 않았다',
+      `${pre.blockingReason}. `
+      + `설치 위치=${installRoot} · 그 안의 파일=[${pre.dirFiles.join(', ') || '(없음)'}] · `
+      + `제거 레지스트리 항목=${pre.regCount}개 · 경로 기억 키=[${pre.pathKeys.join(', ') || '없음'}]. `
+      + `이 검사는 무인 설치·무인 제거를 실행하므로, 계속하면 사용자가 실제로 쓰고 있는 ezBrowser 를 `
+      + `덮어쓰거나 완전히 제거할 수 있다. 다른 머신/VM 에서 돌리거나, 이 설치를 백업 후 수동 제거하고 `
+      + `다시 시도하라.`,
+    )
+    fs.writeFileSync(path.join(args.out, 'install-results.json'), JSON.stringify(results, null, 2))
+    console.log('\n===== verify-install 결과 =====')
+    console.log('BLOCKED — 안전을 위해 설치·제거를 시도하지 않았다.')
+    process.exit(3)
+  }
+  if (pre.pathKeys.length) {
+    console.log(`  (참고: 과거 설치의 잔재로 보이는 레지스트리 경로 키가 남아 있다 — 활성 설치는 아니라 진행한다: ${pre.pathKeys.join(', ')})`)
+  }
+
   // 앞선 실행의 잔재를 먼저 치운다. NSIS 는 `_?=` 로 제거하면 **제거기 자신을 남긴다**(알려진 동작)
   // — 그 잔재가 남아 있으면 다음 설치가 0xC0000005 로 깨진다(2026-09-07 실측).
-  if (fs.existsSync(installRoot)) {
-    const left = fs.readdirSync(installRoot)
-    if (left.length && left.every((f) => /^Uninstall .*\.exe$/i.test(f))) {
-      for (const f of left) { try { fs.unlinkSync(path.join(installRoot, f)) } catch { /* ignore */ } }
-      try { fs.rmdirSync(installRoot) } catch { /* ignore */ }
-      console.log('  (앞선 검사가 남긴 제거기 잔재를 정리했다)')
-    }
+  //   (위 안전 게이트를 통과했으므로 이 디렉터리에 남은 것은 우리 자신의 잔재뿐임이 보장된다.)
+  if (pre.residueOnly) {
+    for (const f of pre.dirFiles) { try { fs.unlinkSync(path.join(installRoot, f)) } catch { /* ignore */ } }
+    try { fs.rmdirSync(installRoot) } catch { /* ignore */ }
+    console.log('  (앞선 검사가 남긴 제거기 잔재를 정리했다)')
   }
 
   let installed = false
@@ -84,7 +178,7 @@ async function main() {
       // ELECTRON_RUN_AS_NODE: 설치 직후 자동 실행되는 앱을 **창·프로필 없이** 끝내 사용자 환경을 지킨다.
       let code = -1
       try {
-        execFileSync(INSTALLER, ['/S'], {
+        execFileSync(installerPath, ['/S'], {
           timeout: 180000,
           env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         })

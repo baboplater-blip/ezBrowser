@@ -46,7 +46,9 @@ const PAY_HOST_RE = /(toss|tosspayments|kakaopay|naverpay|payco|nicepay|inicis|k
 const JS_EFFECT_RE = /\.click\s*\(|\.submit\s*\(|requestSubmit|location\s*\.\s*(href|assign|replace)|location\s*=|window\.open|\bfetch\s*\(|XMLHttpRequest|sendBeacon|document\.forms|\.remove\s*\(|removeChild/i
 
 // 위험 판정에서 아예 제외되는 행동(페이지를 바꾸지 않음).
-const HARMLESS = new Set(['scroll', 'read', 'wait', 'wait_for', 'done', 'ask', 'note', 'report', 'remember', 'extract', 'hover', 'switch_tab', 'close_tab'])
+// request_scope 는 그 자체로 페이지를 바꾸지 않고, 별도의 사용자 승인 창을 띄우는 동작이라 여기서는 무해로 둔다
+// (승인 없이는 아무 것도 넓어지지 않는다). select 는 페이지 상태를 바꾸므로 **여기 없다** — 라벨 기반 위험 판정을 받는다.
+const HARMLESS = new Set(['scroll', 'read', 'wait', 'wait_for', 'done', 'ask', 'note', 'report', 'remember', 'extract', 'hover', 'switch_tab', 'close_tab', 'request_scope'])
 
 // ===== 신뢰 레시피(우리 제품이 생성한 JS) =====
 // 블로그 발행 브릿지처럼 앱이 직접 만든 JS 는 내용이 검증돼 있으므로 게이트를 면제한다.

@@ -184,7 +184,7 @@ export function registerAiIpc(): void {
   })
 
   // ===== 에이전트 =====
-  ipcMain.handle(IPC.ai.agentStart, async (e, args: { reqId: string; tabId?: string; task: string; rows?: Array<Record<string, string>>; autoConfirm?: boolean; readOnly?: boolean }) => {
+  ipcMain.handle(IPC.ai.agentStart, async (e, args: { reqId: string; tabId?: string; task: string; rows?: Array<Record<string, string>>; autoConfirm?: boolean; readOnly?: boolean; allowedHosts?: string[] }) => {
     if (!isTrustedSender(e)) return { ok: false }
     if (!args || !args.reqId || !args.task?.trim()) return { ok: false }
     const sender = e.sender
@@ -203,7 +203,15 @@ export function registerAiIpc(): void {
     if (Array.isArray(args.rows) && args.rows.length) {
       void runAgentBatch({ reqId: args.reqId, tabId: args.tabId, task, rows: args.rows, autoConfirm: !!args.autoConfirm }, forward)
     } else {
-      void runAgentTask({ reqId: args.reqId, tabId: args.tabId, task, readOnly: !!args.readOnly }, forward)
+      // 허용 사이트 — 호스트 형태만 통과시킨다(경로·스킴이 섞인 값이 그대로 들어가면 규칙이 무력해진다).
+      const allowedHosts = Array.isArray(args.allowedHosts)
+        ? args.allowedHosts.map((h) => String(h ?? '').trim().toLowerCase().replace(/^\*\./, ''))
+          .filter((h) => /^[a-z0-9.-]+$/.test(h)).slice(0, 30)
+        : undefined
+      void runAgentTask({
+        reqId: args.reqId, tabId: args.tabId, task, readOnly: !!args.readOnly,
+        ...(allowedHosts && allowedHosts.length ? { allowedHosts } : {}),
+      }, forward)
     }
     return { ok: true }
   })

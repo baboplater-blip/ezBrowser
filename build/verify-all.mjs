@@ -106,6 +106,14 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: '패스키(WebAuthn) 자동 요청 차단·사이트별 허용/차단 P1~P4',
     },
     {
+      // 교차 출처 iframe 관찰·조작 + ref 키 세대/프레임 엄격 바인딩 + 로그인/CAPTCHA 사용자 인계.
+      // 실측 약 3분(실제 창 구동) — quick 에는 넣지 않는다.
+      id: 'frames', kind: 'harness', modes: ['full'],
+      script: 'verify-frames-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'frames', 'frames-results.json'),
+      timeoutMs: 12 * 60000, desc: '교차출처 iframe 조작·ref 세대 안전·로그인/CAPTCHA 인계 F1~F8·K1~K2·C1~C4',
+    },
+    {
       id: 'sns-publish', kind: 'harness', modes: ['full'],
       script: 'verify-sns-publish-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'sns-publish', 'sns-publish-results.json'),

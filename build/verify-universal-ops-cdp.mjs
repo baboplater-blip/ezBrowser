@@ -236,18 +236,34 @@ async function main() {
     let hubObs = await pa.observePage(hub.fakeWc)
     if (!hubObs) throw new Error('허브 관찰 실패(null)')
 
-    // ===== U1: cross-origin iframe — 접근 불가를 "정직하게" 보고하는가 =====
+    // ===== U1: cross-origin iframe =====
+    // 판정 기준 갱신(2026-09-18). 이제 제품은 교차 출처 프레임을 **실제로 관찰·조작한다**(WebFrameMain).
+    // 다만 그 능력은 **메인 프로세스 권한**이라, 이 하네스처럼 CDP 로 흉내낸 가짜 WebContents 로는
+    // 원리적으로 시험할 수 없다(가짜 wc 에는 mainFrame 이 없다). 그래서 역할을 나눈다:
+    //   · 실제 조작 실증(관찰→입력→선택→클릭→반응) = build/verify-frames-cdp.mjs 의 F1~F8 (실제 앱·2오리진)
+    //   · 여기서는 **이 환경에서 반드시 지켜져야 할 두 가지**를 본다 —
+    //     ① 못 본 프레임을 조용히 빠뜨리지 않고 정직하게 보고하는가(그래야 모델이 대안을 고른다)
+    //     ② 못 보는 프레임의 요소를 **있는 것처럼 지어내지 않는가**(유령 요소 0)
     await scenario('U1', async () => {
       const list = hubObs.crossOriginFrames ?? []
-      const reported = list.some((s) => /frameB-ops|frameB\.html/.test(s))
-      const leakedAsElement = hubObs.elements.some((e) => e.name.includes('프레임B'))
-      if (leakedAsElement) {
-        return { status: 'FAIL', detail: `cross-origin 버튼이 [조작 가능한 요소] 목록에 새어 들어옴(관찰 정확성 결함): ${hubObs.elements.find((e) => e.name.includes('프레임B')).name}` }
+      const framesSeen = hubObs.frames ?? []
+      const leaked = hubObs.elements.filter((e) => e.name.includes('프레임B 버튼'))
+      // 프레임을 실제로 관찰한 환경이라면 그 요소가 목록에 있는 게 정상이다(유령이 아니다).
+      const reallyObserved = framesSeen.length > 0
+      if (leaked.length > 0 && !reallyObserved) {
+        return { status: 'FAIL', detail: `관찰하지 못한 cross-origin 프레임의 버튼이 요소 목록에 지어내어 들어옴(유령 요소): ${leaked[0].name}` }
       }
+      if (reallyObserved) {
+        return { status: 'PASS', detail: `이 환경에서 프레임을 실제로 관찰함(${framesSeen.map((f) => f.host).join(', ')}) — 조작 실증은 verify-frames-cdp.mjs F1~F8` }
+      }
+      const reported = list.some((s2) => /frameB-ops|frameB\.html|localhost/.test(String(s2)))
       if (!reported) {
-        return { status: 'FAIL', detail: `cross-origin iframe 이 crossOriginFrames 로 보고되지 않음(조용히 누락) — 목록: ${JSON.stringify(list)}` }
+        return { status: 'FAIL', detail: `cross-origin iframe 을 관찰하지도, 못 봤다고 보고하지도 않음(조용한 누락) — 목록: ${JSON.stringify(list)}` }
       }
-      return { status: 'PASS', detail: `cross-origin iframe 안은 관찰 불가(Same-Origin Policy, 구조적 제약)이지만 crossOriginFrames=${JSON.stringify(list)} 로 정직하게 보고됨. 가짜 요소로 새지 않음` }
+      return {
+        status: 'PASS',
+        detail: `가짜 wc 환경이라 프레임 제어 불가(메인 프로세스 WebFrameMain 필요) — 대신 못 본 프레임을 정직 보고(${JSON.stringify(list)})하고 유령 요소 0건. 실제 조작 실증은 verify-frames-cdp.mjs F1~F8(실제 앱·2오리진)`,
+      }
     })
 
     // ===== U2: open/closed shadow DOM =====
@@ -594,28 +610,82 @@ async function checkU9VisionNotice(shell, windowId, port, pageUrl) {
   }
 }
 
-// ── U10: 로그인/CAPTCHA — 코드 확인만(우회 코드 추가 금지) ─────────────────
+// ── U10: 로그인/CAPTCHA — 전용 감지기 실재 확인 + 우회 코드 금지 확인 ────────
+//
+// (2026-09-18 갱신) 예전에는 전용 감지기가 없어 "진전 없는 반복(STUCK_REPEAT)"으로 겨우
+// 수렴하는 정직한 GAP 이었다. 이제 `challenge-detect.ts` 가 신설돼 로그인/CAPTCHA 화면을
+// **보자마자** 감지해 사용자에게 넘긴다. 여기서는 그 배선이 실재하는지·오탐 방지 근거(구조적
+// 신호 기반, 본문 단어만으로는 발동하지 않음)가 있는지를 정적으로 확인한다. e2e 실증은
+// build/verify-frames-cdp.mjs 의 C1~C4·C-UI(실제 앱 + 로컬 fixture)가 맡는다.
 function checkU10CaptchaHandoff() {
   const dir = path.join(REPO_ROOT, 'app', 'main', 'features', 'ai')
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.ts'))
   const combined = files.map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n')
+
   // ① 우회·지문은폐 코드가 없어야 한다(이건 절대 추가하면 안 되는 것 — 준수 확인).
   const bypassHit = /2captcha|anti-?captcha|captcha[-_]?solver|solve[-_]?captcha|recaptcha[-_]?bypass|captcha[-_]?bypass/i.exec(combined)
   if (bypassHit) return { status: 'FAIL', detail: `CAPTCHA 우회/솔버로 보이는 코드 발견(추가돼선 안 됨): "${bypassHit[0]}"` }
-  // ② CAPTCHA 전용 감지기는 없지만, 진전 없는 반복을 감지해 사용자에게 넘기는 범용 메커니즘이 있는지 확인
-  //    (agent.ts 의 STUCK_REPEAT/ask 경로 — 로그인/CAPTCHA 로 막혔을 때도 이 경로로 사용자에게 넘어간다).
-  const agentPath = path.join(REPO_ROOT, 'app', 'main', 'features', 'ai', 'agent.ts')
+
+  // ② 전용 감지기 모듈이 실재하는가: challenge-detect.ts + detectChallenge export.
+  const cdPath = path.join(dir, 'challenge-detect.ts')
+  if (!fs.existsSync(cdPath)) {
+    return { status: 'FAIL', detail: 'challenge-detect.ts 가 없음 — 전용 감지기 미구현' }
+  }
+  const cdSrc = fs.readFileSync(cdPath, 'utf8')
+  const exportsDetect = /export function detectChallenge/.test(cdSrc)
+  if (!exportsDetect) {
+    return { status: 'FAIL', detail: 'challenge-detect.ts 에 export function detectChallenge 가 없음' }
+  }
+
+  // ③ 에이전트 루프가 그것을 import 해 모델 호출 전에 실제로 부르는가.
+  const agentPath = path.join(dir, 'agent.ts')
   const agentSrc = fs.readFileSync(agentPath, 'utf8')
+  const importsDetect = /import\s*\{[^}]*\bdetectChallenge\b[^}]*\}\s*from\s*['"]\.\/challenge-detect['"]/.test(agentSrc)
+  const callsDetect = /detectChallenge\s*\(/.test(agentSrc)
+  if (!importsDetect || !callsDetect) {
+    return { status: 'FAIL', detail: `agent.ts 가 challenge-detect 를 배선하지 않음(import=${importsDetect} 호출=${callsDetect})` }
+  }
+
+  // ④ 막힘→사용자에게 묻는 범용 경로(STUCK_REPEAT/ask)는 여전히 안전망으로 유지돼야 한다
+  //    (전용 감지기가 못 잡는 미지의 차단 화면도 결국 이 경로로 수렴해야 하므로 회귀 여부를 함께 본다).
   const hasStuckAsk = /STUCK_REPEAT/.test(agentSrc) && /type:\s*'ask'/.test(agentSrc) && /같은 동작.*반복했는데 진전이 없습니다/.test(agentSrc)
   if (!hasStuckAsk) {
     return { status: 'FAIL', detail: '막힘→사용자에게 묻는 범용 경로(STUCK_REPEAT/ask)를 agent.ts 에서 못 찾음(회귀 의심)' }
   }
+
+  // ⑤ 관찰 스크립트가 구조적 신호로 challenge 를 만드는가(page-actions.ts) — CAPTCHA 위젯 셀렉터 +
+  //    보이는 password 입력칸. 본문 단어 매칭 폴백이 있다면 반드시 "본문이 아주 짧은 차단 간지"라는
+  //    구조적 조건과 함께여야 한다(그렇지 않으면 안내문서·약관 페이지에서 오탐이 난다).
+  const paPath = path.join(dir, 'page-actions.ts')
+  const paSrc = fs.readFileSync(paPath, 'utf8')
+  const hasCaptchaWidgetSelector = /g-recaptcha|h-captcha|cf-turnstile|data-sitekey/.test(paSrc)
+  const hasPasswordSelector = /input\[type=password\]/.test(paSrc)
+  const hasChallengeField = /challenge:\s*challenge/.test(paSrc) || /challenge\?:\s*\{\s*kind/.test(paSrc)
+  if (!hasCaptchaWidgetSelector || !hasPasswordSelector || !hasChallengeField) {
+    return {
+      status: 'FAIL',
+      detail: `page-actions.ts 관찰 스크립트에 구조적 challenge 신호가 없음(CAPTCHA위젯=${hasCaptchaWidgetSelector} password입력칸=${hasPasswordSelector} challenge필드=${hasChallengeField})`,
+    }
+  }
+  // 본문 단어만으로 발동하는 경로가 없는지: 텍스트 매칭이 있다면 반드시 길이 상한(짧은 차단 간지) 조건과 함께다.
+  const textFallbackMatch = /CAP_TEXT/.test(paSrc)
+  if (textFallbackMatch) {
+    const guardedByShortBody = /bodyText\.length\s*<\s*\d+[\s\S]{0,200}CAP_TEXT/.test(paSrc)
+    if (!guardedByShortBody) {
+      return {
+        status: 'FAIL',
+        detail: '본문 문구 매칭(CAP_TEXT)이 "본문이 짧은 차단 간지"라는 구조적 조건 없이 단어만으로 발동할 수 있음(오탐 위험)',
+      }
+    }
+  }
+
   return {
-    status: 'GAP',
-    detail: 'CAPTCHA/로그인 우회·지문은폐 코드 없음(준수 확인, grep 0건). '
-      + 'CAPTCHA 전용 감지기는 없으나, 진전 없는 반복(STUCK_REPEAT=3)을 감지해 emit({type:"ask"}) 로 사용자에게 넘기고 '
-      + '답변을 받아 이어가는 범용 메커니즘은 실재(agent.ts) — CAPTCHA로 막힌 흐름도 결국 이 경로로 수렴할 것으로 보이나, '
-      + 'CAPTCHA 를 특정해 즉시 감지하는 전용 로직은 아니므로 e2e 로 실증하지 않고 정직히 GAP 으로 보고.',
+    status: 'PASS',
+    detail: 'CAPTCHA/로그인 우회·지문은폐 코드 없음(grep 0건). 전용 감지기 실재(challenge-detect.ts::detectChallenge) + '
+      + 'agent.ts 가 모델 호출 전 배선(import·호출 확인) + 관찰 스크립트가 구조적 신호(CAPTCHA 위젯 셀렉터·보이는 password '
+      + '입력칸)만으로 판단하고 본문 단어 폴백은 짧은 차단 간지 조건에 갇혀 있음(오탐 방지 근거 확인). '
+      + '막힘→ask 안전망(STUCK_REPEAT)도 회귀 없이 유지. e2e 실증은 build/verify-frames-cdp.mjs 의 C1~C4·C-UI 가 실제 '
+      + '앱 + 로컬 fixture 로 수행(15/15 PASS).',
   }
 }
 

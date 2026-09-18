@@ -821,9 +821,16 @@ function onSegmentEvent(task: PersistentTask, evt: AgentEvent, box: { outcome: S
     }
     case 'ask': {
       rt.waitKind = 'agent-ask'
-      setState(task, 'waiting-user', str(evt.message, '추가 정보가 필요합니다.'))
+      // 로그인/CAPTCHA 로 넘어온 대기는 사유를 눈에 띄게 구분한다 — 사용자가 "내가 브라우저에서 직접
+      // 해야 하는 일" 임을 바로 알아야 한다(그냥 질문과 성격이 다르다).
+      const isChallenge = evt.challenge === 'login' || evt.challenge === 'captcha'
+      const prefix = evt.challenge === 'captcha' ? '🧩 사람 확인이 필요합니다 — '
+        : evt.challenge === 'login' ? '🔐 로그인이 필요합니다 — ' : ''
+      setState(task, 'waiting-user', prefix + str(evt.message, isChallenge ? '직접 처리한 뒤 이어가기를 눌러 주세요.' : '추가 정보가 필요합니다.'))
       return
     }
+    // 감지 사실 자체는 트레이스로만 남긴다(상태 전환은 바로 뒤따르는 'ask' 가 한다).
+    case 'challenge': return
     case 'answer': {
       if (task.state === 'waiting-user') setState(task, 'running')
       return

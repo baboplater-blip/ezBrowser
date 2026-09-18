@@ -543,6 +543,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           break
         }
         case 'confirm': push('⏸️', `확인 필요: ${String(p.label ?? '')}`, 'warn'); setAwaitingConfirm(String(p.label ?? '이 행동')); break
+        // 로그인/CAPTCHA 감지 — "왜 멈췄는지" 를 사용자가 바로 알아야 한다(자동으로 풀지 않는다).
+        case 'challenge': push(p.kind === 'captcha' ? '🧩' : '🔐',
+          `${p.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면입니다 — 브라우저에서 직접 처리해 주세요 (근거: ${String(p.evidence ?? '')})`, 'warn'); break
         case 'ask': push('❓', String(p.message ?? '')); setAwaitingAsk(String(p.message ?? '추가 정보가 필요합니다.')); break
         case 'answer': push('🗣️', `답변: ${String(p.text ?? '')}`, 'muted'); break
         case 'report': {
@@ -708,6 +711,10 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         case 'ask':
           setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'ask', message: String(p.message ?? '추가 정보가 필요합니다.') } }))
           pushTrace('❓', String(p.message ?? ''))
+          break
+        case 'challenge':
+          pushTrace(p.kind === 'captcha' ? '🧩' : '🔐',
+            `${p.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면 감지 — 브라우저에서 직접 처리해 주세요`, 'warn')
           break
         case 'answer':
           setPtaskPending((prev) => { const n = { ...prev }; delete n[id]; return n })

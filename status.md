@@ -96,12 +96,12 @@
 
 ### 최신 실행
 
-**`npm run verify` — 9/9 PASS · 44s** (2026-09-18 09:05)
+**`npm run verify` — 9/9 PASS · 42s** (2026-09-18 09:57)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
-| typecheck | ✅ PASS | 5s | 종료코드 0 |
-| build | ✅ PASS | 6s | 종료코드 0 |
+| typecheck | ✅ PASS | 4s | 종료코드 0 |
+| build | ✅ PASS | 5s | 종료코드 0 |
 | package | ✅ PASS | 7s | 종료코드 0 |
 | smoke | ✅ PASS | 12s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
@@ -112,6 +112,7 @@
 
 ### 최근 10회
 
+- 2026-09-18 09:57 · `quick` · **9/9 PASS** · 42s
 - 2026-09-18 09:05 · `quick` · **9/9 PASS** · 44s
 - 2026-09-18 08:49 · `quick` · **9/9 PASS** · 44s
 - 2026-09-18 08:43 · `quick` · **9/9 PASS** · 47s
@@ -121,7 +122,6 @@
 - 2026-09-15 11:45 · `quick` · **8/8 PASS** · 1m 15s
 - 2026-09-15 11:19 · `quick` · **8/8 PASS** · 36s
 - 2026-09-15 10:59 · `quick` · **8/8 PASS** · 41s
-- 2026-09-15 09:09 · `quick` · **8/8 PASS** · 40s
 
 <!-- verify-all:end -->
 

@@ -16,6 +16,8 @@ import { downloadMedia, downloadStream, getCandidates } from '../video-download'
 import { getProfile, hasProfileData } from './profile'
 import { hasAgentFilesDir, listAgentFiles, resolveAgentFile } from './agent-files'
 import { writeDownloadMd, safeFileName } from './conversations'
+import { detectChallenge, challengeKey, type ChallengeVerdict } from './challenge-detect'
+import { hostAllowed as frameHostAllowed } from './frames'
 import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, type RiskVerdict, type CompletionSignal } from './agent-gate'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
@@ -210,6 +212,8 @@ const AGENT_TOOLS: ToolSpec[] = [
   toolSpec('wait_for', '요소나 텍스트가 나타날 때까지 대기(동적 페이지·로딩·AJAX·영상 업로드/인코딩 완료). selector(CSS) 또는 text 중 하나, timeout(ms). 대기는 작업 단계를 소모하지 않으므로 오래 걸리는 처리에는 큰 timeout 을 쓰세요.', { selector: { type: 'string' }, text: { type: 'string' }, timeout: { type: 'integer', description: '최대 대기 ms(기본 10000, 최대 300000=5분)' } }),
   toolSpec('key', '키보드 키/조합을 누름(실제 키 입력 — Enter·Tab·Escape·방향키·Ctrl+A 등 기본 동작 발동). ref 를 주면 그 요소에 먼저 포커스.', { key: { type: 'string', description: '예 "Enter","Tab","Escape","Control+a"' }, ref: { type: 'integer' } }, ['key']),
   toolSpec('hover', '요소에 마우스를 올림(호버로만 뜨는 메뉴 등).', { ref: { type: 'integer' } }, ['ref']),
+  toolSpec('select', '드롭다운(<select>)에서 항목을 고름. text 에 보이는 글자 또는 value 를 주세요(부분 일치도 됨).', { ref: { type: 'integer' }, text: { type: 'string' } }, ['ref', 'text']),
+  toolSpec('request_scope', '허용 사이트 목록 밖이라 열지 않은 프레임/사이트를 작업에 써야 할 때, 사용자에게 허용을 요청합니다. 사용자가 승인해야만 열립니다(임의 확대 불가).', { host: { type: 'string', description: '허용을 요청할 호스트(예: payments.example.com)' }, message: { type: 'string', description: '왜 필요한지 한 문장' } }, ['host']),
   toolSpec('drag', '요소/좌표에서 요소/좌표로 드래그(슬라이더·정렬·캔버스). 시작=ref 또는 xPct,yPct / 끝=toRef 또는 toXPct,toYPct.', { ref: { type: 'integer' }, xPct: { type: 'number' }, yPct: { type: 'number' }, toRef: { type: 'integer' }, toXPct: { type: 'number' }, toYPct: { type: 'number' } }),
   toolSpec('download', '사진·영상·파일 다운로드 — 실제 다운로드 엔진(쿠키·Referer·멀티커넥션·네이티브 HLS/DASH·yt-dlp)으로 저장. ref 에 사진(img)·영상(video)·링크 요소 번호를 주거나 url 을 직접 주세요. 둘 다 생략하면 지금 페이지에서 재생 중인 영상을 자동 감지해 받습니다(유튜브·인스타·틱톡 등). blob/스트리밍 영상도 처리됩니다.', { ref: { type: 'integer', description: '사진/영상/링크 요소의 [번호]' }, url: { type: 'string', description: '직접 지정할 미디어 URL' } }),
   toolSpec('run_js', '페이지에서 자바스크립트를 실행하고 결과를 받음(추출·조작 만능). 마지막 값을 return 하세요.', { code: { type: 'string' } }, ['code']),
@@ -254,6 +258,8 @@ function toolCallToAction(tc: ToolCall): AgentAction | null {
     case 'wait_for': return { action: 'wait_for', selector: typeof a.selector === 'string' ? a.selector : undefined, text: typeof a.text === 'string' ? a.text : undefined, timeout: asNum(a.timeout), thought }
     case 'key': return { action: 'key', key: String(a.key ?? ''), ref: asNum(a.ref), thought }
     case 'hover': { const ref = asNum(a.ref); return ref == null ? null : { action: 'hover', ref, thought } }
+    case 'select': { const ref = asNum(a.ref); return ref == null ? null : { action: 'select', ref, text: String(a.text ?? ''), thought } }
+    case 'request_scope': { const host = String(a.host ?? '').trim(); return host ? { action: 'request_scope', host, message: a.message ? String(a.message) : undefined, thought } : null }
     case 'drag': return { action: 'drag', ref: asNum(a.ref), xPct: asNum(a.xPct), yPct: asNum(a.yPct), toRef: asNum(a.toRef), toXPct: asNum(a.toXPct), toYPct: asNum(a.toYPct), thought }
     case 'download': return { action: 'download', ref: asNum(a.ref), url: typeof a.url === 'string' ? a.url : undefined, thought }
     case 'run_js': return { action: 'run_js', code: String(a.code ?? ''), thought }
@@ -296,6 +302,8 @@ function agentSystemPrompt(task: string): string {
     '- 대기: {"action":"wait_for","selector":".result"} 또는 {"action":"wait_for","text":"완료","timeout":8000}  (요소·텍스트가 나타날 때까지 — 로딩·AJAX·SPA). 영상 업로드·인코딩처럼 오래 걸리는 것은 timeout 을 크게(최대 300000 = 5분) 주고 기다리세요 — 대기는 작업 단계를 소모하지 않습니다.',
     '- 키 입력: {"action":"key","key":"Enter"}  (Enter·Tab·Escape·방향키·"Control+a" 등 실제 키. ref 를 주면 그 요소에 포커스 후)',
     '- 호버: {"action":"hover","ref":<번호>}  (마우스를 올려야 뜨는 메뉴)',
+    '- 드롭다운 선택: {"action":"select","ref":<select 번호>,"text":"보이는 항목 글자"}  (<select> 전용. 커스텀 드롭다운은 click 으로 열고 항목을 click)',
+    '- 허용 범위 요청: {"action":"request_scope","host":"example.com","message":"왜 필요한지"}  ([열지 않은 프레임] 처럼 허용 목록 밖 사이트가 작업에 꼭 필요할 때만. 사용자가 승인해야 열립니다)',
     '- 드래그: {"action":"drag","ref":<시작번호>,"toRef":<끝번호>}  (슬라이더·정렬·캔버스. 좌표로는 xPct,yPct → toXPct,toYPct)',
     '- 다운로드: {"action":"download","ref":<사진/영상/링크 번호>} 또는 {"action":"download","url":"https://..."} 또는 {"action":"download"}(지금 페이지에서 재생 중인 영상 자동 감지). 사진·영상(HLS/DASH·유튜브/인스타/틱톡 포함)·파일을 실제 엔진으로 저장.',
     '- JS 실행: {"action":"run_js","code":"return document.title"}  (페이지에서 코드 실행하고 결과 받기 — 추출·조작 만능)',
@@ -354,8 +362,20 @@ function formatObservation(obs: PageObservation, injected: boolean): string {
     // 다른 오리진 iframe 은 브라우저 보안 정책상 안을 들여다볼 수 없다. 예전에는 조용히 빠져서
     // 모델이 "요소가 없다"고 판단해 헛돌았다 — 있는데 못 본다는 사실 자체를 알려야 올바른 대안
     // (화면을 보고 click_at, 또는 사용자에게 넘기기)을 고른다.
+    // 다른 오리진 iframe 도 이제 브라우저 권한으로 직접 관찰·조작한다(WebFrameMain). 그 안의 요소는
+    // 아래 [조작 가능한 요소] 목록에 "(프레임 호스트)" 표시와 함께 같은 번호 체계로 들어 있다.
+    ...(obs.frames && obs.frames.length > 0 ? [
+      `[프레임] 다른 사이트의 화면 ${obs.frames.length}개가 이 페이지 안에 들어 있고, 그 안의 요소도 아래 목록에 있습니다(이름 앞에 "(프레임 호스트)").`,
+      ...obs.frames.map((f) => `  · ${f.host} — ${f.title || '(제목 없음)'} · 요소 ${f.elementCount}개${f.text ? `
+    내용: ${f.text.replace(/\s+/g, ' ').slice(0, 300)}` : ''}`),
+    ] : []),
+    // 허용 사이트 밖이라 일부러 열지 않은 프레임 — 안의 내용은 읽지 않았다(한 글자도 프롬프트에 없다).
+    ...(obs.blockedFrames && obs.blockedFrames.length > 0 ? [
+      `[열지 않은 프레임] 허용 사이트 목록 밖이라 읽지 않은 프레임이 있습니다: ${obs.blockedFrames.join(', ')}`,
+      '그 안의 내용은 전혀 읽지 않았습니다. 작업에 꼭 필요하면 request_scope 로 사용자에게 허용을 요청하세요(사용자가 승인해야만 열립니다). 임의로 우회하지 마세요.',
+    ] : []),
     ...(obs.crossOriginFrames && obs.crossOriginFrames.length > 0 ? [
-      `[볼 수 없는 영역] 다른 오리진의 iframe ${obs.crossOriginFrames.length}개가 화면에 있습니다: ${obs.crossOriginFrames.slice(0, 5).join(', ')}`,
+      `[볼 수 없는 영역] 기술적으로 접근하지 못한 프레임이 있습니다: ${obs.crossOriginFrames.slice(0, 5).join(', ')}`,
       '그 안의 요소는 [조작 가능한 요소] 목록에 없습니다. 필요하면 화면(스크린샷)을 보고 click_at 으로 그 영역을 클릭한 뒤 ref 없이 입력하세요. 그래도 안 되면 ask 로 사용자에게 직접 처리를 요청하세요.',
     ] : []),
     '',
@@ -561,6 +581,8 @@ function describeAction(action: AgentAction, obs: PageObservation): string {
     case 'switch_tab': return `탭 전환 #${action.index ?? '?'}`
     case 'close_tab': return `탭 닫기 #${action.index ?? '?'}`
     case 'scroll': return `스크롤 ${action.direction === 'up' ? '위' : '아래'}`
+    case 'select': return `드롭다운 선택 ${name} → "${(action.text ?? '').slice(0, 30)}"`
+    case 'request_scope': return `허용 사이트 추가 요청: ${action.host ?? ''}`
     case 'note': return `노트 기록 (${(action.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 30)}…)`
     case 'report': return `보고서 완성 "${action.title ?? ''}"`
     default: return action.action
@@ -719,19 +741,12 @@ export interface AgentTaskParams {
 
 // 허용 호스트 검사 — 사용자가 "이 사이트들에서만" 이라고 정한 범위를 코드로 강제한다.
 // 프롬프트 지시만으로는 모델이 다른 사이트로 새는 것을 막을 수 없다.
-function hostAllowed(url: string, allowed: string[] | undefined): boolean {
-  if (!allowed || allowed.length === 0) return true
-  let host = ''
-  try { host = new URL(url).hostname.toLowerCase() } catch { return false }
-  return allowed.some((a) => {
-    const want = String(a ?? '').trim().toLowerCase().replace(/^\*\./, '')
-    if (!want) return false
-    return host === want || host.endsWith('.' + want)
-  })
-}
+// 자식 프레임 관찰에도 **똑같은** 규칙이 적용돼야 하므로 구현을 frames.ts 한 곳에 두고 여기서 쓴다.
+// 규칙이 두 벌이면 한쪽만 조여져 구멍이 생긴다(최상위 이동은 막는데 프레임은 읽히는 식).
+const hostAllowed = frameHostAllowed
 
 // 읽기 전용(사이트 분석 보고서 등) 에서 차단하는 "페이지를 바꾸는" 동작 — 열람·이동·note/report 만 허용.
-const READONLY_BLOCKED = new Set(['type', 'run_js', 'upload_file', 'autofill', 'drag', 'download', 'key'])
+const READONLY_BLOCKED = new Set(['type', 'run_js', 'upload_file', 'autofill', 'drag', 'download', 'key', 'select'])
 
 export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Promise<void> {
   const { reqId, tabId, task } = params
@@ -839,7 +854,8 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     ? Math.floor(params.stepBudget)
     : Math.max(6, Math.min(80, st.agentMaxSteps || DEFAULT_MAX_STEPS))
   const lastStep = startStep + segmentSteps - 1
-  const allowedHosts = params.allowedHosts
+  // 사용자가 request_scope 를 **명시 승인**했을 때만 넓어진다(자동 확대 금지).
+  let allowedHosts = params.allowedHosts ? [...params.allowedHosts] : undefined
   // 구간을 이어갈 때 호출자에게 돌려줄 진행 상태 — 모델이 note/remember/done 으로 남긴 것과 실제 행동에서 모은다.
   const doneSubtasks: string[] = [...(params.resumeContext?.doneSubtasks ?? [])]
   const noteSubtask = (s: string): void => {
@@ -865,6 +881,10 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
   let noParseStreak = 0           // 응답을 연속으로 못 읽은 횟수
   let failStreak = 0              // 행동이 연속으로 실패한 횟수
   let needVision = true           // 이번(첫) 단계에 스마트 비전 캡처가 필요한가(화면 변화·막힘 시 재설정)
+  // 사용자가 직접 처리했다고 알려 준 로그인/CAPTCHA 화면 — 같은 화면에서 다시 묻지 않는다.
+  const challengeResolved = new Set<string>()
+  let challengeHandoffs = 0
+  const CHALLENGE_HANDOFF_LIMIT = 5
   const collected: Array<Record<string, string>> = [] // extract 로 모은 데이터(여러 페이지 누적)
   const seenRows = new Set<string>()                   // 중복 행 제거(같은 페이지 재추출 시 이중 집계 방지)
   const reportNotes: Array<{ url: string; title: string; md: string }> = [] // note 로 모은 보고서 재료(페이지별)
@@ -963,17 +983,43 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       needVision = false
       // 관찰(DOM)과 화면 캡처는 서로 독립적 → 병렬로 돌려 단계당 지연을 줄인다(둘 중 긴 쪽만큼만 소요).
       let [obs, shot] = await Promise.all([
-        observePage(wc),
+        observePage(wc, { allowedHosts }),
         captureThisStep ? captureScreenshot(wc) : Promise.resolve<string | undefined>(undefined),
       ])
       // 새 탭 전환 직후 아직 about:blank/로딩 중이면 관찰이 null 이 되므로 한 번 재시도한다.
       if (!obs) {
         await sleep(600); if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
-        obs = await observePage(wc)
+        obs = await observePage(wc, { allowedHosts })
         if (obs && captureThisStep && !shot) shot = await captureScreenshot(wc) // 첫 캡처가 blank 였으면 다시
       }
       if (!obs) { emit({ type: 'error', message: '페이지를 관찰하지 못했습니다.' }); return }
       emit({ type: 'observe', step, url: obs.url, title: obs.title, elements: obs.elements.length, vision: !!shot })
+
+      // ===== 로그인 / CAPTCHA 화면 → 사람에게 넘기기 =====
+      // 이 화면 앞에서는 에이전트가 원리적으로 할 수 있는 게 없다. 예전에는 같은 화면을 보며 단계·모델 호출을
+      // 다 태운 뒤에야 막힘 감지로 겨우 물었다. 이제 **모델을 부르기 전에** 멈춘다(예산 0 소모).
+      // CAPTCHA 를 풀거나 우회하지 않는다 — 사용자가 직접 처리한 뒤 "계속" 이라고 하면 이어간다.
+      {
+        const ch: ChallengeVerdict | null = challengeHandoffs < CHALLENGE_HANDOFF_LIMIT ? detectChallenge(obs, challengeResolved) : null
+        if (ch) {
+          challengeHandoffs++
+          const askP = waitAsk(reqId) // 대기자를 emit 전에 등록(배치 동기 응답 대비)
+          emit({ type: 'challenge', kind: ch.kind, message: ch.reason, evidence: ch.evidence, url: obs.url })
+          emit({ type: 'ask', message: ch.reason, challenge: ch.kind })
+          const answer = await askP
+          if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+          if (answer == null) {
+            emit({ type: 'done', message: `${ch.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면에서 중단했습니다 — 직접 처리하신 뒤 이어가기를 눌러 주세요.`, needsUser: true })
+            return
+          }
+          // 사용자가 처리했다고 알려 줬다 → 같은 화면에서 다시 묻지 않는다. 다시 관찰부터(단계 소모 없음).
+          challengeResolved.add(ch.key)
+          emit({ type: 'answer', text: answer })
+          pendingPrefix = `사용자가 ${ch.kind === 'captcha' ? '사람 확인' : '로그인'} 화면을 직접 처리했습니다: ${answer}`
+          needVision = true
+          continue
+        }
+      }
 
       const tabList: AgentTab[] = windowId ? listTabs(windowId).map((t) => ({ id: t.id, title: t.title, url: t.url })) : []
       // 페이지가 에이전트를 조종하려 드는지 탐지 — 발견 시 프롬프트에 경고를 넣고 사용자 트레이스에도 표시한다.
@@ -1115,7 +1161,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         const tl = describeAction(t, obs)
         emit({ type: 'thought', thought: t.thought ?? '', action: t.action })
         emit({ type: 'action', label: tl })
-        const tr = await executeInPageAction(wc, t, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch })
+        const tr = await executeInPageAction(wc, t, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch, allowedHosts })
         emit({ type: 'result', ok: tr.ok, label: tl, detail: tr.detail })
         await settleAfterAction(wc, t, fastSite)
         if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
@@ -1399,6 +1445,40 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         needVision = true
         continue
       }
+      if (action.action === 'request_scope') {
+        // 허용 범위 확대는 **사용자 명시 승인**으로만. 모델이 스스로 넓히거나, 승인 없이 프레임을 읽는 경로는 없다.
+        const want = String(action.host ?? '').trim().toLowerCase().replace(/^\*\./, '')
+        const label = `허용 사이트 추가: ${want}`
+        if (!want || !/^[a-z0-9.-]+$/.test(want)) {
+          emit({ type: 'result', ok: false, label, detail: '호스트 형식이 올바르지 않습니다.' })
+          pendingPrefix = '허용 요청의 호스트 형식이 올바르지 않습니다.'
+          continue
+        }
+        if (!allowedHosts || allowedHosts.length === 0) {
+          emit({ type: 'result', ok: true, label, detail: '이 작업에는 사이트 제한이 없습니다.' })
+          pendingPrefix = '이 작업에는 사이트 제한이 없습니다 — 그대로 진행하세요.'
+          continue
+        }
+        if (allowedHosts.includes(want)) {
+          pendingPrefix = `${want} 는 이미 허용돼 있습니다.`
+          continue
+        }
+        const scopeLabel = `${label} — ${action.message ? action.message + ' · ' : ''}이 사이트의 화면(프레임)을 읽고 조작하게 됩니다`
+        const scopeP = waitConfirm(reqId) // 대기자를 emit 전에 등록(배치 동기 응답 대비)
+        emit({ type: 'confirm', label: scopeLabel, risk: 'confirm', critical: false, scopeHost: want })
+        const okScope = await scopeP
+        if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+        if (!okScope) {
+          emit({ type: 'result', ok: false, label, detail: '사용자가 거부했습니다.' })
+          pendingPrefix = `사용자가 ${want} 허용을 거부했습니다. 그 사이트 없이 할 수 있는 방법을 찾거나, 불가능하면 ask 로 알리세요. 우회하지 마세요.`
+          continue
+        }
+        allowedHosts = [...allowedHosts, want]
+        emit({ type: 'result', ok: true, label, detail: `사용자가 승인했습니다 — 다음 관찰부터 ${want} 프레임이 보입니다.` })
+        pendingPrefix = `사용자가 ${want} 를 허용했습니다. 다시 관찰하면 그 프레임의 요소가 목록에 나타납니다.`
+        needVision = true
+        continue
+      }
       if (action.action === 'hover') {
         const label = describeAction({ ...action, action: 'click' }, obs).replace('클릭', '호버')
         emit({ type: 'action', label })
@@ -1648,7 +1728,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         else { emit({ type: 'action', label }); await navigateAndWait(wc, action.url); result = { ok: true, detail: '이동함' } }
       } else {
         emit({ type: 'action', label })
-        result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch })
+        result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch, allowedHosts })
         await settleAfterAction(wc, action, fastSite)
       }
 
