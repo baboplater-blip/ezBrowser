@@ -3,8 +3,8 @@
   "project_id": null,
   "task_id": "social-workflows-20260918",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 71,
-  "updated_at": "2026-09-18T12:29:39Z",
+  "revision": 78,
+  "updated_at": "2026-09-18T13:04:13Z",
   "columns": [
     "대기",
     "진행",
@@ -418,20 +418,21 @@
     {
       "id": "run:run-20260918T113955Z-851f2b",
       "title": "Claude 실행 — 사용자 요구 실제 구현: 브라우저 에이전트에게 젠스파크/ChatGPT에서 이미지생성→생성물을 가져와 캡션/해시태그 작성→내 SNS업로드까지 맡기",
-      "column": "진행",
+      "column": "완료",
       "owner": "Claude 팀장(lead)",
       "model": "opus",
-      "step": "세션 실행 중",
-      "evidence": null,
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260918T113955Z-851f2b)의 구조화 완료 기록: pass (합격 기준 16건 전건 통과, 부정 사례 9건, 선언된 잔여 작업 없음) / 남은 작업: rc.4 설치파일의 격리 설치→부팅→제거 검증 — verify-install 이 스스로 BLOCKED(이 PC 에 사용자가 실제로 쓰는 ezBrowser 설치본이 등록돼 있어 무인 설치·제거가 그것을 덮어쓰거나 지운다). 우회하지 않았다. 다른 PC/VM 필요, (차단) Genspark·ChatGPT 의 실제 이미지 생성 화면 흐름 미검증 — 로그인·생성 크레딧이 필요해 자율 범위 밖. 공개 정보로는 진입 주소와 '생성이 워크스페이스 안이고 고정 URL 이 아니다' 까지만 확인, (차단) 실제 SNS 게시·실제 블로그 댓글 미",
       "blocker": null,
       "detail": "사용자 요구 실제 구현: 브라우저 에이전트에게 젠스파크/ChatGPT에서 이미지생성→생성물을 가져와 캡션/해시태그 작성→내 SNS업로드까지 맡기기. 또 내블로그와 관심사같은 블로그 검색→본문읽고 맞춤댓글/좋아요. 실제계정 외부게시를 지금 하라는 요청은 아니고 제품기능 구현요청. 메인 조사: agent.ts download는 background 시작만 반환하고 upload_file은 agent-files 지정폴더만 해결하므로 생성→업로드 연결없음. sns-publish.ts instagram/youtube/tiktok 기존레시피, durable task/runtime 및 저장계정 자동로그인 rc.3 존재. 이 기반 재사용. 우선 플랫폼 답변대기중 기본 Instagram+Naver, 공통엔진은 사이트독립. 소유 ai agent-files/agent/page-actions/task-runtime/sns-publish 관련파일, 필요한 새 artifact/workflow모듈/IPC/shared/preload/AiTab 설정UI/i18n/검증/가이드. user변경 .claude/settings 및 bak, 실프로필/실행앱 보존. CLAUDE 거대이력/과거콘텐츠 전수읽기 금지. auto-dev 기본팀장 구조, 독립 bounded작업만 필요시 분담하고 타작업변경 되돌리지말기. 완료기준A 실제 파일파이프라인: task별 격리 artifact저장소, download 완료/오류/timeout/cancel과 id/형식/크기/해시/sourceURL/sourceTab/frame/time 메타 반환. 생성전후 기준선과 해당 생성대화/요청 연결로 새산출물만 수집. 기존이미지/로고/광고/썸네일/이전작업/다른탭 파일 오인 금지, 불명확하면 선택요청. 실제 PNG/JPEG/WebP 바이트검증/디코딩 및 작업에 필요한 치수확인, HTML위장/빈파일 거부. 다운로드버튼/인증쿠키/CDN/blob 경우 처리하되 세션범위보존·페이지제한우회 금지. 임의filesystem광범위읽기/기존파일삭제/비밀로그 금지. 작업artifactId로 업로드 가능(폴더를 수동지정해 옮길필요없게), 작업범위/realpath/다른작업/허용사이트 검증. target file-input/ref/frame 정확히선택하고 stale/범위외 거부. paused/cancelled 후 파일전달/발행없음. B 생성게시워크플로 UI: 생성서비스 Genspark/ChatGPT/사용자URL, 프롬프트/게시대상/사용자계정/캡션톤/태그, 초안 또는 지정범위 게시 모드, 진행단계·이미지미리보기·캡션확인·게시영수증과 중단재개. 단순 프롬프트문자열만 추가해 완료라고하지말고 A와 durable/runtime에 실제배선. ChatGPT/Genspark 웹UI를 기존로그인세션으로 조작, 실제최신 공개화면/공식안내 범위만 조사하여 흐름 확인하되 로그인/생성크레딧소비/외부계정조작 안함; 유료API나 imagegen으로 몰래대체 금지. 제공자별 성공을 미검증이면 솔직히표기. 편집기 캡션태그 실제입력/파일처리완료/게시후 URL 또는 새게시물",
       "tags": [
         "run",
-        "resume"
+        "success",
+        "3141.1s"
       ],
       "required": true,
       "run_id": "run-20260918T113955Z-851f2b",
-      "updated_at": "2026-09-18T11:39:55Z"
+      "updated_at": "2026-09-18T12:32:16Z"
     },
     {
       "id": "social-workflows-20260918",
@@ -462,26 +463,62 @@
       "required": true,
       "run_id": null,
       "updated_at": "2026-09-18T11:54:38Z"
+    },
+    {
+      "id": "run:run-20260918T123309Z-8d6072",
+      "title": "Claude 실행 — 최종검토 발견한 필수차이만 마감. 1) 현재 social-workflow는 mode publish도 무조건 캡션review승인에서 정지한다. 사",
+      "column": "진행",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "세션 실행 중",
+      "evidence": null,
+      "blocker": null,
+      "detail": "최종검토 발견한 필수차이만 마감. 1) 현재 social-workflow는 mode publish도 무조건 캡션review승인에서 정지한다. 사용자는 한번 맡기고 끝까지 수행요청했고 최초브리핑도 지정범위자동게시를 요구했음. 기본초안/매번확인은 유지하되 사용자가 시작할때 명시선택하는 이번작업 자동게시 승인 옵션 구현. 대상계정·사이트·게시수·기한/작업범위 바인딩 및 신뢰IPC로만 설정, model/page가 만들거나 변경못함. 승인한 범위내 성공적으로 생성/식별된 단일이미지+정상생성캡션/태그면 추가클릭없이 publish진행. draft/기존저장작업/모호이미지/캡션실패 fallback prompt/계정대상변경/범위벗어남/예산초과/취소는 자동게시안됨. draftCaption실패시 원래prompt를 캡션으로 자동올리지말고 reason있는대기. 재시작후 pending publication은 재시도없이 기존검증원장 사용. 2) blog intervalSeconds 및 사용자지정 글수/기간이 prompt-only면 이번요구미달. engage codeguard에서 계정+작업의 지속된 한도/간격 강제. 모델이 무시/재개/세그먼트전환해도 초과댓글/좋아요0. 이미했던글 중복과 likes취소가 계속막히는 양성/부정. 이건 optional 아니다. 3) 최초brief 요청했던 실제모델 검증이 없음: 기존구독ClaudeCLI provider로 로컬 social fixture에서 image→capture→caption/tags→SNS 게시 완료와 blog본문기반 서로다른2글댓글/좋아요까지 두시나리오 적은step/call budget으로 실행. 가짜LLM 각본만 통과해도 실제planner가 툴을 쓰는지모름. 사전알아둘지원모델은 기존구독만, 외부실사이트로그인/크레딧/게시 금지. 실패면원인수정 후 좁게검증; 실제모델미지원이면 정확한이유. 기존19e2e 전체 반복말고 영향범위+새실행. 4) installerBLOCKED는 정당, 기존설치등록이나보호가드 우회/실프로필변경/VM설치하지말기. rc.5 로컬패키지/portable smoke최종 npm verify, installer install/uninstall미검증명시. 다운로드폴더기존결함은 이번소유아님 그대로기록, 사용자파일삭제금지. 보고서와 QUICKSTART에 위 자동게시선승인/실제모델검증 구분/한계/최종버전해시 일치. board카드 본실행대기/진행/완료 및 task_id 맞춤. max40분, 기존코드다시조사/새기능추가/무관검증 없이 위3점만. 사용자원하는무인작업을 임의확인단계로축소하지않는게목표. complete record+모델usage+간결영수증으로마감.",
+      "tags": [
+        "run",
+        "resume"
+      ],
+      "required": true,
+      "run_id": "run-20260918T123309Z-8d6072",
+      "updated_at": "2026-09-18T12:33:09Z"
+    },
+    {
+      "id": "social-auto-publish",
+      "title": "social-auto-publish",
+      "column": "완료",
+      "owner": null,
+      "model": null,
+      "step": "자동게시 선승인 + 참여 한도 코드가드 + 실모델 e2e 2/2 + rc.5",
+      "evidence": "verify 12/12 · auto-publish 33/33(음성대조 3) · engage-ledger 54/54(음성대조 2) · social e2e 19/19 · 실모델 R-SNS/R-BLOG 2/2(구독 CLI, 픽스처 /state 판정) · rc.5 스모크 16/16. 설치파일 설치/제거는 BLOCKED(사용자 실설치 보호) — 미검증",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-18T13:02:50Z"
     }
   ],
   "summary": {
     "all_requested_work_complete": false,
-    "remaining_required": [],
+    "remaining_required": [
+      "rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요"
+    ],
     "blockers": [
-      "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가)",
-      "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요)",
-      "실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인",
-      "저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지"
+      "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요)",
+      "실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처)",
+      "깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월)"
     ],
     "optional_next": [
-      "실사이트 첫 사용 시 화면을 보며 1회 동반 확인(사용자 승인 시)"
+      "실모델 블로그 시나리오를 buildBlogEngageTask 경로로 태워 참여 한도·간격 코드가드까지 실모델로 행사",
+      "실모델 e2e 를 시나리오당 2회 이상 돌려 도구호출 파싱 실패 빈도 측정"
     ],
     "note": null,
-    "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인, (차단) 저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지; 전체 요청 완료: 아니오"
+    "korean_line": "남은 작업: rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요), (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처), (차단) 깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월); 전체 요청 완료: 아니오"
   },
   "source": {
-    "kind": "cli",
-    "at": "2026-09-18T12:29:39Z"
+    "kind": "completion-record",
+    "run_id": "run-20260918T123309Z-8d6072",
+    "at": "2026-09-18T13:04:13Z"
   },
   "warnings": []
 }
