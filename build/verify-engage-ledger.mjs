@@ -110,6 +110,69 @@ t('초안 레시피에 가드 표식이 실린다',
 t('실행 레시피에 가드 표식이 실린다',
   G.parseEngageMark(E.buildBlogEngageTask({ topic: 'x', maxPosts: 2, actions: ['like'], mode: 'act' }).task)?.mode === 'act')
 
+
+
+// ===== 한도·간격·기한 (작업 단위 영속 카운터) =====
+//
+// 왜 상설인가: 사용자가 정한 "글 몇 개까지 / 얼마 간격으로 / 언제까지" 가 **지시문 수준**이면
+// 모델이 무시하거나, 작업이 중단 뒤 재개되거나, 구간이 바뀌어 지시문을 다시 읽을 때 카운트가
+// 0 으로 돌아간다. 그러면 사용자가 5개라고 한 작업이 20개를 달 수 있다(계정 제한·스팸).
+// 여기서는 그 한도가 **디스크 카운터로** 지켜지는지를 본다 — 양성(허용)·부정(차단) 양방향.
+
+const guard = (over) => ({ account: 'a', mode: 'act', comment: true, like: true, guardId: 'g-quota-1', limit: 2, intervalMs: 0, until: 0, ...over })
+
+// 양성 — 한도 안에서는 허용된다("전부 막혀서" 통과가 아님을 보증)
+t('한도 안이면 허용', E.engageQuotaCheck(guard(), 'comment').ok === true)
+E.engageQuotaRecord(guard(), 'comment')
+t('1건 쓴 뒤에도 한도 안이면 허용', E.engageQuotaCheck(guard(), 'comment').ok === true)
+E.engageQuotaRecord(guard(), 'comment')
+
+// 부정 — 한도를 넘기면 차단된다
+const over = E.engageQuotaCheck(guard(), 'comment')
+t('한도를 넘기면 차단', over.ok === false, JSON.stringify(over))
+t('차단 사유에 한도가 드러난다', /2건/.test(over.reason ?? ''), over.reason)
+
+// 행동 종류는 따로 센다 — 댓글을 다 썼다고 좋아요까지 막히면 안 된다
+t('행동 종류별로 따로 센다(좋아요는 아직 허용)', E.engageQuotaCheck(guard(), 'like').ok === true)
+
+// 카운터는 **작업(guardId) 단위** — 다른 작업은 영향받지 않는다
+t('다른 작업은 자기 한도를 그대로 쓴다', E.engageQuotaCheck(guard({ guardId: 'g-quota-2' }), 'comment').ok === true)
+
+// 간격 — 방금 한 직후에는 막히고, 간격이 지나면 다시 허용된다
+const iv = { account: 'a', mode: 'act', comment: true, like: true, guardId: 'g-iv', limit: 0, intervalMs: 30000, until: 0 }
+E.engageQuotaRecord(iv, 'comment')
+const tooSoon = E.engageQuotaCheck(iv, 'comment')
+t('간격이 안 지나면 차단', tooSoon.ok === false, JSON.stringify(tooSoon))
+t('차단 사유가 몇 초 더 기다리라고 알려준다', /초 더/.test(tooSoon.reason ?? ''), tooSoon.reason)
+t('간격이 지나면 다시 허용(양성 대조)', E.engageQuotaCheck(iv, 'comment', Date.now() + 31000).ok === true)
+
+// 기한 — 지나면 더 하지 않는다
+const past = { account: 'a', mode: 'act', comment: true, like: true, guardId: 'g-until', limit: 0, intervalMs: 0, until: Date.now() - 1000 }
+t('기한이 지나면 차단', E.engageQuotaCheck(past, 'comment').ok === false)
+t('기한 전이면 허용(양성 대조)',
+  E.engageQuotaCheck({ ...past, guardId: 'g-until2', until: Date.now() + 60000 }, 'comment').ok === true)
+
+// 표식이 없던 시절 작업(guardId 없음)은 한도를 적용하지 않는다 — 기존 작업이 갑자기 막히면 안 된다
+t('guardId 가 없으면 한도 미적용(하위호환)',
+  E.engageQuotaCheck({ account: 'a', mode: 'act', comment: true, like: true, guardId: '', limit: 1, intervalMs: 999999, until: 1 }, 'comment').ok === true)
+
+// 재개·구간 전환 내성 — 같은 guardId 로 다시 물어도 카운트가 0 으로 돌아가지 않는다
+t('같은 작업을 다시 조회해도 카운트가 살아 있다(재개 내성)', E.engageQuotaUsed('g-quota-1').comment === 2)
+
+// ===== 레시피가 한도·간격·기한을 표식에 싣는가 =====
+const built = E.buildBlogEngageTask({ topic: 'x', maxPosts: 3, actions: ['comment', 'like'], mode: 'act', intervalSeconds: 45, until: Date.now() + 3600000 })
+const bg = G.parseEngageMark(built.task)
+t('레시피 표식에 한도가 실린다', bg?.limit === 3, JSON.stringify(bg))
+t('레시피 표식에 간격이 실린다(ms)', bg?.intervalMs === 45000)
+t('레시피 표식에 기한이 실린다', (bg?.until ?? 0) > Date.now())
+t('레시피 표식에 작업별 guardId 가 실린다', !!bg?.guardId && bg.guardId.length >= 8)
+// guardId 는 작업마다 달라야 한다 — 같으면 다른 작업이 서로의 한도를 갉아먹는다
+const built2 = E.buildBlogEngageTask({ topic: 'x', maxPosts: 3, actions: ['comment'], mode: 'act' })
+t('작업마다 guardId 가 다르다', G.parseEngageMark(built2.task)?.guardId !== bg?.guardId)
+t('maxPosts clamp 가 표식 한도에도 반영된다',
+  G.parseEngageMark(E.buildBlogEngageTask({ topic: 'x', maxPosts: 999, actions: ['like'], mode: 'act' }).task)?.limit === 20)
+
+
 console.log(`\n합계 PASS ${pass} / FAIL ${fail}`)
 
 const outDir = path.join(REPO, 'verify-out', 'engage-ledger')

@@ -368,6 +368,9 @@ export const IPC = {
     socialCancel: 'ai:social-cancel',
     socialDelete: 'ai:social-delete',
     socialChanged: 'ai:social-changed',
+    socialGrant: 'ai:social-grant',
+    socialGrantGet: 'ai:social-grant-get',
+    socialGrantRevoke: 'ai:social-grant-revoke',
     // 작업 산출물(캡처한 이미지·받은 파일)
     artifactList: 'ai:artifact-list',
     artifactData: 'ai:artifact-data',

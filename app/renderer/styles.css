@@ -2589,3 +2589,8 @@ button:not(.tab):not(.si-toggle):not(.sidepanel-tab):not(.ai-fold-toggle):not(:d
 }
 .error-boundary .eb-actions button:hover { background: var(--bg-hover, rgba(0, 0, 0, 0.06)); }
 .error-boundary .eb-hint { color: var(--text-secondary, #666); font-size: 11px; }
+
+/* 자동 게시 선승인 입력 줄 — 좁은 사이드바(280px)에서 라벨+숫자 두 쌍이 접히게 둔다. */
+.ai-social-auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ai-social-auto-row .ai-write-label { margin: 0; }
+.ai-input-sm { width: 64px; flex: 0 0 auto; }

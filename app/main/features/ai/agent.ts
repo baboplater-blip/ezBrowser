@@ -25,7 +25,7 @@ import { detectChallenge, challengeKey, type ChallengeVerdict } from './challeng
 import { attemptAutoLogin, hasAutoLoginAccountFor } from './auto-login'
 import { hostAllowed as frameHostAllowed } from './frames'
 import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, type RiskVerdict, type CompletionSignal } from './agent-gate'
-import { normalizeTargetUrl, alreadyDid, recordEngagement } from './blog-engage'
+import { normalizeTargetUrl, alreadyDid, recordEngagement, engageQuotaCheck, engageQuotaRecord } from './blog-engage'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
 // 판단은 두 경로: 지원 제공자/모델이면 네이티브 tool-use(구조화 함수 호출, 더 안정적),
@@ -1383,8 +1383,18 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
             pendingPrefix = `이 글(${targetKey})에는 이미 ${kind === 'comment' ? '댓글을 달았습니다' : '좋아요를 눌렀습니다'}. 중복이므로 건너뛰고 다음 글로 넘어가세요.`
             continue
           }
+          // ⑤ 이 작업에 정해진 한도·간격·기한 — 모델이 지시를 무시하거나, 중단 뒤 재개하거나,
+          //    구간이 바뀌어 지시문을 다시 읽어도 **디스크 카운터**로 검사하므로 초과가 성립하지 않는다.
+          const quota = engageQuotaCheck(engageGuard, kind)
+          if (!quota.ok) {
+            const why = quota.reason ?? '이 작업의 한도에 도달했습니다.'
+            emit({ type: 'result', ok: false, label, detail: why })
+            pendingPrefix = `${why} 이 클릭은 실행되지 않았습니다. 한도·기한이 끝난 것이면 지금까지 처리한 내용을 note 로 정리하고 done 으로 마치세요. 간격이 부족한 것이면 wait_for 로 기다린 뒤 다시 시도하세요. 다른 수단으로 우회하지 마세요.`
+            continue
+          }
           // 통과 — 실행 직전에 기록한다. 클릭 뒤에 적으면 실패·중단 시 기록이 빠져 다음에 또 단다.
           recordEngagement({ key: targetKey, account, action: kind, note: label.slice(0, 120) })
+          engageQuotaRecord(engageGuard, kind)
         }
       }
 

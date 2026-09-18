@@ -35,10 +35,21 @@ interface SocialWorkflow {
   artifactId?: string
   artifactPreview?: { width?: number; height?: number; bytes: number; format: string; sha256: string }
   caption?: string
+  captionError?: string
+  artifactAmbiguous?: boolean
+  autoPublished?: boolean
   receipt?: { url?: string; evidence?: string; at: number }
   error?: string
   createdAt: number
   updatedAt: number
+}
+interface AutoPublishGrantView {
+  id: string; createdAt: number
+  platform: SocialPlatform
+  accounts: string[]
+  maxPosts: number; expiresAt: number; used: number
+  consumed: string[]
+  revokedAt?: number
 }
 interface ArtifactMeta { id: string; name: string; format: string; bytes: number; width?: number; height?: number }
 interface EngageLedgerEntry { key: string; account: string; action: 'comment' | 'like'; at: number; note?: string }
@@ -149,14 +160,21 @@ function SocialCard({
           )}
           <textarea className="ai-input" rows={3} value={captionDraft} placeholder="캡션"
             onChange={(e) => onCaptionChange(e.target.value)} />
-          <div className="ai-hint">이 단계에서 멈춥니다 — 아래 버튼을 눌러야 다음으로 넘어갑니다.</div>
-          <button className="ai-send ai-social-cta" onClick={() => onApprove(captionDraft)}>
+          {/* 캡션 생성이 실패하면 프롬프트를 캡션으로 대신 올리지 않는다 — 사유를 보이고 기다린다. */}
+          {w.captionError
+            ? <div className="ai-handoff-note ai-err">{w.captionError}</div>
+            : w.artifactAmbiguous
+              ? <div className="ai-hint">이미지 후보가 여럿이라 확인이 필요합니다 — 자동 게시하지 않습니다.</div>
+              : <div className="ai-hint">이 단계에서 멈춥니다 — 아래 버튼을 눌러야 다음으로 넘어갑니다.</div>}
+          <button className="ai-send ai-social-cta" onClick={() => onApprove(captionDraft)} disabled={!captionDraft.trim()}>
             {w.params.mode === 'publish' ? '📤 이대로 게시' : '▶ 이대로 진행'}
           </button>
         </>
       )}
 
-      {w.stage === 'publish' && <div className="ai-hint">게시하는 중…</div>}
+      {w.stage === 'publish' && (
+        <div className="ai-hint">{w.autoPublished ? '선승인 범위 안이라 확인 없이 게시하는 중…' : '게시하는 중…'}</div>
+      )}
 
       {w.stage === 'done' && (
         <div className="ai-social-receipt">
@@ -199,6 +217,12 @@ export function AiSocialPanel({
   const [tone, setTone] = useState('')
   const [tags, setTags] = useState('')
   const [genMode, setGenMode] = useState<SocialMode>('draft')
+  // 자동 게시 선승인 — 기본은 꺼짐. 사용자가 이 작업을 시작할 때 직접 켠 경우에만 적용된다.
+  const [autoPublish, setAutoPublish] = useState(false)
+  const [autoMaxPosts, setAutoMaxPosts] = useState(1)
+  const [autoMinutes, setAutoMinutes] = useState(30)
+  const [grantInfo, setGrantInfo] = useState<AutoPublishGrantView | null>(null)
+  const refreshGrant = () => { void window.browserAPI.ai.socialGrantGet().then(setGrantInfo) }
   const [genBusy, setGenBusy] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
 
@@ -262,6 +286,18 @@ export function AiSocialPanel({
     if (genService === 'custom' && !customUrl.trim()) { setGenError('직접 입력할 생성 서비스 URL을 입력하세요.'); return }
     setGenBusy(true); setGenError(null)
     try {
+      // 선승인은 **작업을 만들기 전에** 등록한다 — 작업이 선승인보다 먼저 생기면 범위 밖으로 판정돼
+      // 자동 게시가 되지 않는다(메인의 createdAt 비교 규칙).
+      if (genMode === 'publish' && autoPublish) {
+        const g = await window.browserAPI.ai.socialGrant({
+          platform: genPlatform,
+          accounts: [genAccount.trim() || 'default'],
+          maxPosts: autoMaxPosts,
+          minutes: autoMinutes,
+        })
+        setGrantInfo(g)
+        if (!g) { setGenError('자동 게시 선승인을 등록하지 못했습니다 — 확인 후 게시로 진행합니다.'); }
+      }
       const params = {
         service: genService,
         customUrl: genService === 'custom' ? customUrl.trim() : undefined,
@@ -301,6 +337,8 @@ export function AiSocialPanel({
   const [doLike, setDoLike] = useState(true)
   const [excludeHosts, setExcludeHosts] = useState('')
   const [intervalSeconds, setIntervalSeconds] = useState(30)
+  // 이 작업을 언제까지 할 것인가(분). 0 = 기한 없음(글 수로만 제한).
+  const [engageWindowMin, setEngageWindowMin] = useState(0)
   const [engageMode, setEngageMode] = useState<'draft' | 'act'>('draft')
   const [engageBusy, setEngageBusy] = useState(false)
   const [engageError, setEngageError] = useState<string | null>(null)
@@ -334,6 +372,8 @@ export function AiSocialPanel({
         mode: engageMode,
         excludeHosts: excludeHosts.split(',').map((s) => s.trim()).filter(Boolean),
         intervalSeconds: Math.max(0, Math.min(600, intervalSeconds)),
+        // 기한은 "지금부터 N분" 을 절대 시각으로 바꿔 넘긴다(메인이 표식에 실어 코드로 강제한다).
+        until: engageWindowMin > 0 ? Date.now() + engageWindowMin * 60_000 : undefined,
       }
       const res = await window.browserAPI.ai.engageBuildTask(params)
       setEngageBuild({ task: res.task, openUrl: res.openUrl, hosts: [...res.allowedHosts] })
@@ -449,7 +489,43 @@ export function AiSocialPanel({
               <button className={`ai-chip ${genMode === 'draft' ? 'active' : ''}`} onClick={() => setGenMode('draft')}>초안까지만</button>
               <button className={`ai-chip ${genMode === 'publish' ? 'active' : ''}`} onClick={() => setGenMode('publish')}>게시까지</button>
             </div>
-            {genMode === 'publish' && <div className="ai-handoff-note ai-err">⚠ 실제 계정에 게시됩니다. 되돌릴 수 없습니다.</div>}
+            {genMode === 'publish' && (
+              <>
+                <div className="ai-handoff-note ai-err">⚠ 실제 계정에 게시됩니다. 되돌릴 수 없습니다.</div>
+                {/*
+                  한 번 맡기면 끝까지 — 다만 **사용자가 여기서 직접 켤 때만**. 켜면 이번에 시작하는
+                  작업(같은 플랫폼·같은 계정·정한 건수·정한 시간 안)에 한해 캡션 확인 클릭 없이 게시까지 간다.
+                  범위 밖·이미지 모호·캡션 실패는 자동으로 넘어가지 않고 그대로 확인 대기로 남는다.
+                */}
+                <label className="ai-write-label">캡션 확인 없이 게시(이번 작업 한정)</label>
+                <div className="ai-chips">
+                  <button className={`ai-chip ${autoPublish ? '' : 'active'}`} onClick={() => setAutoPublish(false)}>확인 후 게시</button>
+                  <button className={`ai-chip ${autoPublish ? 'active' : ''}`} onClick={() => setAutoPublish(true)}>맡기고 자동 게시</button>
+                </div>
+                {autoPublish && (
+                  <>
+                    <div className="ai-social-auto-row">
+                      <label className="ai-write-label">최대 건수</label>
+                      <input className="ai-input ai-input-sm" type="number" min={1} max={50} value={autoMaxPosts}
+                        onChange={(e) => setAutoMaxPosts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+                      <label className="ai-write-label">유효 시간(분)</label>
+                      <input className="ai-input ai-input-sm" type="number" min={5} max={1440} value={autoMinutes}
+                        onChange={(e) => setAutoMinutes(Math.max(5, Math.min(1440, Number(e.target.value) || 5)))} />
+                    </div>
+                    <div className="ai-handoff-note ai-err">
+                      ⚠ {PLATFORM_LABEL[genPlatform]} · 계정 “{genAccount.trim() || '(계정 미지정)'}” 로 최대 {autoMaxPosts}건을
+                      {autoMinutes}분 안에 <b>확인 없이 게시</b>합니다. 이미지가 모호하거나 캡션 생성이 실패하면 자동 게시하지 않고 확인을 기다립니다.
+                    </div>
+                    {grantInfo && !grantInfo.revokedAt && grantInfo.expiresAt > Date.now() && (
+                      <div className="ai-hint">
+                        선승인 사용 {grantInfo.used}/{grantInfo.maxPosts}건
+                        <button className="ai-mini-btn" onClick={() => { void window.browserAPI.ai.socialGrantRevoke().then(refreshGrant) }}>선승인 취소</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
 
             <button className="ai-send ai-social-cta" onClick={() => void startGenerate()} disabled={!prompt.trim() || genBusy || !activeId}>
               {genBusy ? '요청 중…' : '✨ 시작'}
@@ -485,7 +561,12 @@ export function AiSocialPanel({
               <label className="ai-write-label">글 사이 간격(초)</label>
               <input className="ai-input" type="number" min={0} max={600} value={intervalSeconds}
                 onChange={(e) => setIntervalSeconds(Math.max(0, Math.min(600, Number(e.target.value) || 0)))} />
-              <div className="ai-hint">이 값은 AI에게 전달되는 지시일 뿐 코드로 강제되지는 않습니다. 너무 빠르게 연속으로 달면 사이트가 차단할 수 있습니다.</div>
+              <div className="ai-hint">간격이 덜 지난 클릭은 <b>코드가 거부</b>합니다(작업별 카운터를 디스크에 두고 검사 — 중단 후 재개해도 유지).</div>
+
+              <label className="ai-write-label">기한(분) — 0이면 기한 없음</label>
+              <input className="ai-input" type="number" min={0} max={1440} value={engageWindowMin}
+                onChange={(e) => setEngageWindowMin(Math.max(0, Math.min(1440, Number(e.target.value) || 0)))} />
+              <div className="ai-hint">이 시간이 지나면 남은 글이 있어도 댓글·좋아요를 더 하지 않습니다.</div>
 
               <label className="ai-write-label">모드</label>
               <div className="ai-chips">

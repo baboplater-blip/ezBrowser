@@ -85,7 +85,16 @@ function steps(outRoot) {
       id: 'engage-ledger', kind: 'harness', modes: ['quick', 'full'],
       script: 'verify-engage-ledger.mjs', outArg: false,
       result: (o) => path.join(o, '..', 'engage-ledger', 'results.json'),
-      timeoutMs: 2 * 60000, desc: '블로그 참여 중복 방지 장부·주소 정규화·레시피 지시 22종',
+      timeoutMs: 2 * 60000, desc: '블로그 참여 중복 방지·주소 정규화·한도/간격/기한 코드가드 54종',
+    },
+    {
+      // 순수 함수 — "사용자가 승인한 범위 안에서만 확인 없이 게시한다" 는 판정. 이게 느슨해지면
+      // 승인하지 않은 계정·플랫폼·건수로 **되돌릴 수 없는 게시**가 나간다(양성 대조 포함).
+      // 검출력 확인 2026-09-18: 계정 범위·선승인 이전 작업 검사를 무력화하니 3건 FAIL.
+      id: 'auto-publish', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-auto-publish.mjs', outArg: false,
+      result: (o) => path.join(o, '..', 'auto-publish', 'results.json'),
+      timeoutMs: 2 * 60000, desc: '자동 게시 선승인 판정·배선 33종(양성 대조 포함, 공개 API 경로 실행)',
     },
     {
       // 순수 함수 — 앱 없이 즉시 끝난다. 작업 격리 경계(남의 산출물 업로드 금지)와 HTML 위장 거부는

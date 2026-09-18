@@ -24,8 +24,11 @@ import { createJsonStore, loadJsonObject } from './json-store'
  * 완료 근거 판정을 전부 그쪽에 위임하고, 이 파일은 **단계 사이를 잇는 얇은 오케스트레이션**만 한다.
  * 새 실행 엔진을 만들지 않는다.
  *
- * ⚠ 캡션 확인(review) 단계에서 자동으로 게시로 넘어가지 않는다. 되돌릴 수 없는 게시 전에 사용자
- *   확인을 반드시 거치는 것이 이 단계의 존재 이유다(approveAndPublish 호출 전까지는 절대 진행 안 함).
+ * ⚠ 기본값은 여전히 "캡션 확인 후 사용자가 승인" 이다. 예외는 **사용자가 작업을 시작하면서 명시적으로
+ *   선택한 이번 작업 한정 자동 게시 선승인(AutoPublishGrant)** 하나뿐이다. 그 선승인은 신뢰 IPC 로만
+ *   만들어지고 대상 계정·플랫폼·건수·기한에 묶인다 — 모델도 페이지도 만들거나 넓힐 수 없다.
+ *   선승인 범위 안에서 ①단일 이미지가 모호함 없이 확보되고 ②캡션이 정상 생성됐을 때만 추가 클릭 없이
+ *   게시로 넘어간다(maybeAutoPublish 의 거부 목록 참조).
  *
  * ⚠ 산출물 경계: 게시는 **그 게시 작업 자신의 산출물 폴더**에 있는 파일만 첨부할 수 있다(agent.ts 의
  *   upload_file 이 실행 중인 작업의 taskId 로만 조회하기 때문 — artifacts.ts 규칙). 그래서 생성 작업의
@@ -57,9 +60,34 @@ export interface ImagePostWorkflow {
   artifactId?: string
   artifactPreview?: { width?: number; height?: number; bytes: number; format: string; sha256: string }
   caption?: string            // 사용자가 확인·수정할 수 있는 초안
+  /** 캡션 초안이 실패한 이유. 있으면 **자동 게시하지 않는다**(사용자가 직접 써야 한다). */
+  captionError?: string
+  /**
+   * 후보가 2개 이상이어서 사람이 골랐는가. 모호했던 이미지는 선승인이 있어도 자동 게시하지 않는다
+   * (선승인의 전제가 "모호함 없이 식별된 단일 이미지" 다).
+   */
+  artifactAmbiguous?: boolean
+  /** 자동 게시 선승인으로 진행됐는가(영수증·감사 표시용). */
+  autoPublished?: boolean
   receipt?: { url?: string; evidence?: string; at: number }   // 게시 영수증
   error?: string
   createdAt: number; updatedAt: number
+}
+
+/**
+ * 이번 작업 한정 자동 게시 선승인. **신뢰 IPC 로만** 만들어진다(grantAutoPublish).
+ * 사용자가 작업을 시작할 때 명시적으로 선택한 범위이며, 그 범위를 벗어나면 자동 게시하지 않는다.
+ */
+export interface AutoPublishGrant {
+  id: string
+  createdAt: number
+  platform: SnsPlatform
+  accounts: string[]     // 정규화된 계정 키 목록(최소 1개)
+  maxPosts: number       // 이 선승인으로 자동 게시할 수 있는 최대 건수
+  expiresAt: number      // 이 시각(epoch ms) 이후에는 자동 게시하지 않는다
+  used: number
+  consumed: string[]     // 이미 자동 게시에 쓴 워크플로 id(재시작 뒤 재시도 방지)
+  revokedAt?: number
 }
 
 /** 'changed' → ImagePostWorkflow[] */
@@ -94,11 +122,15 @@ let taskListenerHooked = false
 // chatOnce 를 중복 호출하지 않는다.
 const captioningInFlight = new Set<string>()
 
+// 이번 작업 한정 자동 게시 선승인. 하나만 유지한다 — 사용자가 새로 선택하면 이전 것을 대체한다
+// (선승인이 여러 개 쌓여 어느 것이 적용되는지 알 수 없게 되는 상태를 만들지 않는다).
+let grant: AutoPublishGrant | null = null
+
 const store = createJsonStore({
   fileName: FILE_NAME,
   label: STORE_LABEL,
   debounceMs: 400,
-  snapshot: () => ({ version: 1, workflows: all() }),
+  snapshot: () => ({ version: 1, workflows: all(), grant }),
 })
 
 function str(v: unknown, fallback = ''): string {
@@ -187,12 +219,48 @@ function reviveWorkflow(raw: unknown): ImagePostWorkflow | null {
     ...(typeof o.artifactId === 'string' && o.artifactId ? { artifactId: o.artifactId } : {}),
     ...(artifactPreview ? { artifactPreview } : {}),
     ...(typeof o.caption === 'string' ? { caption: o.caption } : {}),
+    ...(typeof o.captionError === 'string' && o.captionError ? { captionError: o.captionError } : {}),
+    ...(o.artifactAmbiguous === true ? { artifactAmbiguous: true } : {}),
+    ...(o.autoPublished === true ? { autoPublished: true } : {}),
     ...(receipt ? { receipt } : {}),
     ...(stageValid
       ? (typeof o.error === 'string' && o.error ? { error: o.error } : {})
       : { error: '저장된 상태를 복구할 수 없어 중단으로 표시합니다.' }),
     createdAt,
     updatedAt: num(o.updatedAt, createdAt),
+  }
+}
+
+/** 계정 키 정규화 — 빈 값과 'default' 가 갈리면 범위 검사가 샌다(blog-engage 와 같은 규칙). */
+function normAccount(a: string | undefined | null): string {
+  return String(a ?? '').trim() || 'default'
+}
+
+/**
+ * 저장된 선승인을 복원한다. 손상된 값이 들어오면 **통째로 버린다** — 범위가 망가진 선승인을
+ * 이어가는 것은 "사용자가 승인하지 않은 자동 게시" 와 같다(fail-closed).
+ */
+function reviveGrant(raw: unknown): AutoPublishGrant | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const id = str(o.id)
+  const platform = SNS_PLATFORMS.has(str(o.platform)) ? (o.platform as SnsPlatform) : null
+  const accounts = Array.isArray(o.accounts)
+    ? Array.from(new Set(o.accounts.filter((x): x is string => typeof x === 'string').map(normAccount)))
+    : []
+  const maxPosts = Math.floor(num(o.maxPosts))
+  const expiresAt = Math.floor(num(o.expiresAt))
+  if (!id || !platform || accounts.length === 0 || maxPosts <= 0 || expiresAt <= 0) return null
+  return {
+    id,
+    createdAt: Math.floor(num(o.createdAt, Date.now())),
+    platform,
+    accounts,
+    maxPosts,
+    expiresAt,
+    used: Math.max(0, Math.floor(num(o.used))),
+    consumed: Array.isArray(o.consumed) ? o.consumed.filter((x): x is string => typeof x === 'string').slice(0, 200) : [],
+    ...(num(o.revokedAt) > 0 ? { revokedAt: Math.floor(num(o.revokedAt)) } : {}),
   }
 }
 
@@ -212,6 +280,7 @@ export function initSocialWorkflows(): void {
       kept++
     }
     store.reportDropped(rawList.length - kept, kept)
+    grant = reviveGrant(raw.grant)
   }
 
   // task-runtime 의 모든 작업 변경에 반응한다(우리 워크플로와 무관한 변경이 대부분이지만, reconcileOne
@@ -338,26 +407,39 @@ async function draftCaption(p: ImagePostParams): Promise<string> {
   return raw.replace(/^["'“”]|["'“”]$/g, '').trim() || p.prompt
 }
 
-/** 캡션 초안을 비동기로 채운다. 실패해도 워크플로를 실패시키지 않는다 — 프롬프트를 초안으로 대체. */
+/**
+ * 캡션 초안을 비동기로 채운다. 실패해도 워크플로를 실패시키지는 않지만, **프롬프트를 캡션으로
+ * 대신 올리지 않는다** — 생성 프롬프트는 캡션이 아니다(그대로 게시되면 사용자가 쓰지 않은 글이
+ * 자기 계정에 올라간다). 실패하면 사유를 남기고 사용자 입력을 기다린다(자동 게시도 하지 않는다).
+ */
 async function draftCaptionInto(workflowId: string): Promise<void> {
   if (captioningInFlight.has(workflowId)) return
   captioningInFlight.add(workflowId)
   try {
     const wf = wfMap().get(workflowId)
     if (!wf || wf.stage !== 'review') return
-    let caption: string
+    let caption = ''
+    let failure = ''
     try {
-      caption = await draftCaption(wf.params)
+      caption = (await draftCaption(wf.params)).trim()
+      if (!caption) failure = '캡션 초안이 비어 있습니다.'
     } catch (err) {
-      console.warn('[ai] 캡션 초안 생성 실패 — 프롬프트를 초안으로 대체합니다', err)
-      caption = wf.params.prompt
+      failure = err instanceof Error ? err.message : String(err)
+      console.warn('[ai] 캡션 초안 생성 실패 — 사용자 입력을 기다립니다', err)
     }
     // await 하는 동안 사용자가 이미 다른 단계로 넘어갔을 수 있다 — review 단계일 때만 반영한다.
     const cur = wfMap().get(workflowId)
-    if (cur && cur.stage === 'review' && !cur.caption) {
-      cur.caption = caption
+    if (!cur || cur.stage !== 'review' || cur.caption) return
+    if (failure) {
+      cur.captionError = `캡션을 만들지 못했습니다: ${failure} — 캡션을 직접 입력한 뒤 승인해 주세요.`
       touch(cur)
+      return
     }
+    cur.caption = caption
+    delete cur.captionError
+    touch(cur)
+    // 사용자가 이번 작업에 자동 게시를 선승인했고 범위 안이면, 여기서 추가 클릭 없이 게시로 넘어간다.
+    maybeAutoPublish(cur)
   } finally {
     captioningInFlight.delete(workflowId)
   }
@@ -423,11 +505,13 @@ export function chooseArtifact(id: string, artifactId: string): { ok: boolean; e
   if (!genTaskId) return { ok: false, error: '생성 작업이 없습니다.' }
   const meta = getArtifact(genTaskId, artifactId)
   if (!meta) return { ok: false, error: '해당 산출물을 찾을 수 없습니다.' }
-  proceedToReview(wf, meta)
+  // 사람이 후보 중에서 고른 경로 — 모호했던 이미지이므로 자동 게시 대상이 아니다.
+  proceedToReview(wf, meta, true)
   return { ok: true }
 }
 
-function proceedToReview(wf: ImagePostWorkflow, meta: ArtifactMeta): void {
+function proceedToReview(wf: ImagePostWorkflow, meta: ArtifactMeta, ambiguous = false): void {
+  if (ambiguous) wf.artifactAmbiguous = true
   wf.artifactId = meta.id
   wf.artifactPreview = {
     ...(typeof meta.width === 'number' ? { width: meta.width } : {}),
@@ -442,6 +526,120 @@ function proceedToReview(wf: ImagePostWorkflow, meta: ArtifactMeta): void {
   void draftCaptionInto(wf.id)
 }
 
+// ===== 자동 게시 선승인 =====
+
+export interface GrantInput {
+  platform: SnsPlatform
+  accounts: string[]
+  maxPosts: number
+  /** 유효 시간(분). 이 시간이 지나면 선승인은 효력을 잃는다. */
+  minutes: number
+}
+
+const MAX_GRANT_POSTS = 50
+const MAX_GRANT_MINUTES = 24 * 60
+
+/**
+ * 이번 작업 한정 자동 게시 선승인을 만든다. **신뢰 IPC 에서만** 불린다(ipc/ai.ts 의 isTrustedSender).
+ * 에이전트 루프·페이지·모델은 이 함수에 도달할 경로가 없다 — 자동 게시 범위를 넓히는 유일한 입구가
+ * 사용자의 명시 선택이 되도록 하는 것이 요점이다.
+ */
+export function grantAutoPublish(input: GrantInput): AutoPublishGrant | null {
+  if (!input || typeof input !== 'object') return null
+  if (!SNS_PLATFORMS.has(input.platform)) return null
+  const accounts = Array.from(new Set(
+    (Array.isArray(input.accounts) ? input.accounts : []).map(normAccount).filter(Boolean),
+  )).slice(0, 20)
+  if (accounts.length === 0) return null
+  const maxPosts = Math.floor(Number(input.maxPosts))
+  if (!Number.isFinite(maxPosts) || maxPosts <= 0) return null
+  const minutes = Math.floor(Number(input.minutes))
+  if (!Number.isFinite(minutes) || minutes <= 0) return null
+
+  const now = Date.now()
+  grant = {
+    id: randomUUID(),
+    createdAt: now,
+    platform: input.platform,
+    accounts,
+    maxPosts: Math.min(maxPosts, MAX_GRANT_POSTS),
+    expiresAt: now + Math.min(minutes, MAX_GRANT_MINUTES) * 60_000,
+    used: 0,
+    consumed: [],
+  }
+  store.markDirty()
+  workflowEvents.emit('changed', listWorkflows())
+  return grant
+}
+
+/** 사용자가 선승인을 거둔다 — 즉시 효력을 잃는다(진행 중 게시 작업을 되돌리지는 못한다). */
+export function revokeAutoPublish(): void {
+  if (!grant || grant.revokedAt) return
+  grant.revokedAt = Date.now()
+  store.markDirty()
+  workflowEvents.emit('changed', listWorkflows())
+}
+
+/** 현재 선승인(없거나 만료·소진·철회면 null 로 보이지 않고 그대로 반환 — UI 가 사유를 보여준다). */
+export function getAutoPublishGrant(): AutoPublishGrant | null {
+  if (cache === null) initSocialWorkflows()
+  return grant
+}
+
+/**
+ * 이 워크플로를 추가 클릭 없이 게시해도 되는가. **허용 조건을 전부 만족할 때만** true.
+ * 하나라도 어긋나면 사유를 돌려주고 사용자 승인 대기로 남는다(fail-closed).
+ */
+export function autoPublishVerdict(wf: ImagePostWorkflow, now = Date.now()): { ok: boolean; why: string } {
+  if (!grant) return { ok: false, why: '자동 게시 선승인이 없습니다' }
+  if (grant.revokedAt) return { ok: false, why: '선승인이 철회되었습니다' }
+  if (now > grant.expiresAt) return { ok: false, why: '선승인 기한이 지났습니다' }
+  if (grant.used >= grant.maxPosts) return { ok: false, why: `선승인 건수(${grant.maxPosts})를 모두 사용했습니다` }
+  // 재시작 뒤 같은 워크플로를 다시 자동 게시하지 않는다 — 이미 쓴 것은 영수증/장부가 정본이다.
+  if (grant.consumed.includes(wf.id)) return { ok: false, why: '이미 이 선승인으로 진행한 작업입니다' }
+
+  if (wf.params.mode !== 'publish') return { ok: false, why: '초안 모드 작업입니다' }
+  // 선승인보다 **먼저 만들어진** 작업은 그 승인의 대상이 아니다(이전에 저장해 둔 작업이 나중에
+  // 만든 승인으로 갑자기 게시되는 일을 막는다).
+  if (wf.createdAt < grant.createdAt) return { ok: false, why: '선승인 이전에 만들어진 작업입니다' }
+  if (wf.params.platform !== grant.platform) return { ok: false, why: '승인한 플랫폼이 아닙니다' }
+  if (!grant.accounts.includes(normAccount(wf.params.account))) return { ok: false, why: '승인한 계정이 아닙니다' }
+
+  if (wf.stage !== 'review') return { ok: false, why: '게시를 시작할 단계가 아닙니다' }
+  if (wf.receipt) return { ok: false, why: '이미 게시가 진행된 작업입니다' }
+  if (!wf.artifactId || !wf.taskIds.generate) return { ok: false, why: '게시할 산출물이 없습니다' }
+  if (wf.artifactAmbiguous) return { ok: false, why: '이미지 후보가 여럿이라 사람이 골라야 합니다' }
+  if (wf.captionError) return { ok: false, why: '캡션을 만들지 못했습니다' }
+  if (!wf.caption?.trim()) return { ok: false, why: '캡션이 비어 있습니다' }
+  return { ok: true, why: '' }
+}
+
+/**
+ * 캡션이 정상적으로 준비된 직후에만 불린다. **재시작 시에는 불리지 않는다** — 재시작 뒤 review 에
+ * 남아 있는 작업은 자동 게시를 재시도하지 않고 사용자 승인을 기다린다(요구: "재시작 후 pending
+ * publication 은 재시도 없이 기존 검증 원장 사용").
+ */
+function maybeAutoPublish(wf: ImagePostWorkflow): void {
+  const v = autoPublishVerdict(wf)
+  if (!v.ok) return
+  const g = grant
+  if (!g) return
+  const genTaskId = wf.taskIds.generate
+  const artifactId = wf.artifactId
+  if (!genTaskId || !artifactId) return
+
+  // 소비를 **먼저** 기록한다 — 게시 작업 시작 도중 예외가 나도 같은 선승인으로 두 번 게시되지 않는다.
+  g.used += 1
+  g.consumed.push(wf.id)
+  wf.autoPublished = true
+  const r = runPublishStage(wf, genTaskId, artifactId)
+  if (!r.ok) {
+    // 시작조차 못 했으면 건수는 돌려준다(소비 기록은 남겨 재시도하지 않는다 — 원인을 사람이 본다).
+    g.used = Math.max(0, g.used - 1)
+  }
+  store.markDirty()
+}
+
 // ===== 2단계 승인 → 3단계 게시 =====
 
 export function approveAndPublish(id: string, caption: string): { ok: boolean; error?: string } {
@@ -454,7 +652,11 @@ export function approveAndPublish(id: string, caption: string): { ok: boolean; e
   const artifactId = wf.artifactId
   if (!genTaskId || !artifactId) return { ok: false, error: '가져올 산출물이 없습니다.' }
 
-  wf.caption = (caption ?? '').trim() || wf.caption?.trim() || wf.params.prompt
+  // 사용자가 직접 승인하는 경로다. 캡션이 비면 여기서 막는다 — 프롬프트를 캡션으로 대신 올리지 않는다.
+  const finalCaption = (caption ?? '').trim() || wf.caption?.trim() || ''
+  if (!finalCaption) return { ok: false, error: '캡션이 비어 있습니다 — 캡션을 입력한 뒤 승인해 주세요.' }
+  wf.caption = finalCaption
+  delete wf.captionError
   return runPublishStage(wf, genTaskId, artifactId)
 }
 

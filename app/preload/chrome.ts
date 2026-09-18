@@ -452,6 +452,11 @@ const api = {
       ipcRenderer.invoke(IPC.ai.socialApprove, { id, caption }),
     socialChoose: (id: string, artifactId: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.ai.socialChoose, { id, artifactId }),
+    // 이번 작업 한정 자동 게시 선승인(사용자가 시작할 때 명시 선택). 범위 밖은 자동 게시되지 않는다.
+    socialGrant: (input: AiAutoPublishGrantInput): Promise<AiAutoPublishGrant | null> =>
+      ipcRenderer.invoke(IPC.ai.socialGrant, input),
+    socialGrantGet: (): Promise<AiAutoPublishGrant | null> => ipcRenderer.invoke(IPC.ai.socialGrantGet),
+    socialGrantRevoke: (): Promise<void> => ipcRenderer.invoke(IPC.ai.socialGrantRevoke),
     socialCancel: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialCancel, { id }),
     socialDelete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialDelete, { id }),
     onSocialChanged: (cb: (list: AiSocialWorkflow[]) => void) => on(IPC.ai.socialChanged, cb),
@@ -690,9 +695,34 @@ interface AiSocialWorkflow {
   artifactId?: string
   artifactPreview?: { width?: number; height?: number; bytes: number; format: string; sha256: string }
   caption?: string
+  /** 캡션 초안 실패 사유. 있으면 자동 게시하지 않고 사용자가 직접 써야 한다. */
+  captionError?: string
+  /** 후보가 여럿이라 사람이 골랐는가(모호했던 이미지는 자동 게시 대상이 아니다). */
+  artifactAmbiguous?: boolean
+  /** 자동 게시 선승인으로 진행됐는가. */
+  autoPublished?: boolean
   receipt?: { url?: string; evidence?: string; at: number }
   error?: string
   createdAt: number; updatedAt: number
+}
+
+interface AiAutoPublishGrantInput {
+  platform: 'instagram' | 'youtube' | 'tiktok'
+  accounts: string[]
+  maxPosts: number
+  minutes: number
+}
+
+interface AiAutoPublishGrant {
+  id: string
+  createdAt: number
+  platform: 'instagram' | 'youtube' | 'tiktok'
+  accounts: string[]
+  maxPosts: number
+  expiresAt: number
+  used: number
+  consumed: string[]
+  revokedAt?: number
 }
 
 interface AiEngageParams {
@@ -702,8 +732,10 @@ interface AiEngageParams {
   mode: 'draft' | 'act'
   excludeHosts?: string[]
   minBodyChars?: number
-  /** 글 사이 최소 간격(초). ⚠ 지시문 수준의 요청이며 코드가 강제하지 않는다. */
+  /** 글 사이 최소 간격(초). 영속 카운터로 **코드가 강제한다**(재개·구간 전환에도 유지). */
   intervalSeconds?: number
+  /** 이 작업의 기한(epoch ms). 지나면 댓글·좋아요를 더 하지 않는다. */
+  until?: number
 }
 
 interface AiEngageLedgerEntry {

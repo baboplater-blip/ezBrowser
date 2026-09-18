@@ -7,7 +7,8 @@
 // 이 파일은 외부 사이트에 접속하지 않는다 — 문자열 생성과 로컬 장부 조회/기록만 한다.
 // 실제 조작(검색·클릭·읽기·댓글 작성)은 에이전트 루프(agent.ts)가 buildBlogEngageTask 의 작업 지시문을 보고 수행한다.
 
-import { buildEngageMark, NO_PUBLISH_MARK } from './agent-gate'
+import { randomUUID } from 'node:crypto'
+import { buildEngageMark, NO_PUBLISH_MARK, type EngageGuard } from './agent-gate'
 import { createJsonStore, loadJsonObject } from './json-store'
 
 // ===== 장부(ledger) =====
@@ -99,6 +100,92 @@ function idx(): Set<string> {
 /** 종료 시 디바운스 대기 중이던 저장을 동기 flush(정상 종료 데이터 손실 방지). */
 export function flushEngageLedger(): void {
   store.flush()
+  quotaStore.flush()
+}
+
+// ===== 한도·간격 카운터 (작업 단위, 영속) =====
+//
+// 왜 별도 저장이 필요한가: 장부(ledger)는 (글, 계정, 행동) 으로만 갈린다 — "이 작업에서 몇 번 했나"
+// 를 셀 수 없다. 그리고 한도·간격이 지시문 수준이면 모델이 무시하거나, 중단 뒤 재개하거나, 구간이
+// 바뀌어 지시문을 다시 읽을 때 카운트가 0 으로 돌아간다. 그래서 **작업(guardId) 단위 카운터를 디스크에**
+// 두고, 에이전트 루프가 클릭 직전에 조회해 코드로 막는다.
+
+interface QuotaRec { comment: number; like: number; lastAt: number }
+
+const QUOTA_FILE = 'ai-engage-quota.json'
+const MAX_QUOTA_RECORDS = 500
+
+let quota: Map<string, QuotaRec> | null = null
+
+const quotaStore = createJsonStore({
+  fileName: QUOTA_FILE,
+  label: '인게이지 한도',
+  debounceMs: 300,
+  snapshot: () => ({ version: 1, records: Object.fromEntries(quotaMap()) }),
+})
+
+function quotaMap(): Map<string, QuotaRec> {
+  if (quota) return quota
+  const m = new Map<string, QuotaRec>()
+  const raw = loadJsonObject(QUOTA_FILE, '인게이지 한도', 'records')
+  const recs = raw && raw.records && typeof raw.records === 'object' && !Array.isArray(raw.records)
+    ? raw.records as Record<string, unknown>
+    : {}
+  for (const [k, v] of Object.entries(recs)) {
+    if (!k || !v || typeof v !== 'object') continue
+    const o = v as Record<string, unknown>
+    const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.floor(x) : 0)
+    m.set(k.slice(0, 64), { comment: n(o.comment), like: n(o.like), lastAt: n(o.lastAt) })
+  }
+  quota = m
+  return m
+}
+
+export interface QuotaVerdict { ok: boolean; reason?: string }
+
+/**
+ * 이 작업에서 이 행동을 더 해도 되는가. **클릭 직전에** 부른다.
+ * 한도 초과·기한 경과·간격 미달이면 거부한다. guardId 가 없으면(옛 표식) 한도를 적용하지 않는다.
+ */
+export function engageQuotaCheck(g: EngageGuard, action: EngageAction, now = Date.now()): QuotaVerdict {
+  if (!g.guardId) return { ok: true }
+  if (g.until > 0 && now > g.until) {
+    return { ok: false, reason: '이 작업에 정해진 기한이 지났습니다 — 더 진행하지 않습니다.' }
+  }
+  const rec = quotaMap().get(g.guardId) ?? { comment: 0, like: 0, lastAt: 0 }
+  if (g.limit > 0 && rec[action] >= g.limit) {
+    const what = action === 'comment' ? '댓글' : '좋아요'
+    return { ok: false, reason: `이 작업에서 허용된 ${what} ${g.limit}건을 이미 모두 사용했습니다.` }
+  }
+  if (g.intervalMs > 0 && rec.lastAt > 0) {
+    const waited = now - rec.lastAt
+    if (waited < g.intervalMs) {
+      const left = Math.ceil((g.intervalMs - waited) / 1000)
+      return { ok: false, reason: `연속 행동 간격이 부족합니다 — ${left}초 더 기다린 뒤에 다시 시도하세요.` }
+    }
+  }
+  return { ok: true }
+}
+
+/** 실제로 행동한 것만 센다. engageQuotaCheck 통과 직후 실행 직전에 부른다. */
+export function engageQuotaRecord(g: EngageGuard, action: EngageAction, now = Date.now()): void {
+  if (!g.guardId) return
+  const m = quotaMap()
+  const rec = m.get(g.guardId) ?? { comment: 0, like: 0, lastAt: 0 }
+  rec[action] += 1
+  rec.lastAt = now
+  m.set(g.guardId, rec)
+  if (m.size > MAX_QUOTA_RECORDS) {
+    // 오래된 작업부터 버린다 — 진행 중 작업의 카운터가 밀려나지 않도록 lastAt 기준.
+    const sorted = Array.from(m.entries()).sort((a, b) => b[1].lastAt - a[1].lastAt).slice(0, MAX_QUOTA_RECORDS)
+    quota = new Map(sorted)
+  }
+  quotaStore.markDirty()
+}
+
+/** 테스트·표시용 — 이 작업이 지금까지 몇 번 했는가. */
+export function engageQuotaUsed(guardId: string): QuotaRec {
+  return quotaMap().get(String(guardId ?? '')) ?? { comment: 0, like: 0, lastAt: 0 }
 }
 
 /**
@@ -214,10 +301,15 @@ export interface BlogEngageParams {
   minBodyChars?: number
   /**
    * 글과 글 사이 최소 간격(초). 연속으로 빠르게 달면 사이트가 차단하거나 스팸으로 본다.
-   * ⚠ 이것은 **지시문 수준의 요청**이다 — 모델에게 기다리라고 말할 뿐, 코드가 강제하지 않는다.
-   *   (댓글 등록은 일반 click 으로 나가므로, 어느 클릭이 '등록' 인지 코드가 알 방법이 없다.)
+   * **코드가 강제한다** — 표식(guardId)에 실려 영속 카운터로 검사되므로, 모델이 지시를 무시하거나
+   * 작업이 중단 후 재개되거나 구간이 바뀌어도 간격이 지켜진다(engageQuotaCheck).
    */
-  intervalSeconds?: number     // 본문이 이보다 짧으면 "읽지 못한 것"으로 보고 건너뛴다(기본 300)
+  intervalSeconds?: number
+  /**
+   * 이 작업의 유효 기한(epoch ms). 이 시각이 지나면 댓글·좋아요를 더 하지 않는다.
+   * 없으면 기한 없음(한도 maxPosts 로만 제한).
+   */
+  until?: number
 }
 
 const DEFAULT_MIN_BODY_CHARS = 300
@@ -280,11 +372,19 @@ export function buildBlogEngageTask(
   if (myBlogUrl) head.push(`내 블로그: ${myBlogUrl} (이 블로그와 관심사·주제가 비슷한 글을 찾으세요. 이 블로그 자체의 글은 대상에서 제외합니다.)`)
   if (!topic && !myBlogUrl) head.push('주제나 내 블로그 주소가 따로 없으면, 검색 결과에서 보이는 인기·최신 글 중 내용이 알차 보이는 글을 고르세요.')
   // 참여 가드 표식 — 에이전트 루프가 이걸 읽어 댓글·좋아요를 **코드로** 막는다(지시문만으로는 안 된다).
+  // 한도(글 수)·간격·기한도 함께 실어 영속 카운터로 강제한다. guardId 는 이 작업 인스턴스 전용이며
+  // 지시문에만 존재하므로 모델·페이지가 만들거나 바꿀 수 없다.
+  const until = typeof p.until === 'number' && Number.isFinite(p.until) && p.until > 0 ? Math.floor(p.until) : 0
   head.push(buildEngageMark({
     account: (p.account ?? '').trim() || 'default',
     mode: p.mode === 'act' ? 'act' : 'draft',
     comment: wantComment,
     like: wantLike,
+    guardId: randomUUID(),
+    // 한도는 "글 수" 다 — 한 글에 댓글 1·좋아요 1 이므로 행동 종류별 상한이 곧 maxPosts 다.
+    limit: maxPosts,
+    intervalMs: intervalSeconds * 1000,
+    until,
   }))
   if (p.mode === 'draft') {
     head.push(`${NO_PUBLISH_MARK} 이 작업에서는 실제로 댓글을 등록하거나 좋아요 버튼을 누르지 않습니다. 댓글 등록·좋아요 버튼은 절대 누르지 마세요 — 대상 목록과 댓글 초안만 보고합니다.`)
@@ -315,7 +415,8 @@ export function buildBlogEngageTask(
   if (intervalSeconds > 0) {
     steps.push(
       `⑩ 한 글을 처리한 뒤 다음 글로 넘어가기 전에 **최소 ${intervalSeconds}초를 기다리세요**({"action":"wait_for","timeout":${intervalSeconds * 1000}} 또는 wait). `
-      + '연속으로 빠르게 댓글·좋아요를 남기면 사이트가 스팸으로 보고 계정을 제한할 수 있습니다.',
+      + '연속으로 빠르게 댓글·좋아요를 남기면 사이트가 스팸으로 보고 계정을 제한할 수 있습니다. '
+      + '이 간격과 한도는 코드로 강제되므로, 기다리지 않고 누르면 그 클릭은 거부됩니다.',
     )
   }
   if (p.mode === 'act' && wantComment) {

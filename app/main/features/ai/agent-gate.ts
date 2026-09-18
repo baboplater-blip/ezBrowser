@@ -288,13 +288,44 @@ export function assessRisk(action: AgentAction, obs: PageObservation, ctx: RiskC
 
 export const ENGAGE_MARK_PREFIX = '[참여 가드]'
 
-export interface EngageGuard { account: string; mode: 'draft' | 'act'; comment: boolean; like: boolean }
+export interface EngageGuard {
+  account: string
+  mode: 'draft' | 'act'
+  comment: boolean
+  like: boolean
+  /**
+   * 이 작업의 한도·간격 카운터를 묶는 키. 작업 지시문에만 실리므로 **모델도 페이지도 만들 수 없다**
+   * (지시문은 신뢰 경로에서만 쓰인다 — createTask/setTaskInstruction).
+   * 빈 문자열이면 한도 집계를 할 수 없으므로 한도·간격을 적용하지 않는다(표식이 없던 시절 작업 호환).
+   */
+  guardId: string
+  /** 행동 종류별 이번 작업 최대 횟수. 0 이하 = 한도 없음(집계만). */
+  limit: number
+  /** 같은 계정의 연속 행동 사이 최소 간격(ms). 0 = 간격 제한 없음. */
+  intervalMs: number
+  /** 이 시각(epoch ms) 이후에는 더 하지 않는다. 0 = 기한 없음. */
+  until: number
+}
+
+function intField(line: string, name: string): number {
+  const m = new RegExp(`${name}=(\\d{1,15})`).exec(line)
+  const v = m ? Number(m[1]) : 0
+  return Number.isFinite(v) && v > 0 ? v : 0
+}
 
 export function buildEngageMark(g: EngageGuard): string {
   const acts = [g.comment ? 'comment' : '', g.like ? 'like' : ''].filter(Boolean).join(',')
   // 계정 이름에 줄바꿈·파이프가 들어가면 파싱이 깨지므로 제거한다.
   const acc = String(g.account ?? '').replace(/[|\r\n]/g, ' ').trim().slice(0, 120)
-  return `${ENGAGE_MARK_PREFIX} account=${acc} mode=${g.mode} actions=${acts}`
+  // guardId 는 파싱이 흔들리지 않게 영숫자·하이픈만 남긴다.
+  const gid = String(g.guardId ?? '').replace(/[^A-Za-z0-9-]/g, '').slice(0, 64)
+  const nums = [
+    gid ? `id=${gid}` : '',
+    g.limit > 0 ? `limit=${Math.floor(g.limit)}` : '',
+    g.intervalMs > 0 ? `interval=${Math.floor(g.intervalMs)}` : '',
+    g.until > 0 ? `until=${Math.floor(g.until)}` : '',
+  ].filter(Boolean).join(' ')
+  return `${ENGAGE_MARK_PREFIX} account=${acc} mode=${g.mode} actions=${acts}${nums ? ` ${nums}` : ''}`
 }
 
 export function parseEngageMark(task: string): EngageGuard | null {
@@ -303,7 +334,16 @@ export function parseEngageMark(task: string): EngageGuard | null {
   const acc = /account=([^\n]*?)\s+mode=/.exec(line)?.[1] ?? ''
   const mode = /mode=(draft|act)/.exec(line)?.[1] === 'act' ? 'act' : 'draft'
   const acts = (/actions=([a-z,]*)/.exec(line)?.[1] ?? '').split(',')
-  return { account: acc.trim(), mode, comment: acts.includes('comment'), like: acts.includes('like') }
+  return {
+    account: acc.trim(),
+    mode,
+    comment: acts.includes('comment'),
+    like: acts.includes('like'),
+    guardId: /\bid=([A-Za-z0-9-]{1,64})/.exec(line)?.[1] ?? '',
+    limit: intField(line, 'limit'),
+    intervalMs: intField(line, 'interval'),
+    until: intField(line, 'until'),
+  }
 }
 
 // 클릭 라벨 분류. **취소를 먼저 본다** — "좋아요 취소" 는 좋아요가 아니라 취소다(순서를 뒤집으면

@@ -40,7 +40,8 @@ import {
 import { listArtifacts, getArtifact, resolveArtifactPath } from '../features/ai/artifacts'
 import {
   workflowEvents, listWorkflows, startImagePost, approveAndPublish, chooseArtifact,
-  cancelWorkflow, deleteWorkflow, type ImagePostParams, type ImagePostWorkflow,
+  cancelWorkflow, deleteWorkflow, grantAutoPublish, getAutoPublishGrant, revokeAutoPublish,
+  type ImagePostParams, type ImagePostWorkflow, type GrantInput,
 } from '../features/ai/social-workflow'
 import { buildBlogEngageTask, listEngagements, clearEngagements, type BlogEngageParams } from '../features/ai/blog-engage'
 import { readFile } from 'node:fs/promises'
@@ -481,6 +482,20 @@ export function registerAiIpc(): void {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
     return chooseArtifact(String(args?.id ?? ''), String(args?.artifactId ?? ''))
   })
+  // 이번 작업 한정 자동 게시 선승인 — **사용자의 명시 선택만** 이 입구를 지난다(신뢰 sender 검증).
+  // 모델·페이지는 이 채널에 도달할 수 없으므로 자동 게시 범위를 스스로 만들거나 넓힐 수 없다.
+  ipcMain.handle(IPC.ai.socialGrant, (e, args: GrantInput) => {
+    if (!isTrustedSender(e)) return null
+    if (!args || typeof args !== 'object') return null
+    return grantAutoPublish({
+      platform: args.platform === 'youtube' ? 'youtube' : args.platform === 'tiktok' ? 'tiktok' : 'instagram',
+      accounts: Array.isArray(args.accounts) ? args.accounts.map((a) => String(a).slice(0, 120)) : [],
+      maxPosts: Number(args.maxPosts),
+      minutes: Number(args.minutes),
+    })
+  })
+  ipcMain.handle(IPC.ai.socialGrantGet, (e) => { if (!isTrustedSender(e)) return null; return getAutoPublishGrant() })
+  ipcMain.handle(IPC.ai.socialGrantRevoke, (e) => { if (!isTrustedSender(e)) return; revokeAutoPublish() })
   ipcMain.handle(IPC.ai.socialCancel, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; cancelWorkflow(String(args?.id ?? '')) })
   ipcMain.handle(IPC.ai.socialDelete, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; deleteWorkflow(String(args?.id ?? '')) })
   workflowEvents.on('changed', (list: ImagePostWorkflow[]) => {
@@ -503,6 +518,8 @@ export function registerAiIpc(): void {
       excludeHosts: Array.isArray(params?.excludeHosts) ? params.excludeHosts.map(String).slice(0, 50) : [],
       minBodyChars: Number(params?.minBodyChars) || undefined,
       intervalSeconds: typeof params?.intervalSeconds === 'number' ? params.intervalSeconds : undefined,
+      // 기한(epoch ms). 과거 시각을 주면 즉시 한도 소진 상태가 되므로 미래 값만 받는다.
+      until: typeof params?.until === 'number' && params.until > Date.now() ? params.until : undefined,
     })
   })
   ipcMain.handle(IPC.ai.engageLedger, (e, args: { limit?: number }) => {
