@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TabSummary } from '../../shared/types'
+import type { AiProviderDetection, AiProviderKind, TabSummary } from '../../shared/types'
 import { Markdown } from './Markdown'
 import { AiWriteStudio } from './AiWriteStudio'
 
@@ -23,6 +23,14 @@ interface AiConfig {
 }
 
 interface PageInfo { url: string; title: string; hasSelection: boolean }
+
+/** 비용을 숨기지 않는다 — 고르기 전에 무엇이 드는지 먼저 보인다. */
+const COST_LABEL: Record<AiProviderDetection['candidates'][number]['cost'], string> = {
+  subscription: '구독 계정 · 추가 요금 없음',
+  'free-local': '내 컴퓨터 · 무료',
+  'free-tier': '무료 티어',
+  'paid-key': '사용한 만큼 과금',
+}
 interface TraceItem { id: string; icon: string; text: string; tone?: 'ok' | 'warn' | 'muted'; shot?: string }
 interface ConvSummary { id: string; title: string; updatedAt: number; messageCount: number; folderId: string | null; tags: string[]; pinned: boolean }
 interface ChatFolder { id: string; name: string; createdAt: number; color: string; emoji?: string }
@@ -174,6 +182,10 @@ function relTime(ts: number): string {
 
 export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { windowId: string; active: TabSummary | null; summarizeNonce?: number; writeNonce?: number }) {
   const [config, setConfig] = useState<AiConfig | null>(null)
+  const [detection, setDetection] = useState<AiProviderDetection | null>(null)
+  const [detecting, setDetecting] = useState(false)
+  const [connecting, setConnecting] = useState<AiProviderKind | null>(null)
+  const [connectError, setConnectError] = useState<{ message: string; fix?: string } | null>(null)
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null)
   const [mode, setMode] = useState<'chat' | 'agent' | 'write'>('chat')
   // 챗
@@ -259,6 +271,48 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   const isInternal = active ? !/^https?:/i.test(active.url) : true
 
   const refreshConfig = () => { void window.browserAPI.ai.config().then((c) => setConfig(c)) }
+
+  // 제공자 탐지·연결 — "키가 필요합니다"로 끝내지 않고 이 컴퓨터에서 쓸 수 있는 길을 찾아 준다.
+  const loadDetection = async (force = false) => {
+    setDetecting(true)
+    try {
+      const d = await window.browserAPI.ai.detectProviders(force)
+      setDetection(d)
+    } catch { setDetection(null) } finally { setDetecting(false) }
+  }
+
+  const connectTo = async (id: AiProviderKind) => {
+    setConnecting(id)
+    setConnectError(null)
+    try {
+      const r = await window.browserAPI.ai.connectProvider(id)
+      if (r?.ok) { refreshConfig(); setDetection(null); return }
+      // 실패해도 무엇이 문제인지·무엇을 하면 되는지 그대로 보여준다(조용한 실패 금지).
+      setConnectError({
+        message: r?.diagnosis?.message ?? r?.error ?? '연결하지 못했습니다.',
+        fix: r?.diagnosis?.fix,
+      })
+      void loadDetection(true)
+    } catch (e) {
+      setConnectError({ message: e instanceof Error ? e.message : String(e) })
+    } finally { setConnecting(null) }
+  }
+
+  // 설정에서 제공자·키가 바뀌면 이 패널도 따라온다. 없으면 설정 화면(또는 다른 창)에서 연결해도
+  // 사이드바는 "키가 필요합니다"에 머물러, 사용자가 보기엔 연결이 안 된 것과 같다.
+  useEffect(() => {
+    const off = window.browserAPI.settings.onChange(() => {
+      refreshConfig()
+      setDetection(null)
+    })
+    return off
+  }, [])
+
+  // 제공자가 준비되지 않은 상태로 패널이 열리면 곧바로 탐지한다.
+  const needsProvider = !!config && config.enabled && !config.hasKey && config.provider !== 'ollama'
+  useEffect(() => {
+    if (needsProvider && detection === null && !detecting) void loadDetection(false)
+  }, [needsProvider, detection, detecting])
 
   // 챗 스트림 구독
   useEffect(() => {
@@ -789,16 +843,62 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     )
   }
   if (config && !config.hasKey && config.provider !== 'ollama') {
+    // 막다른 안내를 주지 않는다 — 이 컴퓨터에서 지금 쓸 수 있는 것을 찾아 한 번에 연결한다.
+    const usable = detection?.candidates.filter((c) => c.ready) ?? []
+    const notReady = detection?.candidates.filter((c) => !c.ready) ?? []
     return (
       <div className="ai-setup">
-        <div className="ai-setup-title">🔑 {config.providerLabel} API 키가 필요합니다</div>
-        <p className="ai-setup-desc">
-          {config.storageAvailable
-            ? 'aside 처럼 내 API 키를 직접 씁니다. 키는 OS 암호화(safeStorage)로 안전하게 저장됩니다.'
-            : '이 기기에서는 안전한 키 저장(safeStorage)을 사용할 수 없습니다.'}
-        </p>
-        <button className="ai-setup-btn" onClick={openSettings}>설정에서 키 입력</button>
-        <p className="ai-setup-hint">또는 설정에서 무료 로컬 모델(Ollama)·Gemini 무료 티어로 전환할 수 있습니다.</p>
+        <div className="ai-setup-title">AI를 연결하세요</div>
+        {detecting && <p className="ai-setup-desc">이 컴퓨터에서 쓸 수 있는 방법을 찾는 중…</p>}
+        {!detecting && usable.length > 0 && (
+          <>
+            <p className="ai-setup-desc">지금 바로 쓸 수 있는 방법을 찾았습니다. 하나를 고르면 연결까지 확인합니다.</p>
+            <div className="ai-provider-list">
+              {usable.map((c) => (
+                <button
+                  key={c.id}
+                  className="ai-provider-card"
+                  disabled={!!connecting}
+                  onClick={() => void connectTo(c.id)}
+                >
+                  <span className="ai-provider-head">
+                    <span className="ai-provider-name">{c.label}</span>
+                    <span className={`ai-provider-cost cost-${c.cost}`}>{COST_LABEL[c.cost]}</span>
+                  </span>
+                  <span className="ai-provider-detail">{c.detail}</span>
+                  {connecting === c.id && <span className="ai-provider-detail">연결 확인 중…</span>}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {!detecting && usable.length === 0 && (
+          <p className="ai-setup-desc">
+            이 컴퓨터에서 바로 쓸 수 있는 AI를 찾지 못했습니다. 아래 중 하나를 준비하면 됩니다.
+          </p>
+        )}
+        {connectError && (
+          <div className="ai-setup-error">
+            <div className="ai-setup-error-msg">{connectError.message}</div>
+            {connectError.fix && <div className="ai-setup-error-fix">{connectError.fix}</div>}
+          </div>
+        )}
+        {!detecting && notReady.length > 0 && (
+          <details className="ai-provider-more">
+            <summary>준비되지 않은 방법 {notReady.length}개 보기</summary>
+            {notReady.map((c) => (
+              <div key={c.id} className="ai-provider-row">
+                <span className="ai-provider-name">{c.label}</span>
+                <span className="ai-provider-detail">{c.detail}</span>
+                {c.fix && <span className="ai-provider-fix">{c.fix}</span>}
+              </div>
+            ))}
+          </details>
+        )}
+        <div className="ai-setup-actions">
+          <button className="ai-setup-btn" onClick={openSettings}>설정에서 직접 고르기</button>
+          <button className="ai-setup-btn ghost" disabled={detecting} onClick={() => void loadDetection(true)}>다시 찾기</button>
+        </div>
       </div>
     )
   }

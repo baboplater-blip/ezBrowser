@@ -1,11 +1,10 @@
 import { app } from 'electron'
 import { EventEmitter } from 'node:events'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
-import { writeFile, mkdir, rename } from 'node:fs/promises'
-import path from 'node:path'
+import { createJsonStore, loadJsonObject } from './json-store'
 
 // 에이전트 실행 이력 — 에이전트가 수행한 작업(지시·단계·결과)을 저장해 나중에 되짚어볼 수 있게 한다.
 // 메인에서 기록하므로 사이드바를 닫아도 남는다. userData/ai-agent-runs.json.
+// 저장 기전(디바운스·원자적 쓰기·손상 복구)은 json-store.ts 가 맡는다 — 그 파일의 머리말 참고.
 
 export type AgentRunStatus = 'running' | 'done' | 'error' | 'cancelled'
 export interface AgentRunStep { icon: string; text: string; tone?: 'ok' | 'warn' | 'muted' }
@@ -33,14 +32,17 @@ export const agentRunEvents = new EventEmitter()
 
 const MAX_RUNS = 50
 const MAX_STEPS_PER_RUN = 120
+const FILE_NAME = 'ai-agent-runs.json'
+
 let cache: AgentRun[] | null = null
-let writeTimer: NodeJS.Timeout | null = null
-let dirty = false
 let quitHooked = false
 
-function filePath(): string {
-  return path.join(app.getPath('userData'), 'ai-agent-runs.json')
-}
+const store = createJsonStore({
+  fileName: FILE_NAME,
+  label: '실행 이력',
+  debounceMs: 400,
+  snapshot: () => ({ version: 1, runs: all() }),
+})
 
 function isValid(r: unknown): r is AgentRun {
   if (!r || typeof r !== 'object') return false
@@ -51,19 +53,18 @@ function isValid(r: unknown): r is AgentRun {
 export function initAgentRuns(): void {
   if (!quitHooked) { quitHooked = true; try { app.on('before-quit', flushAgentRuns) } catch { /* ignore */ } }
   if (cache !== null) return
-  try {
-    if (existsSync(filePath())) {
-      const raw = JSON.parse(readFileSync(filePath(), 'utf-8')) as { runs?: unknown }
-      cache = Array.isArray(raw?.runs) ? raw.runs.filter(isValid) : []
-      // 재시작 시 'running' 으로 남은 것은 중단된 것으로 정리
-      for (const r of cache) { if (r.status === 'running') { r.status = 'cancelled'; r.endedAt = r.endedAt ?? r.startedAt } }
-    } else {
-      cache = []
-    }
-  } catch (err) {
-    console.warn('[ai] agent runs load failed', err)
-    cache = []
-  }
+
+  // 파일을 통째로 못 읽으면 loadJsonObject 가 고유 이름 백업을 남기고 null 을 준다.
+  // (예전에는 백업 없이 빈 상태로 시작해, 다음 저장이 손상 파일을 영구히 덮어썼다.)
+  const raw = loadJsonObject(FILE_NAME, '실행 이력', 'runs')
+  if (!raw) { cache = []; return }
+
+  const rawRuns = Array.isArray(raw.runs) ? raw.runs : []
+  cache = rawRuns.filter(isValid)
+  // 파싱은 됐지만 일부 항목이 망가진 경우 — 정상 항목은 복구하고 버린 개수를 알린다.
+  store.reportDropped(rawRuns.length - cache.length, cache.length)
+  // 재시작 시 'running' 으로 남은 것은 중단된 것으로 정리
+  for (const r of cache) { if (r.status === 'running') { r.status = 'cancelled'; r.endedAt = r.endedAt ?? r.startedAt } }
 }
 
 function all(): AgentRun[] {
@@ -72,35 +73,11 @@ function all(): AgentRun[] {
 }
 
 function schedulePersist(): void {
-  dirty = true
-  if (writeTimer) clearTimeout(writeTimer)
-  writeTimer = setTimeout(() => { void persist() }, 400)
-}
-
-async function persist(): Promise<void> {
-  try {
-    await mkdir(path.dirname(filePath()), { recursive: true })
-    const tmp = filePath() + '.tmp'
-    await writeFile(tmp, JSON.stringify({ version: 1, runs: all() }), 'utf-8')
-    await rename(tmp, filePath())
-    dirty = false
-  } catch (err) {
-    console.warn('[ai] agent runs persist failed', err)
-  }
+  store.markDirty()
 }
 
 export function flushAgentRuns(): void {
-  if (writeTimer) { clearTimeout(writeTimer); writeTimer = null }
-  if (!dirty) return
-  try {
-    mkdirSync(path.dirname(filePath()), { recursive: true })
-    const tmp = filePath() + '.tmp' // 원자적 쓰기 — 종료 중 크래시로 파일이 잘리지 않도록
-    writeFileSync(tmp, JSON.stringify({ version: 1, runs: all() }), 'utf-8')
-    renameSync(tmp, filePath())
-    dirty = false
-  } catch (err) {
-    console.warn('[ai] agent runs flush failed', err)
-  }
+  store.flush()
 }
 
 function summaryOf(r: AgentRun): AgentRunSummary {

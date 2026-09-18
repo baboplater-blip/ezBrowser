@@ -6,16 +6,37 @@ import { pipeline } from 'node:stream/promises'
 import { createHash, generateKeyPairSync } from 'node:crypto'
 import path from 'node:path'
 import extract from 'extract-zip'
-import { createTab, getWebContentsByTabId } from '../tabs/tab-service'
-import { getAllWindows } from '../windows/window-service'
-import { addSessionInitHook, forEachInstalledSession } from '../session-bootstrap'
-import type { ExtensionSummary } from '../../shared/types'
+import {
+  activateTab, closeTab, createTab, findTabIdByWebContentsId, getWebContentsByTabId,
+} from '../tabs/tab-service'
+import { getAllWindows, getWindow } from '../windows/window-service'
+import { addSessionInitHook, forEachInstalledSession, partitionOfSession } from '../session-bootstrap'
+import { listWorkspaces } from '../features/workspace'
+import { DEFAULT_SESSION } from '../../shared/constants'
+import type { ExtensionSessionLoad, ExtensionSummary } from '../../shared/types'
 import {
   reloadDnrRules, dnrRuleCountFor, loadDynamicRules, watchDiskDynamicRules,
   updateRuntimeRules, getRuntimeRules, dropRuntimeRules,
 } from '../features/extensions/dnr'
 
 let extensionsAdapter: unknown = null
+let extensionsModule: { ElectronChromeExtensions: ExtensionsCtor } | null = null
+
+/**
+ * 세션마다 하나씩 두는 확장 어댑터.
+ *
+ * 왜 세션마다인가 (2026-09-15): 라이브러리는 `addTab(wc, win)` 에서
+ * `this.ctx.session !== wc.session` 이면 **TypeError 를 던진다**(엄격한 동일성 검사).
+ * 그런데 우리 탭은 전부 워크스페이스 partition(`persist:ws-<id>`)에 있고 어댑터는
+ * `defaultSession` 하나로만 만들어져 있었다 → 어떤 탭도 등록될 수 없었고
+ * `chrome.tabs.query` 는 늘 빈 배열이었다.
+ *
+ * 인스턴스를 여러 개 만들어도 안전한 근거: 라이브러리의 IPC 라우터(`crx-msg` 등)는
+ * **모듈 전역 싱글턴**(gRoutingDelegate)이 한 번만 등록하고 sender 세션으로 라우팅한다.
+ * `ElectronChromeExtensions.fromSession(session)` 이 존재하는 것도 세션당 1개가 설계 의도임을 보여준다.
+ * (adblock 의 코스메틱 핸들러처럼 "두 번째 등록이 throw" 하는 계열이 아님을 확인했다.)
+ */
+const adaptersBySession = new WeakMap<Session, unknown>()
 
 interface ExtensionsCtor {
   new (opts: {
@@ -25,6 +46,19 @@ interface ExtensionsCtor {
     selectTab?: (tab: Electron.WebContents, win: Electron.BaseWindow) => void
     removeTab?: (tab: Electron.WebContents, win: Electron.BaseWindow) => void
   }): unknown
+}
+
+/**
+ * 라이브러리 인스턴스가 제공하는 **탭 등록** 표면.
+ *
+ * 생성자에 넘기는 `createTab`/`selectTab`/`removeTab` 은 "확장이 브라우저에게 시키는" 방향이고,
+ * 이 메서드들은 반대로 "브라우저가 확장에게 탭을 알려주는" 방향이다 — 둘은 다른 것이며,
+ * 후자를 부르지 않으면 `chrome.tabs.*` 에 노출되는 탭이 **하나도 없다**.
+ */
+interface ExtensionsTabRegistry {
+  addTab?: (tab: Electron.WebContents, window: Electron.BaseWindow) => void
+  removeTab?: (tab: Electron.WebContents) => void
+  selectTab?: (tab: Electron.WebContents) => void
 }
 
 async function loadModule(): Promise<{ ElectronChromeExtensions: ExtensionsCtor } | null> {
@@ -99,14 +133,128 @@ extensionEvents.on('changed', () => {
   })()
 })
 
+// ===== 세션 식별 — "이 세션이 시크릿인가" · "사용자에게 뭐라고 부를까" =====
+
+type SessionKind = ExtensionSessionLoad['kind']
+
+interface SessionDesc { partition: string; label: string; kind: SessionKind }
+
+function kindOfPartition(p: string): SessionKind {
+  if (p.startsWith('incognito')) return 'incognito'
+  if (p === '' || p === DEFAULT_SESSION) return 'default'
+  if (p.startsWith('persist:ws-')) return 'workspace'
+  return 'other'
+}
+
+function labelOfPartition(p: string): string {
+  switch (kindOfPartition(p)) {
+    case 'default': return '기본'
+    case 'incognito': return '시크릿'
+    case 'workspace': {
+      const ws = listWorkspaces().find((w) => w.partition === p)
+      return ws ? `워크스페이스: ${ws.name}` : `워크스페이스(${p.slice('persist:ws-'.length)})`
+    }
+    default: return p
+  }
+}
+
+/** 사용자에게 보여줄 세션 설명. partition 문자열을 그대로 노출하지 않기 위한 단일 출처. */
+function describeSession(ses: Session): SessionDesc {
+  const p = partitionOfSession(ses)
+  if (p === undefined) {
+    // 우리가 만들지 않은 세션(있어선 안 되지만) — partition 을 되찾을 방법이 없다.
+    return { partition: '(알 수 없음)', label: '알 수 없는 세션', kind: 'other' }
+  }
+  return { partition: p, label: labelOfPartition(p), kind: kindOfPartition(p) }
+}
+
+/** 로드 결과를 세션별로 보관할 때 쓰는 키(빈 partition = defaultSession). */
+function sessionKey(desc: SessionDesc): string { return desc.partition || '(default)' }
+
+/**
+ * 확장에게 `file://` 콘텐츠 접근을 줄 것인가. **주지 않는다**(Electron·크롬 둘 다의 기본값).
+ *
+ * 왜 (2026-09-15, 검사 X26 이 실측으로 잡음): 우리 **외피(탭바·주소창·사이드패널)는 `file://` 로
+ * 로드되는 또 하나의 webContents** 다. 그리고 Electron 35 의 `chrome.scripting` 은 대상 탭을
+ * `electron::api::WebContents::FromID(tabId)` — **프로세스 전역 레지스트리** — 로 풀고 세션을 보지
+ * 않는다(shell/browser/extensions/api/scripting/scripting_api.cc 의 `CanAccessTarget` 은 넘겨받은
+ * `browser_context` 인자를 한 번도 쓰지 않는다). 즉 확장이 작은 정수를 훑기만 하면 외피에 닿았다.
+ *
+ * 그 결과가 추상적 위험이 아니었다 — 일반 워크스페이스의 확장이 **시크릿 창의 외피**에서
+ * `document.body.innerText` 와 주소창 input 값을 읽어 **시크릿 탭의 주소를 그대로 가져갔다**
+ * (X26 이 그 문자열을 증거로 남긴다). 시크릿 탭 **안**은 못 건드리지만(X25) "무엇을 보고 있는지"는
+ * 새고 있었다.
+ *
+ * 남은 관문이 `permissions.CanAccessPage(대상 URL)` 뿐이므로, **우리가 통제할 수 있는 유일한 손잡이가
+ * 이 플래그**다. 끄면 `<all_urls>` 를 가진 확장도 `file://` 에는 닿지 못한다.
+ *
+ * 비용(정직하게): 사용자가 연 로컬 파일(`file://` 페이지)에서 확장이 동작하지 않는다.
+ * 크롬도 기본이 이것이며 확장마다 "파일 URL 접근 허용" 을 사용자가 켜도록 한다 — 그 토글은 아직 없다.
+ * 한계: 개발 모드(`VITE_DEV_SERVER_URL`)에서는 외피가 `http://localhost` 라 이 플래그로 막히지 않는다.
+ * 배포 빌드는 항상 `file://` 이므로 사용자에게 가는 경로는 막힌다.
+ */
+const EXTENSION_FILE_ACCESS = false
+
+/**
+ * 시크릿 세션인가.
+ *
+ * 왜 중요한가 (2026-09-15): 크롬은 **확장을 시크릿에서 기본으로 끈다**(확장마다 사용자가 명시적으로
+ * "시크릿에서 허용" 을 켜야 한다). 우리는 시크릿 partition 도 `setupSessionByPartition` 을 지나가므로
+ * 세션 hook 이 그대로 걸려 **확장이 시크릿에도 로드되고 시크릿 탭이 chrome.tabs 에 등록**됐다.
+ * 확장은 `chrome.storage.local`(영속)에 쓸 수 있으니, 이는 단순한 호환성 문제가 아니라
+ * **시크릿 방문 기록이 영속 저장소로 새는 통로**였다. 그래서 확장이 닿는 모든 경로에서 시크릿을 뺀다.
+ *
+ * 판정은 두 겹이다 — partition 이름(정상 경로)과 실제 시크릿 창 목록(라벨을 못 얻은 예외 상황).
+ * 둘 중 하나라도 시크릿이면 시크릿으로 본다(모르면 안전한 쪽).
+ */
+function isIncognitoSession(ses: Session): boolean {
+  if (describeSession(ses).kind === 'incognito') return true
+  for (const ctx of getAllWindows()) {
+    if (!ctx.incognito || !ctx.incognitoPartition) continue
+    // 이미 존재하는 partition 이므로 fromPartition 이 새 세션을 만들지 않는다(캐시된 인스턴스 반환).
+    try { if (session.fromPartition(ctx.incognitoPartition) === ses) return true } catch { /* ignore */ }
+  }
+  return false
+}
+
 function sessions(): Session[] {
   // 모든 설치된 세션(default + persist:default + 모든 워크스페이스 partition)에 확장을 로드해야
   // 비-default 워크스페이스에서도 확장이 동작한다. defaultSession 은 install 목록에 포함되지만
   // 방어적으로 Set 에 미리 넣어 dedup 한다. (회귀 #12/#13 계열 — session-bootstrap hook 시스템 재사용)
+  // 단 **시크릿 세션은 제외**한다(위 isIncognitoSession 주석).
   const set = new Set<Session>([session.defaultSession])
   forEachInstalledSession((s) => set.add(s))
-  return [...set]
+  return [...set].filter((s) => !isIncognitoSession(s))
 }
+
+// ===== 세션별 로드 결과 =====
+//
+// 현재 로드 여부 자체는 `ses.getAllExtensions()` 로 **그때그때 조회**한다(과거 기록을 믿지 않는다).
+// 여기 남기는 것은 "왜 실패했는가" 뿐이다 — 조회로는 이유를 알 수 없기 때문이다.
+interface LoadFailure { error: string; reason: string }
+const loadFailures = new Map<string, Map<string, LoadFailure>>()
+
+/** 영문 오류를 사용자가 이해할 수 있는 한 줄로. 못 알아보면 원문을 접어서 보여줄 뿐 지어내지 않는다. */
+function koReason(raw: string): string {
+  const s = raw.toLowerCase()
+  if (s.includes('manifest')) return 'manifest.json 을 읽을 수 없거나 형식이 잘못됐습니다.'
+  if (s.includes('version')) return '확장의 버전 표기가 올바르지 않습니다.'
+  if (s.includes('enoent') || s.includes('no such file')) return '확장 파일을 찾을 수 없습니다.'
+  if (s.includes('eacces') || s.includes('permission')) return '파일 권한 때문에 읽지 못했습니다.'
+  if (s.includes('locale') || s.includes('_locales')) return '번역(_locales) 파일에 문제가 있습니다.'
+  return '이 세션에서 확장을 불러오지 못했습니다.'
+}
+
+function recordLoadResult(extId: string, ses: Session, ok: boolean, err?: unknown): void {
+  const key = sessionKey(describeSession(ses))
+  let m = loadFailures.get(extId)
+  if (ok) { m?.delete(key); return }
+  if (!m) { m = new Map(); loadFailures.set(extId, m) }
+  const error = String((err as Error)?.message ?? err ?? '알 수 없는 오류')
+  m.set(key, { error, reason: koReason(error) })
+}
+
+function clearLoadResults(extId: string): void { loadFailures.delete(extId) }
 
 // 새로 만들어지는 세션(예: 새 워크스페이스 partition)에 활성 확장을 로드한다. idempotent.
 /**
@@ -114,7 +262,49 @@ function sessions(): Session[] {
  * `electron-chrome-extensions` 가 자기 API 를 넣는 것과 **같은 방식**('frame' + 'service-worker').
  * id 를 고정해 두면 같은 세션에 두 번 등록돼도 교체된다(멱등).
  */
+/** 이 세션의 확장 어댑터를 얻는다(없으면 만든다). 라이브러리가 없으면 null. */
+function ensureAdapterFor(ses: Session): unknown {
+  const existing = adaptersBySession.get(ses)
+  if (existing) return existing
+  if (!extensionsModule) return null
+  // 시크릿 세션에는 어댑터 자체를 만들지 않는다 → 시크릿 탭이 chrome.tabs 에 등록될 길이 없다.
+  if (isIncognitoSession(ses)) return null
+  try {
+    const instance = new extensionsModule.ElectronChromeExtensions({
+      session: ses,
+      license: 'GPL-3.0',
+      createTab: async ({ url, active }) => {
+        const ctx = getAllWindows()[0]
+        if (!ctx) throw new Error('no window')
+        const summary = createTab({ windowId: ctx.id, url, background: !active })
+        const wc = getWebContentsByTabId(summary.id)
+        if (!wc) throw new Error('webcontents not found')
+        return [wc, ctx.win]
+      },
+      // 확장이 탭을 고르거나 닫으려 할 때(chrome.tabs.update({active:true}) / chrome.tabs.remove).
+      // 전에는 둘 다 무시(() => undefined)라 확장의 탭 조작이 조용히 아무 일도 하지 않았다.
+      // 라이브러리의 removeTab() 안에서 불리지만, 그쪽은 이미 자기 목록에서 지운 뒤라
+      // 우리 closeTab → onTabClosed → untrackExtensionTab 이 되돌아와도 재진입하지 않는다.
+      selectTab: (tab) => {
+        const loc = findTabIdByWebContentsId(tab.id)
+        if (loc) activateTab(loc.tabId)
+      },
+      removeTab: (tab) => {
+        const loc = findTabIdByWebContentsId(tab.id)
+        if (loc) closeTab(loc.tabId)
+      },
+    })
+    adaptersBySession.set(ses, instance)
+    return instance
+  } catch (err) {
+    console.warn('[extensions] adapter init failed', err)
+    return null
+  }
+}
+
 async function loadEnabledInto(ses: Session): Promise<void> {
+  // 시크릿 세션에는 확장을 올리지 않는다(크롬 기본과 같다 — isIncognitoSession 주석 참고).
+  if (isIncognitoSession(ses)) return
   const root = extensionsRoot()
   let entries: string[] = []
   try { entries = await fsp.readdir(root) } catch { return }
@@ -127,8 +317,15 @@ async function loadEnabledInto(ses: Session): Promise<void> {
     const stat = await fsp.stat(extPath).catch(() => null)
     if (!stat?.isDirectory()) continue
     if (!existsSync(path.join(extPath, 'manifest.json'))) continue
-    try { await ses.loadExtension(extPath, { allowFileAccess: true }) }
-    catch (err) { console.warn(`[extensions] load into new session failed: ${entry}`, err) }
+    try {
+      await ses.loadExtension(extPath, { allowFileAccess: EXTENSION_FILE_ACCESS })
+      recordLoadResult(entry, ses, true)
+    } catch (err) {
+      // 이 세션에서만 실패할 수 있다(디스크·권한 등). 뭉개지 말고 세션별로 남겨
+      // 관리 화면이 "어느 워크스페이스에서 안 뜨는지" 를 말할 수 있게 한다.
+      recordLoadResult(entry, ses, false, err)
+      console.warn(`[extensions] load into new session failed: ${entry}`, err)
+    }
   }
 }
 
@@ -142,30 +339,27 @@ export async function initExtensions(): Promise<void> {
   const mod = await loadModule()
   if (!mod) return
 
-  try {
-    extensionsAdapter = new mod.ElectronChromeExtensions({
-      session: session.defaultSession,
-      license: 'GPL-3.0',
-      createTab: async ({ url, active }) => {
-        const ctx = getAllWindows()[0]
-        if (!ctx) throw new Error('no window')
-        const summary = createTab({ windowId: ctx.id, url, background: !active })
-        const wc = getWebContentsByTabId(summary.id)
-        if (!wc) throw new Error('webcontents not found')
-        return [wc, ctx.win]
-      },
-      selectTab: () => undefined,
-      removeTab: () => undefined,
-    })
-  } catch (err) {
-    console.warn('[extensions] adapter init failed', err)
-    return
-  }
+  extensionsModule = mod
+  // defaultSession 용 인스턴스. 실제 탭은 워크스페이스 partition 에 있으므로
+  // 그쪽 인스턴스는 session-bootstrap hook 에서 세션마다 따로 만든다(ensureAdapterFor).
+  extensionsAdapter = ensureAdapterFor(session.defaultSession)
+  if (!extensionsAdapter) return
+
+  // 탭이 실제로 쓰는 세션(persist:default · 워크스페이스 partition)에도 어댑터를 만든다.
+  // addSessionInitHook 은 **이미 설치된 세션에도 즉시** 적용된다(회귀 #13 에서 그렇게 고쳤다).
+  for (const ses of sessions()) ensureAdapterFor(ses)
 
   await fsp.mkdir(extensionsRoot(), { recursive: true }).catch(() => undefined)
   await loadInstalledExtensions()
-  // 이후 생성되는 워크스페이스 partition 세션에도 자동으로 활성 확장 로드 (기존 세션은 위에서 이미 로드됨 → getAllExtensions 가드로 skip)
-  addSessionInitHook((ses) => { void loadEnabledInto(ses) })
+  // 이후 생성되는 워크스페이스 partition 세션에도 자동으로 어댑터 생성 + 활성 확장 로드
+  // (기존 세션은 위에서 이미 로드됨 → getAllExtensions 가드로 skip)
+  addSessionInitHook((ses) => {
+    // 시크릿 세션은 여기서 곧바로 돌려보낸다. 아래 두 함수에도 각각 가드가 있지만(다중 방어),
+    // 이 hook 은 **새 partition 이 생길 때마다** 불리는 유일한 입구라 여기서 막는 것이 본줄기다.
+    if (isIncognitoSession(ses)) return
+    ensureAdapterFor(ses)
+    void loadEnabledInto(ses)
+  })
 }
 
 async function loadInstalledExtensions(): Promise<void> {
@@ -188,15 +382,27 @@ async function loadInstalledExtensions(): Promise<void> {
   extensionEvents.emit('changed')
 }
 
+/**
+ * 모든 (시크릿 아닌) 세션에 확장을 올린다.
+ *
+ * 반환값은 예전과 같다(하나라도 성공하면 그 Extension). 다만 **세션별 성패를 따로 기록**한다 —
+ * 예전에는 실패를 `lastErr` 하나로 뭉개서 "3개 세션 중 1개만 성공" 도 성공으로 보고했고,
+ * 그 워크스페이스에서 확장이 전혀 안 뜨는데 화면에는 정상으로 보였다.
+ */
 async function loadExtensionInAll(extPath: string): Promise<Extension | null> {
+  const extId = path.basename(extPath)
   let lastErr: unknown = null
   let loaded: Extension | null = null
   for (const ses of sessions()) {
     try {
-      const ext = await ses.loadExtension(extPath, { allowFileAccess: true })
+      const ext = await ses.loadExtension(extPath, { allowFileAccess: EXTENSION_FILE_ACCESS })
       loaded = ext
+      recordLoadResult(extId, ses, true)
+      // 계산된 id 와 런타임 id 가 어긋나는 예외 상황에서도 기록이 미아가 되지 않게 함께 남긴다.
+      if (ext.id !== extId) recordLoadResult(ext.id, ses, true)
     } catch (err) {
       lastErr = err
+      recordLoadResult(extId, ses, false, err)
     }
   }
   if (!loaded) console.warn(`[extensions] failed to load ${extPath}`, lastErr)
@@ -209,14 +415,25 @@ function removeFromAll(id: string): void {
   }
 }
 
+/**
+ * 설치된 확장 목록.
+ *
+ * 2026-09-15 에 고친 것: 예전에는 **`defaultSession` 하나만** 보고 메타데이터를 채웠고,
+ * `enabled` 는 "비활성 목록에 없으면 true" 였다. 즉 **설정상 켬**과 **실제 로드됨**이 구분되지 않아,
+ * 워크스페이스 세션에서 로드가 실패해도 화면에는 멀쩡히 켜진 확장으로 보였다.
+ * 이제 확장이 로드될 수 있는 **모든 세션을 실제로 조회해서**(과거 시도 기록이 아니라 현재 상태)
+ * 세션별 로드 여부를 싣는다. 실패 이유만 기록(loadFailures)에서 가져온다.
+ */
 export async function listExtensions(): Promise<ExtensionSummary[]> {
   const disabled = await readDisabled()
   const root = extensionsRoot()
   const dirs: string[] = await fsp.readdir(root).catch(() => [])
   const out: ExtensionSummary[] = []
-  // active 세션 기준 metadata
-  const active = session.defaultSession.getAllExtensions()
-  const activeById = new Map(active.map((e) => [e.id, e]))
+  // 확장이 올라갈 수 있는 세션들의 **현재** 스냅샷(시크릿 제외). 세션마다 한 번만 조회한다.
+  const eligible = sessions().map((ses) => ({
+    desc: describeSession(ses),
+    byId: new Map(ses.getAllExtensions().map((e) => [e.id, e])),
+  }))
   for (const dir of dirs) {
     const dirPath = path.join(root, dir)
     const stat = await fsp.stat(dirPath).catch(() => null)
@@ -230,7 +447,25 @@ export async function listExtensions(): Promise<ExtensionSummary[]> {
       continue
     }
     const isDisabled = disabled.has(dir)
-    const ext = activeById.get(dir)
+
+    // ── 세션별 실제 로드 상태 ──
+    const sessionStates: ExtensionSessionLoad[] = eligible.map(({ desc, byId }) => {
+      const has = byId.has(dir)
+      const st: ExtensionSessionLoad = {
+        partition: desc.partition, label: desc.label, kind: desc.kind, loaded: has,
+      }
+      if (!has) {
+        const fail = loadFailures.get(dir)?.get(sessionKey(desc))
+        if (fail) { st.error = fail.error; st.reason = fail.reason }
+        else st.reason = isDisabled ? '꺼져 있습니다.' : '아직 이 세션에 불러오지 않았습니다.'
+      }
+      return st
+    })
+    const loadedSessions = sessionStates.filter((s) => s.loaded).length
+
+    // 메타데이터는 이 확장을 실제로 들고 있는 아무 세션에서나 가져온다
+    // (defaultSession 에만 없고 워크스페이스 세션에는 있는 경우가 실제로 있다).
+    const ext = eligible.map((e) => e.byId.get(dir)).find((e) => e !== undefined)
     const iconDataUrl = await readBestIcon(dirPath, manifest).catch(() => undefined)
     const messages = await loadLocaleMessages(dirPath, manifest.default_locale || 'en')
     out.push({
@@ -241,6 +476,11 @@ export async function listExtensions(): Promise<ExtensionSummary[]> {
       version: ext?.version ?? manifest.version ?? '0.0.0',
       description: localizeString(manifest.description, messages),
       enabled: !isDisabled,
+      // 설정상 켬(enabled)과 다른 값 — 실제로 한 세션에라도 올라와 있는가.
+      loaded: loadedSessions > 0,
+      sessions: sessionStates,
+      loadedSessions,
+      totalSessions: sessionStates.length,
       hasOptions: Boolean(manifest.options_ui?.page || manifest.options_page),
       hasIcon: Boolean(iconDataUrl),
       iconDataUrl,
@@ -676,6 +916,7 @@ export async function installFromUrl(url: string): Promise<{ ok: boolean; id?: s
 export async function removeExtension(id: string): Promise<{
   ok: boolean; error?: string }> {
   dropRuntimeRules(id)   // 확장이 사라지면 그 확장의 런타임 룰도 버린다
+  clearLoadResults(id)   // 세션별 실패 기록도 함께(같은 id 로 재설치될 수 있다)
   if (!/^[a-z]{32}$/i.test(id) && !/^[a-z0-9_-]+$/i.test(id)) {
     return { ok: false, error: 'invalid id' }
   }
@@ -693,6 +934,8 @@ export async function setExtensionEnabled(id: string, enabled: boolean): Promise
   const dir = path.join(extensionsRoot(), id)
   if (!existsSync(dir)) return { ok: false, error: 'not found' }
   const disabled = await readDisabled()
+  // 상태가 바뀌면 이전 실패 이유는 더 이상 사실이 아니다 — 먼저 비우고 새로 기록한다.
+  clearLoadResults(id)
   if (enabled) {
     disabled.delete(id)
     await writeDisabled(disabled)
@@ -769,4 +1012,62 @@ export async function importLocalUnpackedDir(srcDir: string): Promise<{ ok: bool
 
 export function getExtensionsAdapter(): unknown {
   return extensionsAdapter
+}
+
+// ===== 탭 등록 (chrome.tabs.*) =====
+//
+// 2026-09-15 에 고친 결함: 어디에서도 `addTab` 을 부르지 않아 확장이 보는 탭 목록이 **항상 비어 있었다**.
+// `chrome.tabs.query({})` 가 0개를 돌려주니 탭을 훑어 동작하는 확장(Vimium·Bitwarden·uBO 팝업 등)과
+// `chrome.scripting.executeScript({ target: { tabId } })` 처럼 탭 id 가 필요한 경로가 통째로 죽어 있었다.
+// CLAUDE.md 확장 지원 우선순위 4번(tabs/windows/runtime/scripting)이 사실상 미구현이던 셈.
+// 확장은 로드되고 콘텐츠 스크립트도 돌아서 겉으로는 멀쩡해 보였다 — 그래서 오래 눈에 띄지 않았다.
+//
+// 닫힌 뒤에는 webContents 를 다시 얻을 수 없으므로(onTabClosed 는 id 만 준다) 등록 시점에 붙잡아 둔다.
+const trackedExtensionTabs = new Map<string, Electron.WebContents>()
+
+/**
+ * 이 webContents 가 속한 **세션의** 어댑터. 세션이 어긋나면 라이브러리가 TypeError 를 던지므로
+ * 반드시 wc.session 으로 고른다(전역 인스턴스 하나를 쓰면 안 된다).
+ */
+function tabRegistryFor(wc: Electron.WebContents): ExtensionsTabRegistry | null {
+  return (ensureAdapterFor(wc.session) as ExtensionsTabRegistry | null) ?? null
+}
+
+/** 새 탭을 확장 시스템에 등록한다. 라이브러리가 없거나 창을 못 찾으면 조용히 건너뛴다. */
+export function trackExtensionTab(tabId: string): void {
+  const wc = getWebContentsByTabId(tabId)
+  if (!wc || wc.isDestroyed()) return
+  // 시크릿 탭은 어떤 확장에도 알리지 않는다. (ensureAdapterFor 가 이미 null 을 주지만,
+  // 여기서 먼저 끊어야 trackedExtensionTabs 에 시크릿 webContents 참조가 남지 않는다.)
+  if (isIncognitoSession(wc.session)) return
+  const api = tabRegistryFor(wc)
+  if (typeof api?.addTab !== 'function') return
+  const loc = findTabIdByWebContentsId(wc.id)
+  const ctx = loc ? getWindow(loc.windowId) : undefined
+  if (!ctx) return
+  try {
+    api.addTab(wc, ctx.win)
+    trackedExtensionTabs.set(tabId, wc)
+  } catch (err) {
+    console.warn('[extensions] addTab failed', err)
+  }
+}
+
+/** 닫힌 탭을 확장 시스템에서 지운다(안 지우면 chrome.tabs 가 유령 탭을 계속 보고한다). */
+export function untrackExtensionTab(tabId: string): void {
+  const wc = trackedExtensionTabs.get(tabId)
+  trackedExtensionTabs.delete(tabId)
+  if (!wc || wc.isDestroyed()) return
+  const api = tabRegistryFor(wc)
+  if (typeof api?.removeTab !== 'function') return
+  try { api.removeTab(wc) } catch { /* 이미 파괴된 webContents — 무시 */ }
+}
+
+/** 활성 탭이 바뀐 것을 알린다 — `chrome.tabs.query({ active: true })` 가 이 값을 쓴다. */
+export function selectExtensionTab(tabId: string): void {
+  const wc = trackedExtensionTabs.get(tabId) ?? getWebContentsByTabId(tabId)
+  if (!wc || wc.isDestroyed()) return
+  const api = tabRegistryFor(wc)
+  if (typeof api?.selectTab !== 'function') return
+  try { api.selectTab(wc) } catch { /* ignore */ }
 }

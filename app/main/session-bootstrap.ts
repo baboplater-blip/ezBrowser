@@ -83,6 +83,20 @@ export function removeInstalledSession(ses: Session): void {
   if (i >= 0) installedSessionList.splice(i, 1)
 }
 
+/**
+ * 세션 → partition 문자열. Electron 의 Session 객체는 자기 partition 이름을 알려주지 않아서,
+ * **우리가 만들 때 기록해 두는 것 말고는 되찾을 방법이 없다**(session.fromPartition 으로 역추적하면
+ * 존재하지 않는 세션을 새로 만드는 부작용이 난다).
+ * 확장 쪽에서 "이 세션이 시크릿인가"(확장을 올리면 안 됨) · "사용자에게 뭐라고 부를까"를 판단하는 데 쓴다.
+ */
+const partitionBySession = new WeakMap<Session, string>()
+
+/** 이 세션의 partition 문자열. defaultSession 은 빈 문자열, 모르면 undefined. */
+export function partitionOfSession(ses: Session): string | undefined {
+  if (ses === session.defaultSession) return ''
+  return partitionBySession.get(ses)
+}
+
 /** 설치된 모든 세션을 순회 (adblock 재초기화 등에서 사용). */
 export function forEachInstalledSession(fn: (ses: Session) => void): void {
   for (const ses of installedSessionList) {
@@ -138,5 +152,8 @@ export function setupSession(ses: Session): void {
 
 export function setupSessionByPartition(partition: string): void {
   const ses = session.fromPartition(partition)
+  // 라벨은 setupSession 보다 **먼저** 기록한다 — setupSession 이 부르는 hook(확장 어댑터 등)이
+  // 곧바로 partitionOfSession 을 물어보기 때문이다. 순서가 뒤바뀌면 시크릿 세션을 못 알아본다.
+  partitionBySession.set(ses, partition)
   setupSession(ses)
 }

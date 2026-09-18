@@ -209,9 +209,66 @@ async function main() {
       steps.length >= 2 && blank.length === 0,
       `단계 ${steps.length}개 통과 · 빈 단계 ${blank.length}개`)
 
+    // W4 — 온보딩에 AI 연결 단계가 있고, 이 컴퓨터에서 쓸 수 있는 방법을 실제로 찾아 보여주는가.
+    //   (2026-09-18) 예전에는 온보딩 어디에도 AI 가 없어, 설치 직후 사용자는 제품의 핵심 기능이
+    //   있는지조차 몰랐다. 여기서 막히면 "설치 → 첫 AI 사용" 연결이 다시 끊긴 것이다.
+    const aiStep = await evaluate(welcome, `(async () => {
+      // 처음으로 되돌린 뒤 AI 단계를 찾아 들어간다.
+      for (let guard = 0; guard < 12; guard++) {
+        const h = document.querySelector('#step h2')?.textContent || ''
+        if (/AI/.test(h)) break
+        const prev = document.getElementById('prev')
+        if (!prev) break
+        prev.click()
+        await new Promise((r) => setTimeout(r, 250))
+      }
+      for (let guard = 0; guard < 12; guard++) {
+        const h = document.querySelector('#step h2')?.textContent || ''
+        if (/AI/.test(h)) {
+          // 탐지가 끝날 때까지 기다린다(카드 또는 "찾지 못했어요" 안내 중 하나가 나온다).
+          for (let w = 0; w < 40; w++) {
+            const t = document.getElementById('step')?.innerText || ''
+            if (!/찾는 중/.test(t)) break
+            await new Promise((r) => setTimeout(r, 500))
+          }
+          const step = document.getElementById('step')
+          return { found: true, heading: h,
+                   cards: [...step.querySelectorAll('[data-ai]')].map((e) => e.dataset.ai),
+                   text: (step.innerText || '').slice(0, 300) }
+        }
+        const next = document.getElementById('next')
+        if (!next || /시작하기/.test(next.textContent || '')) break
+        next.click()
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      return { found: false }
+    })()`, 60_000)
+    check('W4', '온보딩에 AI 연결 단계가 있고 탐지 결과를 보여준다',
+      aiStep.found === true && !/찾는 중/.test(aiStep.text || ''),
+      aiStep.found ? `"${aiStep.heading}" · 연결 가능 ${aiStep.cards?.length ?? 0}개` : 'AI 단계를 찾지 못함')
+
+    // W5 — 탐지 결과가 실제 설정과 어긋나지 않는가(화면만 그럴듯한 것 방지).
+    const detTruth = await evaluate(shell, `window.browserAPI.ai.detectProviders(false)`, 45_000)
+    const readyIds = (detTruth?.candidates ?? []).filter((c) => c.ready).map((c) => c.id).sort()
+    const shownIds = [...(aiStep.cards ?? [])].sort()
+    check('W5', '온보딩이 보여주는 방법이 실제 탐지 결과와 같다',
+      JSON.stringify(readyIds) === JSON.stringify(shownIds),
+      `화면 [${shownIds.join(',')}] · 실제 [${readyIds.join(',')}]`)
+
     // 마지막 단계에서 "시작하기" 를 누르면 온보딩 완료가 실제로 기록되는가.
     await evaluate(shell, `window.browserAPI.settings.set('setup.completed', false)`)
     await sleep(500)
+    // W4 가 AI 단계로 되돌려 놓았으므로, 마지막 단계까지 다시 전진한 뒤 눌러야 한다.
+    // (앞 시나리오가 남긴 상태에 기대면 조용히 엉뚱한 것을 검사한다.)
+    await evaluate(welcome, `(async () => {
+      for (let i = 0; i < 12; i++) {
+        const n = document.getElementById('next')
+        if (!n || /시작하기/.test(n.textContent || '')) break
+        n.click()
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      return true
+    })()`, 30_000)
     await evaluate(welcome, `(() => { const n = document.getElementById('next'); if (n) n.click(); return true })()`)
     await sleep(1800)
     const completed = await evaluate(shell, `window.browserAPI.settings.get('setup.completed')`)

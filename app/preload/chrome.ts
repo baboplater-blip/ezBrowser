@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type {
-  ActionDescriptor, AdblockStats, Bookmark, BookmarkFolder,
+  ActionDescriptor, AdblockStats, AiConnectResult, AiProviderDetection, AiProviderKind, Bookmark, BookmarkFolder,
   BookmarkTree, DownloadItem, ExtensionSummary, HistoryEntry, KeyBinding,
   MacroSummary, MediaCandidate, OmniboxSuggestion, ReadLaterItem, SearchEngine, TabGroup, TabGroupColor, TabSummary, TopSite, UserChromeState,
   Workspace, WorkspaceState,
@@ -392,12 +392,18 @@ const api = {
   ai: {
     config: (): Promise<{
       enabled: boolean
-      provider: 'anthropic' | 'openai' | 'ollama' | 'google'
+      provider: AiProviderKind
       providerLabel: string
       model: string
       hasKey: boolean
       storageAvailable: boolean
     } | null> => ipcRenderer.invoke(IPC.ai.config),
+    /** 이 컴퓨터에서 지금 쓸 수 있는 제공자 — 요금 드는 호출은 하지 않는다. */
+    detectProviders: (force?: boolean): Promise<AiProviderDetection | null> =>
+      ipcRenderer.invoke(IPC.ai.detectProviders, { force: !!force }),
+    /** 제공자를 고르고 실제로 한 번 물어봐 확인 — 실패하면 원인·해결책이 함께 온다. */
+    connectProvider: (provider: AiProviderKind, model?: string): Promise<AiConnectResult> =>
+      ipcRenderer.invoke(IPC.ai.connectProvider, { provider, model }),
     pageContext: (tabId?: string): Promise<{ url: string; title: string; hasSelection: boolean } | null> =>
       ipcRenderer.invoke(IPC.ai.pageContext, { tabId }),
     send: (args: {

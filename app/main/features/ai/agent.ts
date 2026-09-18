@@ -103,11 +103,15 @@ async function probeClickAtTarget(wc: Electron.WebContents, action: AgentAction)
 }
 
 export function confirmAgentStep(reqId: string, approved: boolean): void {
+  // 취소된 실행에 뒤늦게 도착한 승인은 무시한다 — 승인과 취소가 거의 동시에 오면 **취소가 이긴다**.
+  // (이미 나간 동작은 되돌리지 않는다. 다만 아직 실행되지 않은 것은 실행하지 않는다.)
+  if (cancelledSet.has(reqId)) return
   const fn = pendingConfirm.get(reqId)
   if (fn) { pendingConfirm.delete(reqId); fn(approved) }
 }
 
 export function replyAgentAsk(reqId: string, answer: string): void {
+  if (cancelledSet.has(reqId)) return
   const fn = pendingAsk.get(reqId)
   if (fn) { pendingAsk.delete(reqId); fn(answer) }
 }
@@ -668,10 +672,32 @@ export interface AgentTaskParams {
 // 읽기 전용(사이트 분석 보고서 등) 에서 차단하는 "페이지를 바꾸는" 동작 — 열람·이동·note/report 만 허용.
 const READONLY_BLOCKED = new Set(['type', 'run_js', 'upload_file', 'autofill', 'drag', 'download', 'key'])
 
-export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise<void> {
+export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Promise<void> {
   const { reqId, tabId, task } = params
   const readOnly = !!params.readOnly
   cancelledSet.delete(reqId)
+  // ===== 취소 경계 =====
+  // 취소의 계약은 "되돌리기"가 아니라 **"이 시점 이후로는 아무 것도 더 하지 않는다"** 이다.
+  // ① 취소 뒤에는 'cancelled' 하나만 내보낸다 — 늦게 도착한 done/result 가 실행 이력의 상태를
+  //    뒤집거나(cancelled → done) 이미 끝난 실행에 단계를 덧붙이지 못하게 한다(agent-runs 는
+  //    받은 이벤트 순서대로 status 를 갱신하므로, 막는 자리는 여기 emit 경계다).
+  // ② 종료 이벤트는 한 번만. 반환된 뒤(finally)에는 어떤 이벤트도 나가지 않는다 —
+  //    armFileChooser 처럼 최대 90초 뒤에 resolve 되는 플로팅 프로미스가 남아 있다.
+  let terminated = false
+  const emit: Emit = (evt) => {
+    if (terminated) return
+    const type = String(evt.type)
+    if (cancelledSet.has(reqId) && type !== 'cancelled') return
+    if (type === 'done' || type === 'error' || type === 'cancelled') terminated = true
+    rawEmit(evt)
+  }
+  // 부작용이 있는 동작 직전의 **마지막 관문**. 관찰·스크린샷·모델 호출·확인 대기 같은 await 사이에
+  // 취소가 도착했으면 여기서 멈춘다. true 를 받으면 호출자는 즉시 return 해야 한다.
+  const abortIfCancelled = (): boolean => {
+    if (!cancelledSet.has(reqId)) return false
+    emit({ type: 'cancelled' })
+    return true
+  }
   const startWc = tabId ? getWebContentsByTabId(tabId) : null
   if (!startWc || !tabId) { emit({ type: 'error', message: '활성 탭을 찾을 수 없습니다.' }); return }
   if (!/^https?:/i.test(startWc.getURL())) {
@@ -877,6 +903,8 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
       // 세션 경로에서는 전체 history 요청이 필요 없다 — 도구 경로·폴백에서만 만든다.
       const buildReq = async (): Promise<AiRequest> => { const r = await resolveReq(system, [...history, { role: 'user', content: userContent }]); if (shot) r.image = shot; return r }
 
+      // 관찰·스크린샷(수백 ms~수 초) 동안 취소가 들어왔을 수 있다 — 모델을 부르기 전에 멈춘다(토큰 낭비도 막는다).
+      if (abortIfCancelled()) return
       if (skipLlm) {
         // 가드 통과 — 이번 스텝은 모델을 부르지 않는다(usage 도 없다).
       } else if (useTools) {
@@ -948,6 +976,7 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         if (!t || t.action !== 'type' || t.submit) break
         // 위험 등급이 붙는 입력(카드 필드·결제 페이지 등)은 배치로 흘리지 않고 단일 게이트 경로로 넘긴다.
         if (assessRisk(t, obs, { pageUrl: obs.url }).level !== 'none') break
+        if (abortIfCancelled()) return // 관찰·직전 입력 사이에 취소가 들어왔으면 다음 입력은 내보내지 않는다
         const tl = describeAction(t, obs)
         emit({ type: 'thought', thought: t.thought ?? '', action: t.action })
         emit({ type: 'action', label: tl })
@@ -1016,6 +1045,10 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         const gateP = waitConfirm(reqId) // 대기자를 emit 전에 등록(배치 동기 승인/거부 대비)
         emit({ type: 'confirm', label: gateLabel, risk: risk.level, critical: risk.level === 'critical' })
         const okGate = await gateP
+        // 승인과 취소가 거의 동시에 도착하는 경합. 승인이 먼저 처리돼 리졸버를 깨우더라도, **이미 보내진**
+        // 취소가 처리될 기회를 한 턴 준 뒤 다시 확인한다. 정책: **취소가 이긴다** — 이미 나간 동작은
+        // 되돌리지 않지만, 아직 실행되지 않은 것은 실행하지 않는다. 비용은 위험 동작 1건당 약 1ms.
+        if (okGate) await new Promise((r) => setTimeout(r, 0))
         if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
         if (!okGate) {
           emit({ type: 'result', ok: false, label: gateLabel, detail: '사용자가 거부했습니다.' })
@@ -1024,6 +1057,11 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
           continue
         }
       }
+
+      // ===== 취소 마지막 관문 =====
+      // 관찰·좌표 조사(click_at)·확인 대기 사이에 취소가 도착했을 수 있다. 아래의 모든 동작 핸들러가
+      // 이 관문 뒤에 있으므로, 새 행동이 추가돼도 취소를 지나치는 경로가 생기지 않는다(위험 게이트와 같은 이유로 여기).
+      if (abortIfCancelled()) return
 
       // ===== 중복 게시 방지 =====
       // 발행이 이미 끝났는데 화면이 리셋되면 모델은 "아직 안 됐다"고 보고 발행을 또 누른다 → 같은 글 2회 게시.
@@ -1066,6 +1104,9 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
           recordOutcome += ' ⚠ 다만 게시 완료 신호(완료 안내·글 주소 이동)를 확인하지 못했습니다 — 실제로 올라갔는지 확인해 주세요.'
         }
         const evidence = await captureScreenshot(wc) // 완료 증거 — 최종 화면 스크린샷을 함께 보여준다
+        // 캡처(재시도 포함 수백 ms) 동안 취소가 들어왔으면 '완료'로 끝내지 않는다 — 예전에는 여기서
+        // 늦은 done 이 실행 이력의 상태를 cancelled → done 으로 뒤집었다.
+        if (abortIfCancelled()) return
         emit({ type: 'done', message: recordOutcome, ...(evidence ? { shot: evidence } : {}) })
         return
       }
@@ -1135,6 +1176,7 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         recordOutcome = `보고서 작성 완료: ${title} (노트 ${reportNotes.length}개${saved.ok && saved.path ? `, ${path.basename(saved.path)} 저장` : ''})`
         emit({ type: 'report', title, markdown: md, notes: reportNotes.length, sources: [...seenNoteUrls], ...(saved.ok && saved.path ? { path: saved.path } : {}) })
         const evidence = await captureScreenshot(wc)
+        if (abortIfCancelled()) return
         emit({ type: 'done', message: recordOutcome, ...(evidence ? { shot: evidence } : {}) })
         return
       }
@@ -1265,6 +1307,8 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
           pendingPrefix = '다운로드 대상을 못 찾았습니다. 사진/영상/링크 요소의 ref 나 http(s) url 을 지정하거나, 영상 페이지에서 다시 시도하세요.'
           continue
         }
+        // 대상 해석(resolveMediaSrc/resolveHref) 동안 취소가 들어왔으면 다운로드를 시작하지 않는다.
+        if (abortIfCancelled()) return
         emit({ type: 'action', label: `다운로드(${via}): ${target.slice(0, 70)}` })
         try {
           // 백그라운드로 시작만 하고(완료까지 기다리지 않음) 다음 단계로 — 진행률은 다운로드 패널에서 보인다.
@@ -1432,6 +1476,9 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
         }
       }
 
+      // 페이지를 실제로 바꾸는 마지막 지점. 확인 가드(skipLlm) 경로는 모델을 부르지 않고 여기로 바로 오므로,
+      // 관찰 await 동안 들어온 취소를 잡을 관문이 반드시 여기 필요하다.
+      if (abortIfCancelled()) return
       let result: { ok: boolean; detail: string }
       // 완료 신호 기준선 — **발행성 클릭**(게시·공유·업로드 확정) 직전 화면만. 입력·이동 뒤에도 판정하면 캡션에 들어간
       // 완료 어휘("…공유되었습니다 라고 썼다")가 게시 전에 거짓 완료를 만든다(리뷰 지적). 발행 클릭이 아니면 판정하지 않는다.
@@ -1479,9 +1526,13 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
       }
       pendingPrefix = `이전 행동 결과: ${result.ok ? '성공' : '실패'} — ${result.detail}`
     }
+    // 단계 소진으로 빠져나온 경로에도 관문을 둔다 — 아래에서 스크린샷을 찍고 보고서 파일까지 쓴다.
+    if (abortIfCancelled()) return
     recordOutcome = `${maxSteps}단계까지 진행했지만 작업을 마치지 못했습니다.`
     const wcEnd = getWebContentsByTabId(currentTabId)
     const evidence = wcEnd ? await captureScreenshot(wcEnd) : undefined
+    // 캡처 동안 취소가 들어왔으면 부분 보고서 파일도 쓰지 않는다(취소 후 파일 생성 금지).
+    if (cancelledSet.has(reqId)) { recordOutcome = null; emit({ type: 'cancelled' }); return }
     // 보고서 작업이 report 없이 단계 소진 시, 모은 노트를 버리지 않고 부분 보고서로 저장·전달한다.
     if (reportNotes.length > 0) {
       const host = wcEnd ? (() => { try { return new URL(wcEnd.getURL()).hostname } catch { return '사이트' } })() : '사이트'
@@ -1496,6 +1547,9 @@ export async function runAgentTask(params: AgentTaskParams, emit: Emit): Promise
   } catch (err) {
     emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) })
   } finally {
+    // 이 실행은 끝났다 — 이후 어떤 경로로도 이벤트를 더 내보내지 않는다. 특히 armFileChooser 처럼
+    // 최대 90초 뒤 resolve 되는 플로팅 프로미스가 끝난 실행에 단계를 덧붙이던 것을 여기서 끊는다.
+    terminated = true
     if (cli) { try { cli.close() } catch { /* ignore */ } cli = null }
     activeCall.delete(reqId)
     pendingConfirm.delete(reqId)
@@ -1538,7 +1592,16 @@ function fillTemplate(task: string, row: Record<string, string>): string {
 
 export interface AgentBatchParams { reqId: string; tabId?: string; task: string; rows: Array<Record<string, string>>; autoConfirm?: boolean }
 
-export async function runAgentBatch(params: AgentBatchParams, emit: Emit): Promise<void> {
+export async function runAgentBatch(params: AgentBatchParams, rawEmit: Emit): Promise<void> {
+  // 종료 이벤트는 한 번만 — 예전에는 취소로 루프를 빠져나온 뒤에도 아래의 '대량 처리 완료' done 이
+  // 그대로 나가, 실행 이력의 상태가 cancelled → done 으로 뒤집혔다.
+  let terminated = false
+  const emit: Emit = (evt) => {
+    if (terminated) return
+    const type = String(evt.type)
+    if (type === 'done' || type === 'error' || type === 'cancelled') terminated = true
+    rawEmit(evt)
+  }
   const rows = (params.rows || []).slice(0, MAX_BATCH_ROWS)
   if (!rows.length) { emit({ type: 'error', message: '반복할 데이터 행이 없습니다.' }); return }
   const st: BatchState = { cancelled: false, current: null }
@@ -1572,6 +1635,8 @@ export async function runAgentBatch(params: AgentBatchParams, emit: Emit): Promi
         emit({ ...evt, batchIndex: i })
       })
       st.current = null
+      // 이 행이 취소로 끝났으면 완료로 세지 않고 즉시 중단한다(다음 행으로 넘어가지 않는다).
+      if (st.cancelled) { emit({ type: 'cancelled' }); break }
       completed++
       emit({ type: 'batch-row-done', index: i, total: rows.length, outcome: outcome.slice(0, 200) })
       // 행 사이 간격 — 예전에는 간격이 0이라 분당 수십 건 게시가 가능했고 그대로 스팸 판정·계정 정지로 이어졌다.
@@ -1589,6 +1654,10 @@ export async function runAgentBatch(params: AgentBatchParams, emit: Emit): Promi
   } catch (err) {
     emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) })
   } finally {
+    terminated = true
     batchState.delete(params.reqId)
+    // 배치 reqId 는 runAgentTask 가 쓰지 않는 id 라(하위 작업은 reqId#i) cancelledSet 에서 지워질 곳이 없다.
+    // ipc 의 agentCancel 이 항상 cancelAgentTask(batchId) 도 호출하므로, 여기서 치우지 않으면 Set 이 계속 커진다.
+    cancelledSet.delete(params.reqId)
   }
 }

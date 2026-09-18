@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import './external-features'
 import type {
-  ActionDescriptor, AdblockStats, Bookmark, BookmarkFolder, BookmarkTree, DownloadItem,
+  ActionDescriptor, AdblockStats, AiConnectResult, AiProviderDetection, AiProviderKind, Bookmark, BookmarkFolder, BookmarkTree, DownloadItem,
   ExtensionSummary, HistoryEntry, KeyBinding,
   Macro, MacroSummary, ModSummary,
   PasswordSummary, PerfMilestones, PerfReport, PolicyRule, PolicyRuleSummary, ReadLaterItem, SearchEngine, TopSite,
@@ -284,12 +284,16 @@ const api = {
   ai: {
     config: (): Promise<{
       enabled: boolean
-      provider: 'anthropic' | 'openai' | 'ollama' | 'google'
+      provider: AiProviderKind
       providerLabel: string
       model: string
       hasKey: boolean
       storageAvailable: boolean
     } | null> => ipcRenderer.invoke(IPC.ai.config),
+    detectProviders: (force?: boolean): Promise<AiProviderDetection | null> =>
+      ipcRenderer.invoke(IPC.ai.detectProviders, { force: !!force }),
+    connectProvider: (provider: AiProviderKind, model?: string): Promise<AiConnectResult> =>
+      ipcRenderer.invoke(IPC.ai.connectProvider, { provider, model }),
     keyStatus: (): Promise<{ anthropic: boolean; openai: boolean; google: boolean; storageAvailable: boolean } | null> =>
       ipcRenderer.invoke(IPC.ai.keyStatus),
     diagnose: (): Promise<{

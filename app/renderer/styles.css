@@ -2233,6 +2233,38 @@ body.splitter-dragging .splitter { pointer-events: auto; }
   color: #fff; font-size: var(--text-base); font-weight: 500; padding: 8px 16px; cursor: pointer;
 }
 .ai-setup-btn:hover { background: var(--color-accent-hover); }
+.ai-setup-btn:disabled { opacity: 0.5; cursor: default; }
+.ai-setup-btn.ghost { background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+.ai-setup-btn.ghost:hover:not(:disabled) { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.ai-setup-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+/* 제공자 선택 — 좁은 도크(280px)에 맞춘 세로 카드. 비용을 먼저 보이고, 한 번 눌러 연결한다. */
+.ai-provider-list { display: flex; flex-direction: column; gap: 6px; width: 100%; margin: 6px 0 2px; }
+.ai-provider-card {
+  display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left;
+  padding: 9px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-bg-elevated); color: var(--color-text-primary); cursor: pointer;
+}
+.ai-provider-card:hover:not(:disabled) { border-color: var(--color-accent-primary); background: var(--color-bg-hover); }
+.ai-provider-card:disabled { opacity: 0.6; cursor: default; }
+.ai-provider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ai-provider-name { font-size: var(--text-base); font-weight: 600; }
+.ai-provider-cost { font-size: 9px; padding: 1px 5px; border-radius: 999px; white-space: nowrap; }
+.ai-provider-cost.cost-subscription { background: color-mix(in srgb, #22c55e 18%, transparent); color: #16a34a; }
+.ai-provider-cost.cost-free-local { background: color-mix(in srgb, #3b82f6 18%, transparent); color: #2563eb; }
+.ai-provider-cost.cost-free-tier { background: color-mix(in srgb, #a855f7 18%, transparent); color: #9333ea; }
+.ai-provider-cost.cost-paid-key { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #b45309; }
+.ai-provider-detail { font-size: 10px; color: var(--color-text-secondary); line-height: 1.45; }
+.ai-provider-fix { font-size: 10px; color: var(--color-text-muted); line-height: 1.45; }
+.ai-provider-more { width: 100%; text-align: left; margin-top: 4px; }
+.ai-provider-more summary { font-size: 10px; color: var(--color-text-secondary); cursor: pointer; }
+.ai-provider-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+.ai-setup-error {
+  width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--radius-md);
+  background: color-mix(in srgb, #ef4444 12%, transparent); border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+}
+.ai-setup-error-msg { font-size: 11px; font-weight: 600; color: var(--color-text-primary); }
+.ai-setup-error-fix { font-size: 10px; color: var(--color-text-secondary); margin-top: 3px; line-height: 1.45; }
 
 /* AI 모드 세그먼트 (챗 / 에이전트 / 글쓰기) — 전폭, 각 세그먼트 균등 */
 .ai-mode { display: flex; gap: 3px; background: var(--color-bg-sunken); border-radius: 10px; padding: 3px; }

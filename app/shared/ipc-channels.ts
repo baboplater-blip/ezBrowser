@@ -333,6 +333,8 @@ export const IPC = {
     agentReset: 'ai:agent-reset',
     summarize: 'ai:summarize',
     diagnose: 'ai:diagnose',
+    detectProviders: 'ai:detect-providers',
+    connectProvider: 'ai:connect-provider',
     triggerList: 'ai:trigger-list',
     triggerAdd: 'ai:trigger-add',
     triggerUpdate: 'ai:trigger-update',

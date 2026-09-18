@@ -12,8 +12,12 @@
 //   O  조건 urlFilter(크롬 문법 || | ^ *) · regexFilter · resourceTypes(+excluded)
 //      · initiatorDomains(+excluded) · requestDomains(+excluded) · isUrlFilterCaseSensitive
 //   O  priority + **allow 가 block 을 이긴다**(같은 우선순위에서)
-//   X  동적 룰 API(updateDynamicRules 등) — 확장이 런타임에 룰을 바꾸는 경우는 아직 미지원
-//   X  modifyHeaders — 응답/요청 헤더 변형은 다음 단계
+//   O  동적 룰(updateDynamicRules) — Electron 이 디스크에 써 주는 것을 읽어 병합(임무 39)
+//   O  modifyHeaders — 요청/응답 헤더 변형(임무 37)
+//   O  꺼지거나 지워진 확장의 룰은 **정적·동적·디스크 전부** 즉시 빠진다(2026-09-15)
+//   X  세션 룰(updateSessionRules) — Chromium 이 디스크에 남기지 않아 읽을 방법이 없다
+//   X  확장 DNR 은 세션을 가리지 않는다 — 시크릿 창에서도 차단이 적용된다(크롬은 확장 자체를
+//      시크릿에서 끈다). 데이터가 새는 방향이 아니라 "차단이 더 되는" 쪽이라 그대로 둔다.
 //
 // ⚠ 세션당 webRequest 리스너는 **하나만** 유효하다(회귀 #5 계열). 그래서 이 모듈은 리스너를
 //    직접 걸지 않고 **순수 판정 함수**만 제공하고, adblock 모듈의 단일 리스너가 호출한다.
@@ -85,9 +89,34 @@ function rankOf(a: CompiledRule): number {
   return a.action === 'allow' || a.action === 'allowAllRequests' ? 0 : 1
 }
 
+/**
+ * 지금 **켜져 있고 설치돼 있는** 확장 id. null 이면 아직 모른다(부팅 극초기) → 거르지 않는다.
+ *
+ * 왜 (2026-09-15): `reloadDnrRules(disabled)` 는 **정적 룰만** 다시 만들었다. 동적 룰(확장이
+ * 런타임에 넣은 것)·세션 룰·디스크에서 읽어 온 룰은 아무 필터도 거치지 않아서,
+ * **확장을 꺼도·지워도 그 확장의 동적 룰이 계속 요청을 막았다**. 사용자가 보기엔 "껐는데도
+ * 사이트가 깨지는" 상태이고, 어떤 확장이 막는지 화면 어디에도 안 나온다.
+ * 정적 룰은 파일을 다시 읽으며 자연히 빠졌기 때문에 끄기가 듣는 것처럼 보였다 — 그래서 눈에 띄지 않았다.
+ */
+let activeIds: Set<string> | null = null
+
+function isActive(r: CompiledRule): boolean {
+  return !activeIds || activeIds.has(r.extId)
+}
+
 function rebuildMerged(): void {
   rules = [...staticRules, ...dynamicCompiled, ...sessionCompiled, ...diskCompiled]
+    .filter(isActive)
     .sort((a, b) => (b.priority - a.priority) || (rankOf(a) - rankOf(b)))
+}
+
+/**
+ * 켜져 있는 확장 목록을 알려 준다(설치돼 있고 비활성도 아닌 것).
+ * `reloadDnrRules` 가 스스로 계산해 부르므로 보통은 따로 부를 일이 없다.
+ */
+export function setActiveExtensions(ids: Set<string>): void {
+  activeIds = new Set(ids)
+  rebuildMerged()
 }
 
 function compileList(extId: string, list: RawRule[]): CompiledRule[] {
@@ -215,13 +244,25 @@ function toDnrResourceType(t: string): string {
 export async function reloadDnrRules(disabledIds?: Set<string>): Promise<number> {
   const root = extensionsRoot()
   const next: CompiledRule[] = []
+  const active = new Set<string>()
   let entries: string[] = []
-  try { entries = await readdir(root) } catch { rules = []; return 0 }
+  try {
+    entries = await readdir(root)
+  } catch {
+    // 확장 디렉터리가 통째로 없다 = 켜진 확장이 하나도 없다.
+    // 정적 룰뿐 아니라 동적·디스크 룰도 함께 죽어야 한다(빈 active 집합이 그 일을 한다).
+    staticRules = []
+    setActiveExtensions(active)
+    return 0
+  }
 
   for (const entry of entries) {
     if (disabledIds?.has(entry)) continue
     const manifestPath = path.join(root, entry, 'manifest.json')
     if (!existsSync(manifestPath)) continue
+    // 룰셋이 없는 확장도 "켜져 있는 확장" 으로 세야 한다 — 정적 룰이 없을 뿐,
+    // 런타임에 동적 룰을 넣을 수 있기 때문이다(그것까지 걸러 버리면 X8 이 죽는다).
+    active.add(entry)
     let manifest: { declarative_net_request?: { rule_resources?: Array<{ path?: string; enabled?: boolean }> } }
     try { manifest = JSON.parse(await readFile(manifestPath, 'utf-8')) } catch { continue }
     const resources = manifest.declarative_net_request?.rule_resources
@@ -246,7 +287,9 @@ export async function reloadDnrRules(disabledIds?: Set<string>): Promise<number>
 
   // 우선순위가 높은 것부터. 같은 우선순위면 allow 계열이 먼저 오게 해 block 을 이긴다.
   staticRules = next
-  rebuildMerged()
+  // 켜진 확장 목록도 같이 갱신한다 — 꺼지거나 지워진 확장의 **동적·디스크 룰**을 걷어내는 것이
+  // 여기 말고는 없다(rebuildMerged 는 setActiveExtensions 안에서 한 번만 돈다).
+  setActiveExtensions(active)
   return staticRules.length
 }
 

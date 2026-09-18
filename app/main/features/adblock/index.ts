@@ -366,6 +366,22 @@ export async function initAdblock(): Promise<void> {
     forEachInstalledSession(clearListeners)
   }
 
+  // 훅은 **우리 광고차단의 on/off 와 무관하게 한 번만** 등록한다.
+  // 2026-09-15 검증 중 실측 결함: 예전엔 이 등록이 `settings.enabled` 분기 안(아래, buildBlocker
+  // 성공 이후)에만 있었다 — adblock 이 꺼진 상태(`settings.enabled=false`)면 그 아래 `if (!settings.
+  // enabled) return` 에서 먼저 반환해 버려 **훅이 아예 등록되지 않았다**. 그 결과, 부팅 이후에
+  // 새로 생기는 세션(워크스페이스 등)은 clearListeners 의 "DNR 전용" 리스너조차 못 받아 —
+  // 확장 declarativeNetRequest 가 **그 세션에서만 조용히 무력화**됐다(재현: 워크스페이스 B 를
+  // 만든 뒤 확장을 disable→enable 해도 B 세션에서만 차단이 안 돌아옴). dnr.ts 의 설계 의도
+  // ("확장 DNR 은 세션을 가리지 않는다")가 adblock 이 꺼져 있을 때는 깨져 있었다.
+  // → 훅 자체는 항상 등록하고, 훅의 본문에서 현재 blocker 유무로 분기한다(꺼져 있으면 최소한
+  //   DNR 전용 리스너는 건다).
+  if (!hookRegistered) {
+    hookRegistered = true
+    // 등록 즉시 기존 세션 전부에 적용 + 이후 새로 생성되는 세션에도 자동 적용
+    addSessionInitHook((ses) => { if (blocker) enableOnSession(ses); else clearListeners(ses) })
+  }
+
   const settings = getSetting('adblock')
   if (!settings.enabled) {
     adblockEvents.emit('changed')
@@ -376,15 +392,10 @@ export async function initAdblock(): Promise<void> {
   if (!b) return
   blocker = b
 
-  // 모든 partition 세션(persist:default·워크스페이스 ws-* 포함)에 적용 — 탭은 defaultSession 을 쓰지 않는다.
-  if (!hookRegistered) {
-    hookRegistered = true
-    // 등록 즉시 기존 세션 전부에 적용 + 이후 새로 생성되는 세션에도 자동 적용
-    addSessionInitHook((ses) => { if (blocker) enableOnSession(ses) })
-  } else {
-    // 재초기화(설정 변경) — 기존 세션에 다시 적용
-    forEachInstalledSession(enableOnSession)
-  }
+  // 훅은 위에서 이미 등록됐으므로(최초 호출이든 재초기화든) 여기서는 **이미 설치된** 세션에만
+  // 직접 적용한다(새 세션은 위 훅이 담당) — 모든 partition 세션(persist:default·워크스페이스
+  // ws-* 포함)에 적용, 탭은 defaultSession 을 쓰지 않는다.
+  forEachInstalledSession(enableOnSession)
   console.log(`[adblock] initialized (${settings.level}, filters=${resolveFilterUrls().length}, all sessions)`)
   adblockEvents.emit('changed')
 }

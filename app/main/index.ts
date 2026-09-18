@@ -21,9 +21,11 @@ import {
 } from './features/video-download'
 import {
   createTab, navigateTab, onTabCreated, onTabClosed, onTabNavigated, onTabTitleUpdated,
-  onTabInPageNavigated, getTabPartition,
+  onTabInPageNavigated, onTabActivated, getTabPartition,
 } from './tabs/tab-service'
-import { initExtensions } from './extensions/adapter'
+import {
+  initExtensions, trackExtensionTab, untrackExtensionTab, selectExtensionTab,
+} from './extensions/adapter'
 import { buildAppMenu } from './menu/build-menu'
 import { initBookmarks } from './storage/bookmarks'
 import { initHistory, recordVisit, updateVisitTitle } from './storage/history'
@@ -196,12 +198,16 @@ if (!app.requestSingleInstanceLock()) {
           trackZoom(wc, id)
           wc.once('did-finish-load', () => recordFirstTabLoaded())
         }
+        // 확장에 탭을 알린다 — 등록하지 않으면 chrome.tabs.query 가 늘 빈 배열이다.
+        trackExtensionTab(id)
         dispatchTabCreated({ id, webContentsId })
       })
       onTabClosed((id) => {
         unregisterTabWebContents(id)
+        untrackExtensionTab(id)
         dispatchTabClosed(id)
       })
+      onTabActivated((id) => selectExtensionTab(id))
       // SPA(pushState) 경로 변경 시에도 이전 영상 후보를 비운다 — did-navigate 만으로는 안 불림
       onTabInPageNavigated(({ id }) => clearVideoCandidates(id))
       onTabNavigated(({ id, url, title }) => {

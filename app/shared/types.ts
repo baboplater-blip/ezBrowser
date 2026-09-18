@@ -367,6 +367,28 @@ export interface PerfReport {
   history: PerfMilestones[]
 }
 
+/**
+ * 확장이 **어느 세션에서 실제로 로드됐는지**.
+ *
+ * 왜 필요한가: 우리 탭은 워크스페이스마다 다른 partition(`persist:ws-*`)을 쓰고, 확장은 그
+ * 세션들에 각각 로드된다. 그런데 목록은 `defaultSession` 하나만 보고 "켬/끔"만 말해서,
+ * **어떤 워크스페이스에서는 확장이 전혀 안 뜨는데도 화면에는 정상으로 보였다**.
+ * 설정상 켬(`enabled`)과 실제 로드됨(`loaded`)은 다른 것이므로 따로 싣는다.
+ */
+export interface ExtensionSessionLoad {
+  /** partition 문자열. defaultSession 은 빈 문자열. 사용자에게 그대로 보이면 안 된다(label 을 쓸 것). */
+  partition: string
+  /** 사람이 읽는 이름 — '기본' · '워크스페이스: 업무' · '시크릿'. */
+  label: string
+  kind: 'default' | 'workspace' | 'incognito' | 'other'
+  /** 지금 이 세션에 실제로 올라와 있는가(과거 시도 기록이 아니라 현재 상태를 조회한 값). */
+  loaded: boolean
+  /** 실패 원문(영문 메시지 등) — 화면에는 접어서 보여준다. */
+  error?: string
+  /** 실패를 한국어로 요약한 것 — 화면에 먼저 보여준다. */
+  reason?: string
+}
+
 export interface ExtensionSummary {
   /** 이 확장의 declarativeNetRequest 정적 룰 중 우리가 적용 중인 개수(없으면 0). */
   dnrRules?: number
@@ -374,7 +396,15 @@ export interface ExtensionSummary {
   name: string
   version: string
   description?: string
+  /** 사용자가 켜 둔 상태인가(설정값). 실제 동작 여부는 `loaded` 를 볼 것. */
   enabled: boolean
+  /** 한 곳 이상의 세션에 실제로 로드돼 있는가. */
+  loaded?: boolean
+  /** 세션별 로드 결과(확장이 로드될 수 있는 세션만 — 시크릿은 제외). */
+  sessions?: ExtensionSessionLoad[]
+  /** 로드에 성공한 세션 수 / 전체 세션 수 — 부분 실패를 한눈에. */
+  loadedSessions?: number
+  totalSessions?: number
   hasOptions: boolean
   hasIcon: boolean
   iconDataUrl?: string
@@ -384,3 +414,51 @@ export interface ExtensionSummary {
   source: 'crx' | 'unpacked' | 'webstore'
 }
 
+
+// ── AI 제공자 탐지·연결 ────────────────────────────────────────────────────────
+// 메인(features/ai/detect.ts)·preload·화면(AiTab·설정·환영)이 같은 모양을 본다.
+
+export type AiProviderKind =
+  | 'anthropic' | 'openai' | 'ollama' | 'google' | 'claude-code' | 'codex' | 'gemini-cli'
+
+/** 지금 이 컴퓨터에서 쓸 수 있는가 / 얼마가 드는가 — 사용자에게 그대로 보여주는 판정. */
+export interface AiProviderCandidate {
+  id: AiProviderKind
+  label: string
+  kind: 'cli' | 'local' | 'key'
+  ready: boolean
+  /** subscription=이미 있는 구독 · free-local=내 컴퓨터 · free-tier=무료 티어 · paid-key=종량 과금 */
+  cost: 'subscription' | 'free-local' | 'free-tier' | 'paid-key'
+  detail: string
+  fix?: string
+  models?: string[]
+}
+
+export interface AiProviderDetection {
+  at: number
+  current: AiProviderKind
+  currentReady: boolean
+  candidates: AiProviderCandidate[]
+  error?: string
+}
+
+export interface AiDiagnosisSummary {
+  ok: boolean
+  provider: string
+  providerLabel: string
+  model: string
+  status: string
+  message: string
+  detail?: string
+  fix?: string
+  latencyMs?: number
+  installedModels?: string[]
+}
+
+export interface AiConnectResult {
+  ok: boolean
+  provider?: AiProviderKind
+  providerLabel?: string
+  diagnosis?: AiDiagnosisSummary
+  error?: string
+}

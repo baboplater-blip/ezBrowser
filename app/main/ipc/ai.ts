@@ -9,6 +9,8 @@ import {
   type AiMessage,
 } from '../features/ai'
 import { setAiKey, clearAiKey, type AiSecretProvider } from '../features/ai/keys'
+import { detectProviders, connectProvider } from '../features/ai/detect'
+import type { AiProviderId } from '../features/ai/providers'
 import { runAgentTask, confirmAgentStep, replyAgentAsk, cancelAgentTask, resetAgentSession, runAgentBatch, cancelAgentBatch } from '../features/ai/agent'
 import { startRepeat, stopRepeat, removeRepeat, listRepeats, repeatEvents, type RepeatSummary } from '../features/ai/agent-schedule'
 import { getMemoryText, setMemoryText, clearMemory, memoryEvents } from '../features/ai/memory'
@@ -69,6 +71,24 @@ export function registerAiIpc(): void {
     if (!isTrustedSender(e)) return null
     try { return await diagnoseAi() } catch (err) {
       return { ok: false, status: 'error', message: '점검 중 오류', detail: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // 이 컴퓨터에서 지금 쓸 수 있는 제공자 탐지 — 요금이 드는 호출은 하지 않는다(CLI --version·로컬 tags·키 유무).
+  ipcMain.handle(IPC.ai.detectProviders, async (e, args: { force?: boolean } = {}) => {
+    if (!isTrustedSender(e)) return null
+    try { return await detectProviders({ force: !!args?.force }) } catch (err) {
+      return { at: Date.now(), current: 'anthropic', currentReady: false, candidates: [], error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // 제공자 연결 — 고른 뒤 실제로 한 번 물어봐서 되는지 확인하고, 안 되면 원인·해결책을 그대로 돌려준다.
+  ipcMain.handle(IPC.ai.connectProvider, async (e, args: { provider: AiProviderId; model?: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
+    const allowed: AiProviderId[] = ['anthropic', 'openai', 'google', 'ollama', 'claude-code', 'codex', 'gemini-cli']
+    if (!args || !allowed.includes(args.provider)) return { ok: false, error: '알 수 없는 제공자' }
+    try { return await connectProvider(args.provider, args.model) } catch (err) {
+      return { ok: false, provider: args.provider, error: err instanceof Error ? err.message : String(err) }
     }
   })
 

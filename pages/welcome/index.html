@@ -105,6 +105,11 @@
       .src .p { font-size: 12px; color: var(--muted); margin-top: 2px; }
       .src .tags { font-size: 11px; color: var(--muted); }
       .imp-opts { margin-top: 16px; }
+      .ai-done { background: color-mix(in srgb, #22c55e 14%, transparent); border: 1px solid color-mix(in srgb, #22c55e 40%, transparent);
+        border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; text-align: left; }
+      .ai-err { background: color-mix(in srgb, #ef4444 12%, transparent); border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+        border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.5; text-align: left; margin-bottom: 10px; }
+      .ai-err .f { color: var(--muted); margin-top: 4px; font-size: 11px; }
       .imp-empty { font-size: 13px; color: var(--muted); padding: 22px; text-align: center;
         border: 1px dashed var(--border); border-radius: 10px; }
       .imp-result { font-size: 13px; padding: 12px 14px; border-radius: 10px; margin-top: 14px; line-height: 1.55; }
@@ -131,7 +136,7 @@
       <div class="actions" id="actions"></div>
     </div>
     <script>
-      const TOTAL = 5
+      const TOTAL = 6
       let stepIdx = 0
       let state = {
         searchEngine: 'google',
@@ -149,6 +154,10 @@
         importHistory: true,
         importing: false,
         importResult: null,    // { ok, bookmarks, history, errors } 또는 문자열 에러
+        // AI 연결 — 이 컴퓨터에서 지금 쓸 수 있는 방법을 찾아 한 번에 잇는다.
+        aiDetection: null,     // null = 미로드
+        aiConnecting: null,
+        aiResult: null,        // { ok, label, message, fix }
       }
 
       function api() { return window.internalAPI }
@@ -226,6 +235,71 @@
         return html
       }
 
+      // ── AI 연결 단계 ────────────────────────────────────────────────
+      const AI_COST_LABEL = {
+        subscription: '구독 계정 · 추가 요금 없음',
+        'free-local': '내 컴퓨터 · 무료',
+        'free-tier': '무료 티어',
+        'paid-key': '사용한 만큼 과금',
+      }
+
+      function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+      }
+
+      function renderAi() {
+        if (state.aiResult && state.aiResult.ok) {
+          return '<div class="ai-done">✓ <b>' + esc(state.aiResult.label) + '</b> 에 연결됐습니다. 사이드바의 ✨ 버튼으로 바로 쓸 수 있어요.</div>'
+        }
+        if (state.aiDetection === null) return '<div class="imp-empty">이 컴퓨터에서 쓸 수 있는 AI 를 찾는 중…</div>'
+        const ready = (state.aiDetection.candidates || []).filter((c) => c.ready)
+        let html = ''
+        if (state.aiResult && !state.aiResult.ok) {
+          html += '<div class="ai-err"><b>' + esc(state.aiResult.message) + '</b>'
+            + (state.aiResult.fix ? '<div class="f">' + esc(state.aiResult.fix) + '</div>' : '') + '</div>'
+        }
+        if (ready.length === 0) {
+          html += '<div class="imp-empty">지금 바로 쓸 수 있는 AI 를 찾지 못했어요. 나중에 설정 &gt; AI 에서 연결할 수 있고, 건너뛰어도 브라우저는 그대로 씁니다.</div>'
+          return html
+        }
+        html += '<div class="src-list">'
+        for (const c of ready) {
+          const busy = state.aiConnecting === c.id
+          html += '<div class="src' + (busy ? ' selected' : '') + '" data-ai="' + esc(c.id) + '">'
+            + '<div class="info"><div class="b">' + esc(c.label) + '</div><div class="p">' + esc(busy ? '연결 확인 중…' : c.detail) + '</div></div>'
+            + '<div class="tags">' + esc(AI_COST_LABEL[c.cost] || '') + '</div></div>'
+        }
+        html += '</div>'
+        return html
+      }
+
+      async function loadAiDetection() {
+        try {
+          const a = api()
+          state.aiDetection = a && a.ai && a.ai.detectProviders ? await a.ai.detectProviders(false) : { candidates: [] }
+        } catch (e) { state.aiDetection = { candidates: [] } }
+        if (state.aiDetection === null) state.aiDetection = { candidates: [] }
+        if (stepIdx === 4) renderStep()
+      }
+
+      async function connectAi(id) {
+        if (state.aiConnecting) return
+        state.aiConnecting = id
+        state.aiResult = null
+        renderStep()
+        try {
+          const r = await api().ai.connectProvider(id)
+          state.aiResult = r && r.ok
+            ? { ok: true, label: (r.providerLabel || id) }
+            : { ok: false, message: (r && r.diagnosis && r.diagnosis.message) || (r && r.error) || '연결하지 못했습니다.',
+                fix: r && r.diagnosis ? r.diagnosis.fix : undefined }
+        } catch (e) {
+          state.aiResult = { ok: false, message: (e && e.message) ? e.message : String(e) }
+        }
+        state.aiConnecting = null
+        renderStep()
+      }
+
       async function loadImportSources() {
         try {
           const a = api()
@@ -255,11 +329,16 @@
       }
 
       let importLoadStarted = false
+      let aiLoadStarted = false
       function renderStep() {
         // 가져오기 단계 진입 시 소스 1회 로드
         if (stepIdx === 1 && state.importSources === null && !importLoadStarted) {
           importLoadStarted = true
           void loadImportSources()
+        }
+        if (stepIdx === 4 && state.aiDetection === null && !aiLoadStarted) {
+          aiLoadStarted = true
+          void loadAiDetection()
         }
         const step = document.getElementById('step')
         const actions = document.getElementById('actions')
@@ -297,6 +376,11 @@
             ${toggleRow('quickSearch', '빠른 검색', '텍스트 선택 시 부유 검색 버튼')}
             ${toggleRow('hoverTranslate', '호버 단어 번역', 'Alt 누른 채 단어 위 마우스 → 번역 팝업')}`
         } else if (stepIdx === 4) {
+          step.innerHTML = `
+            <h2>AI 연결</h2>
+            <div class="desc">이 브라우저의 AI 는 <b>내 계정·내 컴퓨터</b>로 돌아갑니다. 지금 쓸 수 있는 방법을 찾아 뒀어요 — 하나를 고르면 실제로 되는지까지 확인합니다. 나중에 해도 됩니다.</div>
+            ${renderAi()}`
+        } else if (stepIdx === 5) {
           step.innerHTML = `
             <h2>핵심 단축키</h2>
             <div class="desc">이 단축키만 외워도 80%는 활용할 수 있습니다. 모든 키는 <code style="background:var(--bg);padding:1px 4px;border-radius:3px;">browser://keymap</code> 에서 재바인딩 가능.</div>
@@ -350,6 +434,9 @@
             state.importResult = null
             renderStep()
           })
+        })
+        document.querySelectorAll('[data-ai]').forEach((el) => {
+          el.addEventListener('click', () => { void connectAi(el.dataset.ai) })
         })
         const runBtn = document.getElementById('runImport')
         if (runBtn) runBtn.addEventListener('click', runImport)

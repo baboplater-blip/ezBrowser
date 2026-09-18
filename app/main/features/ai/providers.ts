@@ -336,6 +336,10 @@ function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
     child.stderr?.on('data', (c: Buffer) => { stderr += c.toString('utf8') })
     child.on('error', (e) => { cleanupFile(); finish(() => handlers.onError(cliErrorMessage(spec, e as NodeJS.ErrnoException, stderr))) })
     child.on('close', (code) => {
+      // 취소·시간초과로 이미 끝난 뒤의 close 는 무시한다. 아래 분기들은 finish() 전에 handlers.onDelta(...)
+      // 를 직접 부르는데, 그것이 finished 검사를 지나쳐 **취소한 뒤에도 델타 한 건이 렌더러로 가던** 경로였다
+      // (cancel() 이 child 를 kill → close 발생 → 킬 전까지 모인 stdout 을 답으로 흘려보냄).
+      if (finished) { cleanupFile(); return }
       if (spec.mode === 'outfile') {
         let msg = ''
         try { msg = readFileSync(outFile, 'utf8') } catch { /* 파일 없음 = 실패 */ }

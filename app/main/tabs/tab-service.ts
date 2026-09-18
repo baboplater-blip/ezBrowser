@@ -18,8 +18,12 @@ type TabHook = (tab: { id: string; webContentsId: number }) => void
 const onTabCreatedHooks: TabHook[] = []
 const onTabClosedHooks: Array<(id: string) => void> = []
 
+const onTabActivatedHooks: Array<(id: string) => void> = []
+
 export function onTabCreated(cb: TabHook): void { onTabCreatedHooks.push(cb) }
 export function onTabClosed(cb: (id: string) => void): void { onTabClosedHooks.push(cb) }
+/** 활성 탭이 바뀔 때 — 확장 시스템의 `chrome.tabs.query({ active: true })` 가 이 신호를 쓴다. */
+export function onTabActivated(cb: (id: string) => void): void { onTabActivatedHooks.push(cb) }
 
 interface TabRecord {
   id: string
@@ -77,8 +81,14 @@ function restoreNavigation(wc: Electron.WebContents, entries: NavigationEntrySna
   try {
     const restorable = entries.map((e) => ({ url: e.url, title: e.title, pageState: e.pageState })) as Electron.NavigationEntry[]
     void wc.navigationHistory.restore({ entries: restorable, index: safeIdx })
-      .catch(() => { void wc.loadURL(fallbackUrl) })
-  } catch {
+      // 폴백은 **조용히** 하면 안 된다 — 이 경로로 떨어지면 URL 만 맞고 스크롤·폼은 사라진다.
+      // (2026-09-15: 잠든 복원 탭을 깨울 때 여기로 떨어지는 것을 이 로그로 확인했다.)
+      .catch((err: unknown) => {
+        console.warn(`[tabs] navigationHistory.restore 실패 → 평문 로드로 폴백(스크롤·폼 유실): ${String(err)}`)
+        void wc.loadURL(fallbackUrl)
+      })
+  } catch (err) {
+    console.warn(`[tabs] navigationHistory.restore 예외 → 평문 로드로 폴백(스크롤·폼 유실): ${String(err)}`)
     void wc.loadURL(fallbackUrl)
   }
 }
@@ -430,8 +440,14 @@ export function createTab(opts: {
     if (opts.restoreHistory && opts.restoreHistory.length > 0) {
       tab.discardedHistory = opts.restoreHistory
       tab.discardedIndex = opts.restoreHistoryIndex
+      // ⚠ 여기서 about:blank 를 **커밋하지 않는다**. 갓 만든 WebContentsView 는 이미 빈 문서라
+      //   메모리상 차이가 없는데, about:blank 를 한 번 커밋해 버리면 나중에 깨울 때
+      //   `navigationHistory.restore()` 가 **성공은 하지만 pageState(스크롤·폼)가 적용되지 않는다**
+      //   (2026-09-15 실측: 복원 실패 로그 없이 scrollY=0·폼 빈 값. Electron 35·42 동일).
+      //   히스토리가 없는 경우에만 예전처럼 비워 둔다.
+    } else {
+      void view.webContents.loadURL('about:blank')
     }
-    void view.webContents.loadURL('about:blank')
   } else if (opts.restoreHistory && opts.restoreHistory.length > 0) {
     // 즉시 로드 대상 복원 탭: 히스토리 재생(뒤로/앞으로 + 스크롤/폼 복원)
     restoreNavigation(view.webContents, opts.restoreHistory, opts.restoreHistoryIndex)
@@ -481,6 +497,7 @@ function activateTabInternal(tab: TabRecord): void {
     reapplyLayout(tab.windowId)
   }
   emitTabList(tab.windowId)
+  for (const cb of onTabActivatedHooks) { try { cb(tab.id) } catch { /* 훅 하나가 활성화를 막지 않도록 */ } }
 }
 
 export function activateTab(tabId: string): void {

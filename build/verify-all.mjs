@@ -97,7 +97,7 @@ function steps(outRoot) {
       id: 'agent-loop', kind: 'harness', modes: ['full'],
       script: 'verify-agent-loop-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'agent-loop', 'agent-loop-results.json'),
-      timeoutMs: 10 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 L1~L9·F1~F3',
+      timeoutMs: 12 * 60000, desc: '에이전트 루프 e2e + 자료폴더 경계 + 취소 경계 L1~L9·F1~F3·CN1~CN8',
     },
     {
       id: 'passkey', kind: 'harness', modes: ['full'],
@@ -128,14 +128,14 @@ function steps(outRoot) {
       id: 'ai-persist', kind: 'harness', modes: ['full'],
       script: 'verify-ai-persist-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'ai-persist', 'ai-persist-results.json'),
-      timeoutMs: 8 * 60000, desc: 'AI 대화·실행이력 재시작 영속화·상한 PS1~PS4',
+      timeoutMs: 10 * 60000, desc: 'AI 대화·실행이력 재시작 영속화·상한·저장 경합·손상 복구 PS1~PS12',
     },
     {
-      // 확장이 **로드만 되는 게 아니라 동작하는지** — DNR 은 현재 알려진 공백(GAP)이다.
+      // 확장이 **로드만 되는 게 아니라 동작하는지**. scripting API 는 현재 알려진 공백(GAP)이다.
       id: 'extension-behavior', kind: 'harness', modes: ['full'],
       script: 'verify-extension-behavior-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'extension-behavior', 'extension-behavior-results.json'),
-      timeoutMs: 8 * 60000, desc: '확장 실동작(차단·주입·저장소·SW) X1~X5',
+      timeoutMs: 8 * 60000, desc: '확장 실동작(차단·주입·헤더·동적룰·저장소·SW) X1~X11',
     },
     {
       id: 'agent-triggers', kind: 'harness', modes: ['full'],
@@ -164,7 +164,15 @@ function steps(outRoot) {
       id: 'settings-welcome', kind: 'harness', modes: ['full'],
       script: 'verify-settings-welcome-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'settings-welcome', 'settings-welcome-results.json'),
-      timeoutMs: 10 * 60000, desc: 'browser://settings·welcome 표시·반영 대조 S1~S5·W1~W3',
+      timeoutMs: 10 * 60000, desc: 'browser://settings·welcome 표시·반영 대조 S1~S5·W1~W5',
+    },
+    {
+      // 제품의 첫인상 경로라 매 라운드 지킨다. 모델을 부르지 않으므로(탐지만) 요금·한도 소모 0 —
+      // 실제 왕복은 `node build/verify-ai-connect-cdp.mjs --live` 로 사람이 따로 확인한다.
+      id: 'ai-connect', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-ai-connect-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'ai-connect', 'results.json'),
+      timeoutMs: 8 * 60000, desc: 'AI 첫 사용이 막다른 길로 끝나지 않는가 C1~C9',
     },
     {
       id: 'settings-deep', kind: 'harness', modes: ['full'],

@@ -58,11 +58,11 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>에이전트 시험</t
 <input id="txt" type="text" placeholder="제목">
 <p id="state">대기</p>
 <script>
-  window.__clicked = false; window.__paid = false; window.__published = false;
-  document.getElementById('ok').onclick = () => { window.__clicked = true; document.getElementById('state').textContent = '눌림' }
-  document.getElementById('neg').onclick = () => { document.getElementById('state').textContent = '완료되지 않았습니다' }
-  document.getElementById('pay').onclick = () => { window.__paid = true; document.getElementById('state').textContent = '결제됨' }
-  document.getElementById('pub').onclick = () => { window.__published = true; document.getElementById('state').textContent = '발행됨' }
+  window.__clicked = false; window.__paid = false; window.__published = false; window.__clickCount = 0;
+  document.getElementById('ok').onclick = () => { window.__clicked = true; window.__clickCount++; document.getElementById('state').textContent = '눌림' }
+  document.getElementById('neg').onclick = () => { window.__clickCount++; document.getElementById('state').textContent = '완료되지 않았습니다' }
+  document.getElementById('pay').onclick = () => { window.__paid = true; window.__clickCount++; document.getElementById('state').textContent = '결제됨' }
+  document.getElementById('pub').onclick = () => { window.__published = true; window.__clickCount++; document.getElementById('state').textContent = '발행됨' }
 </script></body>`
 
 function startPageServer(port) {
@@ -172,7 +172,7 @@ async function main() {
     async function run({ script, reqId, task, onConfirm, onAsk, rows, autoConfirm, readOnly, timeoutMs = 30000 }) {
       llm.setScript(script)
       // 상태 문구도 되돌린다 — 앞 시나리오가 남긴 "눌림" 이 남아 있으면 expect 가드가 "동작 전부터 있던 문구" 로 정확히 거부한다(B1 거짓 실패, 2026-09-13).
-      await evalIn(page, 'window.__clicked = false; window.__paid = false; window.__published = false; (document.getElementById("state") || {}).textContent = "대기"; true')
+      await evalIn(page, 'window.__clicked = false; window.__paid = false; window.__published = false; window.__clickCount = 0; (document.getElementById("state") || {}).textContent = "대기"; true')
       await evalIn(shell, 'window.__ev = []; true')
       const startArgs = { reqId, tabId, task, ...(readOnly ? { readOnly: true } : {}), ...(rows ? { rows, autoConfirm: !!autoConfirm } : {}) }
       await evalIn(shell, `window.browserAPI.ai.agentStart(${JSON.stringify(startArgs)})`, true)
@@ -202,6 +202,64 @@ async function main() {
         typed: await evalIn(page, '(document.getElementById("txt")?.value ?? "")'),
       }
       return { evs, state, types: evs.map((e) => e.type) }
+    }
+
+    /**
+     * 취소 경합(CN 시리즈) 전용 저수준 러너 — run() 과 달리 시나리오가 이벤트를 지켜보며
+     * confirm/cancel/reply 호출 시점을 직접 정한다. 취소 검증은 "그 순간에" 호출해야
+     * 의미가 있어서(예: 확인 대기 중에만 · 승인과 같은 틱에) run() 의 일괄 폴링으로는 안 된다.
+     */
+    async function startControlled({ reqId, task, script, rows, autoConfirm, timeoutMs = 30000 }) {
+      llm.setScript(script)
+      await evalIn(page, 'window.__clicked = false; window.__paid = false; window.__published = false; window.__clickCount = 0; (document.getElementById("state") || {}).textContent = "대기"; true')
+      await evalIn(shell, 'window.__ev = []; true')
+      const startArgs = { reqId, tabId, task, ...(rows ? { rows, autoConfirm: !!autoConfirm } : {}) }
+      await evalIn(shell, `window.browserAPI.ai.agentStart(${JSON.stringify(startArgs)})`, true)
+      const isTerminal = (evs) => evs.some((e) => e.type === 'done' || e.type === 'error' || e.type === 'cancelled')
+      const h = {
+        reqId,
+        async events() { return JSON.parse(await evalIn(shell, 'JSON.stringify(window.__ev)') ?? '[]') },
+        async state() {
+          return {
+            clicked: await evalIn(page, 'window.__clicked === true'),
+            paid: await evalIn(page, 'window.__paid === true'),
+            published: await evalIn(page, 'window.__published === true'),
+            clickCount: await evalIn(page, 'window.__clickCount ?? 0'),
+          }
+        },
+        // predicate(evs) 가 참이 될 때까지 촘촘히(30ms) 폴링 — 타이밍이 중요한 시나리오용(30ms 는
+        // CDP evaluate 왕복(수~수십ms)보다 커서 매 tick 스팸을 피하면서도 충분히 빠르다).
+        async waitUntil(predicate, ms = timeoutMs) {
+          const dl = Date.now() + ms
+          let evs = await h.events()
+          while (Date.now() < dl && !predicate(evs)) { await sleep(30); evs = await h.events() }
+          return evs
+        },
+        async waitTerminal(ms = timeoutMs) { return h.waitUntil(isTerminal, ms) },
+        async cancel() { await evalIn(shell, `window.browserAPI.ai.agentCancel(${JSON.stringify(reqId)})`, true) },
+        async confirm(approved) { await evalIn(shell, `window.browserAPI.ai.agentConfirm(${JSON.stringify(reqId)}, ${!!approved})`, true) },
+        // 승인과 취소를 **같은 동기 실행 턴**에서 연달아 보낸다 — 둘 사이에 await 이 없어야 렌더러가
+        // 두 IPC invoke 를 최대한 가깝게(하나의 JS 틱 안에서) 전송한다. 이게 바로 코드가 다루려는 경합이다.
+        async confirmThenCancel(approved) {
+          await evalIn(shell, `(function(){ window.browserAPI.ai.agentConfirm(${JSON.stringify(reqId)}, ${!!approved}); window.browserAPI.ai.agentCancel(${JSON.stringify(reqId)}); })()`)
+        },
+        async reply(text) { await evalIn(shell, `window.browserAPI.ai.agentReply(${JSON.stringify(reqId)}, ${JSON.stringify(text)})`, true) },
+        async runStatus() {
+          const r = await evalIn(shell, `window.browserAPI.ai.runGet(${JSON.stringify(reqId)})`, true)
+          return r ? JSON.parse(JSON.stringify(r)) : null
+        },
+      }
+      return h
+    }
+    /** userData/ai-agent-runs.json 을 직접 읽어 그 reqId 의 status 를 돌려준다(저장소 계층 확인용). */
+    function diskRunStatus(reqId) {
+      const p = path.join(profileDir, 'ai-agent-runs.json')
+      if (!fs.existsSync(p)) return { found: false, status: null, raw: '(파일 없음)' }
+      let obj
+      try { obj = JSON.parse(fs.readFileSync(p, 'utf8')) } catch (e) { return { found: false, status: null, raw: `파싱 실패: ${e.message}` } }
+      const runs = Array.isArray(obj?.runs) ? obj.runs : []
+      const run = runs.find((r) => r.id === reqId)
+      return { found: !!run, status: run?.status ?? null, stepCount: run?.steps?.length ?? 0, raw: run ? JSON.stringify(run).slice(0, 300) : '(없음)' }
     }
 
     // 라벨을 못 찾으면 **관찰 원문을 남긴다** — 조용히 done 으로 끝나면 원인을 알 수 없다.
@@ -580,6 +638,193 @@ async function main() {
       check('B8', 'urlChanged 가드: 이동 작업이 1호출로 끝난다',
         llm.count === 1 && String(doneEv3?.message ?? '').startsWith('이동했습니다'),
         `LLM 호출=${llm.count}(1 이어야) · done="${String(doneEv3?.message ?? '').slice(0, 60)}"`)
+    }
+
+    // ===== CN: 취소 계약 — "되돌리기" 가 아니라 "이 시점 이후로는 아무 것도 더 하지 않는다" =====
+    // (2026-09-15) app/main/features/ai/agent.ts·providers.ts 의 취소 경계 fix 검증.
+
+    // ---- CN1: 모델이 생성 중일 때 취소 — 이후 어떤 동작도 나가지 않는다 ----
+    {
+      const h = await startControlled({
+        reqId: 'CN1', task: '확인 버튼을 눌러라',
+        script: [{ mode: 'slow', chunks: ['일', '부', '응답'], delayMs: 700 }, clickByLabel('확인'), doneStep],
+      })
+      await sleep(350) // 첫 조각은 보냈지만 스트림은 아직 안 끝난 시점(전체 스트림은 ~2.1초)
+      const callsAtCancel = llm.count
+      await h.cancel()
+      const evs = await h.waitTerminal(15000)
+      const st = await h.state()
+      const types = evs.map((e) => e.type)
+      check('CN1', '생성 중 취소 — 스트림이 끊기고 어떤 동작도 실행되지 않는다',
+        types[types.length - 1] === 'cancelled' && !types.includes('done') && !types.includes('action') && !types.includes('result')
+        && st.clicked === false && st.clickCount === 0 && callsAtCancel === 1,
+        `취소 시점 LLM 요청=${callsAtCancel}회 · 클릭=${st.clicked}(false 여야) · 이벤트 ${types.join('>')}`)
+    }
+
+    // ---- CN2 / CN2b: 확인 게이트 대기 중 취소(응답 안 보냄) — 실행되지 않고, 뒤늦은 승인도 무시된다 ----
+    {
+      const h = await startControlled({ reqId: 'CN2', task: '결제하기를 눌러라', script: [clickByLabel('결제하기'), doneStep] })
+      await h.waitUntil((evs) => evs.some((e) => e.type === 'confirm'), 10000)
+      await h.cancel() // 확인에 응답하지 않고 바로 취소
+      const evs = await h.waitTerminal(15000)
+      const types = evs.map((e) => e.type)
+      const deniedResult = evs.find((e) => e.type === 'result' && /거부했습니다/.test(String(e.detail ?? '')))
+      const stAfterCancel = await h.state()
+      check('CN2', '확인 대기 중 취소 — 실행되지 않고 "거부" 결과가 아니라 취소로 끝난다',
+        types[types.length - 1] === 'cancelled' && !types.includes('done') && !deniedResult && stAfterCancel.paid === false,
+        `결제실행=${stAfterCancel.paid}(false 여야) · "거부"결과이벤트=${!!deniedResult}(없어야— cancelledSet 검사가 !okGate 분기보다 먼저여야 함) · 이벤트 ${types.join('>')}`)
+
+      // CN2b: 취소가 이미 처리된 뒤 뒤늦게 도착한 승인(true) — 무시된다
+      const countBefore = evs.length
+      await h.confirm(true) // 이미 취소된 reqId 에 뒤늦은 승인
+      await sleep(1000)
+      const evsAfter = await h.events()
+      const stFinal = await h.state()
+      check('CN2b', '취소된 실행에 뒤늦게 온 승인은 무시된다(실행되지 않고 새 이벤트도 없다)',
+        stFinal.paid === false && evsAfter.length === countBefore,
+        `결제실행=${stFinal.paid}(false 여야) · 이벤트 수 ${countBefore}→${evsAfter.length}(같아야)`)
+    }
+
+    // ---- CN3: 첫 동작이 나간 직후(실행 중) 취소 — 다음 동작은 나가지 않는다 ----
+    {
+      const h = await startControlled({
+        reqId: 'CN3', task: '확인 버튼을 누르고 그다음 부정 버튼을 눌러라',
+        script: [clickByLabel('확인'), clickByLabel('부정'), doneStep],
+      })
+      // 첫 'action' 이 보이는 즉시(30ms 폴링) 취소 — executeInPageAction/settleAfterAction 진행 중일 가능성이 높다.
+      await h.waitUntil((evs) => evs.some((e) => e.type === 'action'), 10000)
+      await h.cancel()
+      const evs = await h.waitTerminal(15000)
+      const st = await h.state()
+      const types = evs.map((e) => e.type)
+      const secondActionRan = st.clickCount >= 2 // 2건이면 '부정' 까지 눌렸다는 뜻(허용 안 됨)
+      check('CN3', '동작 실행 중 취소 — 그다음 동작은 나가지 않는다(action1 은 이미 나갔을 수 있어 되돌렸다 주장하지 않음)',
+        types[types.length - 1] === 'cancelled' && !types.includes('done') && !secondActionRan,
+        `클릭횟수=${st.clickCount}(2 미만이어야 — '부정' 까지 눌리면 실패) · 이벤트 ${types.join('>')}`)
+    }
+
+    // ---- CN4: 승인과 취소가 같은 틱에 도착 — 취소가 이긴다(5회 반복해 재현성 확인) ----
+    {
+      const N = 5
+      let winCount = 0
+      const detailLines = []
+      for (let i = 0; i < N; i++) {
+        const reqId = `CN4-${i}`
+        const h = await startControlled({ reqId, task: '결제하기를 눌러라', script: [clickByLabel('결제하기'), doneStep] })
+        await h.waitUntil((evs) => evs.some((e) => e.type === 'confirm'), 10000)
+        await h.confirmThenCancel(true) // 같은 JS 틱에서 승인 뒤 곧바로 취소
+        const evs = await h.waitTerminal(15000)
+        const st = await h.state()
+        const types = evs.map((e) => e.type)
+        const ok = types[types.length - 1] === 'cancelled' && !types.includes('done') && st.paid === false
+        if (ok) winCount++
+        detailLines.push(`#${i}:paid=${st.paid},끝=${types[types.length - 1]}`)
+      }
+      check('CN4', `승인+취소 경합(같은 틱) — 취소가 이겨 결제가 실행되지 않는다 (${N}회 중 ${winCount}회)`,
+        winCount === N,
+        `${N}회 중 ${winCount}회 취소 승리 · ${detailLines.join(' ')}`)
+    }
+
+    // ---- CN5: 취소 뒤에는 새 이벤트가 더 안 나오고, 디스크에 저장된 상태도 cancelled 로 남는다 ----
+    {
+      const h = await startControlled({ reqId: 'CN5', task: '결제하기를 눌러라', script: [clickByLabel('결제하기'), doneStep] })
+      await h.waitUntil((evs) => evs.some((e) => e.type === 'confirm'), 10000)
+      await h.cancel()
+      await h.waitTerminal(15000)
+      const countAtCancel = (await h.events()).length
+      // json-store 디바운스(400ms) + 상한(2000ms) 을 넉넉히 넘겨 기다린다.
+      await sleep(3000)
+      const countLater = (await h.events()).length
+      const memStatus = await h.runStatus()
+      const disk = diskRunStatus('CN5')
+      check('CN5', '취소 뒤 3초가 지나도 새 이벤트가 없고, 메모리·디스크 상태 모두 cancelled 로 남는다',
+        countLater === countAtCancel && memStatus?.status === 'cancelled' && disk.found && disk.status === 'cancelled',
+        `이벤트 수 ${countAtCancel}→${countLater}(같아야) · 메모리상태=${memStatus?.status} · 디스크상태=${disk.status}(찾음=${disk.found}) · 디스크원문=${disk.raw.slice(0, 120)}`)
+    }
+
+    // ---- CN5b (탐색적, 정밀 재현 불가 인정): 스텝 소진 시 스크린샷 캡처 도중 취소 ----
+    // 캡처는 수십~수백 ms 밖에 안 걸려 외부 IPC 로 그 창을 정확히 맞히는 것은 운에 가깝다.
+    // 그래서 PASS/FAIL 로 게이트하지 않고 몇 회 시도한 결과(적중률)만 참고로 남긴다.
+    {
+      await evalIn(shell, `window.browserAPI.settings.set('ai.agentMaxSteps', 2)`, true)
+      await sleep(300)
+      const forever = { reply: () => JSON.stringify({ action: 'scroll', dy: 50, thought: '계속' }) }
+      let hits = 0
+      const tries = 6
+      const lines = []
+      for (let i = 0; i < tries; i++) {
+        const reqId = `CN5b-${i}`
+        const h = await startControlled({ reqId, task: '끝없이 스크롤해라', script: [forever, forever, forever], timeoutMs: 20000 })
+        // **마지막(2번째) 동작**(step=maxSteps=2 의 'action')이 보이는 즉시 취소 — 이 동작의 settleAfterAction
+        // 과 소진 경로의 스크린샷 캡처 사이 어딘가를 노린다(2번째 observe 시점에 쏘면 아직 LLM 호출도 전이라
+        // 너무 이르다 — 그건 그냥 다음 스텝 진입 전 관문에 걸릴 뿐 이 특정 경합을 시험하지 못한다).
+        await h.waitUntil((evs) => evs.filter((e) => e.type === 'action').length >= 2, 12000)
+        await h.cancel()
+        const evs = await h.waitTerminal(12000)
+        const types = evs.map((e) => e.type)
+        const landed = types[types.length - 1] === 'cancelled'
+        if (landed) hits++
+        lines.push(`#${i}:${types[types.length - 1]}`)
+      }
+      console.log(`  ℹ CN5b(탐색적, 미게이트) — 소진-중-취소 경합(마지막 동작 직후 발사) 적중 ${hits}/${tries}: ${lines.join(' ')}`)
+      await evalIn(shell, `window.browserAPI.settings.set('ai.agentMaxSteps', 8)`, true)
+      await sleep(300)
+    }
+
+    // ---- CN6: ask 대기 중 취소 — 질문이 취소되고, 뒤늦은 답변도 무시된다 ----
+    {
+      const h = await startControlled({
+        reqId: 'CN6', task: '무엇을 누를지 물어봐라',
+        script: [{ reply: () => JSON.stringify({ action: 'ask', question: '어느 버튼을 누를까요?' }) }, clickByLabel('확인'), doneStep],
+      })
+      await h.waitUntil((evs) => evs.some((e) => e.type === 'ask'), 10000)
+      const callsAtAsk = llm.count
+      await h.cancel() // 답하지 않고 바로 취소
+      const evs = await h.waitTerminal(15000)
+      const countAtCancel = evs.length
+      await h.reply('확인 버튼') // 뒤늦은 답변
+      await sleep(1000)
+      const evsAfter = await h.events()
+      const st = await h.state()
+      const types = evs.map((e) => e.type)
+      check('CN6', 'ask 대기 중 취소되면 질문이 무효화되고, 뒤늦은 답변도 무시된다(추가 호출·클릭 없음)',
+        types[types.length - 1] === 'cancelled' && !evs.some((e) => e.type === 'answer')
+        && evsAfter.length === countAtCancel && llm.count === callsAtAsk && st.clicked === false,
+        `취소 전 이벤트 ${types.join('>')} · 답변 후 이벤트 수 ${countAtCancel}→${evsAfter.length}(같아야)`
+        + ` · LLM 호출 ${callsAtAsk}→${llm.count}(같아야) · 클릭=${st.clicked}(false 여야)`)
+    }
+
+    // ---- CN7: 양성 대조 — 취소가 다음 실행을 오염시키지 않는다 ----
+    {
+      // CN1~CN6 이 모두 취소로 끝난 직후, 완전히 새 reqId 로 평범한 실행을 시작한다.
+      const h = await startControlled({ reqId: 'CN7', task: '확인 버튼을 눌러라', script: [clickByLabel('확인'), doneStep] })
+      const evs = await h.waitTerminal(15000)
+      const st = await h.state()
+      const types = evs.map((e) => e.type)
+      const memStatus = await h.runStatus()
+      check('CN7', '양성 대조: 앞선 취소들 뒤에도 새 실행은 정상 완료된다(오염 없음)',
+        st.clicked === true && types.includes('done') && !types.includes('cancelled') && memStatus?.status === 'done',
+        `클릭=${st.clicked}(true 여야) · 이벤트 ${types.join('>')} · 저장상태=${memStatus?.status}(done 이어야)`)
+    }
+
+    // ---- CN8: 배치 — 첫 행이 취소되면 완료로 안 세고, 다음 행으로 안 넘어가고, 최종 done 도 없다 ----
+    {
+      const h = await startControlled({
+        reqId: 'CN8', task: '확인 버튼을 눌러라',
+        script: [{ mode: 'slow', chunks: ['일', '부'], delayMs: 700 }, clickByLabel('확인'), doneStep],
+        rows: [{ 행: '1' }, { 행: '2' }], autoConfirm: true,
+      })
+      await sleep(350) // 1행의 첫 생성이 아직 스트리밍 중인 시점
+      await h.cancel() // agentCancel(배치 reqId) — cancelAgentBatch 가 현재 하위 실행도 취소한다
+      const evs = await h.waitTerminal(20000)
+      const st = await h.state()
+      const types = evs.map((e) => e.type)
+      const row0Done = evs.some((e) => e.type === 'batch-row-done')
+      const row1Started = evs.some((e) => e.type === 'batch-row' && e.index === 1)
+      const finalDone = types.includes('done')
+      check('CN8', '배치: 취소된 행은 완료로 안 세고, 2행으로 안 넘어가고, 최종 done 도 나가지 않는다',
+        types[types.length - 1] === 'cancelled' && !row0Done && !row1Started && !finalDone && st.clickCount === 0,
+        `이벤트 ${types.join('>')} · 1행완료이벤트=${row0Done}(없어야) · 2행시작=${row1Started}(없어야) · 최종done=${finalDone}(없어야) · 클릭수=${st.clickCount}(0이어야)`)
     }
 
     try { page.close() } catch { /* ignore */ }

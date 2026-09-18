@@ -473,11 +473,31 @@ async function phase1(args, probe) {
         id: group.id, title: group.title, color: group.color,
         memberUrls: tabsExpected.filter((t) => t.groupId === group.id).map((t) => t.url).sort(),
       },
-      split: {
-        split: layoutEvent.split, splitRatio: layoutEvent.splitRatio, activePaneIdx: layoutEvent.activePaneIdx,
-        pane0Url: idToUrl.get(pane0TabId) ?? null,
-        pane1Url: idToUrl.get(pane1TabId) ?? null,
-      },
+      // ⚠ pane 의 탭은 **스냅샷에서** 읽는다 — 복원이 실제로 쓰는 바로 그 값이다.
+      //
+      // 2026-09-15 수정: 예전에는 분할 직후의 `layoutChanged` 이벤트(pane0TabId)를 그대로 기대값으로
+      // 썼다. 그런데 그 뒤 T7 을 **전면(foreground)으로** 만들면 `createTab` 이 활성 pane 의 탭을
+      // 교체한다(설계된 동작). 즉 kill 시점의 pane0 은 /scroll 이 아니라 plain?n=7 인데, 기대값만
+      // 옛날 그대로여서 "pane0 콘텐츠 타깃 없음" 으로 **제품과 무관하게** 실패했다.
+      // (같은 실패가 Electron 35.7.5·42.11.3 양쪽에서 동일하게 재현돼 엔진 무관임을 확인했다.)
+      split: (() => {
+        const snapLayout = (flushedWin.layouts ?? [])[0] ?? null
+        const idxToUrl = new Map((flushedWin.tabs ?? []).map((t) => [t.index, t.url]))
+        const paneUrl = (i) => {
+          const ti = snapLayout?.panes?.[i]?.tabIndex
+          return (typeof ti === 'number' ? idxToUrl.get(ti) : null) ?? null
+        }
+        const s = {
+          split: snapLayout?.split ?? layoutEvent.split,
+          splitRatio: snapLayout?.splitRatio ?? layoutEvent.splitRatio,
+          activePaneIdx: snapLayout?.activePaneIdx ?? layoutEvent.activePaneIdx,
+          pane0Url: paneUrl(0), pane1Url: paneUrl(1),
+        }
+        console.log(`[phase1] 스냅샷 layout 에서 읽은 pane: ${JSON.stringify(s)}`
+          + ` (분할 직후 이벤트의 pane0=${idToUrl.get(pane0TabId) ?? '(모름)'},`
+          + ` pane1=${idToUrl.get(pane1TabId) ?? '(모름)'} — 이후 전면 탭 생성으로 바뀔 수 있다)`)
+        return s
+      })(),
       scrollUrl: probe.scrollUrl,
       scrollY: expectedScrollY,
       inputValue: expectedInputValue,
@@ -599,7 +619,21 @@ async function phase2(args, probe, setup) {
     }
 
     // 스크롤 위치 검증
+    //
+    // 2026-09-15 수정: 복원은 **활성 탭 + 핀 + 마지막 5개**만 즉시 로드하고 나머지는 잠재운다
+    // (가벼움 예산). 이 시나리오의 /scroll 탭은 index 1 이라 잠든 채로 복원되며 — 잠든 탭은
+    // about:blank 이므로 CDP 에 그 URL 의 타깃이 **아예 없다**. 예전 코드는 그 타깃을 20초 기다리다
+    // 타임아웃으로 실패했다(제품이 아니라 검사의 문제 — 엔진 35·42 양쪽에서 동일 재현).
+    //
+    // 사용자가 그 탭을 실제로 보는 유일한 경로는 **깨우는 것**이다. 그래서 깨운 뒤에 잰다.
+    // 이건 기준 완화가 아니다 — 깨웠는데 스크롤·폼이 안 돌아오면 그대로 FAIL 이고,
+    // 오히려 잠든 탭의 내비게이션 히스토리 재생(undiscardTab)까지 함께 검증된다.
     try {
+      const sleeping = tabsActual.find((t) => t.url === expected.scrollUrl && t.discarded)
+      if (sleeping) {
+        console.log(`[phase2] /scroll 탭이 잠들어 있음(index=${sleeping.index}) → 활성화해서 깨운다`)
+        await callApi(chromeSession, 'tabs.activate', [sleeping.id])
+      }
       const scrollTarget = await waitForTargetByUrlPredicate(args.port, (u) => u.startsWith(expected.scrollUrl), 'scroll 콘텐츠 타깃(복원)', 20000)
       const scrollSession = await connectSession(scrollTarget, 'content:scroll-p2')
       openSessions.push(scrollSession)
