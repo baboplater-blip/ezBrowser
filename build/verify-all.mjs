@@ -125,6 +125,30 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '피드 수집·중복 제거·키워드 필터 + 양성대조 C1~C4',
     },
     {
+      // 영속 작업 런타임 — 단계 소진이 성공으로 기록되지 않는가, 일시정지가 부작용을 멈추는가,
+      // 강제종료 후 이어갈 수 있는가. 강제종료·재기동을 포함하므로 앱을 여러 번 띄운다.
+      id: 'task-runtime', kind: 'harness', modes: ['full'],
+      script: 'verify-task-runtime-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'task-runtime', 'task-runtime-results.json'),
+      timeoutMs: 16 * 60000, desc: '영속 작업: 구간 분할·일시정지·이어가기·복원·예산·중복쓰기 T1~T15',
+    },
+    {
+      // 작업 UI 가 화면에서 실제로 동작하는가. IPC 로는 통과하지만 화면에선 버튼이 없거나 전환이 안 되는
+      // 결함이 그 사이에 숨는다(기능 하네스 32종이 전부 초록인 채 제품이 못 쓸 상태였던 전례).
+      id: 'task-ui', kind: 'harness', modes: ['full'],
+      script: 'verify-task-ui-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'task-ui', 'task-ui-results.json'),
+      timeoutMs: 12 * 60000, desc: '작업 UI DOM 대조: 카드·일시정지/재개·미완료 표시·승인 흐름 UI1~UI9',
+    },
+    {
+      // 범용 조작 — 사이트별 스크립트에 의존하지 않는 조작(iframe·shadow DOM·SPA 재렌더·업로드).
+      // cross-origin iframe 은 브라우저 구조 제약일 수 있어 GAP 으로 세고 실패로 보지 않는다.
+      id: 'universal-ops', kind: 'harness', modes: ['full'],
+      script: 'verify-universal-ops-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'universal-ops', 'universal-ops-results.json'),
+      timeoutMs: 12 * 60000, desc: '범용 조작: iframe·shadow DOM·stale ref 거부·업로드 3경로 U1~U10',
+    },
+    {
       id: 'ai-persist', kind: 'harness', modes: ['full'],
       script: 'verify-ai-persist-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'ai-persist', 'ai-persist-results.json'),

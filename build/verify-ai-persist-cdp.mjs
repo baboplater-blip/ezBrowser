@@ -244,11 +244,20 @@ async function main() {
     // PS4 — 재시작 **전에 실제로 running 이었는지**를 먼저 확인한다. 그러지 않으면
     // "running 이 하나도 없었으니 당연히 없다" 를 통과로 세는 빈 검사가 된다(2026-09-15 이전이 그랬다).
     const runB = (after.runs ?? []).find((r) => String(r.task).includes('작업 B'))
-    check('PS4', "재시작하면 'running' 잔여가 'cancelled' 로 정리된다",
-      runningBefore > 0 && runB?.status === 'cancelled'
-        && (after.runs ?? []).every((r) => r.status !== 'running'),
-      `종료 전 running ${runningBefore}건(0 이면 빈 검사) · B 작업 상태=${runB?.status}`
-      + ` · 재시작 후 전체 상태: ${(after.runs ?? []).map((r) => r.status).join(', ') || '(없음)'}`)
+    // 기대 상태 변경 (2026-09-18, 팀장): `cancelled` → **`interrupted`**.
+    //   예전에는 재시작 시 남은 'running' 을 'cancelled' 로 뭉갰다. 그러면 **사용자가 직접 중단한 것**과
+    //   **크래시로 끊긴 것**이 화면에서 같아 보이고, 후자는 이어갈 수 있는데 그 사실이 사라진다.
+    //   이번 라운드에 'interrupted'(이어가기 가능) 를 신설해 둘을 구분했다 — 이 검사는 옛 동작을
+    //   기대하고 있었으므로 고쳐진 제품을 실패로 잡았다.
+    //   느슨해지지 않도록 조건을 **추가**한다: ① 'running' 잔여가 하나도 없어야 한다(원래 계약)
+    //   ② 사용자가 중단하지 않았으므로 'cancelled' 로 오분류돼서도 안 된다.
+    check('PS4', "재시작하면 'running' 잔여가 'interrupted'(이어가기 가능)로 정리되고, 사용자 중단과 혼동되지 않는다",
+      runningBefore > 0 && runB?.status === 'interrupted'
+        && (after.runs ?? []).every((r) => r.status !== 'running')
+        && (after.runs ?? []).every((r) => r.status !== 'cancelled'),
+      `종료 전 running ${runningBefore}건(0 이면 빈 검사) · B 작업 상태=${runB?.status}(interrupted 여야)`
+      + ` · 재시작 후 전체 상태: ${(after.runs ?? []).map((r) => r.status).join(', ') || '(없음)'}`
+      + ` (running 잔여 0 · cancelled 오분류 0 이어야)`)
 
     // ===== PS3: 상한 =====
     {

@@ -28,6 +28,14 @@ export interface PageObservation {
   progress?: string
   // 반복 구조(목록) 감지 — extract 의 rowSelector 후보 + 첫 항목 안의 필드(하위 선택자) 후보
   listHint?: { rowSelector: string; count: number; fields?: Array<{ sel: string; sample: string; attr?: string }> }
+  // 과제2 U1 — 존재는 보이지만 안을 볼 수 없는 프레임(대개 cross-origin, same-origin 정책은 페이지 JS 로
+  // 우회 불가한 구조적 한계). 값이 있으면 "이 화면엔 접근 못 하는 영역이 있다"는 사실을 모델이 알 수 있다.
+  crossOriginFrames?: string[]
+  // 관찰 세대(epoch) — 이 관찰에서 나온 ref 번호들은 이 토큰과 짝일 때만 유효하다는 표. 실행 함수에
+  // epoch 를 함께 넘기면, 그 사이 재관찰(다른 탭에 갔다 오거나 SPA 재렌더 후 다시 observePage)이 있었는지
+  // pick() 이 검증한다 — 옛 번호로 "지금 화면의 다른 요소"를 집는 사고를 막는다(과제1). 탭 id 를 섞어
+  // 탭이 달라도 절대 같은 토큰이 나오지 않는다(같은 이유로 다른 탭의 ref 는 애초에 먹히지 않는다).
+  epoch: string
 }
 
 export interface AgentAction {
@@ -72,9 +80,26 @@ const REF_KEY = '__' + Math.random().toString(36).slice(2, 10)
 // 집기 — 번호로 요소를 꺼내되, 그 사이 화면이 바뀌었는지 검증한다.
 // 가상 스크롤(피드)은 DOM 노드를 재활용하므로, 관찰 때 본 이름과 지금 이름이 다르면 다른 항목이 된 것이다.
 // 그대로 클릭하면 엉뚱한 게시물에 좋아요·신고를 누르게 되므로 null 을 돌려 재관찰을 유도한다.
-const PICK_FN = `function pick(r){var A=window['${REF_KEY}'];if(!A)return null;var it=A[r];if(!it||!it.e)return null;var el=it.e;`
+// 두 번째 인자 epoch(과제1) — 넘기면 지금 레지스트리의 세대와 일치하는지, 요소가 속한 문서(프레임)가
+// 관찰 당시와 같은 페이지인지까지 검증한다. 실패 사유는 pick.reason 에 남겨(함수 객체 프로퍼티 — 같은
+// executeJavaScript 안에서 pick() 직후 동기적으로 읽으면 항상 그 호출의 결과다) 호출부가 사람이 읽을
+// 메시지를 만들 수 있게 한다. epoch 를 안 넘기면(하위호환) 세대·프레임 검사를 생략하고 예전과 동일하게 동작한다.
+const PICK_FN = `function pick(r,epoch){pick.reason='';var A=window['${REF_KEY}'];if(!A){pick.reason='stale';return null;}`
+  // 관찰 세대(epoch) 불일치 — 탭을 전환했다 돌아오거나 SPA 재렌더 후 다시 observePage 를 부르면 레지스트리가
+  // 통째로 새로 만들어지며 __epoch 도 바뀐다(observePage 참고). 옛 번호를 그대로 쓰면 지금 화면에서 그 자리에
+  // 나타난 "다른" 요소를 집게 되므로, 넘어온 epoch 가 지금 것과 다르면 즉시 거부한다.
+  + `if(epoch!=null&&A.__epoch!==epoch){pick.reason='epoch';return null;}`
+  + `var it=A[r];if(!it||!it.e){pick.reason='stale';return null;}var el=it.e;`
+  // 프레임 검사 — 요소가 속한 문서(top 또는 same-origin iframe)의 현재 URL 이 관찰 당시 기록한 것과
+  // 다르면 거부한다. iframe 이 새 페이지로 넘어간 뒤 같은 슬롯에 생긴 다른 요소(예: 결제 iframe 이 다음
+  // 단계로 넘어간 뒤 남은 참조로 그 화면의 버튼을 누르는 사고)를 막는다. cross-origin 프레임은 관찰
+  // 단계에서부터 수집되지 않으므로(같은 파일의 collect() 주석 참고) 여기서 SecurityError 가 날 일은
+  // 없지만, 어떤 이유로든 접근이 막히면 통과시킨다(과잉 차단보다 재관찰 유도가 먼저인 다른 검사들과 달리,
+  // 이 값을 못 읽는 것 자체는 화면이 바뀌었다는 증거가 아니다). epoch 검사와 마찬가지로 epoch 를 넘긴
+  // 호출자에게만 적용한다 — 아직 epoch 를 안 넘기는 호출자(agent.ts 배선 전)의 기존 동작을 그대로 보존.
+  + `try{if(epoch!=null&&it.f){var fw=(el.ownerDocument&&el.ownerDocument.defaultView)||null;var curF=fw?((fw.location&&fw.location.href)||''):'';if(curF&&curF!==it.f){pick.reason='frame';return null;}}}catch(e){}`
   // React 재렌더로 관찰 때 요소가 DOM 에서 떨어지면(인스타 사이드바 "새로운 게시물" — 실사이트 2회 재현) 같은 이름의 요소를 다시 찾는다.
-  + `try{if(!el.isConnected){var Q='a[href],button,input,select,textarea,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[contenteditable=true],[onclick],[tabindex]';var cand=document.querySelectorAll(Q);var found=null;for(var qi=0;qi<cand.length&&!found;qi++){var ce=cand[qi];var cn='';try{cn=(ce.getAttribute('aria-label')||ce.getAttribute('placeholder')||ce.innerText||ce.textContent||'').replace(/\\s+/g,' ').trim();}catch(e){}if(cn&&it.n&&(cn===it.n||cn.indexOf(it.n)===0)){var cr=ce.getBoundingClientRect();if(cr.width>0&&cr.height>0)found=ce;}}if(!found)return null;el=found;it.e=found;}}catch(e){}`
+  + `try{if(!el.isConnected){var Q='a[href],button,input,select,textarea,[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[contenteditable=true],[onclick],[tabindex]';var cand=document.querySelectorAll(Q);var found=null;for(var qi=0;qi<cand.length&&!found;qi++){var ce=cand[qi];var cn='';try{cn=(ce.getAttribute('aria-label')||ce.getAttribute('placeholder')||ce.innerText||ce.textContent||'').replace(/\\s+/g,' ').trim();}catch(e){}if(cn&&it.n&&(cn===it.n||cn.indexOf(it.n)===0)){var cr=ce.getBoundingClientRect();if(cr.width>0&&cr.height>0)found=ce;}}if(!found){pick.reason='stale';return null;}el=found;it.e=found;}}catch(e){}`
   // 이름 계산은 관찰(nameOf)과 **같은 순서**여야 한다 — 다르면 라벨로 이름 붙은 입력칸("설명")·라디오("공개")가
   // value 와 비교돼 "다른 요소" 로 거부된다(2026-09-13, SNS 하네스 S3·S4).
   + `if(it.n){var cur='';try{var tg=el.tagName;cur=el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('data-placeholder')||el.getAttribute('aria-placeholder')||'';`
@@ -84,8 +109,16 @@ const PICK_FN = `function pick(r){var A=window['${REF_KEY}'];if(!A)return null;v
   + `cur=(cur+'').replace(/\\s+/g,' ').trim();}catch(e){cur='';}`
   // 접두 일치 허용 — 호버·펼침으로 라벨이 늘어나는 요소(인스타 사이드바 "새로운 게시물" → "새로운 게시물만들기")를 "다른 요소" 로
   // 거부하던 것(실사이트 draft 재실행 2026-09-13). 재활용 노드는 이름이 통째로 바뀌므로 접두 검사로도 여전히 걸러진다(A4).
-  + `var a=it.n.slice(0,20),b=cur.slice(0,20);if(a&&b&&a!==b&&!(it.n.indexOf(cur)===0||cur.indexOf(it.n)===0))return null;}`
+  + `var a=it.n.slice(0,20),b=cur.slice(0,20);if(a&&b&&a!==b&&!(it.n.indexOf(cur)===0||cur.indexOf(it.n)===0)){pick.reason='name';return null;}}`
   + `return el;}`
+
+// pick() 이 null 을 돌려줄 때의 pick.reason 을 사람이 읽을 한국어 문장으로. 여러 실행 함수가 공유한다.
+const PICK_REASON_FN = `function pickReasonText(r){if(r==='epoch')return '관찰이 바뀌었습니다 — 다시 관찰하세요';if(r==='frame')return '요소가 다른 프레임으로 이동했습니다';if(r==='name')return '요소가 변경되어 안전하게 식별할 수 없습니다 — 다시 관찰하세요';return '요소를 찾을 수 없습니다(페이지가 바뀌었을 수 있음)';}`
+
+// pick(ref, epoch) 호출 문자열을 만든다 — epoch 가 없으면(하위호환) 인자를 생략해 세대·프레임 검사를 건너뛴다.
+function pickCallArg(epoch?: string): string {
+  return epoch != null ? `,${JSON.stringify(epoch)}` : ''
+}
 
 // 요소가 same-origin iframe 안에 있으면 getBoundingClientRect 는 그 iframe 뷰포트 기준이다. sendInputEvent
 // (마우스 이동·드래그)는 top 창 좌표를 쓰므로, 조상 iframe 들의 뷰포트 오프셋을 누적해 top 창 좌표로 변환한다.
@@ -145,20 +178,29 @@ export async function runPageJs(wc: WebContents, code: string): Promise<{ ok: bo
   }
 }
 
+// pick() 이 실패했을 때 사유를 담아 돌려주는 공용 실패 모양. dragOnPage·dropFilesOnRef 처럼 pointForRef 를
+// 쓰는 여러 함수가 같은 판별을 반복하지 않도록 타입가드를 함께 둔다.
+interface RefFail { __fail: string }
+function isRefFail(v: unknown): v is RefFail {
+  return !!v && typeof v === 'object' && '__fail' in (v as Record<string, unknown>)
+}
+
 // ref 의 화면(뷰포트) 중심 좌표를 구한다(호버·드래그용). top 문서 기준.
-async function pointForRef(wc: WebContents, ref: number): Promise<{ x: number; y: number; name: string } | null> {
+// epoch(과제1) 를 넘기면 pick() 이 세대·프레임을 검증하고, 실패 시 이유를 담은 RefFail 을 돌려준다.
+async function pointForRef(wc: WebContents, ref: number, epoch?: string): Promise<{ x: number; y: number; name: string } | RefFail | null> {
   try {
     return (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
+  ${PICK_REASON_FN}
   ${FRAME_OFFSET_FN}
-  var el = pick(${ref}); if(!el) return null;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return { __fail: pickReasonText(pick.reason) };
   try{ el.scrollIntoView({block:'center'}); }catch(e){}
   var r = el.getBoundingClientRect();
   var fo = frameOffset(el);
   return { x: Math.round(r.left + r.width/2 + fo.ox), y: Math.round(r.top + r.height/2 + fo.oy), name: (el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,30) };
 })()
-`, true)) as { x: number; y: number; name: string } | null
+`, true)) as { x: number; y: number; name: string } | RefFail | null
   } catch { return null }
 }
 
@@ -271,12 +313,12 @@ async function realClickXY(wc: WebContents, x: number, y: number, prof: InputPro
 
 // 클릭 지점이 실제로 그 요소인지 확인 — 스티키 헤더·쿠키 배너·로딩 오버레이가 위를 덮고 있으면
 // 좌표만 보고 누르는 순간 엉뚱한 것이 눌린다. top 문서 좌표 기준(프레임 안 요소는 검사 생략).
-async function pointHitsRef(wc: WebContents, ref: number, x: number, y: number): Promise<boolean> {
+async function pointHitsRef(wc: WebContents, ref: number, x: number, y: number, epoch?: string): Promise<boolean> {
   try {
     return (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
-  var el = pick(${ref}); if(!el) return false;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return false;
   try { if (el.ownerDocument !== document) return true; } catch(e) { return true; }
   var hit = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)});
   if (!hit) return false;
@@ -289,14 +331,15 @@ async function pointHitsRef(wc: WebContents, ref: number, x: number, y: number):
 // 클릭 준비를 인페이지에서 한 번에 처리한다 — 스크롤 → 좌표 안정화(rAF) → 좌표 계산 → 가림 검사.
 // 예전에는 JS 왕복 4회 + 고정 대기 120·180ms 로 나뉘어 있어 클릭마다 수백 ms 를 그냥 버렸다.
 // 안정화는 고정 대기가 아니라 "연속 두 프레임에서 좌표가 같으면 통과" 라 대개 훨씬 빨리 끝난다.
-async function prepareClickPoint(wc: WebContents, ref: number, settleMs: number): Promise<
-{ x: number; y: number; name: string; w: number; h: number; vw: number; vh: number; occluded: boolean } | null> {
+async function prepareClickPoint(wc: WebContents, ref: number, settleMs: number, epoch?: string): Promise<
+{ x: number; y: number; name: string; w: number; h: number; vw: number; vh: number; occluded: boolean } | RefFail | null> {
   try {
     return (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
+  ${PICK_REASON_FN}
   ${FRAME_OFFSET_FN}
-  var el = pick(${ref}); if(!el) return null;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return { __fail: pickReasonText(pick.reason) };
   try{ el.scrollIntoView({block:'center'}); }catch(e){}
   var deadline = Date.now() + ${Math.max(0, Math.round(settleMs))};
   function rect(){ var r = el.getBoundingClientRect(); var fo = frameOffset(el);
@@ -324,14 +367,16 @@ async function prepareClickPoint(wc: WebContents, ref: number, settleMs: number)
     requestAnimationFrame(step);
   });
 })()
-`, true)) as { x: number; y: number; name: string; w: number; h: number; vw: number; vh: number; occluded: boolean } | null
+`, true)) as { x: number; y: number; name: string; w: number; h: number; vw: number; vh: number; occluded: boolean } | RefFail | null
   } catch { return null }
 }
 
-// ref 의 화면 좌표를 구하고(scrollIntoView 포함) 뷰포트 안이면 실제 클릭. 좌표를 못 구하거나 화면 밖이면 null.
-async function realClickRef(wc: WebContents, ref: number, prof: InputProfile = PROFILE_STRICT): Promise<{ ok: boolean; name: string } | null> {
-  const p = await prepareClickPoint(wc, ref, prof.settleMs)
+// ref 의 화면 좌표를 구하고(scrollIntoView 포함) 뷰포트 안이면 실제 클릭. 좌표를 못 구하거나 화면 밖이면 null,
+// pick() 이 세대·프레임·이름 불일치로 거부했으면 RefFail(사유 포함)을 돌려준다.
+async function realClickRef(wc: WebContents, ref: number, prof: InputProfile = PROFILE_STRICT, epoch?: string): Promise<{ ok: true; name: string } | RefFail | null> {
+  const p = await prepareClickPoint(wc, ref, prof.settleMs, epoch)
   if (!p) return null
+  if (isRefFail(p)) return p
   if (p.occluded) return null // 다른 것이 덮고 있음 → 합성 폴백
   if (p.x < 0 || p.y < 0 || p.x > p.vw || p.y > p.vh) return null // 화면 밖 → 합성 폴백
   // 요소 정중앙을 픽셀 단위로 반복해 찍는 것은 사람에게 불가능하다 — 요소 크기에 비례한 정규분포 오차.
@@ -344,13 +389,13 @@ async function realClickRef(wc: WebContents, ref: number, prof: InputProfile = P
 }
 
 // 입력값이 실제로 들어갔는지 검증(합성 폴백 판단용) — 첫 조각이 요소 값/본문에 있으면 성공으로 본다.
-async function verifyTyped(wc: WebContents, ref: number, text: string): Promise<boolean> {
+async function verifyTyped(wc: WebContents, ref: number, text: string, epoch?: string): Promise<boolean> {
   const probe = JSON.stringify(text.replace(/\s+/g, ' ').trim().slice(0, 12))
   try {
     return (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
-  var el = pick(${ref}); if(!el) return false;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return false;
   var v = (el.value != null ? el.value : (el.innerText || el.textContent || ''));
   var probe = ${probe};
   if (!probe) return (String(v).trim().length > 0);
@@ -455,12 +500,12 @@ async function verifyFocusedText(wc: WebContents, text: string): Promise<'ok' | 
 // 한글 등 조합 문자도 char 이벤트로 직접 삽입된다. 검증 실패 시 호출부가 합성 방식으로 폴백한다.
 // 입력칸이 실제로 비었는지 확인하고, 남아 있으면 비운 뒤 캐럿을 끝으로 보낸다.
 // 값을 "지우는" 것은 사람 흉내가 필요한 부분이 아니므로(중요한 건 타이핑) 결정적으로 처리한다.
-async function ensureFieldCleared(wc: WebContents, ref: number): Promise<void> {
+async function ensureFieldCleared(wc: WebContents, ref: number, epoch?: string): Promise<void> {
   try {
     await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
-  var el = pick(${ref}); if(!el) return false;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return false;
   var cur = (el.value != null ? el.value : (el.innerText || el.textContent || ''));
   if (!String(cur).trim()) return true;
   var win = (el.ownerDocument && el.ownerDocument.defaultView) || window;
@@ -487,11 +532,13 @@ async function ensureFieldCleared(wc: WebContents, ref: number): Promise<void> {
   } catch { /* 확인 실패는 무시 — 아래 verifyTyped 가 최종 판정한다 */ }
 }
 
-async function realTypeRef(wc: WebContents, ref: number, text: string, submit: boolean, prof: InputProfile = PROFILE_STRICT): Promise<{ ok: boolean; detail: string }> {
-  const focused = await realClickRef(wc, ref, prof)
+async function realTypeRef(wc: WebContents, ref: number, text: string, submit: boolean, prof: InputProfile = PROFILE_STRICT, epoch?: string): Promise<{ ok: boolean; detail: string }> {
+  const focused = await realClickRef(wc, ref, prof, epoch)
+  // RefFail(세대·프레임·이름 불일치)이면 클릭이 아예 일어나지 않은 것 — 타이핑을 시도하지 말고 즉시 사유를 돌려준다.
+  if (focused && isRefFail(focused)) return { ok: false, detail: focused.__fail }
   if (focused) await sleep(prof.typeWordPause ? 70 : 20)
   else {
-    try { await wc.executeJavaScript(`(function(){ ${PICK_FN} var el=pick(${ref}); if(el){ try{el.scrollIntoView({block:'center'}); el.focus();}catch(e){} } })()`, true) } catch { /* ignore */ }
+    try { await wc.executeJavaScript(`(function(){ ${PICK_FN} var el=pick(${ref}${pickCallArg(epoch)}); if(el){ try{el.scrollIntoView({block:'center'}); el.focus();}catch(e){} } })()`, true) } catch { /* ignore */ }
     await sleep(40)
   }
   // 기존 내용 비우기 — 전체 선택 후 삭제(실제 키).
@@ -505,10 +552,10 @@ async function realTypeRef(wc: WebContents, ref: number, text: string, submit: b
   // 지워졌는지 확인하고, 아직 남아 있으면 확실히 비운다.
   // (키로만 지우면 포커스가 잡히기 전이거나 편집기 구현에 따라 실패하는데, 그러면 기존 값 중간에
   //  새 글자가 끼어 들어가 엉뚱한 값이 된다 — 빠른 프로파일에서 재현됨. 타이밍에 기대지 않는다.)
-  await ensureFieldCleared(wc, ref)
+  await ensureFieldCleared(wc, ref, epoch)
   await typeCharsReal(wc, text, prof)
   await sleep(20)
-  const ok = await verifyTyped(wc, ref, text)
+  const ok = await verifyTyped(wc, ref, text, epoch)
   if (submit) {
     await sleep(30)
     try {
@@ -520,24 +567,29 @@ async function realTypeRef(wc: WebContents, ref: number, text: string, submit: b
 }
 
 // 화면 백분율 좌표에 실제 클릭(캔버스·커스텀 UI 등 요소 목록 밖 대상).
+// 과제2 U8 — execScript 의 click_at 과 동일하게, 범위 밖 좌표는 경계로 당겨 찍지 않고 거부한다.
 async function realClickAtPct(wc: WebContents, xPct: number, yPct: number, prof: InputProfile = PROFILE_STRICT): Promise<{ ok: boolean; detail: string }> {
+  if (!Number.isFinite(xPct) || !Number.isFinite(yPct) || xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) {
+    return { ok: false, detail: `화면 밖 좌표(${xPct}%, ${yPct}%) — xPct·yPct 는 0~100 사이여야 합니다` }
+  }
   const vp = await viewportSize(wc)
-  const x = Math.round(Math.max(0, Math.min(100, xPct)) / 100 * vp.w)
-  const y = Math.round(Math.max(0, Math.min(100, yPct)) / 100 * vp.h)
+  const x = Math.round(xPct / 100 * vp.w)
+  const y = Math.round(yPct / 100 * vp.h)
   await realClickXY(wc, x, y, prof)
   return { ok: true, detail: `화면 클릭 ${x},${y}` }
 }
 
 // 호버 — JS 기반 메뉴는 합성 mouseover 로, CSS :hover 는 실제 마우스 이동(sendInputEvent)으로 둘 다 커버.
-export async function hoverElement(wc: WebContents, ref: number): Promise<{ ok: boolean; detail: string }> {
+export async function hoverElement(wc: WebContents, ref: number, epoch?: string): Promise<{ ok: boolean; detail: string }> {
   if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
-  let pt: { x: number; y: number; name: string } | null
+  let pt: { x: number; y: number; name: string } | RefFail | null
   try {
     pt = (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
+  ${PICK_REASON_FN}
   ${FRAME_OFFSET_FN}
-  var el = pick(${ref}); if(!el) return null;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return { __fail: pickReasonText(pick.reason) };
   try{ el.scrollIntoView({block:'center'}); }catch(e){}
   var rc = el.getBoundingClientRect();
   var w = (el.ownerDocument && el.ownerDocument.defaultView) || window;
@@ -548,24 +600,27 @@ export async function hoverElement(wc: WebContents, ref: number): Promise<{ ok: 
   var fo = frameOffset(el);
   return { x:Math.round(rc.left+rc.width/2+fo.ox), y:Math.round(rc.top+rc.height/2+fo.oy), name:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,30) };
 })()
-`, true)) as { x: number; y: number; name: string } | null
+`, true)) as { x: number; y: number; name: string } | RefFail | null
   } catch { pt = null }
+  if (pt && isRefFail(pt)) return { ok: false, detail: pt.__fail }
   if (!pt) return { ok: false, detail: 'ref 요소를 찾을 수 없음' }
   try { wc.sendInputEvent({ type: 'mouseMove', x: pt.x, y: pt.y }) } catch { /* top-level 만 */ }
   return { ok: true, detail: `호버: ${pt.name || ref}` }
 }
 
 // 드래그 — 실제 마우스 down→move→up(sendInputEvent). 슬라이더·캔버스·정렬 등. from/to 는 ref 또는 화면 %.
-export async function dragOnPage(wc: WebContents, spec: { ref?: number; xPct?: number; yPct?: number; toRef?: number; toXPct?: number; toYPct?: number }): Promise<{ ok: boolean; detail: string }> {
+export async function dragOnPage(wc: WebContents, spec: { ref?: number; xPct?: number; yPct?: number; toRef?: number; toXPct?: number; toYPct?: number }, epoch?: string): Promise<{ ok: boolean; detail: string }> {
   if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
   const vp = await viewportSize(wc)
-  const resolve = async (ref?: number, xp?: number, yp?: number): Promise<{ x: number; y: number } | null> => {
-    if (ref != null) { const p = await pointForRef(wc, ref); return p ? { x: p.x, y: p.y } : null }
+  const resolve = async (ref?: number, xp?: number, yp?: number): Promise<{ x: number; y: number } | RefFail | null> => {
+    if (ref != null) { const p = await pointForRef(wc, ref, epoch); if (p && isRefFail(p)) return p; return p ? { x: p.x, y: p.y } : null }
     if (xp != null && yp != null) return { x: Math.round(Math.max(0, Math.min(100, xp)) / 100 * vp.w), y: Math.round(Math.max(0, Math.min(100, yp)) / 100 * vp.h) }
     return null
   }
   const from = await resolve(spec.ref, spec.xPct, spec.yPct)
   const to = await resolve(spec.toRef, spec.toXPct, spec.toYPct)
+  if (from && isRefFail(from)) return { ok: false, detail: from.__fail }
+  if (to && isRefFail(to)) return { ok: false, detail: to.__fail }
   if (!from || !to) return { ok: false, detail: '드래그 시작/끝 지점을 정할 수 없음(ref 또는 %)' }
   try {
     wc.focus()
@@ -595,10 +650,12 @@ function normalizeKeyName(k: string): string {
 }
 
 // 키보드 입력 — 실제 키 이벤트(sendInputEvent) 라 Ctrl+A(전체선택) 등 브라우저 기본 동작도 발동.
-export async function pressKey(wc: WebContents, spec: { key: string; ref?: number }): Promise<{ ok: boolean; detail: string }> {
+// ref 는 포커스만 옮기는 용도라(키 자체는 지금 포커스에 간다) epoch 불일치로 포커스를 못 옮겨도
+// 치명적이지 않다 — 조용히 건너뛰고 키는 그대로 보낸다(기존 동작과 동일, epoch 는 세대만 맞춰 넘긴다).
+export async function pressKey(wc: WebContents, spec: { key: string; ref?: number }, epoch?: string): Promise<{ ok: boolean; detail: string }> {
   if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
   if (spec.ref != null) {
-    try { await wc.executeJavaScript(`(function(){ ${PICK_FN} var el=pick(${spec.ref}); if(el){ try{el.focus();}catch(e){} } })()`, true) } catch { /* ignore */ }
+    try { await wc.executeJavaScript(`(function(){ ${PICK_FN} var el=pick(${spec.ref}${pickCallArg(epoch)}); if(el){ try{el.focus();}catch(e){} } })()`, true) } catch { /* ignore */ }
   }
   const parts = String(spec.key ?? '').split('+').map((s) => s.trim()).filter(Boolean)
   const keyName = parts.pop() ?? ''
@@ -688,12 +745,14 @@ export async function autofillPage(wc: WebContents, profile: Record<string, stri
 }
 
 // 다운로드 — ref 의 링크(href) 또는 지정 url 을 다운로드 매니저로 내려받는다.
-export async function resolveHref(wc: WebContents, ref: number): Promise<string | null> {
+// 반환형이 string|null 이라(사유를 담을 자리가 없다) epoch 불일치도 그냥 null 로 — 호출부(agent.ts)가
+// "다운로드 대상을 못 찾음" 수준의 기존 일반 메시지로 처리한다(다른 함수들처럼 세밀한 사유는 못 준다).
+export async function resolveHref(wc: WebContents, ref: number, epoch?: string): Promise<string | null> {
   try {
     return (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
-  var el = pick(${ref}); if(!el) return null;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return null;
   var a = el.closest ? (el.closest('a[href]') || el) : el;
   var h = a.getAttribute ? a.getAttribute('href') : null;
   if(!h) return null;
@@ -705,12 +764,12 @@ export async function resolveHref(wc: WebContents, ref: number): Promise<string 
 
 // 다운로드용 미디어 소스 해석 — 사진(img)·영상(video/source)·배경이미지·링크(a[href])를 절대 URL 로.
 // blob:/data: 는 직접 받을 수 없으므로 제외(호출부가 감지 후보·yt-dlp 로 폴백하게 null 반환).
-export async function resolveMediaSrc(wc: WebContents, ref: number): Promise<{ url: string; kind: 'image' | 'video' | 'link' } | null> {
+export async function resolveMediaSrc(wc: WebContents, ref: number, epoch?: string): Promise<{ url: string; kind: 'image' | 'video' | 'link' } | null> {
   try {
     return (await wc.executeJavaScript(`
 (function(){
   ${PICK_FN}
-  var el = pick(${ref}); if(!el) return null;
+  var el = pick(${ref}${pickCallArg(epoch)}); if(!el) return null;
   function abs(u){ if(!u) return ''; try{ return new URL(u, location.href).href; }catch(e){ return u; } }
   function ok(u){ return u && u.indexOf('blob:')!==0 && u.indexOf('data:')!==0; }
   var tag = el.tagName ? el.tagName.toUpperCase() : '';
@@ -785,7 +844,7 @@ export async function extractFromPage(wc: WebContents, spec: { rowSelector?: str
   }
 }
 
-const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
+const OBSERVE_SCRIPT = (maxEls: number, maxText: number, epoch: string) => `
 (function() {
   var SEL = 'a[href], button, input, select, textarea, summary, label, [role=button], [role=link], [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio], [role=checkbox], [role=radio], [role=switch], [role=combobox], [role=option], [role=treeitem], [contenteditable=true], [onclick], [tabindex]:not([tabindex="-1"])';
   var MAX = ${maxEls};
@@ -830,11 +889,22 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
   }
   var out = [];
   var ref = { n: 0 };
+  // 접근 불가 프레임(대개 cross-origin) — 과제2 U1: 안이 안 보이면 조용히 넘어가지 않고 "여기 프레임이
+  // 있는데 못 본다" 를 정직하게 보고한다(같은 출처 정책은 페이지 JS 로 우회할 수 없는 구조적 한계).
+  var UNREACHABLE = [];
   // 요소 참조 레지스트리 — DOM 에 속성을 달지 않고 여기에만 담는다(봇 탐지 지문 제거).
   // 관찰마다 통째로 새로 만들어, 옛 번호가 살아남아 엉뚱한 요소를 집는 일이 없다.
-  var REG = []; window['${REF_KEY}'] = REG;
+  // __epoch(과제1) — 이 관찰의 세대 토큰(TS 쪽 observePage 가 탭 id 를 섞어 매번 새로 만든다). pick() 이
+  // 실행 시 넘어온 epoch 와 이 값을 비교해, 그 사이 재관찰이 있었으면 옛 번호를 거부한다.
+  var REG = []; REG.__epoch = ${JSON.stringify(epoch)}; window['${REF_KEY}'] = REG;
   var TAKEN = new WeakSet();  // 같은 요소가 두 번(요소 스캔 + 클릭가능 보강) 담기는 것 방지
-  function reg(el, name) { REG[ref.n] = { e: el, n: String(name || '').replace(/\\s+/g, ' ').trim() }; TAKEN.add(el); }
+  // f: 이 요소가 속한 문서(top 또는 same-origin iframe)의 관찰 당시 URL — pick() 의 프레임 검사(과제1)가 쓴다.
+  function reg(el, name) {
+    var fw = winOf(el); var fu = '';
+    try { fu = (fw && fw.location && fw.location.href) || ''; } catch (e) {}
+    REG[ref.n] = { e: el, n: String(name || '').replace(/\\s+/g, ' ').trim(), f: fu };
+    TAKEN.add(el);
+  }
   // same-origin iframe + 열린 shadow DOM(웹 컴포넌트) 을 재귀 관찰(cross-origin/closed 는 접근 예외 → skip).
   function collect(root, depth) {
     if (!root || out.length >= MAX) return;
@@ -929,9 +999,18 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
       var frames;
       try { frames = root.querySelectorAll('iframe, frame'); } catch(e) { frames = []; }
       for (var j = 0; j < frames.length && out.length < MAX; j++) {
+        var fEl = frames[j];
         var fdoc = null;
-        try { fdoc = frames[j].contentDocument; } catch(e) { fdoc = null; }
-        if (fdoc) collect(fdoc, depth + 1);
+        try { fdoc = fEl.contentDocument; } catch(e) { fdoc = null; }
+        if (fdoc) { collect(fdoc, depth + 1); continue; }
+        // contentDocument 가 null 이면 대개 cross-origin(같은 이유로 로드 전일 수도 있어 완벽하진 않지만,
+        // "이 프레임 안은 관찰할 수 없다" 는 신호로 충분하다). 보이는 것만, 개수는 소음 방지로 상한을 둔다.
+        try {
+          if (visible(fEl) && UNREACHABLE.length < 8) {
+            var fsrc = fEl.getAttribute('src') || '';
+            UNREACHABLE.push(((fEl.getAttribute('title') || fEl.getAttribute('name') || '') + (fsrc ? ' ' + fsrc.slice(0, 80) : '(src 없음)')).trim());
+          }
+        } catch(e) {}
       }
     }
   }
@@ -1017,6 +1096,7 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number) => `
     elements: out,
     listHint: listHint,
     progress: progress || undefined,
+    crossOriginFrames: UNREACHABLE.length ? UNREACHABLE : undefined,
     scroll: { y: Math.round(window.scrollY), maxY: Math.round(Math.max(0, Math.max(document.documentElement ? document.documentElement.scrollHeight : 0, document.body ? document.body.scrollHeight : 0) - window.innerHeight)) }
   };
 })();
@@ -1026,25 +1106,39 @@ export async function observePage(wc: WebContents, opts?: { maxElements?: number
   if (wc.isDestroyed()) return null
   const url = wc.getURL()
   if (!/^https?:/i.test(url)) return null
+  // 관찰 세대(epoch, 과제1) — 매 관찰마다 새로 만든다. wc.id 를 섞어 두는 이유: 탭마다 이미 별개의
+  // window(JS 컨텍스트) 라 다른 탭의 레지스트리에 원천적으로 접근할 수 없지만, 탭 id 를 토큰 자체에
+  // 명시해 "이 ref 번호는 어느 탭의 몇 번째 관찰에서 나왔는가"가 값만 봐도 드러나게 한다(재사용 시
+  // 두 번째 방어선 + 디버깅용).
+  const epoch = `${wc.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`
   try {
-    return (await wc.executeJavaScript(OBSERVE_SCRIPT(opts?.maxElements ?? 80, opts?.maxText ?? 1800), true)) as PageObservation
+    const obs = (await wc.executeJavaScript(
+      OBSERVE_SCRIPT(opts?.maxElements ?? 80, opts?.maxText ?? 1800, epoch), true,
+    )) as Omit<PageObservation, 'epoch'>
+    return { ...obs, epoch }
   } catch (err) {
     console.warn('[ai-agent] observe failed', err)
     return null
   }
 }
 
-function execScript(action: AgentAction): string {
+function execScript(action: AgentAction, epoch?: string): string {
   const ref = JSON.stringify(action.ref ?? -1)
   const text = JSON.stringify(action.text ?? '')
   const dir = action.direction === 'up' ? -1 : 1
   const submit = action.submit ? 'true' : 'false'
   const xPct = Number.isFinite(action.xPct as number) ? Number(action.xPct) : 50
   const yPct = Number.isFinite(action.yPct as number) ? Number(action.yPct) : 50
+  // scroll 에 명시적 지점이 왔는지(과제2 — 컨테이너 내부 스크롤). 지점이 없으면(보통의 "더 보자" 의도)
+  // 페이지 스크롤만 시도한다 — 항상 xPct/yPct 를 50 으로 기본값 채우면, 우연히 화면 중앙에 걸린 작은
+  // 스크롤 위젯(코드블록 등)을 메인 스크롤 대신 잘못 건드리는 사고가 난다.
+  const hasPoint = Number.isFinite(action.xPct as number) && Number.isFinite(action.yPct as number)
+  const epochArg = pickCallArg(epoch)
   return `
 (function() {
   // ref 는 관찰 때 만든 레지스트리에서 꺼낸다(DOM 속성 미사용 — 봇 탐지 지문 제거 + 재활용 노드 검증).
   ${PICK_FN}
+  ${PICK_REASON_FN}
   function winOf(el) { return (el.ownerDocument && el.ownerDocument.defaultView) || window; }
   function setNativeValue(el, value) {
     var win = winOf(el);
@@ -1058,12 +1152,40 @@ function execScript(action: AgentAction): string {
   }
   try {
     var act = ${JSON.stringify(action.action)};
-    if (act === 'scroll') { window.scrollBy({ top: ${dir} * Math.round(window.innerHeight * 0.85), behavior: 'instant' }); return { ok: true, detail: 'scrolled' }; }
+    if (act === 'scroll') {
+      var scrolled = false;
+      if (${JSON.stringify(hasPoint)}) {
+        // 과제2 — 컨테이너 내부 스크롤. 지점이 스크롤 가능한(overflow auto/scroll + 실제로 넘치는) 요소
+        // 위라면 그 컨테이너를 스크롤한다(채팅창·목록 패널 등, 페이지 자체는 안 움직이는 UI 대응).
+        // 지점이 없으면(보통의 "페이지를 더 보자") 아래 폴백으로 페이지만 스크롤한다.
+        var svx = Math.max(0, Math.min(100, ${xPct})) / 100 * window.innerWidth;
+        var svy = Math.max(0, Math.min(100, ${yPct})) / 100 * window.innerHeight;
+        var snode = document.elementFromPoint(svx, svy);
+        var sguard = 0;
+        while (snode && snode !== document.body && snode !== document.documentElement && sguard++ < 12) {
+          var scs = null; try { scs = getComputedStyle(snode); } catch (e) {}
+          var soy = scs ? scs.overflowY : '';
+          if ((soy === 'auto' || soy === 'scroll') && snode.scrollHeight > snode.clientHeight + 2) {
+            snode.scrollBy({ top: ${dir} * Math.round(snode.clientHeight * 0.85), behavior: 'instant' });
+            scrolled = true;
+            break;
+          }
+          snode = snode.parentElement;
+        }
+      }
+      if (!scrolled) window.scrollBy({ top: ${dir} * Math.round(window.innerHeight * 0.85), behavior: 'instant' });
+      return { ok: true, detail: scrolled ? 'scrolled(컨테이너)' : 'scrolled' };
+    }
     if (act === 'click_at') {
+      // 과제2 U8 — 화면 밖 비율은 경계로 당겨 찍지 않고 거부한다. 조용히 clamp 하면 모델이 잘못
+      // 계산한 좌표(예: 150%)를 "가장자리를 클릭했다"고 오해한 채 다음 단계로 넘어갈 수 있다.
+      if (${xPct} < 0 || ${xPct} > 100 || ${yPct} < 0 || ${yPct} > 100) {
+        return { ok: false, detail: '화면 밖 좌표(' + ${xPct} + '%, ' + ${yPct} + '%) — xPct·yPct 는 0~100 사이여야 합니다' };
+      }
       // 화면(뷰포트)의 백분율 좌표를 CSS 좌표로 바꿔, 그 지점의 요소에 실제 마우스 이벤트를 보낸다
       // (캔버스·커스텀 UI 처럼 DOM 요소 목록에 안 잡히는 대상도 클릭 가능).
-      var vx = Math.max(0, Math.min(100, ${xPct})) / 100 * window.innerWidth;
-      var vy = Math.max(0, Math.min(100, ${yPct})) / 100 * window.innerHeight;
+      var vx = ${xPct} / 100 * window.innerWidth;
+      var vy = ${yPct} / 100 * window.innerHeight;
       var tgt = document.elementFromPoint(vx, vy);
       if (!tgt) return { ok: false, detail: '그 위치에 요소가 없습니다 (' + Math.round(vx) + ',' + Math.round(vy) + ')' };
       var mo = { bubbles: true, cancelable: true, clientX: vx, clientY: vy, view: window, button: 0 };
@@ -1076,8 +1198,11 @@ function execScript(action: AgentAction): string {
       var tt = (tgt.innerText || tgt.textContent || (tgt.getAttribute && tgt.getAttribute('aria-label')) || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
       return { ok: true, detail: '화면 클릭 ' + Math.round(vx) + ',' + Math.round(vy) + ' → ' + tgt.tagName + (tt ? ' "' + tt + '"' : '') };
     }
-    var el = pick(${ref});
-    if (!el) return { ok: false, detail: 'ref ' + ${ref} + ' 요소를 찾을 수 없음(페이지가 바뀌었을 수 있음)' };
+    var el = pick(${ref}${epochArg});
+    // 과제1의 상세 사유 — 이 자리가 "주 경로"다: executeInPageAction 의 사람 입력이 실패하면 항상
+    // 여기(합성 폴백)로 떨어지므로, 세대·프레임·이름 중 무엇이 안 맞았는지가 최종적으로 사용자·에이전트에
+    // 보이는 detail 이 된다(fallback() 이 이 detail 을 그대로 실어 나른다).
+    if (!el) return { ok: false, detail: pickReasonText(pick.reason) + ' (ref ' + ${ref} + ')' };
     var win = winOf(el);
     el.scrollIntoView({ block: 'center' });
     if (act === 'click') { el.click(); return { ok: true, detail: 'clicked' }; }
@@ -1098,10 +1223,10 @@ function execScript(action: AgentAction): string {
 }
 
 // 합성(synthetic) 실행 — el.click()·setNativeValue·dispatchEvent. 실제 입력 실패 시 폴백으로만 쓴다.
-async function execSynthetic(wc: WebContents, action: AgentAction): Promise<{ ok: boolean; detail: string }> {
+async function execSynthetic(wc: WebContents, action: AgentAction, epoch?: string): Promise<{ ok: boolean; detail: string }> {
   if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
   try {
-    return (await wc.executeJavaScript(execScript(action), true)) as { ok: boolean; detail: string }
+    return (await wc.executeJavaScript(execScript(action, epoch), true)) as { ok: boolean; detail: string }
   } catch (err) {
     return { ok: false, detail: String(err) }
   }
@@ -1128,21 +1253,29 @@ export function inputProfileFor(url: string, mode?: 'auto' | 'human' | 'fast'): 
 export async function executeInPageAction(
   wc: WebContents,
   action: AgentAction,
-  opts?: { humanInput?: boolean; profile?: InputProfile },
+  // epoch(과제1) — 이 행동이 근거한 관찰의 세대 토큰. observePage() 가 돌려준 obs.epoch 를 그대로 넘기면,
+  // 그 사이 다른 관찰(탭 전환 후 재관찰 등)이 있었을 때 옛 ref 로 지금 화면의 다른 요소를 집지 않는다.
+  // 생략하면(하위호환) 세대·프레임 검사 없이 예전과 동일하게 동작한다.
+  opts?: { humanInput?: boolean; profile?: InputProfile; epoch?: string },
 ): Promise<{ ok: boolean; detail: string }> {
   if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
   const human = opts?.humanInput !== false
   const prof = opts?.profile ?? PROFILE_STRICT
-  if (!human) return execSynthetic(wc, action)
+  const epoch = opts?.epoch
+  if (!human) return execSynthetic(wc, action, epoch)
   // 합성 폴백은 isTrusted=false 이벤트라 봇 탐지에 걸릴 수 있다. 예전에는 아무 표시 없이 폴백해서
   // 사용자도 에이전트도 "사람처럼 클릭됐다"고 믿었다 — 이제 결과 detail 에 폴백 사실을 명시한다.
   const fallback = async (why: string): Promise<{ ok: boolean; detail: string }> => {
-    const r = await execSynthetic(wc, action)
+    const r = await execSynthetic(wc, action, epoch)
     return { ok: r.ok, detail: r.ok ? `${r.detail} ※ 사람 입력 대신 합성 이벤트 사용(${why})` : r.detail }
   }
   try {
     if (action.action === 'click') {
-      const r = await realClickRef(wc, action.ref ?? -1, prof)
+      const r = await realClickRef(wc, action.ref ?? -1, prof, epoch)
+      // 세대·프레임·이름 불일치(RefFail) 는 "화면 밖·가려짐" 과 다른 사고다 — 폴백으로 넘기지 않고
+      // 바로 사유를 돌려준다(합성 클릭도 같은 pick() 을 거치므로 어차피 똑같이 거부되지만, 여기서
+      // 즉시 끊으면 불필요한 왕복 없이 더 빠르고 사유가 더 분명하다).
+      if (r && isRefFail(r)) return { ok: false, detail: r.__fail }
       if (r) return { ok: true, detail: `클릭(사람처럼) ${r.name || action.ref}` }
       return fallback('화면 밖·좌표 불가·다른 요소가 덮음')
     }
@@ -1152,11 +1285,11 @@ export async function executeInPageAction(
     if (action.action === 'type') {
       // ref 가 없으면(리치 에디터·iframe 칸) 직전 click_at 으로 포커스한 곳에 실제 키로 입력.
       if (action.ref == null || action.ref < 0) return typeIntoFocused(wc, action.text ?? '', !!action.submit, prof)
-      const r = await realTypeRef(wc, action.ref, action.text ?? '', !!action.submit, prof)
+      const r = await realTypeRef(wc, action.ref, action.text ?? '', !!action.submit, prof, epoch)
       if (r.ok) return r
       return fallback('실제 키 입력이 반영되지 않음')
     }
-    return execSynthetic(wc, action) // scroll 등은 그대로(사람 입력이 필요 없는 동작)
+    return execSynthetic(wc, action, epoch) // scroll 등은 그대로(사람 입력이 필요 없는 동작)
   } catch (err) {
     return fallback('실제 입력 중 오류').catch(() => ({ ok: false, detail: String(err) }))
   }
@@ -1271,10 +1404,11 @@ export async function setFileInputFiles(wc: WebContents, filePaths: string[]): P
 // 드롭존 업로드 — 파일 입력도 파일 선택 창도 쓰지 않고 오직 드래그&드롭(DataTransfer)만 받는 UI 대응.
 // CDP Input.dispatchDragEvent 로 실제 드래그 시퀀스(dragEnter → dragOver → drop)를 보낸다.
 // 좌표는 ref 요소의 화면 중심(top 창 기준). 브라우저가 만든 진짜 드래그라 페이지의 ondrop 이 파일을 받는다.
-export async function dropFilesOnRef(wc: WebContents, ref: number, filePaths: string[]): Promise<{ ok: boolean; detail: string }> {
+export async function dropFilesOnRef(wc: WebContents, ref: number, filePaths: string[], epoch?: string): Promise<{ ok: boolean; detail: string }> {
   if (wc.isDestroyed()) return { ok: false, detail: '탭이 닫혔습니다' }
   if (!filePaths.length) return { ok: false, detail: '선택된 파일이 없습니다' }
-  const pt = await pointForRef(wc, ref)
+  const pt = await pointForRef(wc, ref, epoch)
+  if (pt && isRefFail(pt)) return { ok: false, detail: pt.__fail }
   if (!pt) return { ok: false, detail: `요소 ${ref} 의 위치를 찾지 못했습니다(화면 밖이거나 사라짐)` }
   const dbg = wc.debugger
   let attached = false

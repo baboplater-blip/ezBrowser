@@ -6,7 +6,10 @@ import { createJsonStore, loadJsonObject } from './json-store'
 // 메인에서 기록하므로 사이드바를 닫아도 남는다. userData/ai-agent-runs.json.
 // 저장 기전(디바운스·원자적 쓰기·손상 복구)은 json-store.ts 가 맡는다 — 그 파일의 머리말 참고.
 
-export type AgentRunStatus = 'running' | 'done' | 'error' | 'cancelled'
+// 'interrupted' = 단계 예산을 다 썼지만 작업은 끝나지 않음 — **성공이 아니다**.
+// 예전에는 단계 소진 시 agent.ts 가 done 을 내보내 이 목록에 ✅ 로 남았다(사용자가 "됐다"고 오해).
+// 'paused' = 사용자가 일시정지한 상태로 남은 실행.
+export type AgentRunStatus = 'running' | 'done' | 'error' | 'cancelled' | 'interrupted' | 'paused'
 export interface AgentRunStep { icon: string; text: string; tone?: 'ok' | 'warn' | 'muted' }
 export interface AgentRun {
   id: string
@@ -63,8 +66,16 @@ export function initAgentRuns(): void {
   cache = rawRuns.filter(isValid)
   // 파싱은 됐지만 일부 항목이 망가진 경우 — 정상 항목은 복구하고 버린 개수를 알린다.
   store.reportDropped(rawRuns.length - cache.length, cache.length)
-  // 재시작 시 'running' 으로 남은 것은 중단된 것으로 정리
-  for (const r of cache) { if (r.status === 'running') { r.status = 'cancelled'; r.endedAt = r.endedAt ?? r.startedAt } }
+  // 재시작 시 'running'/'paused' 로 남은 것은 **중단(interrupted)** 으로 정리한다.
+  // 예전에는 'cancelled'(사용자가 취소한 것과 같은 표시)로 뭉갰다 — 크래시로 끊긴 것과
+  // 사용자가 직접 중단한 것은 다른 사건이고, 전자는 이어갈 수 있어야 한다.
+  for (const r of cache) {
+    if (r.status === 'running' || r.status === 'paused') {
+      r.status = 'interrupted'
+      r.endedAt = r.endedAt ?? r.startedAt
+      if (!r.result) r.result = '브라우저가 예기치 않게 종료돼 중단됐습니다(이어가기 가능)'
+    }
+  }
 }
 
 function all(): AgentRun[] {
@@ -126,6 +137,10 @@ function deriveStep(evt: EventLike): AgentRunStep | null {
     case 'done': return { icon: '🏁', text: s('message') || '완료', tone: 'ok' }
     case 'error': return { icon: '❌', text: s('message') || '오류', tone: 'warn' }
     case 'cancelled': return { icon: '⏹️', text: '중단됨', tone: 'muted' }
+    // 단계 예산 소진 — 완료가 아니라 "여기까지" 다. tone 을 ok 로 주지 않는다.
+    case 'exhausted': return { icon: '⏳', text: `단계 ${s('stepsUsed')}까지 진행 — 아직 완료하지 못했습니다`, tone: 'warn' }
+    case 'paused': return { icon: '⏸️', text: '일시정지 — 페이지 조작을 멈췄습니다', tone: 'muted' }
+    case 'resumed': return { icon: '▶️', text: '재개', tone: 'muted' }
     default: return null
   }
 }
@@ -169,6 +184,15 @@ export function recordAgentEvent(runId: string, task: string, evt: EventLike): v
   if (evt.type === 'done') { run.status = 'done'; run.endedAt = Date.now(); run.result = String(evt.message ?? ''); transitioned = true }
   else if (evt.type === 'error') { run.status = 'error'; run.endedAt = Date.now(); run.result = String(evt.message ?? ''); transitioned = true }
   else if (evt.type === 'cancelled') { run.status = 'cancelled'; run.endedAt = Date.now(); transitioned = true }
+  // 단계 소진을 **성공으로 기록하지 않는다**. 이어갈 수 있다는 뜻의 'interrupted' 로 남긴다.
+  else if (evt.type === 'exhausted') {
+    run.status = 'interrupted'; run.endedAt = Date.now()
+    run.result = `단계 ${String(evt.stepsUsed ?? '')}까지 진행 — 완료하지 못했습니다(이어가기 가능)`
+    transitioned = true
+  }
+  // 일시정지는 종료가 아니다 — endedAt 을 찍지 않는다(재개하면 계속 같은 실행).
+  else if (evt.type === 'paused') { run.status = 'paused'; transitioned = true }
+  else if (evt.type === 'resumed') { run.status = 'running'; transitioned = true }
 
   schedulePersist()
   if (transitioned) emitChanged() // 단계마다가 아니라 상태 전환 시에만 목록 갱신(라이브 트레이스는 별도 스트림)

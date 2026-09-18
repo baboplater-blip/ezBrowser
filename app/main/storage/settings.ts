@@ -132,6 +132,11 @@ export interface AppSettings {
     // 에이전트 실행 중 다운로드·동영상 도크와 좌측 사이드패널을 접어 콘텐츠 영역을 넓힌다(끝나면 복구). 큰 대화상자가 잘리는 것 방지.
     agentCollapsePanels: boolean
     webhookUrl: string      // 수집 데이터 연동 — 이 URL 로 JSON POST(Zapier·Make·구글시트 Apps Script 등)
+    // ===== 영속 작업(task-runtime) — 구간 단위로 이어가는 장기 에이전트 작업 =====
+    taskLongMaxHours: number        // 장시간 기본 최대 시간 (기본 24)
+    taskSegmentSteps: number        // 구간당 단계 (기본 12, 범위 4~40)
+    taskLongMaxSteps: number        // 장시간 총 단계 예산 (기본 2000)
+    taskLongMaxLlmCalls: number     // 장시간 모델 호출 상한 (기본 1500)
   }
 }
 
@@ -238,6 +243,10 @@ const DEFAULTS: AppSettings = {
     cliSession: true,
     agentCollapsePanels: true,
     webhookUrl: '',
+    taskLongMaxHours: 24,
+    taskSegmentSteps: 12,
+    taskLongMaxSteps: 2000,
+    taskLongMaxLlmCalls: 1500,
   },
 }
 

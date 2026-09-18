@@ -11,6 +11,8 @@ import { initAiMemory, memoryBlock, appendMemory, getMemoryText } from './memory
 import { initConversations } from './conversations'
 import { initSavedTasks } from './saved-tasks'
 import { initAgentRuns } from './agent-runs'
+import { initTaskRuntime } from './task-runtime'
+import { initAgentSchedule } from './agent-schedule'
 
 export type { AiMessage, AiProviderId } from './providers'
 export { diagnoseAi, type AiDiagnosis } from './diagnose'
@@ -45,6 +47,10 @@ export async function initAi(): Promise<void> {
   initConversations()
   initSavedTasks()
   initAgentRuns()
+  // 영속 작업·반복 스케줄 복원. 둘 다 **자동으로 실행을 재개하지 않는다** — 부팅만으로 에이전트가
+  // 페이지를 조작하면(결제·게시 포함) 안 되므로, 끊긴 것은 '중단됨'으로 되살려 두고 사용자가 이어가게 한다.
+  initTaskRuntime()
+  initAgentSchedule()
 }
 
 function currentModel(provider: AiProviderId): string {

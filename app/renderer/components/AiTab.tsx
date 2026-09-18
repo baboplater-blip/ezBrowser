@@ -60,12 +60,16 @@ function highlightNodes(text: string, query: string): React.ReactNode {
   return parts
 }
 interface SavedTask { id: string; name: string; task: string; createdAt: number; lastRunAt?: number }
-type RunStatus = 'running' | 'done' | 'error' | 'cancelled'
+// 'interrupted'·'paused' 는 task-runtime(영속 작업) 도입으로 추가 — 단계를 다 쓰고 끝난 실행을
+// 성공(done=✅)으로 남기지 않기 위해서다(T3: 단계 소진 ≠ 성공). 이력에는 "미완료"로 정직하게 남는다.
+type RunStatus = 'running' | 'paused' | 'interrupted' | 'done' | 'error' | 'cancelled'
 interface RunSummary { id: string; task: string; startedAt: number; endedAt?: number; status: RunStatus; stepCount: number }
 interface RunStep { icon: string; text: string; tone?: 'ok' | 'warn' | 'muted' }
 interface RunDetail { id: string; task: string; startedAt: number; endedAt?: number; status: RunStatus; steps: RunStep[]; result?: string }
 const RUN_STATUS: Record<RunStatus, { icon: string; label: string }> = {
   running: { icon: '◔', label: '진행 중' },
+  paused: { icon: '⏸️', label: '일시정지' },
+  interrupted: { icon: '⏳', label: '미완료' },
   done: { icon: '✅', label: '완료' },
   error: { icon: '❌', label: '오류' },
   cancelled: { icon: '⏹️', label: '중단' },
@@ -73,6 +77,47 @@ const RUN_STATUS: Record<RunStatus, { icon: string; label: string }> = {
 interface RepeatSummary {
   id: string; task: string; intervalMs: number; totalCount: number; doneCount: number
   autoConfirm: boolean; status: 'running' | 'waiting' | 'stopped' | 'finished'; nextAt: number | null; lastResult?: string
+  resumable?: boolean  // 재시작 후 자동 부활하지 않고 멈춘 반복(T10) — 사용자가 명시적으로 다시 시작해야 함
+}
+
+// ===== 영속 작업(task-runtime) — 단계 소진·크래시에도 이어갈 수 있는 실행 =====
+// 단계 소진(exhausted)이 완료가 아니듯, 여기서도 "끝났다"와 "성공했다"를 절대 같은 뜻으로 쓰지 않는다.
+type TaskState =
+  | 'queued' | 'running' | 'paused' | 'waiting-user' | 'retrying'
+  | 'interrupted' | 'needs-verify' | 'completed' | 'failed' | 'cancelled'
+interface TaskRetryInfo { kind: string; attempt: number; nextAt: number; detail: string }
+interface TaskSummary {
+  id: string; instruction: string; state: TaskState; mode: 'normal' | 'long'
+  stepsUsed: number; maxSteps: number; segment: number
+  elapsedMs: number; startedAt: number; endedAt?: number
+  waitReason?: string; retry?: TaskRetryInfo
+  llmCalls: number; maxLlmCalls: number
+  result?: string; resultFiles: string[]; needsVerify: boolean
+}
+type TaskPending = { kind: 'confirm'; label: string } | { kind: 'ask'; message: string }
+const TASK_STATE_LABEL: Record<TaskState, { icon: string; label: string; tone?: 'ok' | 'warn' | 'muted' }> = {
+  queued: { icon: '🕐', label: '대기 중', tone: 'muted' },
+  running: { icon: '▶', label: '실행 중' },
+  paused: { icon: '⏸️', label: '일시정지', tone: 'muted' },
+  'waiting-user': { icon: '❓', label: '확인 대기', tone: 'warn' },
+  retrying: { icon: '🔄', label: '재시도 대기', tone: 'warn' },
+  interrupted: { icon: '⏳', label: '미완료', tone: 'warn' },
+  'needs-verify': { icon: '🔍', label: '확인 필요', tone: 'warn' },
+  completed: { icon: '✅', label: '완료', tone: 'ok' },
+  failed: { icon: '❌', label: '실패', tone: 'warn' },
+  cancelled: { icon: '⏹️', label: '중단됨', tone: 'muted' },
+}
+const RETRY_KIND_LABEL: Record<string, string> = {
+  network: '네트워크 오류', 'rate-limit': '요청 한도 초과', 'cli-dead': 'CLI 연결 끊김',
+  'tab-gone': '작업 탭이 닫힘', login: '로그인 필요', model: '모델 오류', unknown: '알 수 없는 오류',
+}
+function fmtDuration(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) return `${s}초`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}분 ${s % 60}초`
+  const h = Math.floor(m / 60)
+  return `${h}시간 ${m % 60}분`
 }
 function repeatStatusText(r: RepeatSummary): string {
   const of = r.totalCount > 0 ? `${r.doneCount}/${r.totalCount}회` : `${r.doneCount}회 (무제한)`
@@ -180,6 +225,134 @@ function relTime(ts: number): string {
   try { return new Date(ts).toLocaleDateString() } catch { return '' }
 }
 
+// 영속 작업 카드 — 목록(showPtasks 전체 보기)과 인라인 "진행 중" 영역이 이 한 컴포넌트를 함께 쓴다.
+// SKILL 의 "한 뷰 = 한 목적" 을 지키려고 별도 상세 화면을 두지 않았다 — 카드 자체가 이미 상태·진척·
+// 대기 이유·버튼을 전부 담고 있어, 드릴다운 없이도 필요한 조작을 이 자리에서 끝낼 수 있다.
+function TaskCard({
+  t, elapsedLabel, retryLabel, pending, traceItems, evidence, answerDraft, canRerun,
+  onPause, onResume, onCancel, onDelete, onAccept, onRerun, onConfirm, onAnswerChange, onAnswerSend,
+}: {
+  t: TaskSummary
+  elapsedLabel: string
+  retryLabel: string | null
+  pending?: TaskPending
+  traceItems: TraceItem[]
+  evidence?: string
+  answerDraft: string
+  canRerun: boolean
+  onPause: () => void
+  onResume: () => void
+  onCancel: () => void
+  onDelete: () => void
+  onAccept: () => void
+  onRerun: () => void
+  onConfirm: (approved: boolean) => void
+  onAnswerChange: (v: string) => void
+  onAnswerSend: () => void
+}) {
+  const meta = TASK_STATE_LABEL[t.state]
+  const cancellable = t.state === 'running' || t.state === 'paused' || t.state === 'waiting-user' || t.state === 'retrying' || t.state === 'queued'
+  const terminal = t.state === 'completed' || t.state === 'failed' || t.state === 'cancelled'
+  return (
+    <div className={`ai-task-card ${meta.tone ?? ''}`}>
+      <div className="ai-task-head">
+        <span className={`ai-task-badge ${meta.tone ?? ''}`}>{meta.icon} {meta.label}</span>
+        <span className="ai-task-instruction" title={t.instruction}>{t.instruction}</span>
+      </div>
+      <div className="ai-task-meta">
+        {t.mode === 'long' && <span className="ai-task-pill">장시간</span>}
+        <span>{elapsedLabel}</span>
+        <span>· 단계 {t.stepsUsed}/{t.maxSteps}{t.segment > 1 ? ` · 구간 ${t.segment}` : ''}</span>
+        <span>· 호출 {t.llmCalls}/{t.maxLlmCalls}</span>
+      </div>
+
+      {t.state === 'retrying' && t.retry && (
+        <div className="ai-task-note warn">
+          🔄 {RETRY_KIND_LABEL[t.retry.kind] ?? t.retry.kind} · {t.retry.attempt}번째 재시도{retryLabel ? ` · ${retryLabel}` : ''}
+        </div>
+      )}
+      {/* 단계 소진 등으로 이어가지 못한 것이지 실패가 아니다 — ✅ 로 오인시키지 않고 '미완료'로 정직하게. */}
+      {t.state === 'interrupted' && (
+        <div className="ai-task-note warn">완료하지 못했습니다 — 이어갈 수 있습니다.</div>
+      )}
+      {/* 모델이 done 을 냈어도 근거(완료 문구·결과 파일 등)가 확인되기 전에는 완료로 표시하지 않는다. */}
+      {t.state === 'needs-verify' && (
+        <div className="ai-task-note warn">
+          완료를 확인해 주세요.
+          {evidence ? <div className="ai-task-evidence">{evidence}</div> : <div className="ai-task-evidence dim">근거를 불러오는 중…</div>}
+        </div>
+      )}
+      {(t.state === 'failed' || t.state === 'cancelled') && t.result && (
+        <div className="ai-task-note warn">{t.result}</div>
+      )}
+      {t.state === 'completed' && t.result && (
+        <div className="ai-task-note ok">{t.result}</div>
+      )}
+
+      {traceItems.length > 0 && !terminal && (
+        <div className="ai-task-trace">
+          {traceItems.slice(-6).map((tr) => (
+            <div key={tr.id} className={`ai-trace-item ${tr.tone ?? ''}`}>
+              <span className="ai-trace-icon">{tr.icon}</span>
+              <span className="ai-trace-text">{tr.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 확인/질문 — 사이드바가 열려 있던 동안 라이브 이벤트로 종류를 정확히 알면 그 UI 만,
+          재접속으로 종류를 모르면(waitReason 만 있음) 확인·답변 둘 다 제공한다. */}
+      {pending?.kind === 'confirm' && (
+        <div className="ai-confirm">
+          <div className="ai-confirm-msg">⏸️ <b>{pending.label}</b> 을(를) 실행할까요?</div>
+          <div className="ai-confirm-btns">
+            <button className="ai-confirm-yes" onClick={() => onConfirm(true)}>승인</button>
+            <button className="ai-confirm-no" onClick={() => onConfirm(false)}>거부</button>
+          </div>
+        </div>
+      )}
+      {pending?.kind === 'ask' && (
+        <div className="ai-confirm">
+          <div className="ai-confirm-msg">❓ {pending.message}</div>
+          <div className="ai-ask-row">
+            <input className="ai-ask-input" value={answerDraft} placeholder="답변을 입력하세요…"
+              onChange={(e) => onAnswerChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAnswerSend() } }} />
+            <button className="ai-confirm-yes" onClick={onAnswerSend} disabled={!answerDraft.trim()}>보내기</button>
+          </div>
+        </div>
+      )}
+      {!pending && t.state === 'waiting-user' && (
+        <div className="ai-confirm">
+          <div className="ai-confirm-msg">❓ {t.waitReason ?? '확인이 필요합니다.'}</div>
+          <div className="ai-confirm-btns">
+            <button className="ai-confirm-yes" onClick={() => onConfirm(true)}>승인</button>
+            <button className="ai-confirm-no" onClick={() => onConfirm(false)}>거부</button>
+          </div>
+          <div className="ai-ask-row" style={{ marginTop: 6 }}>
+            <input className="ai-ask-input" value={answerDraft} placeholder="또는 직접 답변…"
+              onChange={(e) => onAnswerChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAnswerSend() } }} />
+            <button className="ai-confirm-yes" onClick={onAnswerSend} disabled={!answerDraft.trim()}>보내기</button>
+          </div>
+        </div>
+      )}
+
+      <div className="ai-task-actions">
+        {t.state === 'running' && <button className="ai-mini-btn" onClick={onPause} title="일시정지">⏸ 일시정지</button>}
+        {t.state === 'paused' && <button className="ai-mini-btn active" onClick={onResume} title="재개">▶ 재개</button>}
+        {t.state === 'interrupted' && <button className="ai-mini-btn active" onClick={onResume} title="이어가기">▶ 이어가기</button>}
+        {t.state === 'needs-verify' && <button className="ai-mini-btn active" onClick={onAccept} title="완료를 확인하고 승인">✅ 결과 승인</button>}
+        {cancellable && <button className="ai-mini-btn" onClick={onCancel} title="중단">⏹ 중단</button>}
+        {canRerun && terminal && <button className="ai-mini-btn" onClick={onRerun} title="같은 작업 다시 실행">↻ 다시</button>}
+        {(terminal || t.state === 'needs-verify' || t.state === 'interrupted') && (
+          <button className="ai-history-del" onClick={onDelete} title="목록에서 삭제">×</button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { windowId: string; active: TabSummary | null; summarizeNonce?: number; writeNonce?: number }) {
   const [config, setConfig] = useState<AiConfig | null>(null)
   const [detection, setDetection] = useState<AiProviderDetection | null>(null)
@@ -241,6 +414,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   const [trace, setTrace] = useState<TraceItem[]>([])
   const [extractRows, setExtractRows] = useState<Array<Record<string, string>>>([]) // 에이전트가 수집한 데이터
   const [agentRunning, setAgentRunning] = useState(false)
+  const [agentPaused, setAgentPaused] = useState(false)  // 'paused'/'resumed' 이벤트 — 종료가 아니라 스피너 문구만 바꾼다
   const [awaitingConfirm, setAwaitingConfirm] = useState<string | null>(null)
   const [awaitingAsk, setAwaitingAsk] = useState<string | null>(null)
   const [askInput, setAskInput] = useState('')
@@ -260,6 +434,23 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   // 대량·반복 처리(데이터 각 행마다 작업)
   const [batchOn, setBatchOn] = useState(false)
   const [batchData, setBatchData] = useState('')
+  // 영속 작업(task-runtime) — 실행 방식·범위 한도. IPC 는 ptask* 접두(에이전트 작업 매크로의
+  // taskList/onTaskChanged 와 이름이 겹쳐 분리됨). 메인 입력창의 '▶ 실행' 이 이 경로를 탄다
+  // (퀵액션·배치·다시실행은 기존 ephemeral agentStart 경로를 그대로 씀).
+  const [execMode, setExecMode] = useState<'normal' | 'long'>('normal')
+  const [longMaxHours, setLongMaxHours] = useState(24)
+  const [longMaxSteps, setLongMaxSteps] = useState(2000)
+  const [longMaxLlmCalls, setLongMaxLlmCalls] = useState(1500)
+  const [allowedHostsText, setAllowedHostsText] = useState('')
+  const [ptasks, setPtasks] = useState<TaskSummary[]>([])
+  const [showPtasks, setShowPtasks] = useState(false)
+  const [ptaskNotice, setPtaskNotice] = useState<string | null>(null)
+  const [ptaskTraces, setPtaskTraces] = useState<Record<string, TraceItem[]>>({})
+  const [ptaskPending, setPtaskPending] = useState<Record<string, TaskPending>>({})
+  const [ptaskEvidence, setPtaskEvidence] = useState<Record<string, string>>({})
+  const [ptaskAnswerDraft, setPtaskAnswerDraft] = useState<Record<string, string>>({})
+  const ptaskSyncRef = useRef<Map<string, { elapsedMs: number; at: number }>>(new Map())
+  const ptaskEvidenceFetchedRef = useRef<Set<string>>(new Set())
   // 고급 옵션(자동 반복·데이터 반복)은 기본 접힘 — 평소 입력창을 깔끔하게 유지
   const [showAdvanced, setShowAdvanced] = useState(false)
   // 부팅 시 마지막 대화 자동 복원이 늦게 도착해, 그 사이 사용자가 이미 입력을 시작한 경우
@@ -366,9 +557,18 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         case 'batch-start': push('📋', `대량 처리 시작 — ${String(p.total)}개 행`); break
         case 'batch-row': push('▶', `행 ${Number(p.index) + 1}/${String(p.total)} 처리`, 'muted'); break
         case 'batch-row-done': push('✅', `행 ${Number(p.index) + 1} 완료: ${String(p.outcome ?? '')}`.slice(0, 120), 'ok'); break
-        case 'done': push('🏁', String(p.message ?? '완료'), 'ok', typeof p.shot === 'string' ? p.shot : undefined); setAgentRunning(false); agentReqId.current = null; break
-        case 'error': push('❌', String(p.message ?? '오류'), 'warn'); setAgentRunning(false); agentReqId.current = null; break
-        case 'cancelled': push('⏹️', '중단됨', 'muted'); setAgentRunning(false); agentReqId.current = null; break
+        case 'done': push('🏁', String(p.message ?? '완료'), 'ok', typeof p.shot === 'string' ? p.shot : undefined); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
+        // 단계 예산을 다 썼지만 끝난 게 아니다 — done(✅)과 절대 같은 톤으로 보이면 안 된다(T3 와 동일 원칙).
+        case 'exhausted':
+          push('⏳', `단계 ${String(p.stepsUsed ?? '')}까지 진행 — 아직 완료하지 못했습니다`, 'warn')
+          if (p.publishPending) push('⚠️', '발행을 눌렀지만 완료 신호를 확인하지 못했습니다 — 실제로 올라갔는지 확인해 주세요', 'warn')
+          setAgentRunning(false); setAgentPaused(false); agentReqId.current = null
+          break
+        case 'error': push('❌', String(p.message ?? '오류'), 'warn'); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
+        case 'cancelled': push('⏹️', '중단됨', 'muted'); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
+        // 일시정지/재개는 종료가 아니다 — agentRunning 은 유지하고 스피너 문구만 바꾼다.
+        case 'paused': push('⏸️', '일시정지 — 페이지 조작을 멈췄습니다', 'muted'); setAgentPaused(true); break
+        case 'resumed': push('▶', '재개', 'muted'); setAgentPaused(false); break
         default: break
       }
     })
@@ -472,11 +672,99 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     return () => off()
   }, [])
   const activeRepeats = repeats.filter((r) => r.status === 'running' || r.status === 'waiting')
+  // 재시작 후 자동 부활하지 않고 멈춘 반복(T10) — 명시적으로 다시 시작해야 한다.
+  const resumableRepeats = repeats.filter((r) => r.status === 'stopped' && r.resumable)
   useEffect(() => {
     if (activeRepeats.length === 0) return
     const t = setInterval(() => setRepeats((prev) => [...prev]), 1000) // 카운트다운 갱신
     return () => clearInterval(t)
   }, [activeRepeats.length])
+
+  // 영속 작업 목록 로드 + 변경 구독 — 사이드바를 닫았다 열어도 살아 있는 작업이 그대로 보인다.
+  useEffect(() => {
+    void window.browserAPI.ai.ptaskList().then(setPtasks)
+    const off = window.browserAPI.ai.onPtaskChanged((list) => setPtasks(list))
+    return () => off()
+  }, [])
+
+  // 영속 작업 라이브 이벤트. confirm/ask 는 종류를 정확히 구분해 받는다(사이드바가 열려 있는 동안
+  // 도착한 경우) — 재시작 후 재접속처럼 라이브 이벤트를 못 받은 채 waiting-user 로 복원된 경우는
+  // 카드가 waitReason 기반 일반 확인/답변 UI 로 대체 표시한다(아래 렌더 부분).
+  useEffect(() => {
+    const off = window.browserAPI.ai.onPtaskEvent((p) => {
+      const id = String(p.taskId ?? '')
+      if (!id) return
+      const pushTrace = (icon: string, text: string, tone?: TraceItem['tone']) =>
+        setPtaskTraces((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), { id: newId(), icon, text, tone }].slice(-60) }))
+      switch (p.type) {
+        case 'observe': pushTrace(p.vision ? '👁' : '🔍', `관찰 · 스텝 ${String(p.step)}`, 'muted'); break
+        case 'thought': if (p.thought) pushTrace('💭', String(p.thought)); break
+        case 'action': pushTrace('⚙️', String(p.label ?? '')); break
+        case 'result': pushTrace(p.ok ? '✔️' : '✖️', String(p.detail ?? ''), p.ok ? 'ok' : 'warn'); break
+        case 'confirm':
+          setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'confirm', label: String(p.label ?? '이 행동') } }))
+          pushTrace('⏸️', `확인 필요: ${String(p.label ?? '')}`, 'warn')
+          break
+        case 'ask':
+          setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'ask', message: String(p.message ?? '추가 정보가 필요합니다.') } }))
+          pushTrace('❓', String(p.message ?? ''))
+          break
+        case 'answer':
+          setPtaskPending((prev) => { const n = { ...prev }; delete n[id]; return n })
+          pushTrace('🗣️', `답변: ${String(p.text ?? '')}`, 'muted')
+          break
+        default: break
+      }
+    })
+    return off
+  }, [])
+
+  // needs-verify 로 접어든 작업만 taskGet 으로 완료 근거(verifyEvidence)를 따로 받아 온다
+  // (목록 요약에는 근거 텍스트가 없어 — 카드에 "완료를 확인해 주세요"만 보이면 신뢰할 근거가 없다).
+  useEffect(() => {
+    for (const t of ptasks) {
+      if (t.needsVerify && !ptaskEvidenceFetchedRef.current.has(t.id)) {
+        ptaskEvidenceFetchedRef.current.add(t.id)
+        void window.browserAPI.ai.ptaskGet(t.id).then((full) => {
+          if (full) setPtaskEvidence((prev) => ({ ...prev, [t.id]: full.verifyEvidence ?? '' }))
+        })
+      }
+    }
+  }, [ptasks])
+
+  // 경과 시간·재시도 카운트다운 — 목록 브로드캐스트 시점의 elapsedMs 를 기준 삼아 벽시계로
+  // 보간한다(백엔드가 초 단위로 매번 다시 보내주지 않아도 화면은 실시간처럼 움직인다).
+  useEffect(() => {
+    for (const t of ptasks) ptaskSyncRef.current.set(t.id, { elapsedMs: t.elapsedMs, at: Date.now() })
+  }, [ptasks])
+  const [, tickPtasks] = useState(0)
+  const ptaskTicking = ptasks.some((t) => t.state === 'running' || t.state === 'retrying')
+  useEffect(() => {
+    if (!ptaskTicking) return
+    const timer = setInterval(() => tickPtasks((v) => v + 1), 1000)
+    return () => clearInterval(timer)
+  }, [ptaskTicking])
+  const ptaskElapsed = (t: TaskSummary): number => {
+    const sync = ptaskSyncRef.current.get(t.id)
+    if (!sync) return t.elapsedMs
+    return t.state === 'running' ? sync.elapsedMs + (Date.now() - sync.at) : sync.elapsedMs
+  }
+  const ptaskRetryCountdown = (t: TaskSummary): string | null => {
+    if (!t.retry) return null
+    const remain = Math.max(0, t.retry.nextAt - Date.now())
+    const sec = Math.ceil(remain / 1000)
+    return sec >= 60 ? `${Math.ceil(sec / 60)}분 후 재시도` : `${sec}초 후 재시도`
+  }
+
+  // 장시간 실행 기본값(설정에서) — 최초 진입 시 한 번 불러와 입력 필드 기본값으로.
+  useEffect(() => {
+    void window.browserAPI.settings.get('ai').then((v) => {
+      const s = (v ?? {}) as Partial<{ taskLongMaxHours: number; taskLongMaxSteps: number; taskLongMaxLlmCalls: number }>
+      if (typeof s.taskLongMaxHours === 'number') setLongMaxHours(s.taskLongMaxHours)
+      if (typeof s.taskLongMaxSteps === 'number') setLongMaxSteps(s.taskLongMaxSteps)
+      if (typeof s.taskLongMaxLlmCalls === 'number') setLongMaxLlmCalls(s.taskLongMaxLlmCalls)
+    })
+  }, [])
 
   // 대화가 안정되면(스트리밍 종료) 400ms 디바운스로 스레드 전체를 저장.
   useEffect(() => {
@@ -731,14 +1019,14 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     const reqId = newId(); agentReqId.current = reqId
     // 이전 턴 트레이스는 지우지 않는다 — 백엔드가 창 단위 세션 맥락을 이어가므로("대화가 이어짐"),
     // 화면도 이어서 쌓인다(각 턴은 🎯 작업 시작 줄로 구분). 초기화는 '＋ 새 작업' 으로.
-    setAwaitingConfirm(null); setAwaitingAsk(null); setAskInput(''); setAgentRunning(true)
+    setAwaitingConfirm(null); setAwaitingAsk(null); setAskInput(''); setAgentRunning(true); setAgentPaused(false)
     setAgentTask('') // 전송 후 입력창 비우기
     const rows = batchOn ? parseDataset(batchData) : []
     void window.browserAPI.ai.agentStart({ reqId, tabId: activeId, task: t, ...(rows.length ? { rows, autoConfirm: repeatAuto } : {}) })
   }
   const stopAgent = () => {
     if (agentReqId.current) void window.browserAPI.ai.agentCancel(agentReqId.current)
-    setAgentRunning(false); setAwaitingConfirm(null); setAwaitingAsk(null)
+    setAgentRunning(false); setAgentPaused(false); setAwaitingConfirm(null); setAwaitingAsk(null)
   }
   const respondConfirm = (approved: boolean) => {
     const rid = agentReqId.current
@@ -751,7 +1039,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     void window.browserAPI.ai.agentReply(rid, a)
     setAskInput(''); setAwaitingAsk(null)
   }
-  // 데이터 반복(batch)이 켜져 있으면 각 행마다 실행(startAgent 가 rows 전달), 시간 반복이면 스케줄러, 아니면 1회.
+  // 데이터 반복(batch)·자동 반복(repeat)은 기존 ephemeral 경로(agentStart/repeatStart) 그대로 두고,
+  // 그 외의 "한 번 실행"만 영속 작업(ptask)으로 만든다 — 일시정지·재개·크래시 복원이 필요한 건
+  // 결국 이 평범한 단발 실행이기 때문(배치·반복은 각자 다른 재개 메커니즘을 이미 갖고 있다).
   const runAgentOrRepeat = () => {
     const t = agentTask.trim()
     if (!t || !providerReady || isInternal) return
@@ -762,12 +1052,75 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
       void window.browserAPI.ai.repeatStart({ task: t, windowId, tabId: activeId, intervalMinutes: Math.max(0.1, repeatEvery), count: Math.max(0, repeatCount), autoConfirm: repeatAuto })
       setAgentTask('') // 전송 후 입력창 비우기
     } else {
-      startAgent(t)
+      startPersistentTask(t)
     }
   }
   const onAgentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAgentOrRepeat() }
   }
+
+  // ===== 영속 작업(ptask) =====
+  // 상태 변경 호출은 throw 하지 않고 {ok, error} 를 돌려준다(소유 창이 아니거나 상태 전이가
+  // 불가할 때) — 조용히 무시하면 "눌렀는데 아무 일도 안 일어난다"가 되므로 실패 사유를 반드시 보인다.
+  const runPtaskAction = (p: Promise<{ ok: boolean; error?: string }>) => {
+    void p.then((r) => { if (!r?.ok) setPtaskNotice(r?.error || '요청을 처리하지 못했습니다.') })
+      .catch((e) => setPtaskNotice(e instanceof Error ? e.message : String(e)))
+  }
+  const startPersistentTask = (task: string) => {
+    const trimmed = task.trim()
+    if (!trimmed || isInternal || !providerReady || !activeId) return
+    // 허용 사이트는 실행 방식(일반/장시간)과 무관하게 적용되는 범위 한도.
+    const hosts = allowedHostsText.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+    const budget: Partial<{ maxDurationMs: number; maxSteps: number; maxLlmCalls: number; allowedHosts: string[] }> = {}
+    if (execMode === 'long') {
+      budget.maxDurationMs = Math.max(1, longMaxHours) * 3600_000
+      budget.maxSteps = Math.max(1, longMaxSteps)
+      budget.maxLlmCalls = Math.max(1, longMaxLlmCalls)
+    }
+    if (hosts.length) budget.allowedHosts = hosts
+    setAgentTask(''); setPtaskNotice('')
+    void window.browserAPI.ai.ptaskCreate({
+      instruction: trimmed, tabId: activeId, mode: execMode,
+      ...(Object.keys(budget).length ? { budget } : {}),
+    }).then((summary) => {
+      if (!summary) { setPtaskNotice('작업을 만들지 못했습니다(빈 지시).'); return }
+      runPtaskAction(window.browserAPI.ai.ptaskStart(summary.id))
+    })
+  }
+  const pausePtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskPause(id))
+  const resumePtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskResume(id))
+  const cancelPtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskCancel(id))
+  const deletePtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskDelete(id))
+  const acceptPtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskAccept(id))
+  const rerunPtask = (t: TaskSummary) => {
+    if (isInternal || !providerReady || !activeId) return
+    void window.browserAPI.ai.ptaskCreate({ instruction: t.instruction, tabId: activeId, mode: t.mode }).then((s) => {
+      if (!s) { setPtaskNotice('작업을 만들지 못했습니다.'); return }
+      runPtaskAction(window.browserAPI.ai.ptaskStart(s.id))
+    })
+  }
+  const respondPtaskConfirm = (id: string, approved: boolean) => {
+    runPtaskAction(window.browserAPI.ai.ptaskConfirm(id, approved))
+    setPtaskPending((prev) => { const n = { ...prev }; delete n[id]; return n })
+  }
+  const setPtaskAnswer = (id: string, v: string) => setPtaskAnswerDraft((prev) => ({ ...prev, [id]: v }))
+  const respondPtaskAnswer = (id: string) => {
+    const a = (ptaskAnswerDraft[id] ?? '').trim()
+    if (!a) return
+    runPtaskAction(window.browserAPI.ai.ptaskAnswer(id, a))
+    setPtaskAnswerDraft((prev) => ({ ...prev, [id]: '' }))
+    setPtaskPending((prev) => { const n = { ...prev }; delete n[id]; return n })
+  }
+  const togglePtasks = () => {
+    setShowRuns(false); setViewRun(null)
+    setShowPtasks((s) => {
+      if (!s) { setPtaskNotice(null); void window.browserAPI.ai.ptaskList().then(setPtasks) }
+      return !s
+    })
+  }
+  // 사이드바를 닫았다 열어도 살아 있는 작업이 눈에 바로 띄도록, 진행/대기 중인 작업은 항상
+  // 인라인으로도 보인다(완료·실패·중단은 '📌 작업' 전체 목록에서만 — 평소 입력창을 깔끔하게 유지).
+  const livePtasks = ptasks.filter((t) => t.state !== 'completed' && t.state !== 'failed' && t.state !== 'cancelled')
   // 작업 매크로
   const saveCurrentTask = () => {
     const t = agentTask.trim()
@@ -790,14 +1143,14 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     if (n) void window.browserAPI.ai.taskRename(id, n)
   }
   const resetAgent = () => {
-    setTrace([]); setExtractRows([]); setReport(null); setAwaitingConfirm(null); setAwaitingAsk(null); setShowRuns(false); setViewRun(null)
+    setTrace([]); setExtractRows([]); setReport(null); setAwaitingConfirm(null); setAwaitingAsk(null); setShowRuns(false); setViewRun(null); setAgentPaused(false)
     void window.browserAPI.ai.agentReset(windowId) // 백엔드 세션 맥락도 초기화(이전 대화 잊기)
   }
   // 사이트 분석 보고서 — 현재 로그인된 사이트를 여러 페이지 훑어보고 보고서 작성(읽기 전용)
   const startSiteReport = () => {
     if (isInternal || !providerReady || agentRunning || !activeId) return
     const reqId = newId(); agentReqId.current = reqId
-    setAwaitingConfirm(null); setAwaitingAsk(null); setAskInput(''); setReport(null); setAgentRunning(true)
+    setAwaitingConfirm(null); setAwaitingAsk(null); setAskInput(''); setReport(null); setAgentRunning(true); setAgentPaused(false)
     void window.browserAPI.ai.reportBuildTask({ depth: reportDepth === 'brief' ? 3 : 7 }).then((r) => {
       void window.browserAPI.ai.agentStart({ reqId, tabId: activeId, task: r.task, readOnly: r.readOnly })
     })
@@ -814,7 +1167,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   }
   // 실행 이력
   const toggleRuns = () => {
-    setViewRun(null)
+    setViewRun(null); setShowPtasks(false)
     setShowRuns((s) => {
       if (!s) void window.browserAPI.ai.runList().then(setAgentRuns)
       return !s
@@ -924,6 +1277,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           )}
           {mode === 'agent' && (
             <>
+              <button className={`ai-mini-btn ${showPtasks ? 'active' : ''}`} onClick={togglePtasks} title="영속 작업 — 일시정지·재개, 사이드바를 닫아도 계속 진행">📌 작업</button>
               <button className={`ai-mini-btn ${showRuns ? 'active' : ''}`} onClick={toggleRuns} title="작업 이력">🕘 이력</button>
               {(trace.length > 0 || showRuns) && !agentRunning && <button className="ai-mini-btn" onClick={resetAgent} title="새 작업">＋ 새 작업</button>}
               <button className="ai-mini-btn" onClick={saveCurrentTask} disabled={!agentTask.trim()} title="현재 작업을 매크로로 저장">💾 저장</button>
@@ -1193,7 +1547,43 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         </>
         )
       ) : (
-        showRuns ? (
+        showPtasks ? (
+          <div className="ai-body">
+            <div className="ai-history-head">
+              <span>영속 작업</span>
+              <div className="ai-history-head-actions">
+                <button className="ai-mini-btn" onClick={() => setShowPtasks(false)}>닫기</button>
+              </div>
+            </div>
+            {ptaskNotice && <div className="ai-handoff-note">{ptaskNotice}</div>}
+            {ptasks.length === 0 ? (
+              <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>영속 작업이 없습니다. 입력창에서 작업을 실행하면 여기에 남습니다.</div>
+            ) : (
+              <div className="ai-task-list">
+                {ptasks.map((t) => (
+                  <TaskCard key={t.id} t={t}
+                    elapsedLabel={fmtDuration(ptaskElapsed(t))}
+                    retryLabel={ptaskRetryCountdown(t)}
+                    pending={ptaskPending[t.id]}
+                    traceItems={ptaskTraces[t.id] ?? []}
+                    evidence={ptaskEvidence[t.id]}
+                    answerDraft={ptaskAnswerDraft[t.id] ?? ''}
+                    canRerun={providerReady && !isInternal}
+                    onPause={() => pausePtask(t.id)}
+                    onResume={() => resumePtask(t.id)}
+                    onCancel={() => cancelPtask(t.id)}
+                    onDelete={() => deletePtask(t.id)}
+                    onAccept={() => acceptPtask(t.id)}
+                    onRerun={() => rerunPtask(t)}
+                    onConfirm={(approved) => respondPtaskConfirm(t.id, approved)}
+                    onAnswerChange={(v) => setPtaskAnswer(t.id, v)}
+                    onAnswerSend={() => respondPtaskAnswer(t.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : showRuns ? (
           <div className="ai-body">
             {viewRun ? (
               <>
@@ -1260,6 +1650,32 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         ) : (
         <>
           <div className="ai-body" ref={bodyRef}>
+            {/* 진행/대기 중인 영속 작업 — 사이드바를 닫았다 열어도 바로 보인다. 완료·실패·중단은
+                여기 안 남기고 '📌 작업' 전체 목록에서만(입력창까지 밀어내지 않도록). */}
+            {livePtasks.length > 0 && (
+              <div className="ai-task-list">
+                {livePtasks.map((t) => (
+                  <TaskCard key={t.id} t={t}
+                    elapsedLabel={fmtDuration(ptaskElapsed(t))}
+                    retryLabel={ptaskRetryCountdown(t)}
+                    pending={ptaskPending[t.id]}
+                    traceItems={ptaskTraces[t.id] ?? []}
+                    evidence={ptaskEvidence[t.id]}
+                    answerDraft={ptaskAnswerDraft[t.id] ?? ''}
+                    canRerun={providerReady && !isInternal}
+                    onPause={() => pausePtask(t.id)}
+                    onResume={() => resumePtask(t.id)}
+                    onCancel={() => cancelPtask(t.id)}
+                    onDelete={() => deletePtask(t.id)}
+                    onAccept={() => acceptPtask(t.id)}
+                    onRerun={() => rerunPtask(t)}
+                    onConfirm={(approved) => respondPtaskConfirm(t.id, approved)}
+                    onAnswerChange={(v) => setPtaskAnswer(t.id, v)}
+                    onAnswerSend={() => respondPtaskAnswer(t.id)}
+                  />
+                ))}
+              </div>
+            )}
             {trace.length === 0 && !agentRunning ? (
               <div className="ai-welcome">
                 <div className="ai-welcome-title">🤖 에이전트</div>
@@ -1341,7 +1757,12 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                     </div>
                   </div>
                 )}
-                {agentRunning && !awaitingConfirm && !awaitingAsk && <div className="ai-trace-item muted"><span className="ai-trace-icon ai-spin">◔</span><span className="ai-trace-text">작업 중…</span></div>}
+                {agentRunning && !awaitingConfirm && !awaitingAsk && (
+                  <div className="ai-trace-item muted">
+                    <span className={agentPaused ? 'ai-trace-icon' : 'ai-trace-icon ai-spin'}>{agentPaused ? '⏸️' : '◔'}</span>
+                    <span className="ai-trace-text">{agentPaused ? '일시정지 — 페이지 조작을 멈췄습니다' : '작업 중…'}</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1393,7 +1814,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
               </div>
             )
           })()}
-          {activeRepeats.length > 0 && (
+          {(activeRepeats.length > 0 || resumableRepeats.length > 0) && (
             <div className="ai-repeats">
               {activeRepeats.map((r) => (
                 <div key={r.id} className="ai-repeat-item">
@@ -1404,14 +1825,45 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                   <div className="ai-repeat-meta">{repeatStatusText(r)}{r.autoConfirm ? ' · 무인 자동 승인' : ''}{r.lastResult ? ` · ${r.lastResult}` : ''}</div>
                 </div>
               ))}
+              {/* 재시작 후 자동 부활하지 않는다(T10) — 사용자가 명시적으로 다시 시작해야 한다. */}
+              {resumableRepeats.map((r) => (
+                <div key={r.id} className="ai-repeat-item muted">
+                  <div className="ai-repeat-head">
+                    <span className="ai-repeat-task" title={r.task}>🔁 {r.task}</span>
+                    <button className="ai-repeat-stop resume" onClick={() => void window.browserAPI.ai.scheduleResume(r.id)} title="다시 시작">재시작으로 멈춤 — 다시 시작</button>
+                  </div>
+                  <div className="ai-repeat-meta">{r.doneCount}회 완료됨</div>
+                </div>
+              ))}
             </div>
           )}
+          {ptaskNotice && <div className="ai-handoff-note">{ptaskNotice}</div>}
           <div className="ai-compose">
+            {/* 실행 방식 — '장시간'은 명시 선택이며, 고르면 무엇을 승인하는지 한 줄로 보인다.
+                일반 실행이 압도 다수이므로 기본은 항상 '일반'(로드 시 초기화 안 함 — 사용자가 마지막에
+                고른 방식이 아니라 매번 안전한 기본값으로 시작). */}
+            <div className="ai-exec-mode">
+              <span className="ai-exec-label">실행 방식</span>
+              <div className="ai-chips">
+                <button className={`ai-chip ${execMode === 'normal' ? 'active' : ''}`} onClick={() => setExecMode('normal')}>일반</button>
+                <button className={`ai-chip ${execMode === 'long' ? 'active' : ''}`} onClick={() => setExecMode('long')} title="사이드바를 닫거나 브라우저를 오래 켜 둔 채로 장시간 이어가는 작업">장시간</button>
+              </div>
+            </div>
+            {execMode === 'long' && (
+              <div className="ai-exec-long">
+                <div className="ai-exec-warn">⚠ 브라우저를 켜 둔 동안 최대 {longMaxHours}시간 계속 시도합니다.</div>
+                <div className="ai-repeat-fields">
+                  <span>최대 <input type="number" min={1} value={longMaxHours} onChange={(e) => setLongMaxHours(Math.max(1, Number(e.target.value) || 1))} />시간</span>
+                  <span>단계 <input type="number" min={10} value={longMaxSteps} onChange={(e) => setLongMaxSteps(Math.max(10, Number(e.target.value) || 10))} />개</span>
+                  <span>호출 <input type="number" min={10} value={longMaxLlmCalls} onChange={(e) => setLongMaxLlmCalls(Math.max(10, Number(e.target.value) || 10))} />회</span>
+                </div>
+              </div>
+            )}
             <button className="ai-adv-toggle" onClick={() => setShowAdvanced((v) => !v)}
-              title="자동 반복·데이터 반복 등 고급 실행 옵션">
+              title="자동 반복·데이터 반복·허용 사이트 등 고급 실행 옵션">
               <span className="ai-adv-caret">{showAdvanced ? '▾' : '▸'}</span>
               고급 옵션
-              {(repeatOn || batchOn) && <span className="ai-adv-badge">켜짐</span>}
+              {(repeatOn || batchOn || allowedHostsText.trim()) && <span className="ai-adv-badge">켜짐</span>}
             </button>
             {showAdvanced && (
             <div className="ai-repeat-config">
@@ -1445,6 +1897,13 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                   </label>
                 </div>
               )}
+              {/* 실행별 범위 한도 — 일반·장시간 어느 쪽에도 적용. 비우면 제한 없음. */}
+              <div className="ai-exec-hosts">
+                <label className="ai-exec-hosts-label" title="이 실행에서 이동을 허용할 사이트. 비우면 제한 없음.">🌐 허용 사이트 (선택)</label>
+                <textarea className="ai-batch-data" rows={2} value={allowedHostsText}
+                  placeholder={'example.com\nshop.example.com\n(줄바꿈 또는 쉼표로 구분 · 비우면 제한 없음)'}
+                  onChange={(e) => setAllowedHostsText(e.target.value)} />
+              </div>
             </div>
             )}
             <div className="ai-input-row">

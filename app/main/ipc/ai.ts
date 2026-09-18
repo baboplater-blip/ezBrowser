@@ -1,4 +1,4 @@
-import { dialog, ipcMain, net } from 'electron'
+import { BrowserWindow, dialog, ipcMain, net, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import { IPC } from '../../shared/ipc-channels'
 import { isTrustedSender } from './trust'
@@ -12,7 +12,7 @@ import { setAiKey, clearAiKey, type AiSecretProvider } from '../features/ai/keys
 import { detectProviders, connectProvider } from '../features/ai/detect'
 import type { AiProviderId } from '../features/ai/providers'
 import { runAgentTask, confirmAgentStep, replyAgentAsk, cancelAgentTask, resetAgentSession, runAgentBatch, cancelAgentBatch } from '../features/ai/agent'
-import { startRepeat, stopRepeat, removeRepeat, listRepeats, repeatEvents, type RepeatSummary } from '../features/ai/agent-schedule'
+import { startRepeat, stopRepeat, removeRepeat, listRepeats, repeatEvents, resumeRepeat, type RepeatSummary } from '../features/ai/agent-schedule'
 import { getMemoryText, setMemoryText, clearMemory, memoryEvents } from '../features/ai/memory'
 import { listTriggers, addTrigger, updateTrigger, removeTrigger, setTriggerEnabled, triggerEvents, type AgentTrigger } from '../features/ai/agent-triggers'
 import { getProfile, setProfile, storageAvailable, PROFILE_FIELDS, profileEvents } from '../features/ai/profile'
@@ -40,7 +40,15 @@ import {
 import {
   listAgentRuns, getAgentRun, recordAgentEvent, deleteAgentRun, clearAgentRuns, agentRunEvents, type AgentRunSummary,
 } from '../features/ai/agent-runs'
-import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
+// 영속 작업 런타임(task-runtime.ts) — 다른 작업자가 같은 라운드에 병행 작성 중인 모듈.
+// design.md §1 에 확정된 export 목록을 그대로 가져다 쓴다. 파일이 아직 없거나 시그니처가
+// 다르면 이 import 부터 tsc 오류가 나는데, 그건 task-runtime.ts 쪽 문제이지 이 파일의 문제가 아니다.
+import {
+  taskEvents, listTasks, getTask, createTask, startTask, pauseTask, resumeTask,
+  cancelTask, deleteTask, confirmTask, answerTask, acceptTaskResult,
+  type PersistentTask, type TaskSummary, type TaskBudget,
+} from '../features/ai/task-runtime'
+import { getAllWindows, getWindow, broadcastToInternalPages } from '../windows/window-service'
 
 interface SendArgs {
   reqId: string
@@ -611,5 +619,157 @@ export function registerAiIpc(): void {
     for (const ctx of getAllWindows()) {
       if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.runChanged, list)
     }
+  })
+
+  // ===== 영속 작업 런타임 =====
+  registerPersistentTaskIpc()
+}
+
+// 보낸 창(webContents)이 어느 BrowserWindowContext 에 속하는지 역추적.
+// extensions.ts 의 resolveWindowId 와 같은 패턴 — 창마다 "외피 webContents" 하나(id)와
+// "그 창의 BaseWindow" 둘 다로 매칭해, 탭/콘텐츠 쪽 webContents 가 잘못 걸리지 않게 한다.
+function resolveSenderWindowId(e: IpcMainInvokeEvent): string | null {
+  const wc = BrowserWindow.fromWebContents(e.sender)
+  for (const ctx of getAllWindows()) {
+    if (ctx.chrome.webContents.id === e.sender.id) return ctx.id
+    if (wc && ctx.win === (wc as unknown as Electron.BaseWindow)) return ctx.id
+  }
+  return null
+}
+
+// 이 작업을 이 창(sender)이 조작해도 되는가.
+// ownerWindowId 가 null 인 작업은 무인 트리거·재시작 복원 등 "특정 창 소유가 아닌" 경우라
+// 창을 가려낼 방법이 없으므로 어느 신뢰 창에서든 조작을 허용한다.
+// null 이 아니면 정확히 그 창에서 온 요청만 통과 — 다른 창·외부 페이지가 남의 작업을
+// 중단·승인·삭제하는 것을 막는 자리.
+function ownsTask(e: IpcMainInvokeEvent, task: PersistentTask): boolean {
+  if (task.ownerWindowId === null) return true
+  return resolveSenderWindowId(e) === task.ownerWindowId
+}
+
+function taskNotFound(): { ok: false; error: string } {
+  return { ok: false, error: '작업을 찾을 수 없습니다(이미 삭제되었을 수 있습니다).' }
+}
+
+function taskOwnershipDenied(): { ok: false; error: string } {
+  return { ok: false, error: '이 작업을 시작한 창에서만 조작할 수 있습니다.' }
+}
+
+const MAX_TASK_INSTRUCTION_LEN = 4000
+
+function clampFiniteNumber(v: unknown, min: number, max: number): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return undefined
+  return Math.min(max, Math.max(min, Math.floor(v)))
+}
+
+// budget 은 사용자가 직접 타이핑하는 값은 아니지만(장기/일반 모드 선택에서 UI 가 계산해 보냄),
+// 검증 없이 그대로 구간 루프에 흘려보내면 0·음수·Infinity·비정상 배열이 예산 계산·allowedHosts
+// 매칭을 깨뜨릴 수 있다 — 이 저장소에서 반복된 "받은 값을 그대로 저장" 결함과 같은 부류.
+function sanitizeTaskBudget(b: unknown): Partial<TaskBudget> | undefined {
+  if (!b || typeof b !== 'object') return undefined
+  const src = b as Partial<TaskBudget>
+  const out: Partial<TaskBudget> = {}
+  const maxSteps = clampFiniteNumber(src.maxSteps, 1, 5000)
+  if (maxSteps !== undefined) out.maxSteps = maxSteps
+  const maxDurationMs = clampFiniteNumber(src.maxDurationMs, 10_000, 172_800_000) // 10초 ~ 48시간
+  if (maxDurationMs !== undefined) out.maxDurationMs = maxDurationMs
+  const maxLlmCalls = clampFiniteNumber(src.maxLlmCalls, 1, 5000)
+  if (maxLlmCalls !== undefined) out.maxLlmCalls = maxLlmCalls
+  if (Array.isArray(src.allowedHosts)) {
+    out.allowedHosts = src.allowedHosts
+      .filter((h): h is string => typeof h === 'string' && h.trim().length > 0 && h.length <= 253)
+      .slice(0, 50)
+      .map((h) => h.trim().toLowerCase())
+  }
+  return out
+}
+
+function registerPersistentTaskIpc(): void {
+  // 목록·조회는 다른 대화·실행 이력 목록과 같은 원칙 — 이 데스크톱 앱엔 창별 데이터 격리가
+  // 없으므로(convList·runList 등도 전역 공개) 소유권 검사 없이 모든 신뢰 창에 보인다.
+  // 상태를 "바꾸는" 채널만 아래에서 ownsTask 로 가린다.
+  ipcMain.handle(IPC.ai.ptaskList, (e) => {
+    if (!isTrustedSender(e)) return []
+    return listTasks()
+  })
+
+  ipcMain.handle(IPC.ai.ptaskGet, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return null
+    return typeof args?.id === 'string' && args.id ? getTask(args.id) : null
+  })
+
+  ipcMain.handle(IPC.ai.ptaskCreate, (e, args: {
+    instruction: string
+    tabId: string
+    mode?: 'normal' | 'long'
+    readOnly?: boolean
+    budget?: Partial<TaskBudget>
+  }) => {
+    if (!isTrustedSender(e)) return null
+    const instruction = typeof args?.instruction === 'string' ? args.instruction.trim() : ''
+    if (!instruction || instruction.length > MAX_TASK_INSTRUCTION_LEN) return null
+    if (typeof args?.tabId !== 'string' || !args.tabId) return null
+    // windowId 는 렌더러가 보낸 값을 쓰지 않는다. 이 값이 그대로 작업의 ownerWindowId 가 되어
+    // 이후 모든 조작 권한의 기준이 되므로, 다른 창 id 를 주장해 소유권을 위조하지 못하도록
+    // 실제 발신 창에서 직접 구한다(호출자가 windowId 를 아예 안 보내도 항상 정확하다).
+    const windowId = resolveSenderWindowId(e)
+    // incognito 도 마찬가지로 클라이언트가 알려주는 값이 아니라 창 자체에서 읽는다.
+    // task-runtime.ts 는 incognito=true 인 작업을 종료 스냅샷에서 제외한다(디스크에 한 줄도
+    // 안 남기는 것이 시크릿 창의 계약) — 이 판정을 렌더러 말을 믿고 하면 그 계약이 깨진다.
+    const incognito = windowId ? (getWindow(windowId)?.incognito ?? false) : false
+    const mode: 'normal' | 'long' = args?.mode === 'long' ? 'long' : 'normal'
+    return createTask({
+      instruction,
+      tabId: args.tabId,
+      windowId,
+      mode,
+      readOnly: !!args?.readOnly,
+      incognito,
+      budget: sanitizeTaskBudget(args?.budget),
+    })
+  })
+
+  const mutate = (
+    channel: string,
+    apply: (task: PersistentTask, e: IpcMainInvokeEvent, args: { id: string; [k: string]: unknown }) => void,
+  ): void => {
+    ipcMain.handle(channel, (e, args: { id: string; [k: string]: unknown }) => {
+      if (!isTrustedSender(e)) return taskOwnershipDenied()
+      const task = typeof args?.id === 'string' && args.id ? getTask(args.id) : null
+      if (!task) return taskNotFound()
+      if (!ownsTask(e, task)) return taskOwnershipDenied()
+      apply(task, e, args)
+      return { ok: true }
+    })
+  }
+
+  mutate(IPC.ai.ptaskStart, (task) => startTask(task.id))
+  mutate(IPC.ai.ptaskPause, (task) => pauseTask(task.id))
+  mutate(IPC.ai.ptaskResume, (task) => resumeTask(task.id))
+  mutate(IPC.ai.ptaskCancel, (task) => cancelTask(task.id))
+  mutate(IPC.ai.ptaskDelete, (task) => deleteTask(task.id))
+  mutate(IPC.ai.ptaskAccept, (task) => acceptTaskResult(task.id))
+  mutate(IPC.ai.ptaskConfirm, (task, _e, args) => confirmTask(task.id, !!args.approved))
+  mutate(IPC.ai.ptaskAnswer, (task, _e, args) => answerTask(task.id, String(args.answer ?? '')))
+
+  taskEvents.on('changed', (list: TaskSummary[]) => {
+    for (const ctx of getAllWindows()) {
+      if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.ptaskChanged, list)
+    }
+    broadcastToInternalPages(IPC.ai.ptaskChanged, list)
+  })
+
+  taskEvents.on('event', (evt: { taskId: string; [k: string]: unknown }) => {
+    for (const ctx of getAllWindows()) {
+      if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.ptaskEvent, evt)
+    }
+    broadcastToInternalPages(IPC.ai.ptaskEvent, evt)
+  })
+
+  // 반복 예약(agent-schedule) 재개 — 이미 완성된 resumeRepeat() 를 그대로 IPC 로 노출.
+  // 소유권 개념이 없는 기능(repeatStart/Stop 도 동일)이라 owns 검사 없이 신뢰 창이면 허용.
+  ipcMain.handle(IPC.ai.scheduleResume, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return null
+    return typeof args?.id === 'string' && args.id ? resumeRepeat(args.id) : null
   })
 }

@@ -412,10 +412,21 @@ async function main() {
       // 스크롤은 막힘 감지 대상이 아니므로 상한에 걸릴 때까지 계속된다.
       const forever = { reply: () => JSON.stringify({ action: 'scroll', dy: 100, thought: '계속 스크롤' }) }
       const r = await run({ reqId: 'L9', task: '끝없이 스크롤해라', script: [forever], timeoutMs: 45000 })
-      const ended = r.types.some((t) => t === 'done' || t === 'error' || t === 'cancelled')
-      check('L9', 'done 이 없어도 단계 상한에서 멈춘다(무한 루프 없음)',
-        ended && llm.count <= 8,
-        `종료=${ended}(${r.types.slice(-2).join('>')}) · LLM 호출 ${llm.count}회(상한 4 + 여유)`)
+      // 판정 기준 변경 (2026-09-18, 팀장): 종료 이벤트 집합에 'exhausted' 를 넣고, **완료로 보고하지
+      // 않는지**를 함께 본다.
+      //   예전에는 단계 소진 시 agent.ts 가 `done` 을 내보냈고 실행 이력에 ✅ 성공으로 남았다 —
+      //   끝내지 못한 작업을 사용자가 "됐다" 고 오해하는 경로였다. 이번 라운드에 별도 이벤트
+      //   `exhausted` 로 분리했으므로, 옛 종료 집합(done|error|cancelled)만 보던 이 검사는
+      //   **고쳐진 제품을 실패로 잡았다**(기준이 옛 결함을 기대하고 있었다).
+      //   그래서 집합에 exhausted 를 더하되, 기준을 느슨하게만 만들지 않도록 조건을 하나 **추가**한다:
+      //   단계 소진으로 끝났다면 종료 이벤트가 `done` 이어서는 안 된다(그러면 옛 결함의 재발이다).
+      const ended = r.types.some((t) => t === 'done' || t === 'error' || t === 'cancelled' || t === 'exhausted')
+      const exhausted = r.types.includes('exhausted')
+      const reportedDone = r.types.includes('done')
+      check('L9', 'done 이 없어도 단계 상한에서 멈추고(무한 루프 없음), 그것을 완료로 보고하지 않는다',
+        ended && exhausted && !reportedDone && llm.count <= 8,
+        `종료=${ended}(${r.types.slice(-2).join('>')}) · exhausted=${exhausted}(true 여야) · done 으로 보고=${reportedDone}(false 여야 — 옛 결함)`
+        + ` · LLM 호출 ${llm.count}회(상한 4 + 여유)`)
       await evalIn(shell, `window.browserAPI.settings.set('ai.agentMaxSteps', 8)`, true)
     }
 

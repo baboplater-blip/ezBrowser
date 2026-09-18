@@ -37,6 +37,10 @@ const cancelledSet = new Set<string>()
 const pendingConfirm = new Map<string, (approved: boolean) => void>()
 const pendingAsk = new Map<string, (answer: string | null) => void>()
 const activeCall = new Map<string, () => void>()
+// 일시정지 — 취소와 같은 관문(부작용 직전)에서 멈춘다. 구간 경계에서만 멈추면 최대 한 구간(12단계)
+// 동안 페이지가 계속 바뀌어 "정지를 눌렀는데도 계속 조작한다"가 되므로, 행동 단위로 잡아야 한다.
+const pausedSet = new Set<string>()
+const pauseWaiters = new Map<string, Array<() => void>>()
 
 // 세션 대화 맥락 — 창(windowId) 단위로 이전 지시와 결과를 이어붙여, 다음 지시가
 // "그거/거기/방금" 처럼 이전 맥락을 참조할 수 있게 한다("대화가 이어져야 한다").
@@ -123,6 +127,34 @@ export function cancelAgentTask(reqId: string): void {
   if (c) { pendingConfirm.delete(reqId); c(false) }
   const a = pendingAsk.get(reqId)
   if (a) { pendingAsk.delete(reqId); a(null) }
+  // 일시정지 중에 취소가 오면 대기자를 깨워야 한다 — 안 깨우면 실행이 영원히 멈춘 채 남는다.
+  resumeAgentTask(reqId)
+}
+
+export function pauseAgentTask(reqId: string): void {
+  if (cancelledSet.has(reqId)) return
+  pausedSet.add(reqId)
+}
+
+export function resumeAgentTask(reqId: string): void {
+  pausedSet.delete(reqId)
+  const waiters = pauseWaiters.get(reqId)
+  pauseWaiters.delete(reqId)
+  for (const w of waiters ?? []) w()
+}
+
+export function isAgentPaused(reqId: string): boolean {
+  return pausedSet.has(reqId)
+}
+
+// 일시정지 대기 — 재개·취소가 올 때까지 여기서 멈춘다. 대기 중에는 어떤 페이지 조작도 나가지 않는다.
+function waitResume(reqId: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!pausedSet.has(reqId)) { resolve(); return }
+    const list = pauseWaiters.get(reqId) ?? []
+    list.push(resolve)
+    pauseWaiters.set(reqId, list)
+  })
 }
 
 // 지정 자료 폴더가 있으면 사용 가능한 파일 목록을 프롬프트에 넣는다(업로드에 이름으로 지정 가능).
@@ -319,6 +351,13 @@ function formatObservation(obs: PageObservation, injected: boolean): string {
     `제목: ${obs.title}`,
     `스크롤: ${obs.scroll.y}/${obs.scroll.maxY}`,
     ...(obs.progress ? [`[진행 상태] ${obs.progress} — 업로드·처리가 진행 중입니다. 100%(또는 완료 안내)가 되고 게시 버튼이 활성화된 뒤에 게시하세요.`] : []),
+    // 다른 오리진 iframe 은 브라우저 보안 정책상 안을 들여다볼 수 없다. 예전에는 조용히 빠져서
+    // 모델이 "요소가 없다"고 판단해 헛돌았다 — 있는데 못 본다는 사실 자체를 알려야 올바른 대안
+    // (화면을 보고 click_at, 또는 사용자에게 넘기기)을 고른다.
+    ...(obs.crossOriginFrames && obs.crossOriginFrames.length > 0 ? [
+      `[볼 수 없는 영역] 다른 오리진의 iframe ${obs.crossOriginFrames.length}개가 화면에 있습니다: ${obs.crossOriginFrames.slice(0, 5).join(', ')}`,
+      '그 안의 요소는 [조작 가능한 요소] 목록에 없습니다. 필요하면 화면(스크린샷)을 보고 click_at 으로 그 영역을 클릭한 뒤 ref 없이 입력하세요. 그래도 안 되면 ask 로 사용자에게 직접 처리를 요청하세요.',
+    ] : []),
     '',
     '[본문]',
     '"""',
@@ -667,6 +706,28 @@ export interface AgentTaskParams {
   // 이때는 전역 "무인 실행 승인" 토글을 무시하고 항상 confirm 을 발생시켜, 호출자의 자체 정책
   // (autoConfirm 여부·critical 거부)이 판단하게 한다. 전역 토글 하나가 모든 안전장치를 무력화하던 구멍을 막는다.
   unattended?: boolean
+  // ===== 구간(segment) 실행 — task-runtime.ts 가 긴 작업을 쪼개 여러 번 부른다 =====
+  // 예전에는 이 함수가 작업 전체를 단일 for 루프(최대 80단계)로 돌았다. 그래서 ① 80단계가 하드 천장이고
+  // ② 문맥을 압축할 지점이 없어 이력이 계속 커지고 ③ 중간에 끊기면 처음부터였다.
+  // 이제 한 번 호출 = 한 구간이고, 구간 끝에서 'exhausted' 를 내보내 호출자가 체크포인트를 저장한다.
+  startStep?: number         // 이 구간이 시작하는 누적 단계 번호(사용자에게 보이는 번호가 이어지도록)
+  stepBudget?: number        // 이 구간에 허용된 단계 수. 미지정이면 기존 설정값(작업 전체를 한 번에)
+  resumeContext?: { progressSummary: string; doneSubtasks: string[] }
+  // 이동 허용 호스트. [] 또는 미지정 = 제한 없음. 있으면 그 호스트(및 서브도메인)만 navigate/open_tab 허용.
+  allowedHosts?: string[]
+}
+
+// 허용 호스트 검사 — 사용자가 "이 사이트들에서만" 이라고 정한 범위를 코드로 강제한다.
+// 프롬프트 지시만으로는 모델이 다른 사이트로 새는 것을 막을 수 없다.
+function hostAllowed(url: string, allowed: string[] | undefined): boolean {
+  if (!allowed || allowed.length === 0) return true
+  let host = ''
+  try { host = new URL(url).hostname.toLowerCase() } catch { return false }
+  return allowed.some((a) => {
+    const want = String(a ?? '').trim().toLowerCase().replace(/^\*\./, '')
+    if (!want) return false
+    return host === want || host.endsWith('.' + want)
+  })
 }
 
 // 읽기 전용(사이트 분석 보고서 등) 에서 차단하는 "페이지를 바꾸는" 동작 — 열람·이동·note/report 만 허용.
@@ -688,7 +749,8 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     if (terminated) return
     const type = String(evt.type)
     if (cancelledSet.has(reqId) && type !== 'cancelled') return
-    if (type === 'done' || type === 'error' || type === 'cancelled') terminated = true
+    // 'exhausted' 도 종료 이벤트다 — 구간이 끝난 뒤 늦게 오는 이벤트가 다음 구간에 섞이지 않게.
+    if (type === 'done' || type === 'error' || type === 'cancelled' || type === 'exhausted') terminated = true
     rawEmit(evt)
   }
   // 부작용이 있는 동작 직전의 **마지막 관문**. 관찰·스크린샷·모델 호출·확인 대기 같은 await 사이에
@@ -697,6 +759,18 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     if (!cancelledSet.has(reqId)) return false
     emit({ type: 'cancelled' })
     return true
+  }
+  // 취소와 같은 자리에서 일시정지도 처리한다. 정지 중에는 여기서 멈춰 있으므로 다음 클릭·입력이 나가지 않는다
+  // (사용자가 보는 계약: "정지를 누른 순간부터 페이지가 더 바뀌지 않는다"). 재개하면 그 자리에서 이어간다.
+  const gate = async (): Promise<boolean> => {
+    if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return true }
+    if (pausedSet.has(reqId)) {
+      emit({ type: 'paused' })
+      await waitResume(reqId)
+      if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return true }
+      emit({ type: 'resumed' })
+    }
+    return false
   }
   const startWc = tabId ? getWebContentsByTabId(tabId) : null
   if (!startWc || !tabId) { emit({ type: 'error', message: '활성 탭을 찾을 수 없습니다.' }); return }
@@ -736,15 +810,57 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
   // 창 단위 세션 맥락(이전 지시·결과)을 프롬프트에 이어붙인다 → 연속 대화처럼 동작.
   const sessionKey = windowId ?? tabId
   const priorTurns = agentSessions.get(sessionKey)
-  const system = (useTools ? agentToolSystemPrompt(task) : agentSystemPrompt(task)) + priorContextBlock(priorTurns)
+  // 이어가기 맥락 — 앞 구간에서 무엇을 했는지 압축 요약으로 넣는다. 관찰 이력 전체를 나르는 대신
+  // 요약만 나르므로 구간이 몇십 개로 늘어도 프롬프트가 커지지 않는다(긴 작업의 문맥 압축 지점).
+  const resumeBlock = ((): string => {
+    const rc = params.resumeContext
+    if (!rc || (!rc.progressSummary && !(rc.doneSubtasks?.length))) return ''
+    const doneList = (rc.doneSubtasks ?? []).slice(-20).map((s) => `- ${s}`).join('\n')
+    return '\n\n# 지금까지 진행 (이어서 하는 작업입니다)\n'
+      + '이 작업은 앞서 일부 진행됐습니다. **이미 끝낸 것을 다시 하지 마세요.**\n'
+      + (rc.progressSummary ? `\n진행 요약: ${rc.progressSummary}\n` : '')
+      + (doneList ? `\n완료한 하위작업:\n${doneList}\n` : '')
+      + '\n남은 부분을 현재 화면에서 이어서 진행하세요. 이미 발행·전송·결제가 끝난 것을 다시 실행하면 중복 사고입니다.'
+  })()
+  const hostBlock = params.allowedHosts && params.allowedHosts.length > 0
+    ? `\n\n# 허용 사이트\n이 작업은 다음 사이트에서만 동작합니다: ${params.allowedHosts.join(', ')}. 다른 사이트로 이동하려 하면 거부됩니다.`
+    : ''
+  const system = (useTools ? agentToolSystemPrompt(task) : agentSystemPrompt(task)) + priorContextBlock(priorTurns) + resumeBlock + hostBlock
     + (useVision ? '\n\n# 화면 인식\n각 단계에 현재 화면의 스크린샷이 함께 제공됩니다. [조작 가능한 요소] 목록과 더불어 화면을 눈으로 보고 판단하세요(시각적 위치·색·이미지·레이아웃 등). ref 는 반드시 요소 목록의 번호를 사용합니다.'
       + '\n화면에는 보이지만 [조작 가능한 요소] 목록에 없는 대상(캔버스·커스텀 위젯 등)은 좌표 클릭을 쓰세요: '
       + (useTools ? 'click_at 도구에 xPct,yPct(화면 가로/세로의 0~100 %)를 지정.' : 'JSON `{"action":"click_at","xPct":<0~100>,"yPct":<0~100>}` 로 화면 가로/세로 백분율 위치를 클릭.')
       + ' 목록에 있으면 ref 클릭을 우선하세요.' : '')
   // 이 실행이 끝나면 세션에 남길 결과(done/최대단계 도달만 기록 — 오류·중단은 맥락 오염 방지 위해 제외).
   let recordOutcome: string | null = null
-  // 복잡한 작업(로그인→업로드→게시 등)이 중간에 끊기지 않도록 단계 수를 설정에서(기본 25) 받는다.
-  const maxSteps = Math.max(6, Math.min(80, st.agentMaxSteps || DEFAULT_MAX_STEPS))
+  // 이 구간이 돌릴 단계 범위. stepBudget 이 오면 구간 실행(task-runtime 이 여러 번 부른다),
+  // 없으면 예전처럼 설정값만큼 한 번에 돈다(트리거·배치 등 기존 호출자 호환).
+  const startStep = Math.max(1, Math.floor(params.startStep ?? 1))
+  const segmentSteps = params.stepBudget && params.stepBudget > 0
+    ? Math.floor(params.stepBudget)
+    : Math.max(6, Math.min(80, st.agentMaxSteps || DEFAULT_MAX_STEPS))
+  const lastStep = startStep + segmentSteps - 1
+  const allowedHosts = params.allowedHosts
+  // 구간을 이어갈 때 호출자에게 돌려줄 진행 상태 — 모델이 note/remember/done 으로 남긴 것과 실제 행동에서 모은다.
+  const doneSubtasks: string[] = [...(params.resumeContext?.doneSubtasks ?? [])]
+  const noteSubtask = (s: string): void => {
+    const t = s.trim().slice(0, 160)
+    if (!t || doneSubtasks.includes(t)) return
+    doneSubtasks.push(t)
+    while (doneSubtasks.length > 20) doneSubtasks.shift()
+  }
+  // 완료를 **검증 가능한 근거**로 환산한다. 모델이 done 을 냈다는 사실 자체는 근거가 아니다.
+  // 근거로 인정하는 것: 결과 파일을 썼다 / 발행 완료 신호를 화면에서 봤다 / 데이터를 실제로 모았다.
+  // 읽기 전용 작업은 "읽은 것"이 결과이므로 노트·추출이 근거가 된다.
+  const resultFiles: string[] = []
+  const completionEvidence = (): string => {
+    const parts: string[] = []
+    if (resultFiles.length > 0) parts.push(`결과 파일 ${resultFiles.length}개 저장`)
+    if (publishedEvidence) parts.push('발행 완료 신호 확인')
+    if (collected.length > 0) parts.push(`${collected.length}행 데이터 추출`)
+    if (reportNotes.length > 0) parts.push(`${reportNotes.length}개 페이지 노트`)
+    // 발행을 눌렀는데 완료 신호를 못 봤다면 그것은 근거가 아니라 **경고**다 — 근거 없음으로 둔다.
+    return parts.join(' · ')
+  }
   const recentSigs: string[] = [] // 최근 행동 지문(막힘 감지)
   let noParseStreak = 0           // 응답을 연속으로 못 읽은 횟수
   let failStreak = 0              // 행동이 연속으로 실패한 횟수
@@ -790,7 +906,9 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       activeCall.set(reqId, turn.cancel)
       try {
         const r = await turn.promise
+        // usage 를 못 받아도 호출 사실은 남긴다 — 작업별 모델 호출 상한이 이 이벤트 수로 세어진다.
         if (r.usage) emit({ type: 'usage', step, ...r.usage })
+        else emit({ type: 'usage', step })
         return r.text
       } catch (err) {
         if (cancelledSet.has(reqId)) throw err
@@ -814,6 +932,17 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     return null
   }
   emit({ type: 'start', task })
+  // 화면 인식을 켜 뒀는데 지금 모델이 비전을 지원하지 않으면 **조용히 끄지 말고 알린다.**
+  // 예전에는 useVision 이 false 로 떨어지기만 해서, 사용자는 "화면을 보고 판단" 을 기대하는데
+  // 실제로는 요소 목록만 보고 도는 것을 알 수 없었다(캔버스·커스텀 UI 작업이 이유 없이 실패).
+  if (visionMode !== 'off' && !useVision) {
+    emit({
+      type: 'result', ok: false, label: '화면 인식 사용 안 함',
+      detail: `${provider}${model ? ` / ${model}` : ''} 은 이미지를 읽지 못해 화면 인식을 끄고 진행합니다.`
+        + ' 요소 목록만으로 판단하므로 캔버스·그림 기반 UI 는 다루기 어렵습니다.'
+        + ' 화면 인식이 필요하면 설정 > AI 에서 이미지를 읽을 수 있는 모델로 바꿔 주세요.',
+    })
+  }
 
   try {
     // 세션 열기는 try 안에서 — 어떤 경로로 빠져나가도 finally 의 close() 가 프로세스·tmp 폴더를 정리한다.
@@ -822,8 +951,9 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       cli = openCliSession({ provider, model, bin: k ? st[k] : '', allowRead: useVision })
       if (cli) emit({ type: 'session', mode: 'cli', provider })
     }
-    for (let step = 1; step <= maxSteps; step++) {
-      if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+    for (let step = startStep; step <= lastStep; step++) {
+      // 단계 머리에서도 정지를 잡는다 — 관찰(스크린샷 포함)조차 나가지 않게.
+      if (await gate()) return
 
       const wc = getWebContentsByTabId(currentTabId)
       if (!wc) { emit({ type: 'error', message: '현재 탭을 찾을 수 없습니다(닫혔을 수 있음).' }); return }
@@ -917,6 +1047,10 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
           emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) }); return
         } finally { activeCall.delete(reqId) }
         if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+        // 도구 경로는 토큰 사용량을 돌려주지 않는다. 그래도 **호출이 일어났다는 사실**은 남겨야 한다 —
+        // 작업별 모델 호출 상한(사용자가 정한 예산)이 이 이벤트 수로 세어지기 때문에, 안 보내면
+        // 상한이 영원히 발동하지 않는다. 토큰 필드는 넣지 않는다(미계측을 0으로 위장하지 않는다).
+        emit({ type: 'usage', step })
         assistantText = res.text || ''
         actions = res.toolCalls.map(toolCallToAction).filter((a): a is AgentAction => a !== null)
         if (!actions.length && assistantText) actions = extractActions(assistantText) // 도구 대신 텍스트로 답한 경우 폴백
@@ -940,6 +1074,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
           if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
           const u = call.usage()
           if (u) emit({ type: 'usage', step, ...u })
+          else emit({ type: 'usage', step })
         }
         assistantText = reply
         actions = extractActions(reply)
@@ -980,7 +1115,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         const tl = describeAction(t, obs)
         emit({ type: 'thought', thought: t.thought ?? '', action: t.action })
         emit({ type: 'action', label: tl })
-        const tr = await executeInPageAction(wc, t, { humanInput, profile: inputProfileFor(obs.url, inputMode) })
+        const tr = await executeInPageAction(wc, t, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch })
         emit({ type: 'result', ok: tr.ok, label: tl, detail: tr.detail })
         await settleAfterAction(wc, t, fastSite)
         if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
@@ -1107,7 +1242,15 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         // 캡처(재시도 포함 수백 ms) 동안 취소가 들어왔으면 '완료'로 끝내지 않는다 — 예전에는 여기서
         // 늦은 done 이 실행 이력의 상태를 cancelled → done 으로 뒤집었다.
         if (abortIfCancelled()) return
-        emit({ type: 'done', message: recordOutcome, ...(evidence ? { shot: evidence } : {}) })
+        // 완료 **근거**를 호출자에게 넘긴다. task-runtime 은 근거가 없으면 '완료'로 확정하지 않고
+        // needs-verify 로 남겨 사용자가 확인하게 한다 — 모델의 "다 했습니다" 를 그대로 믿지 않는 자리.
+        emit({
+          type: 'done', message: recordOutcome,
+          evidence: completionEvidence(),
+          doneSubtasks: [...doneSubtasks],
+          tabUrl: (() => { try { return wc.getURL() } catch { return null } })(),
+          ...(evidence ? { shot: evidence } : {}),
+        })
         return
       }
       if (action.action === 'ask') {
@@ -1152,6 +1295,8 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         if (md && reportNotes.length < 40) {
           reportNotes.push({ url: obs.url, title: obs.title, md })
           seenNoteUrls.add(obs.url)
+          // 구간이 끊겨도 "이 페이지는 이미 봤다"가 다음 구간에 전달되도록 하위작업으로 남긴다.
+          noteSubtask(`노트 기록: ${obs.title || obs.url}`)
           emit({ type: 'result', ok: true, label: '노트 기록', detail: `${obs.title || obs.url} (누적 ${reportNotes.length})` })
           pendingPrefix = `노트 기록됨(누적 ${reportNotes.length}개). 더 볼 페이지가 있으면 이동해 계속하고, 다 봤으면 report 로 보고서를 완성하세요. 이미 기록한 페이지: ${[...seenNoteUrls].slice(-6).join(', ')}`
         } else {
@@ -1173,11 +1318,17 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         const title = (action.title ?? '').trim() || `${host} 분석 보고서`
         const md = assembleReport(title, (action.markdown ?? '').trim(), reportNotes, task)
         const saved = await writeDownloadMd(safeFileName(`보고서-${host}-${reportStamp()}`), md)
+        if (saved.ok && saved.path) resultFiles.push(saved.path)
         recordOutcome = `보고서 작성 완료: ${title} (노트 ${reportNotes.length}개${saved.ok && saved.path ? `, ${path.basename(saved.path)} 저장` : ''})`
         emit({ type: 'report', title, markdown: md, notes: reportNotes.length, sources: [...seenNoteUrls], ...(saved.ok && saved.path ? { path: saved.path } : {}) })
         const evidence = await captureScreenshot(wc)
         if (abortIfCancelled()) return
-        emit({ type: 'done', message: recordOutcome, ...(evidence ? { shot: evidence } : {}) })
+        emit({
+          type: 'done', message: recordOutcome, evidence: completionEvidence(),
+          doneSubtasks: [...doneSubtasks],
+          tabUrl: (() => { try { return wc.getURL() } catch { return null } })(),
+          ...(evidence ? { shot: evidence } : {}),
+        })
         return
       }
 
@@ -1204,6 +1355,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
             if (!seenRows.has(key) && collected.length < 5000) { seenRows.add(key); collected.push(r); fresh.push(r) }
           }
           if (fresh.length) {
+            noteSubtask(`데이터 추출: ${obs.title || obs.url} (${fresh.length}건)`)
             emit({ type: 'extracted', rows: fresh, total: collected.length })
             emit({ type: 'result', ok: true, label: '데이터 추출', detail: `${fresh.length}건 신규 (누적 ${collected.length}건)` })
             pendingPrefix = `데이터 ${fresh.length}건 추출(누적 ${collected.length}건). 더 있으면 다음 페이지로 이동 후 다시 extract, 다 모았으면 done 으로 완료하세요.`
@@ -1250,7 +1402,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       if (action.action === 'hover') {
         const label = describeAction({ ...action, action: 'click' }, obs).replace('클릭', '호버')
         emit({ type: 'action', label })
-        const r = await hoverElement(wc, action.ref ?? -1)
+        const r = await hoverElement(wc, action.ref ?? -1, obs.epoch)
         await sleep(400) // 호버 메뉴가 뜰 시간
         emit({ type: 'result', ok: r.ok, label, detail: r.detail })
         pendingPrefix = r.ok ? `호버했습니다: ${r.detail}. 이제 나타난 항목을 확인하세요.` : `호버 실패: ${r.detail}`
@@ -1259,7 +1411,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       }
       if (action.action === 'drag') {
         emit({ type: 'action', label: '드래그' })
-        const r = await dragOnPage(wc, { ref: action.ref, xPct: action.xPct, yPct: action.yPct, toRef: action.toRef, toXPct: action.toXPct, toYPct: action.toYPct })
+        const r = await dragOnPage(wc, { ref: action.ref, xPct: action.xPct, yPct: action.yPct, toRef: action.toRef, toXPct: action.toXPct, toYPct: action.toYPct }, obs.epoch)
         await settleAfterAction(wc, action, fastSite)
         emit({ type: 'result', ok: r.ok, label: '드래그', detail: r.detail })
         pendingPrefix = r.ok ? `드래그 완료: ${r.detail}` : `드래그 실패: ${r.detail}`
@@ -1269,7 +1421,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       if (action.action === 'key') {
         const label = `키: ${action.key ?? ''}`
         emit({ type: 'action', label })
-        const r = await pressKey(wc, { key: action.key ?? '', ref: action.ref })
+        const r = await pressKey(wc, { key: action.key ?? '', ref: action.ref }, obs.epoch)
         await settleAfterAction(wc, action, fastSite)
         emit({ type: 'result', ok: r.ok, label, detail: r.detail })
         pendingPrefix = r.ok ? `키 입력함: ${action.key}` : `키 입력 실패: ${r.detail}`
@@ -1287,9 +1439,9 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         let via = '미디어'
         let kindHint: 'hls' | 'dash' | undefined
         if (!url && action.ref != null) {
-          const m = await resolveMediaSrc(wc, action.ref)
+          const m = await resolveMediaSrc(wc, action.ref, obs.epoch)
           if (m && m.url) { url = m.url; via = m.kind === 'image' ? '사진' : m.kind === 'video' ? '영상' : '링크' }
-          else url = (await resolveHref(wc, action.ref)) ?? '' // 옛 경로 폴백
+          else url = (await resolveHref(wc, action.ref, obs.epoch)) ?? '' // 옛 경로 폴백
         }
         if (!url) {
           const cand = pickBestCandidate(getCandidates(currentTabId))
@@ -1371,7 +1523,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         emit({ type: 'action', label })
         // ref 를 준 경우 = "이 드롭존에 떨어뜨려라". 파일 입력도 파일 선택 창도 안 쓰는 UI 대응.
         if (action.ref != null && action.ref >= 0) {
-          const dr = await dropFilesOnRef(wc, action.ref, picked)
+          const dr = await dropFilesOnRef(wc, action.ref, picked, obs.epoch)
           emit({ type: 'result', ok: dr.ok, label: '파일 드롭', detail: dr.detail })
           pendingPrefix = dr.ok
             ? `드롭존에 파일을 떨어뜨렸습니다. 관찰로 첨부 결과를 확인하고, 업로드·처리가 끝난 뒤 다음 단계를 진행하세요.`
@@ -1407,6 +1559,12 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         if (!windowId || !url || !/^https?:/i.test(url)) {
           emit({ type: 'result', ok: false, label: describeAction(action, obs), detail: '유효하지 않은 URL' })
           pendingPrefix = '새 탭 열기에 실패했습니다. 유효한 http(s) URL 이 필요합니다.'
+          continue
+        }
+        // 사용자가 정한 허용 사이트 범위를 코드로 강제 — 프롬프트 지시만으로는 새는 것을 못 막는다.
+        if (!hostAllowed(url, allowedHosts)) {
+          emit({ type: 'result', ok: false, label: describeAction(action, obs), detail: `허용된 사이트가 아닙니다(허용: ${(allowedHosts ?? []).join(', ')})` })
+          pendingPrefix = `${url} 은 이 작업의 허용 사이트 범위 밖이라 열지 않았습니다. 허용된 사이트 안에서 진행하세요.`
           continue
         }
         emit({ type: 'action', label: describeAction(action, obs) })
@@ -1477,18 +1635,20 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       }
 
       // 페이지를 실제로 바꾸는 마지막 지점. 확인 가드(skipLlm) 경로는 모델을 부르지 않고 여기로 바로 오므로,
-      // 관찰 await 동안 들어온 취소를 잡을 관문이 반드시 여기 필요하다.
-      if (abortIfCancelled()) return
+      // 관찰 await 동안 들어온 취소·일시정지를 잡을 관문이 반드시 여기 필요하다.
+      // 여기가 **부작용 직전 마지막 자리**다 — 정지가 걸리면 이 아래의 클릭·입력이 나가지 않는다.
+      if (await gate()) return
       let result: { ok: boolean; detail: string }
       // 완료 신호 기준선 — **발행성 클릭**(게시·공유·업로드 확정) 직전 화면만. 입력·이동 뒤에도 판정하면 캡션에 들어간
       // 완료 어휘("…공유되었습니다 라고 썼다")가 게시 전에 거짓 완료를 만든다(리뷰 지적). 발행 클릭이 아니면 판정하지 않는다.
       if (completion && publishish && !noPublish && !readOnly) completionBase = { hay: guardHay(obs), url: obs.url, lines: guardLines(obs) }
       if (action.action === 'navigate') {
         if (!action.url || !/^https?:/i.test(action.url)) result = { ok: false, detail: '유효하지 않은 URL' }
+        else if (!hostAllowed(action.url, allowedHosts)) result = { ok: false, detail: `허용된 사이트가 아닙니다(허용: ${(allowedHosts ?? []).join(', ')})` }
         else { emit({ type: 'action', label }); await navigateAndWait(wc, action.url); result = { ok: true, detail: '이동함' } }
       } else {
         emit({ type: 'action', label })
-        result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode) })
+        result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch })
         await settleAfterAction(wc, action, fastSite)
       }
 
@@ -1526,24 +1686,47 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       }
       pendingPrefix = `이전 행동 결과: ${result.ok ? '성공' : '실패'} — ${result.detail}`
     }
-    // 단계 소진으로 빠져나온 경로에도 관문을 둔다 — 아래에서 스크린샷을 찍고 보고서 파일까지 쓴다.
+    // ===== 구간 단계 소진 — 이것은 성공이 아니다 =====
+    // 예전에는 여기서 done 을 내보냈다. agent-runs 는 done 을 status:'done' 으로 기록하므로
+    // **완료하지 못한 작업이 이력에 ✅ 성공으로 남았다**(사용자가 "됐다"고 오해하는 경로).
+    // 이제 'exhausted' 를 내보내 호출자(task-runtime)가 체크포인트를 저장하고 다음 구간을 잇거나,
+    // 총 예산까지 소진했으면 '중단됨(이어가기 가능)' 으로 남긴다.
     if (abortIfCancelled()) return
-    recordOutcome = `${maxSteps}단계까지 진행했지만 작업을 마치지 못했습니다.`
     const wcEnd = getWebContentsByTabId(currentTabId)
     const evidence = wcEnd ? await captureScreenshot(wcEnd) : undefined
     // 캡처 동안 취소가 들어왔으면 부분 보고서 파일도 쓰지 않는다(취소 후 파일 생성 금지).
     if (cancelledSet.has(reqId)) { recordOutcome = null; emit({ type: 'cancelled' }); return }
+    const endUrl = wcEnd ? wcEnd.getURL() : null
+    // 다음 구간에 넘길 압축 진행요약. 관찰 이력 전체가 아니라 이것만 넘어간다.
+    const summaryParts: string[] = []
+    if (endUrl) summaryParts.push(`마지막 화면: ${endUrl}`)
+    if (reportNotes.length > 0) summaryParts.push(`${reportNotes.length}개 페이지 노트 수집`)
+    if (collected.length > 0) summaryParts.push(`${collected.length}행 데이터 추출`)
+    if (publishClicks > 0) summaryParts.push(publishedEvidence ? '발행 완료 확인됨' : '발행을 눌렀으나 완료 미확인')
+    if (pendingPrefix) summaryParts.push(`직전 상황: ${pendingPrefix.slice(0, 300)}`)
     // 보고서 작업이 report 없이 단계 소진 시, 모은 노트를 버리지 않고 부분 보고서로 저장·전달한다.
+    const files: string[] = []
     if (reportNotes.length > 0) {
       const host = wcEnd ? (() => { try { return new URL(wcEnd.getURL()).hostname } catch { return '사이트' } })() : '사이트'
       const title = `${host} 분석 보고서 (부분)`
       const md = assembleReport(title, '', reportNotes, task)
       const saved = await writeDownloadMd(safeFileName(`보고서-${host}-${reportStamp()}`), md)
+      if (saved.ok && saved.path) files.push(saved.path)
       emit({ type: 'report', title, markdown: md, notes: reportNotes.length, sources: [...seenNoteUrls], ...(saved.ok && saved.path ? { path: saved.path } : {}) })
-      emit({ type: 'done', message: `${maxSteps}단계에서 멈췄지만 그때까지 살펴본 ${reportNotes.length}개 페이지로 부분 보고서를 작성했습니다.${saved.ok && saved.path ? ` (${path.basename(saved.path)} 저장)` : ''}`, ...(evidence ? { shot: evidence } : {}) })
-    } else {
-      emit({ type: 'done', message: `${maxSteps}단계까지 시도했지만 완료하지 못했습니다. 더 구체적으로 지시하시거나, 막힌 부분을 직접 처리하신 뒤 이어서 지시해 주세요. (설정 > AI 에서 최대 단계 수를 늘릴 수도 있습니다.)`, ...(evidence ? { shot: evidence } : {}) })
     }
+    // 이 구간의 결과를 세션 맥락에도 남긴다(이어지는 지시가 상황을 알도록) — 단 "완료"라고 쓰지 않는다.
+    recordOutcome = `${lastStep}단계까지 진행 — 아직 완료하지 못했습니다${endUrl ? ` (마지막 화면 ${endUrl})` : ''}.`
+    emit({
+      type: 'exhausted',
+      stepsUsed: lastStep,
+      progressSummary: summaryParts.join(' · ').slice(0, 1200),
+      doneSubtasks: [...doneSubtasks],
+      tabUrl: endUrl,
+      tabId: currentTabId,
+      files,
+      publishPending: publishClicks > 0 && !publishedEvidence,
+      ...(evidence ? { shot: evidence } : {}),
+    })
   } catch (err) {
     emit({ type: 'error', message: friendlyError(err instanceof Error ? err.message : String(err)) })
   } finally {
@@ -1555,6 +1738,10 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     pendingConfirm.delete(reqId)
     pendingAsk.delete(reqId)
     cancelledSet.delete(reqId)
+    // 일시정지 흔적도 반드시 지운다. 남겨 두면 같은 reqId 가 재사용될 때 첫 관문에서 곧바로
+    // 영구 대기에 걸리고(대기자를 깨울 사람이 없다), 대기자 배열은 GC 되지 않는다.
+    pausedSet.delete(reqId)
+    pauseWaiters.delete(reqId)
     // 성공적으로 끝난 턴만 세션 맥락에 남긴다(다음 지시가 이어받도록).
     if (recordOutcome !== null) {
       const turns = agentSessions.get(sessionKey) ?? []
@@ -1623,6 +1810,8 @@ export async function runAgentBatch(params: AgentBatchParams, rawEmit: Emit): Pr
       // 단 critical(결제·삭제 등 되돌릴 수 없는 것)은 autoConfirm 이어도 절대 자동 승인하지 않는다.
       await runAgentTask({ reqId: sub, tabId: params.tabId, task, unattended: true }, (evt) => {
         if (evt.type === 'done') { outcome = String(evt.message ?? '완료'); return }
+        // 단계 소진은 완료가 아니다 — 이 행의 결과를 "미완"으로 남긴다(예전에는 done 으로 와서 완료로 셌다).
+        if (evt.type === 'exhausted') { outcome = `미완료: ${String(evt.stepsUsed ?? '')}단계까지 진행`; return }
         if (evt.type === 'error') { outcome = '오류: ' + String(evt.message ?? ''); return }
         if (evt.type === 'cancelled') { outcome = outcome || '건너뜀'; return }
         if (evt.type === 'confirm') {

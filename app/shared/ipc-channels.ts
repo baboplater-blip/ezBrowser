@@ -408,6 +408,26 @@ export const IPC = {
     repeatList: 'ai:repeat-list',
     repeatChanged: 'ai:repeat-changed',
     repeatEvent: 'ai:repeat-event',
+    // ===== 영속 작업 런타임(구간 단위로 이어가는 장기 에이전트 작업) =====
+    // 주의: `ai:task-*` 는 위의 taskList/taskAdd/... (에이전트 작업 매크로 · SavedAgentTask) 가
+    // 이미 쓰고 있다. 같은 이름을 쓰면 object literal 키 충돌로 조용히 macro 기능이 덮이거나,
+    // ipcMain.handle 이 같은 채널에 두 번째 핸들러를 등록해 부팅 시 throw 한다.
+    // 그래서 새 런타임은 `ptask*`(persistent task) 접두로 분리한다 — 이름이 design.md 의
+    // `ai.taskList` 등과 다르니 팀장이 UI 작업자에게 이 접두를 알려줘야 한다.
+    ptaskList: 'ai:ptask-list',
+    ptaskGet: 'ai:ptask-get',
+    ptaskCreate: 'ai:ptask-create',
+    ptaskStart: 'ai:ptask-start',
+    ptaskPause: 'ai:ptask-pause',
+    ptaskResume: 'ai:ptask-resume',
+    ptaskCancel: 'ai:ptask-cancel',
+    ptaskDelete: 'ai:ptask-delete',
+    ptaskConfirm: 'ai:ptask-confirm',
+    ptaskAnswer: 'ai:ptask-answer',
+    ptaskAccept: 'ai:ptask-accept',
+    ptaskChanged: 'ai:ptask-changed',
+    ptaskEvent: 'ai:ptask-event',
+    scheduleResume: 'ai:schedule-resume',
   },
 } as const
 

@@ -2208,6 +2208,37 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 .ai-repeat-fields input[type=number] { width: 44px; padding: 2px 4px; border: 1px solid var(--color-border-subtle); border-radius: 6px; background: var(--color-bg); color: var(--color-text); }
 .ai-repeat-auto { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .ai-repeat-fields .dim { opacity: 0.7; }
+.ai-repeat-item.muted { opacity: 0.75; }
+.ai-repeat-stop.resume:hover { background: var(--color-accent); color: #fff; border-color: transparent; }
+
+/* 실행 방식(일반/장시간) 선택 — 입력창 바로 위, 항상 보임 */
+.ai-exec-mode { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ai-exec-label { font-size: 11px; color: var(--color-text-muted); flex: 0 0 auto; }
+.ai-exec-long { margin-bottom: 6px; }
+.ai-exec-warn { font-size: 11px; color: var(--color-warning); margin-bottom: 2px; line-height: 1.4; }
+.ai-exec-hosts { margin-top: 6px; }
+.ai-exec-hosts-label { display: block; font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px; cursor: default; }
+
+/* 영속 작업 카드 — showPtasks 전체 목록 + 진행 중 인라인 영역이 함께 쓴다 */
+.ai-task-list { display: flex; flex-direction: column; gap: 8px; padding: 6px 8px; }
+.ai-task-card { border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 8px 10px; background: var(--color-bg-subtle, rgba(127,127,127,0.08)); }
+.ai-task-card.warn { border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border-subtle)); }
+.ai-task-card.ok { border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-subtle)); }
+.ai-task-head { display: flex; align-items: center; gap: 6px; }
+.ai-task-badge { flex: 0 0 auto; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); white-space: nowrap; }
+.ai-task-badge.ok { background: var(--color-success); color: #fff; border-color: transparent; }
+.ai-task-badge.warn { background: var(--color-warning-icon); color: #fff; border-color: transparent; }
+.ai-task-badge.muted { color: var(--color-text-muted); }
+.ai-task-instruction { flex: 1; font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-task-meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 10px; color: var(--color-text-muted); margin-top: 4px; }
+.ai-task-pill { font-size: 9px; font-weight: 600; color: #fff; background: var(--color-accent); border-radius: 999px; padding: 1px 6px; }
+.ai-task-note { font-size: 11px; line-height: 1.45; margin-top: 6px; }
+.ai-task-note.warn { color: var(--color-warning); }
+.ai-task-note.ok { color: var(--color-success); }
+.ai-task-evidence { font-size: 11px; color: var(--color-text-secondary); background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; padding: 6px 8px; margin-top: 4px; white-space: pre-wrap; }
+.ai-task-evidence.dim { opacity: 0.7; }
+.ai-task-trace { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; max-height: 110px; overflow-y: auto; }
+.ai-task-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .ai-ctx-toggle { display: flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 6px; cursor: pointer; }
 .ai-input-row { display: flex; gap: 6px; align-items: flex-end; }
 .ai-input {

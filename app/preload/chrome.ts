@@ -535,12 +535,127 @@ const api = {
     repeatList: (): Promise<RepeatSummary[]> => ipcRenderer.invoke(IPC.ai.repeatList),
     onRepeatChanged: (cb: (list: RepeatSummary[]) => void) => on(IPC.ai.repeatChanged, cb),
     onRepeatEvent: (cb: (evt: { scheduleId: string; reqId: string; run: number; type: string; [k: string]: unknown }) => void) => on(IPC.ai.repeatEvent, cb),
+    // ===== 영속 작업 런타임(구간 단위로 이어가는 장기 에이전트 작업) =====
+    // 채널이 ptask* 인 이유: ai:task-* 는 위의 taskList/taskAdd/...(에이전트 작업 매크로 —
+    // SavedAgentTask)가 이미 쓰고 있다. 같은 이름을 쓰면 부팅 시 ipcMain.handle 이 같은 채널에
+    // 두 번째 핸들러를 등록하려다 throw 하거나, 이 객체 리터럴 안에서 뒤에 쓴 메서드가 앞의
+    // taskList/taskAdd 를 조용히 덮어써 macro 기능이 먹통이 된다 — 그래서 이름을 분리했다.
+    ptaskList: (): Promise<PersistentTaskSummary[]> => ipcRenderer.invoke(IPC.ai.ptaskList),
+    ptaskGet: (id: string): Promise<PersistentTask | null> => ipcRenderer.invoke(IPC.ai.ptaskGet, { id }),
+    ptaskCreate: (args: {
+      instruction: string
+      tabId: string
+      mode?: 'normal' | 'long'
+      readOnly?: boolean
+      budget?: Partial<PersistentTaskBudget>
+    }): Promise<PersistentTaskSummary | null> => ipcRenderer.invoke(IPC.ai.ptaskCreate, args),
+    // 시작/일시정지/재개/취소/삭제/승인은 소유 창이 아니면 메인이 거부한다(ok:false + 이유) —
+    // 실패해도 throw 하지 않으니 UI 는 항상 ok 를 확인해야 한다.
+    ptaskStart: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskStart, { id }),
+    ptaskPause: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskPause, { id }),
+    ptaskResume: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskResume, { id }),
+    ptaskCancel: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskCancel, { id }),
+    ptaskDelete: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskDelete, { id }),
+    ptaskAccept: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskAccept, { id }),
+    ptaskConfirm: (id: string, approved: boolean): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskConfirm, { id, approved }),
+    ptaskAnswer: (id: string, answer: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskAnswer, { id, answer }),
+    onPtaskChanged: (cb: (list: PersistentTaskSummary[]) => void) => on(IPC.ai.ptaskChanged, cb),
+    onPtaskEvent: (cb: (evt: { taskId: string; type: string; [k: string]: unknown }) => void) =>
+      on(IPC.ai.ptaskEvent, cb),
+    // 반복 예약(에이전트 자동 반복) 재개 — 이미 돌던 작업을 이어서 재개.
+    scheduleResume: (id: string): Promise<RepeatSummary | null> =>
+      ipcRenderer.invoke(IPC.ai.scheduleResume, { id }),
   },
 }
 
 interface RepeatSummary {
   id: string; task: string; intervalMs: number; totalCount: number; doneCount: number
   autoConfirm: boolean; status: 'running' | 'waiting' | 'stopped' | 'finished'; nextAt: number | null; lastResult?: string
+}
+
+// task-runtime.ts(메인 전용 모듈)의 타입을 그대로 가져다 쓰지 않는다 — preload 의 tsconfig 는
+// app/main 을 include 하지 않으므로(별도 컴파일 대상) 여기서 같은 모양을 복제해 둔다.
+// 필드는 design.md §1 의 PersistentTask/TaskSummary/TaskBudget 확정 인터페이스와 동일해야 한다.
+type PersistentTaskState =
+  | 'queued' | 'running' | 'paused' | 'waiting-user' | 'retrying' | 'interrupted'
+  | 'needs-verify' | 'completed' | 'failed' | 'cancelled'
+
+interface PersistentTaskBudget {
+  maxSteps: number
+  maxDurationMs: number
+  maxLlmCalls: number
+  allowedHosts: string[]
+}
+
+interface PersistentTaskCheckpoint {
+  segment: number
+  stepsUsed: number
+  llmCalls: number
+  progressSummary: string
+  doneSubtasks: string[]
+  tabUrl: string | null
+  workspaceId: string | null
+  windowId: string | null
+  savedAt: number
+}
+
+interface PersistentTaskRetry {
+  kind: 'network' | 'rate-limit' | 'cli-dead' | 'tab-gone' | 'login' | 'model' | 'unknown'
+  attempt: number
+  nextAt: number
+  detail: string
+}
+
+interface PersistentTask {
+  id: string
+  instruction: string
+  state: PersistentTaskState
+  mode: 'normal' | 'long'
+  budget: PersistentTaskBudget
+  checkpoint: PersistentTaskCheckpoint
+  usage: { input: number; cacheRead: number; cacheCreate: number; output: number; llmCalls: number }
+  resultFiles: string[]
+  result?: string
+  verifyEvidence?: string
+  waitReason?: string
+  retry?: PersistentTaskRetry
+  readOnly: boolean
+  incognito: boolean
+  ownerWindowId: string | null
+  externalWrites: Array<{ label: string; at: number; confirmed: boolean }>
+  createdAt: number
+  updatedAt: number
+  startedAt: number
+  endedAt?: number
+  elapsedMs: number
+}
+
+interface PersistentTaskSummary {
+  id: string
+  instruction: string
+  state: PersistentTaskState
+  mode: 'normal' | 'long'
+  stepsUsed: number
+  maxSteps: number
+  segment: number
+  elapsedMs: number
+  startedAt: number
+  endedAt?: number
+  waitReason?: string
+  retry?: PersistentTaskRetry
+  llmCalls: number
+  maxLlmCalls: number
+  result?: string
+  resultFiles: string[]
+  needsVerify: boolean
 }
 
 contextBridge.exposeInMainWorld('browserAPI', api)

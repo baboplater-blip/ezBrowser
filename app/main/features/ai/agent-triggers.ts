@@ -159,6 +159,9 @@ async function runTriggerTask(t: AgentTrigger, tabId: string): Promise<void> {
       }
       else if (evt.type === 'ask') cancelAgentTask(reqId)
       else if (evt.type === 'done') outcome = String(evt.message ?? '완료')
+      // 단계 예산 소진 — 예전에는 agent.ts 가 여기에도 done 을 보내 "완료"로 기록됐다.
+      // 이제 별도 이벤트이므로 직접 받아 **완료가 아니라 미완**으로 남긴다(안 받으면 결과가 빈 채로 끝난다).
+      else if (evt.type === 'exhausted') outcome = `미완료: ${String(evt.stepsUsed ?? '')}단계까지 진행했지만 끝내지 못했습니다`
       else if (evt.type === 'error') outcome = '오류: ' + String(evt.message ?? '')
     })
   } catch (err) { outcome = '오류: ' + String(err) }
