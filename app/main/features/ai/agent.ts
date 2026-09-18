@@ -1704,15 +1704,32 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     if (collected.length > 0) summaryParts.push(`${collected.length}행 데이터 추출`)
     if (publishClicks > 0) summaryParts.push(publishedEvidence ? '발행 완료 확인됨' : '발행을 눌렀으나 완료 미확인')
     if (pendingPrefix) summaryParts.push(`직전 상황: ${pendingPrefix.slice(0, 300)}`)
-    // 보고서 작업이 report 없이 단계 소진 시, 모은 노트를 버리지 않고 부분 보고서로 저장·전달한다.
+    // 보고서 작업이 report 없이 단계 소진 시, 모은 노트를 버리지 않고 부분 보고서로 전달한다.
+    //
+    // ⚠ **구간 실행에서는 파일을 쓰지 않는다.** 예전에는 단계 소진이 작업의 끝이었으므로 여기서
+    //    파일을 쓰는 것이 "노트를 버리지 않는" 유일한 방법이었다. 그러나 이제 소진은 **구간마다**
+    //    일어나므로, 그대로 두면 긴 작업 하나가 구간 수만큼 파일을 쏟아낸다
+    //    (실측: 25분 지속 실행이 사용자 다운로드 폴더에 부분 보고서 25개를 남겼다).
+    //    구간 모드에서는 조립된 마크다운을 이벤트로만 넘기고, 작업이 **실제로 끝날 때**
+    //    task-runtime 이 한 번만 파일로 쓴다. 한 번에 도는 기존 호출자(트리거·배치)는 소진이 곧
+    //    끝이므로 예전처럼 여기서 쓴다.
+    const segmentMode = !!(params.stepBudget && params.stepBudget > 0)
     const files: string[] = []
+    let reportTitle: string | null = null
+    let reportMarkdown: string | null = null
     if (reportNotes.length > 0) {
       const host = wcEnd ? (() => { try { return new URL(wcEnd.getURL()).hostname } catch { return '사이트' } })() : '사이트'
       const title = `${host} 분석 보고서 (부분)`
       const md = assembleReport(title, '', reportNotes, task)
-      const saved = await writeDownloadMd(safeFileName(`보고서-${host}-${reportStamp()}`), md)
-      if (saved.ok && saved.path) files.push(saved.path)
-      emit({ type: 'report', title, markdown: md, notes: reportNotes.length, sources: [...seenNoteUrls], ...(saved.ok && saved.path ? { path: saved.path } : {}) })
+      reportTitle = title
+      reportMarkdown = md
+      if (segmentMode) {
+        emit({ type: 'report', title, markdown: md, notes: reportNotes.length, sources: [...seenNoteUrls] })
+      } else {
+        const saved = await writeDownloadMd(safeFileName(`보고서-${host}-${reportStamp()}`), md)
+        if (saved.ok && saved.path) files.push(saved.path)
+        emit({ type: 'report', title, markdown: md, notes: reportNotes.length, sources: [...seenNoteUrls], ...(saved.ok && saved.path ? { path: saved.path } : {}) })
+      }
     }
     // 이 구간의 결과를 세션 맥락에도 남긴다(이어지는 지시가 상황을 알도록) — 단 "완료"라고 쓰지 않는다.
     recordOutcome = `${lastStep}단계까지 진행 — 아직 완료하지 못했습니다${endUrl ? ` (마지막 화면 ${endUrl})` : ''}.`
@@ -1724,6 +1741,9 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       tabUrl: endUrl,
       tabId: currentTabId,
       files,
+      // 구간 모드에서 조립한 부분 보고서 — 파일로 쓰지 않고 넘긴다. 호출자가 작업이 실제로
+      // 끝날 때 한 번만 저장한다(구간마다 파일이 쏟아지는 것을 막는 자리).
+      ...(reportTitle && reportMarkdown ? { reportTitle, reportMarkdown } : {}),
       publishPending: publishClicks > 0 && !publishedEvidence,
       ...(evidence ? { shot: evidence } : {}),
     })

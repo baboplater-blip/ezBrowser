@@ -10,6 +10,7 @@ import {
   getTab, getTabPartition, getWebContentsByTabId, listTabs, listTabsInWorkspace,
 } from '../../tabs/tab-service'
 import { createJsonStore, loadJsonObject } from './json-store'
+import { writeDownloadMd, safeFileName } from './conversations'
 
 /**
  * 영속 작업 런타임 — 에이전트 작업을 **구간(segment) 단위**로 쪼개 돌리고, 구간 경계마다
@@ -176,6 +177,8 @@ interface TaskRuntime {
    * 그 번호가 전혀 다른 탭을 가리킬 수 있다(T9). 재시작 뒤에는 URL 로만 다시 찾는다.
    */
   lastTabId: string | null
+  /** 구간 모드에서 조립된 부분 보고서 — 작업이 끝날 때 한 번만 파일로 쓴다(휘발, 재시작 시 보존 안 함). */
+  pendingReport: { title: string; markdown: string } | null
 }
 
 const runtimes = new Map<string, TaskRuntime>()
@@ -185,7 +188,7 @@ function runtimeOf(id: string): TaskRuntime {
   if (!rt) {
     rt = {
       reqId: null, waitKind: null, loopActive: false, runningSince: 0,
-      retryTimer: null, retryKind: null, retryCount: 0, lastTabId: null,
+      retryTimer: null, retryKind: null, retryCount: 0, lastTabId: null, pendingReport: null,
     }
     runtimes.set(id, rt)
   }
@@ -750,6 +753,9 @@ interface SegmentTrace {
      * 임시저장일 뿐이어서, 라벨만 믿으면 멀쩡한 작업이 "발행됐는지 모르겠다" 로 멈춰 선다.
      */
     publishPending: boolean
+    /** 구간 모드에서 조립된 부분 보고서(파일 미저장) — 작업이 실제로 끝날 때 한 번만 쓴다. */
+    reportTitle: string
+    reportMarkdown: string
   } | null
 }
 
@@ -830,6 +836,14 @@ function onSegmentEvent(task: PersistentTask, evt: AgentEvent, box: { outcome: S
         tabUrl: str(evt.tabUrl),
         files: strList(evt.files, 100),
         publishPending: evt.publishPending === true,
+        reportTitle: str(evt.reportTitle),
+        reportMarkdown: str(evt.reportMarkdown),
+      }
+      // 구간마다 덮어써서 **가장 최근에 조립된** 부분 보고서를 들고 간다(노트는 누적이므로 최신이 가장 완전하다).
+      // 파일은 작업이 실제로 끝날 때 한 번만 쓴다 — 구간마다 쓰면 긴 작업 하나가 파일 수십 개를 쏟아낸다.
+      if (trace.exhausted.reportMarkdown) {
+        const rt2 = runtimeOf(task.id)
+        rt2.pendingReport = { title: trace.exhausted.reportTitle || '분석 보고서 (부분)', markdown: trace.exhausted.reportMarkdown }
       }
       box.outcome = { kind: 'exhausted' }
       return
@@ -935,7 +949,36 @@ function saveCheckpoint(task: PersistentTask, args: {
 // ===== 구간 루프 =====
 
 function toInterrupted(task: PersistentTask, reason: string): void {
+  // 여기가 "작업이 실제로 멈추는" 자리다 — 구간마다 모아 둔 부분 보고서를 **이제** 한 번 쓴다.
+  // (agent.ts 는 구간 모드에서 파일을 쓰지 않는다. 예전처럼 구간마다 쓰면 25분 작업 하나가
+  //  사용자 다운로드 폴더에 보고서 25개를 남긴다 — 실측으로 확인된 문제다.)
+  void flushPendingReport(task)
   setState(task, 'interrupted', `${reason} 이어서 진행할 수 있습니다.`)
+}
+
+/** 모아 둔 부분 보고서를 파일로 한 번 쓰고 결과 파일 목록에 더한다. 실패해도 작업 흐름을 막지 않는다. */
+async function flushPendingReport(task: PersistentTask): Promise<void> {
+  const rt = runtimes.get(task.id)
+  const pending = rt?.pendingReport
+  if (!rt || !pending) return
+  rt.pendingReport = null   // 두 번 쓰지 않도록 먼저 비운다
+  try {
+    const host = (() => { try { return new URL(task.checkpoint.tabUrl ?? '').hostname || '사이트' } catch { return '사이트' } })()
+    const saved = await writeDownloadMd(safeFileName(`보고서-${host}-${reportStampNow()}`), pending.markdown)
+    if (saved.ok && saved.path) {
+      addResultFiles(task, [saved.path])
+      taskEvents.emit('event', { taskId: task.id, type: 'report', title: pending.title, notes: 0, path: saved.path })
+    }
+  } catch (err) {
+    console.warn('[task-runtime] 부분 보고서 저장 실패', err)
+  }
+}
+
+/** 파일명용 시각 도장 — agent.ts 의 reportStamp 와 같은 모양(YYYYMMDD-HHmm). */
+function reportStampNow(): string {
+  const d = new Date()
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
 }
 
 function scheduleRetry(task: PersistentTask, kind: RetryKind, detail: string): boolean {
