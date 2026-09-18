@@ -113,6 +113,13 @@ const api = {
     list: (): Promise<PasswordSummary[]> => ipcRenderer.invoke(IPC.password.list),
     reveal: (id: string): Promise<string | null> => ipcRenderer.invoke(IPC.password.reveal, { id }),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.password.remove, { id }),
+    // 선등록 CRUD — browser:// 내부 페이지 전용. 외부 사이트가 쓰는 content preload 에는 노출하지 않는다.
+    add: (a: { origin: string; username: string; password: string; autoLoginAllowed?: boolean }):
+      Promise<{ ok: boolean; id?: string; reason?: string; message?: string }> =>
+      ipcRenderer.invoke(IPC.password.add, a),
+    update: (a: { id: string; username?: string; password?: string; autoLoginAllowed?: boolean; preferred?: boolean }):
+      Promise<{ ok: boolean; id?: string; reason?: string; message?: string }> =>
+      ipcRenderer.invoke(IPC.password.update, a),
     onChanged: (cb: (list: PasswordSummary[]) => void) =>
       on(IPC.password.changed, cb),
   },

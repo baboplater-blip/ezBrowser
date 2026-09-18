@@ -80,6 +80,22 @@ function steps(outRoot) {
       timeoutMs: 2 * 60000, desc: '마크다운→에디터 평문 변환(누출 0·내용 보존) M1~M5',
     },
     {
+      // 순수 함수 — 같은 글에 두 번 손대지 않는다는 방어. 주소 정규화가 느슨해지면 중복 댓글이,
+      // 과해지면 남의 글을 건너뛴다. 양쪽을 다 본다(검출력 확인 2026-09-18: 정규화를 무력화하니 4건 FAIL).
+      id: 'engage-ledger', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-engage-ledger.mjs', outArg: false,
+      result: (o) => path.join(o, '..', 'engage-ledger', 'results.json'),
+      timeoutMs: 2 * 60000, desc: '블로그 참여 중복 방지 장부·주소 정규화·레시피 지시 22종',
+    },
+    {
+      // 순수 함수 — 앱 없이 즉시 끝난다. 작업 격리 경계(남의 산출물 업로드 금지)와 HTML 위장 거부는
+      // 깨져도 다른 검사가 전부 초록이라, 여기서 자주 보지 않으면 조용히 새어 나간다.
+      id: 'artifacts', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-artifacts.mjs', outArg: false,
+      result: (o) => path.join(o, '..', 'artifacts', 'results.json'),
+      timeoutMs: 2 * 60000, desc: '작업 산출물 저장소(격리 경계·실제 바이트 검증) 15종',
+    },
+    {
       // 순수 함수라 앱을 띄우지 않고 1초 안에 끝난다 — 마감 게이트(quick)에도 넣는다.
       // 이 판정이 느슨해지면 결제·삭제가 확인 없이 실행되므로 자주 볼수록 좋다.
       id: 'agent-gate', kind: 'harness', modes: ['quick', 'full'],
@@ -112,6 +128,14 @@ function steps(outRoot) {
       script: 'verify-frames-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'frames', 'frames-results.json'),
       timeoutMs: 12 * 60000, desc: '교차출처 iframe 조작·ref 세대 안전·로그인/CAPTCHA 인계 F1~F8·K1~K2·C1~C4',
+    },
+    {
+      // 로컬 HTTPS 픽스처(자체 서명 인증서 + --ignore-certificate-errors, 검증 실행 한정)와
+      // 더미 자격증명만 쓴다. 실제 사이트에 접속하지 않는다.
+      id: 'saved-login', kind: 'harness', modes: ['full'],
+      script: 'verify-saved-login-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'saved-login', 'saved-login-results.json'),
+      timeoutMs: 15 * 60000, desc: '저장된 계정 자동 로그인 SL1~SL16(선등록·통과·재개 / 유출·오폼·2FA·취소 거부)',
     },
     {
       id: 'sns-publish', kind: 'harness', modes: ['full'],

@@ -1,0 +1,60 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260918T100753Z-492f08",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-18T10:10:29Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "안내서 방법 A와 빌드 표가 최종 rc.2 설치파일을 가리킨다",
+      "check": "docs/QUICKSTART.md 13행·빌드 표를 실제 산출물과 대조 → 파일명 ezBrowser-0.2.0-rc.2-win-x64.exe, 121,839,792 바이트, 2026-09-18 18:59, SHA256 4ae5aa3e…f4ba83 4항 모두 일치",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "설치 9/9와 게이트 통과가 rc.2 증거로 적혀 있다",
+      "check": "확인 블록에 설치→부팅→제거 9/9(프로필 47→47 무접촉), npm run verify 9/9 42s, frames 15/15, agent-loop 35/35, universal 10/10, 안전 15/15 전부 기재 — A13 1회 실패도 '재실행에서 통과'로 숨기지 않고 명시",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "rc.1 실사이트 증거가 rc.2 증거로 읽히지 않는다",
+      "check": "'확인한 범위의 경계' 블록 확인 → MDN/Wikipedia/GitHub 25.8분·312단계·114페이지는 rc.1 귀속, rc.2 는 로컬 2-오리진 회귀만으로 한정, 두 항목이 별도 불릿이라 섞어 읽을 수 없음",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "미검증 항목이 갱신 과정에서 사라지지 않았다",
+      "check": "실제 24시간·모든 사이트·외부 PC·코드 서명 잔존 확인 → 24시간은 '가상 시계만, 실제 최장 25.8분'으로 4번 항목 신설, 나머지 3종은 기존 문구 보존",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [
+      "코드 서명(.pfx) 적용 후 재빌드 — SmartScreen 경고 해소",
+      "외부 clean Windows PC 에서 설치·실행·자동 업데이트 수신 검증"
+    ],
+    "blockers": [],
+    "optional_next": [
+      "rc.2 로 실사이트 장시간 작업 재실행(현재 실사이트 증거는 rc.1)",
+      "실제 시계 24시간 연속 실행 확인(현재 가상 시계만)",
+      "agent-safety A13 간헐 실패 원인 규명"
+    ],
+    "korean_line": "남은 작업: 코드 서명(.pfx) 적용 후 재빌드 — SmartScreen 경고 해소, 외부 clean Windows PC 에서 설치·실행·자동 업데이트 수신 검증; 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": null,
+    "passed": null,
+    "failed": null,
+    "reran_only_failed": false
+  },
+  "notes": "문서만 고친 실행. 코드·빌드·앱 재검증 없음. git diff는 docs/QUICKSTART.md 단일 파일(+26/-16). 안내서 내 'cross-origin 불가능' 류 낡은 설명은 grep 결과 없음(유일한 '교차' 히트는 과거 업그레이드 기록의 교차 세션 주제로 무관) — 교정 대상 없음. 라운드 기록은 .auto-dev/durable-agent-20260918-final.md."
+}

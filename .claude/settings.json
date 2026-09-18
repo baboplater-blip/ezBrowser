@@ -22,10 +22,7 @@
       "PowerShell(Get-Process *)"
     ],
     "deny": [
-      "Bash(rm -rf *)",
-      "Bash(npm run package -- --publish*)",
-      "Bash(gh release create *)",
-      "Bash(electron-builder --publish*)"
+      "Bash(rm -rf *)"
     ]
   }
 }

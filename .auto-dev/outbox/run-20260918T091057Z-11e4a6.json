@@ -1,0 +1,190 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T091057Z-11e4a6",
+  "recorded_at": "2026-09-18T10:05:36Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T091057Z-11e4a6",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T091057Z-11e4a6)의 구조화 완료 기록: pass (합격 기준 12건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 이전 라운드의 25.8분이 최대, 24시간 경계는 가상시계로만 확인; 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "3a8cf3a1-a13c-44db-9342-c92c0875075b",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "다른 출처 iframe 안의 입력칸·드롭다운·버튼을 에이전트가 조작하면 그 프레임 페이지가 실제로 바뀐다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "프레임 안 요소에 키·스크롤이 그 프레임으로 간다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사람 입력(실제 마우스)으로 프레임 버튼을 정확히 누르고, 관찰이 DOM 에 흔적을 남기지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "관찰 뒤 프레임이 다른 문서로 바뀌면 옛 번호는 거부되고 결제가 실행되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "허용 사이트 밖 프레임의 텍스트가 모델 프롬프트에 한 글자도 가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "허용 범위는 사용자가 승인해야만 넓어진다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "ref 를 준 키 동작은 대상 검증에 실패하면 키를 한 개도 보내지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "로그인/CAPTCHA 화면에서는 예산을 태우지 않고 곧바로 사용자 대기로 넘어간다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 직접 처리한 뒤 '계속' 하면 그 화면부터 이어간다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "'로그인'·'verify'·'인증' 단어만 있는 평범한 문서에서는 멈추지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "CAPTCHA 우회·솔버·지문 은폐 코드를 추가하지 않았다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "최종 설치파일이 설치→부팅→제거까지 동작하고 사용자 실제 프로필을 건드리지 않는다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드(자율 해결 불가)",
+        "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요)",
+        "실제 24시간 연속 실행 미실시 — 실제 시계 증거는 이전 라운드의 25.8분이 최대, 24시간 경계는 가상시계로만 확인"
+      ],
+      "optional_next": [
+        "실제 상용 사이트의 교차 출처 프레임(결제창·소셜 로그인) 실사용 관찰 — 이번엔 로컬 2오리진 fixture 로만 실증했다",
+        "verify-agent-safety A13(아이콘 드롭존 오탐) 기존 flake — 시나리오가 한 페이지를 공유하는 구조적 원인, 이번 변경과 무관"
+      ],
+      "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 이전 라운드의 25.8분이 최대, 24시간 경계는 가상시계로만 확인; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T091057Z-11e4a6"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 3278.2,
+        "context_chars": 11490,
+        "total_tokens": 1628435,
+        "cache_read_tokens": 67910882
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 10326,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 266,
+          "output": 163283,
+          "cache_read": 56196617,
+          "cache_creation": 528824
+        },
+        "claude-sonnet-5": {
+          "input": 88,
+          "output": 53332,
+          "cache_read": 11714265,
+          "cache_creation": 872294
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\durable-agent-20260918\\run-20260918T091057Z-11e4a6-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\durable-agent-20260918\\run-20260918T091057Z-11e4a6-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "필수 A~D 네 항목을 모두 마감하고 최종본으로 검증했습니다.\n\n## A. 교차 출처 iframe 제어 — 실제로 연결했습니다\n\n**전:** 관찰·조작 스크립트가 `wc.executeJavaScript` 로 **최상위 문서에서만** 돌았습니다. 다른 출처 iframe 은 \"여기 프레임이 있는데 못 본다\"로 보고하고 멈췄습니다.\n\n**후:** 신규 `app/main/features/ai/frames.ts` — Electron `WebFrameMain.executeJavaScript` 로 그 프레임 문서에서 직접 관찰·조작합니다. 지적하신 대로 **SOP 는 페이지 안 JS 에 걸리는 규칙이지 브라우저 메인 권한에 걸리는 규칙이 아니었습니다.** `sandbox`·`contextIsolation`·`webSecurity` 는 그대로 두고 렌더러 권한은 한 줄도 완화하지 않았습니다.\n\n- ref 는 모델에게 여전히 평평한 정수 한 벌. (프레임, 프레임 안 번호) 라우팅을 **관찰 세대(epoch)별**로 기억하고, 실행 시 `webFrameMain.fromId` + **관찰 당시 URL 일치**로 되찾습니다 — 사라졌거나 주소가 바뀌었으면 거부.\n- 좌표는 부모에서 `iframe.contentWindow === window.frames[i]` 참조 동일성으로 짝지어 border·padding까지 누적. **자식 개수가 프레임 트리와 어긋나면 정렬을 안 믿고 좌표를 포기**(합성 폴백 + 그 사실 명시).\n- click / type / **select(신규)** / key / scroll / hover / drag 전부 프레임 인지. **실제 입력(trusted sendInputEvent)** 경로도 프레임 좌표로 동작합니다.\n- **allowedHosts 를 자식 프레임에 같은 함수로 적용** — 허용 밖 프레임은 스크립트를 아예 실행하지 않아 텍스트가 프롬프트로 **한 글자도** 가지 않습니다. 넓히려면 신규 `request_scope` 로 **사용자 승인**을 받아야 합니다(자동 확대 경로 없음).\n\n## B. `pressKey` fail-closed\n\nref 검증 실패를 삼키고 현재 포커스에 키를 보내며 `ok:true` 를 돌려주던 것 → **`sendInputEvent` 를 한 번도 부르지 않고** 사유와 함께 실패합니다. ref 없이 부르는 \"현재 포커스\" 동작은 의도된 대로 유지.\n\n**부정 대조 실시:** 옛 동작을 임시 복원해 재빌드·재패키징 후 실행 → K2 가 `ok=true detail=\"키 입력: Enter\"` 로 **FAIL**. 검출력 확인 후 되돌렸습니다.\n\n## C. 로그인/CAPTCHA 인계 — U10 GAP 닫음\n\n신규 `challenge-detect.ts`. **모델을 부르기 전에** 감지해 `waiting-user`(사유 🔐/🧩)로 넘기고, 사용자가 처리한 뒤 \"계속\" 하면 그 화면부터 이어갑니다. 우회·솔버·지문 은폐 코드는 0건(grep 상설 확인). 오탐 방지가 설계 핵심이라 **구조적 신호만** 씁니다(보이는 password 칸, 실제 위젯) — 본문 단어로는 절대 발동하지 않고, reCAPTCHA v3 배지는 제외했습니다.\n\n## D. 설치본 검증 — 최종 파일로\n\n| | |\n|---|---|\n| 파일 | `dist\\ezBrowser-0.2.0-rc.2-win-x64.exe` (121,839,792 바이트) |\n| SHA256 | `4ae5aa3e7682d7b92aba782af2d41efac31302f7557658ba9e06706032f4ba83` |\n| 결과 | **9/9 PASS** — 무인 설치 → 설치본 app.asar 부팅 → 탭·검색·뒤로/앞으로·북마크·세션복원 → 무인 제거 |\n| 격리 | **사용자 실제 프로필 47→47 무접촉**, `--publish never` |\n\n하네스 자체 결함 2건도 고쳤습니다: 설치본 경로에 **0.1.0 이 하드코딩**돼 몇 달 전 파일을 조용히 검사하고 있었고, 기존 설치가 있으면 **사용자 실설치를 덮어쓰고 제거**할 수 ",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T091057Z-11e4a6\\stream.jsonl",
+    "error": null
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "auto-dev/project@1",
+  "project_id": "browser-build-36466a626d",
+  "name": "ezBrowser",
+  "root_realpath": "C:\\Users\\molma\\Desktop\\하네스\\browser-build",
+  "created_at": "2026-09-15T08:47:18Z",
+  "final_verifier": "claude",
+  "session_ids": [
+    {
+      "session_id": "e85ca038-efde-4238-a4e8-ce193ac7c0fd",
+      "run_id": "run-20260915T084732Z-0bf6b9",
+      "status": "unclear",
+      "at": "2026-09-15T09:18:38Z"
+    },
+    {
+      "session_id": "a9b416bf-a1ba-4f5f-898c-e99d8d81d5a8",
+      "run_id": "run-20260915T091853Z-3c8909",
+      "status": "unclear",
+      "at": "2026-09-15T09:32:21Z"
+    },
+    {
+      "session_id": "cbe80641-2782-411b-b8e2-03b039c9fd35",
+      "run_id": "run-20260915T100324Z-f1550b",
+      "status": "unclear",
+      "at": "2026-09-15T10:19:23Z"
+    },
+    {
+      "session_id": "009bd0b0-1c49-409d-abdb-c4b18bf400f1",
+      "run_id": "run-20260915T101940Z-e8b5cf",
+      "status": "unclear",
+      "at": "2026-09-15T11:01:09Z"
+    },
+    {
+      "session_id": "d7f61dc6-f300-4b67-a8ef-9dcbed0927d7",
+      "run_id": "run-20260915T110136Z-b1e3f7",
+      "status": "success",
+      "at": "2026-09-15T11:25:56Z"
+    },
+    {
+      "session_id": "1a240d11-c1b7-45a5-8c20-a13ba49ca03c",
+      "run_id": "run-20260915T112617Z-0b2f2e",
+      "status": "failed",
+      "at": "2026-09-15T11:57:00Z"
+    },
+    {
+      "session_id": "38efa67a-90a4-40e8-8e31-6c92dd90f6d9",
+      "run_id": "run-20260915T120349Z-b703a5",
+      "status": "unclear",
+      "at": "2026-09-15T13:05:00Z"
+    },
+    {
+      "session_id": "05e0d0ea-3225-4551-a9c8-2a8944806c56",
+      "run_id": "run-20260915T154600Z-adca45",
+      "status": "success",
+      "at": "2026-09-15T15:54:43Z"
+    },
+    {
+      "session_id": "7579a9b2-90bd-4af6-85e8-0ad10bba832f",
+      "run_id": "run-20260918T053054Z-3c840e",
+      "status": "success",
+      "at": "2026-09-18T06:05:10Z"
+    },
+    {
+      "session_id": "ae838272-5c5a-44bb-8429-36d8f3f409ee",
+      "run_id": "run-20260918T071658Z-a991dc",
+      "status": "success",
+      "at": "2026-09-18T09:09:41Z"
+    },
+    {
+      "session_id": "3a8cf3a1-a13c-44db-9342-c92c0875075b",
+      "run_id": "run-20260918T091057Z-11e4a6",
+      "status": "success",
+      "at": "2026-09-18T10:05:36Z"
+    },
+    {
+      "session_id": "cfc4938b-fc87-4c78-bcd7-412fd4614d91",
+      "run_id": "run-20260918T100753Z-492f08",
+      "status": "success",
+      "at": "2026-09-18T10:10:50Z"
+    },
+    {
+      "session_id": "eaf75661-a91e-4140-a270-e1dc6520b484",
+      "run_id": "run-20260918T101236Z-5d0d33",
+      "status": "interrupted",
+      "at": "2026-09-18T11:12:36Z"
+    },
+    {
+      "session_id": "01eb08a8-a0d8-4575-a67f-cb4dced19a3d",
+      "run_id": "run-20260918T111313Z-cf641c",
+      "status": "success",
+      "at": "2026-09-18T11:23:38Z"
+    }
+  ],
+  "last_run_id": "run-20260918T113955Z-851f2b",
+  "baseline": {
+    "user_quality": null,
+    "interventions": null,
+    "wait_seconds": null,
+    "main_usage": null
+  }
+}

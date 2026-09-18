@@ -34,9 +34,12 @@ export interface PageObservation {
   listHint?: { rowSelector: string; count: number; fields?: Array<{ sel: string; sample: string; attr?: string }> }
   // 교차 출처 프레임 — 이제 **관찰·조작한다**(WebFrameMain). 여기엔 그 프레임들의 요약이 담긴다.
   // elements 에는 이 프레임들의 요소가 전역 번호로 합쳐져 들어가 있다(이름에 "(프레임 호스트)" 표시).
-  frames?: Array<{ host: string; url: string; title: string; text: string; elementCount: number; challenge?: { kind: 'captcha' | 'login'; marker: string } }>
+  frames?: Array<{ host: string; url: string; title: string; text: string; elementCount: number; challenge?: { kind: 'captcha' | 'login'; marker: string }; loginHint?: { identifierFirst: true; marker: string } }>
   // 로그인 / CAPTCHA 화면 신호(구조적 근거만). 판정·문구는 challenge-detect.ts 가 맡는다.
   challenge?: { kind: 'captcha' | 'login'; marker: string }
+  // 연성 로그인 신호 — "아이디 먼저" 2단계 로그인의 1단계. **이것만으로는 작업을 멈추지 않는다**
+  // (멈추면 로그인 위젯이 있는 평범한 페이지에서 오탐). 저장된 계정으로 자동 로그인할지 고를 때만 본다.
+  loginHint?: { identifierFirst: true; marker: string }
   // 허용 사이트 목록 밖이라 **일부러 열지 않은** 프레임의 호스트. 안의 텍스트·요소는 단 한 글자도
   // 읽지 않는다(모델 프롬프트로 가지 않는다). 사용자가 명시 승인하면 범위가 넓어져 다음 관찰부터 보인다.
   blockedFrames?: string[]
@@ -56,7 +59,7 @@ export interface AgentAction {
   thought?: string
   action: 'click' | 'type' | 'navigate' | 'scroll' | 'read' | 'wait' | 'done' | 'ask' | 'open_tab' | 'switch_tab' | 'close_tab' | 'remember' | 'upload_file' | 'click_at' | 'extract'
     | 'wait_for' | 'key' | 'hover' | 'drag' | 'download' | 'run_js' | 'autofill' | 'note' | 'report' | 'expect'
-    | 'select' | 'request_scope'
+    | 'select' | 'request_scope' | 'mark_baseline' | 'capture_image'
   ref?: number
   text?: string
   url?: string
@@ -83,6 +86,7 @@ export interface AgentAction {
   title?: string         // report: 보고서 제목
   markdown?: string      // report: 개요·핵심 결론(본문은 누적 note 로 조립)
   host?: string          // request_scope: 허용 목록에 추가를 요청할 호스트(사용자 승인 필요)
+  artifact?: string      // upload_file: 이 작업이 만든 산출물 id(자료 폴더 대신)
 }
 
 // ===== ref 레지스트리 (DOM 을 건드리지 않는 요소 참조) =====
@@ -1275,8 +1279,24 @@ const OBSERVE_SCRIPT = (maxEls: number, maxText: number, epoch: string) => `
       }
     }
   } catch (e) {}
+  // ===== 연성(soft) 로그인 신호 — "아이디 먼저" 2단계 로그인의 1단계 =====
+  // 비밀번호 칸이 없어서 위의 challenge 는 잡지 못한다. 그렇다고 이걸 challenge 로 올리면
+  // **작업이 멈추는 오탐**이 생긴다(헤더에 로그인 위젯이 있는 평범한 페이지까지 중단). 그래서 별도 필드로
+  // 내보내고, **자동 로그인 시도 여부를 고를 때만** 참고한다 — 사람에게 넘기는 판단에는 쓰지 않는다.
+  // 근거는 autocomplete="username|email" 하나뿐이다. 이건 페이지 작성자가 "이 칸은 로그인 식별자" 라고
+  // 명시한 것이라 검색창·일반 입력과 혼동되지 않는다(본문 문구 추측이 아니다).
+  var loginHint = null;
+  try {
+    if (!challenge) {
+      var idc = document.querySelectorAll('input[autocomplete~=username i], input[autocomplete=email i]');
+      var idn = 0, idEl = null;
+      for (var ii = 0; ii < idc.length; ii++) { if (visible(idc[ii]) && !idc[ii].disabled) { idn++; idEl = idc[ii]; } }
+      if (idn === 1 && idEl) loginHint = { identifierFirst: true, marker: 'autocomplete=username (아이디 먼저 단계로 보임)' };
+    }
+  } catch (e) {}
   return {
     challenge: challenge,
+    loginHint: loginHint,
     url: location.href,
     title: document.title || '',
     text: bodyText.slice(0, ${maxText}),
@@ -1347,6 +1367,7 @@ export async function observePage(
         host: r.host, url: r.url, title: String(fobs.title ?? ''),
         text: String(fobs.text ?? '').slice(0, FRAME_MAX_TEXT), elementCount: fobs.elements.length,
         ...(fobs.challenge ? { challenge: fobs.challenge } : {}),
+        ...(fobs.loginHint ? { loginHint: fobs.loginHint } : {}),
       })
     }
   } catch (err) {
@@ -1763,4 +1784,134 @@ export async function armFileChooser(wc: WebContents, filePaths: string[], timeo
       .then(() => dbg.sendCommand('Page.setInterceptFileChooserDialog', { enabled: true }))
       .catch((e: unknown) => finish(false, '파일 선택 가로채기를 켜지 못했습니다: ' + String(e)))
   })
+}
+
+// ===== 생성물 수집 — 페이지의 이미지 열거·바이트 읽기 (묶음 SOCIAL-1) =====
+//
+// 왜 따로 두는가: 관찰(observePage)은 **상호작용 요소**만 담는다(버튼·입력칸). 그래서 "AI 사이트가
+// 방금 만들어 준 그림"은 관찰 목록에 아예 없거나 이름 없는 요소로만 잡힌다. 생성물을 가려내려면
+// 이미지 자체의 주소·실제 픽셀 치수를 봐야 하므로 전용 열거를 둔다.
+//
+// 가려내기의 핵심은 **기준선 대비 새로 생긴 것**이다(agent.ts). 여기서는 판단하지 않고 목록만 준다 —
+// 다만 로고·아이콘 같은 잡음이 목록을 채우지 않도록 면적 큰 순으로 정렬해 돌려준다.
+
+export interface PageImage {
+  src: string            // http(s) · data: · blob: · 'canvas:<n>'(캔버스는 주소가 없어 색인으로 집는다)
+  width: number          // 실제 픽셀(naturalWidth) — CSS 로 줄여 그린 큰 이미지를 작다고 오판하지 않게
+  height: number
+  alt: string
+  area: number
+  kind: 'img' | 'canvas'
+  frameId?: string       // 자식 프레임 안의 이미지면 그 프레임 키
+  frameUrl?: string
+}
+
+const IMAGES_SCRIPT = (cap: number): string => `(() => {
+  const out = []; const seen = new Set();
+  const push = (src, w, h, alt, kind) => {
+    if (!src || seen.has(src)) return;
+    // 거대한 data: URI 는 목록에 실으면 IPC 왕복이 폭주한다. 캡처는 캔버스/주소 경로로 따로 한다.
+    if (src.slice(0, 5) === 'data:' && src.length > 200000) return;
+    seen.add(src);
+    const W = Math.round(w) || 0, H = Math.round(h) || 0;
+    out.push({ src: String(src).slice(0, 2000), width: W, height: H, alt: String(alt || '').slice(0, 80), area: W * H, kind });
+  };
+  try {
+    for (const im of document.querySelectorAll('img')) {
+      if (out.length >= ${cap}) break;
+      let r = { width: 0, height: 0 };
+      try { r = im.getBoundingClientRect(); } catch (e) {}
+      push(im.currentSrc || im.src, im.naturalWidth || r.width, im.naturalHeight || r.height, im.alt, 'img');
+    }
+    const cvs = document.querySelectorAll('canvas');
+    for (let i = 0; i < cvs.length && out.length < ${cap}; i++) {
+      const cv = cvs[i];
+      push('canvas:' + i, cv.width, cv.height, cv.getAttribute('aria-label') || '', 'canvas');
+    }
+  } catch (e) {}
+  out.sort((a, b) => b.area - a.area);
+  return out;
+})()`
+
+/**
+ * 현재 페이지(및 허용된 자식 프레임)의 이미지 목록. 면적 큰 순.
+ * 허용 사이트 밖 프레임은 **스크립트를 돌리지 않는다** — 관찰과 같은 규칙(frames.ts).
+ */
+export async function listPageImages(wc: WebContents, allowedHosts?: string[], cap = 60): Promise<PageImage[]> {
+  if (wc.isDestroyed()) return []
+  const url = wc.getURL()
+  if (!/^https?:/i.test(url)) return []
+  const out: PageImage[] = []
+  try {
+    const top = (await wc.executeJavaScript(IMAGES_SCRIPT(cap), true)) as PageImage[]
+    if (Array.isArray(top)) out.push(...top)
+  } catch (err) {
+    console.warn('[ai-agent] listPageImages failed', err)
+  }
+  try {
+    const { roots } = listObservationFrames(wc, allowedHosts)
+    for (const r of roots) {
+      if (out.length >= cap) break
+      let fimgs: PageImage[] | null = null
+      try { fimgs = (await r.frame.executeJavaScript(IMAGES_SCRIPT(20), true)) as PageImage[] } catch { fimgs = null }
+      if (!Array.isArray(fimgs)) continue
+      for (const im of fimgs) out.push({ ...im, frameId: r.id, frameUrl: r.url })
+    }
+  } catch { /* 프레임 열거 불가 환경 — 최상위 목록만 */ }
+  out.sort((a, b) => b.area - a.area)
+  return out.slice(0, cap)
+}
+
+const READ_URL_SCRIPT = (url: string, maxBytes: number): string => `(async () => {
+  const toB64 = (buf) => {
+    const bytes = new Uint8Array(buf); let s = ''; const CH = 0x8000;
+    for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return btoa(s);
+  };
+  try {
+    const u = ${JSON.stringify(url)};
+    if (u.slice(0, 7) === 'canvas:') {
+      const idx = parseInt(u.slice(7), 10) || 0;
+      const cv = document.querySelectorAll('canvas')[idx];
+      if (!cv) return { ok: false, error: '캔버스를 찾지 못했습니다' };
+      // 다른 출처 이미지를 그린 캔버스는 보안상 읽을 수 없다(tainted). 우회하지 않고 그대로 실패로 알린다.
+      let dataUrl = '';
+      try { dataUrl = cv.toDataURL('image/png'); }
+      catch (e) { return { ok: false, error: '캔버스를 읽을 수 없습니다(다른 출처 이미지가 그려져 보호됨)' }; }
+      const comma = dataUrl.indexOf(',');
+      return { ok: true, base64: dataUrl.slice(comma + 1), mime: 'image/png' };
+    }
+    const r = await fetch(u);
+    if (!r.ok) return { ok: false, error: 'HTTP ' + r.status };
+    const b = await r.blob();
+    if (b.size > ${maxBytes}) return { ok: false, error: '파일이 너무 큽니다(' + b.size + ' 바이트)' };
+    if (b.size === 0) return { ok: false, error: '빈 파일입니다' };
+    return { ok: true, base64: toB64(await b.arrayBuffer()), mime: b.type || '' };
+  } catch (e) { return { ok: false, error: String(e && e.message ? e.message : e).slice(0, 200) }; }
+})()`
+
+/**
+ * 페이지 컨텍스트에서 주소를 읽어 base64 로 돌려준다.
+ *
+ * 왜 페이지에서 읽는가: `blob:` 은 그 문서 안에서만 유효한 주소라 메인 프로세스가 열 수 없다.
+ * `canvas:` 도 마찬가지로 DOM 이 있어야 읽힌다. **http(s) 는 이 경로를 쓰지 마라** — 메인에서
+ * 탭 세션으로 받는 편이 쿠키·Referer 가 정확하고 CORS 제약도 받지 않는다(artifacts 쪽에서 처리).
+ */
+export async function readUrlInPage(
+  wc: WebContents, url: string, maxBytes: number, frameId?: string, frameUrl?: string,
+): Promise<{ ok: boolean; base64?: string; mime?: string; error?: string }> {
+  if (wc.isDestroyed()) return { ok: false, error: '탭이 닫혔습니다' }
+  let target: WebContents | WebFrameMain = wc
+  if (frameId) {
+    const f = frameFromId(frameId, frameUrl)
+    if (!f) return { ok: false, error: '이미지가 있던 프레임이 사라졌습니다(다시 관찰하세요)' }
+    target = f
+  }
+  try {
+    const r = await target.executeJavaScript(READ_URL_SCRIPT(url, maxBytes), true)
+    if (r && typeof r === 'object') return r as { ok: boolean; base64?: string; mime?: string; error?: string }
+    return { ok: false, error: '읽기 결과를 받지 못했습니다' }
+  } catch (e) {
+    return { ok: false, error: String(e).slice(0, 200) }
+  }
 }

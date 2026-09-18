@@ -1,0 +1,27 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260915T101940Z-e8b5cf",
+  "recorded_at": "2026-09-15T11:01:09Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260915T101940Z-e8b5cf",
+    "project_id": "browser-build-36466a626d",
+    "status": "unclear",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "판정이 다른 실행(run-20260915T091853Z-3c8909)에 귀속됨 — 이번 실행(run-20260915T101940Z-e8b5cf)의 근거가 아님",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "009bd0b0-1c49-409d-abdb-c4b18bf400f1",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "summary": "Confirmed the pre-change behavior directly from HEAD: conversations used a **fixed** `.corrupt.bak` name (second corruption overwrote the original backup), agent-runs had **no** corruption handling at all, and both cleared `dirty` *after* the await — the exact data-loss races the new store documents.",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260915T101940Z-e8b5cf\\stream.jsonl",
+    "error": null
+  }
+}

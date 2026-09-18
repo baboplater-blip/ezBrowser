@@ -1,0 +1,22 @@
+{
+  "schema": "auto-dev/lock@1",
+  "project_id": "browser-build-36466a626d",
+  "run_id": "run-20260918T113955Z-851f2b",
+  "purpose": "resume",
+  "host": "DESKTOP-3SA4M8U",
+  "acquired_at": "2026-09-18T11:39:55Z",
+  "owner": {
+    "pid": 29580,
+    "create_time": 134342051950692709,
+    "exe": "C:\\Users\\molma\\scoop\\apps\\python\\3.11.9\\python.exe",
+    "platform": "win32"
+  },
+  "child": {
+    "pid": 39876,
+    "create_time": 134342051955037940,
+    "exe": "C:\\Windows\\System32\\cmd.exe",
+    "platform": "win32"
+  },
+  "child_attached_at": "2026-09-18T11:39:55Z",
+  "child_note": "claude -p"
+}

@@ -2412,6 +2412,50 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 }
 .ai-ask-input:focus { border-color: var(--color-accent-primary); }
 
+/* AI 소셜 패널 (이미지 생성→게시 · 관심 블로그 참여) — ai-sidebar-design 스킬: 좁은 폭 = 세로 스택 + 칩 */
+.ai-social-subtabs { display: flex; gap: 3px; background: var(--color-bg-sunken); border-radius: 10px; padding: 3px; }
+.ai-social-subtab {
+  flex: 1; border: none; background: transparent; color: var(--color-text-secondary);
+  font-size: 11px; padding: 6px 4px; border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;
+  transition: background var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+.ai-social-subtab:hover:not(.active) { color: var(--color-text-primary); }
+.ai-social-subtab.active { background: var(--color-bg-elevated); color: var(--color-text-primary); box-shadow: var(--shadow-1); font-weight: 600; }
+
+.ai-social-form { display: flex; flex-direction: column; gap: 7px; }
+.ai-social-cta { width: 100%; justify-content: center; height: auto; padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+
+.ai-social-card { border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 8px 10px; background: var(--color-bg-subtle, rgba(127,127,127,0.08)); display: flex; flex-direction: column; gap: 6px; }
+.ai-social-card.warn { border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border-subtle)); }
+.ai-social-card.ok { border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-subtle)); }
+
+.ai-social-steps { display: flex; gap: 4px; }
+.ai-social-step { flex: 1; text-align: center; font-size: 10px; padding: 3px 2px; border-radius: 999px; background: var(--color-bg-base); color: var(--color-text-muted); border: 1px solid var(--color-border-subtle); white-space: nowrap; }
+.ai-social-step.active { background: var(--color-accent); border-color: var(--color-accent); color: #fff; font-weight: 600; }
+.ai-social-step.done { color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-subtle)); }
+
+.ai-social-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-social-thumb { width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 2px solid var(--color-border-subtle); cursor: pointer; background: var(--color-bg-base); padding: 0; }
+.ai-social-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ai-social-thumb:hover { border-color: var(--color-border-strong); }
+
+.ai-social-preview { width: 100%; max-height: 220px; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border-subtle); background: var(--color-bg-base); display: flex; align-items: center; justify-content: center; min-height: 60px; }
+.ai-social-preview img { max-width: 100%; max-height: 220px; object-fit: contain; display: block; }
+.ai-social-preview-meta { font-size: 10px; color: var(--color-text-muted); }
+
+.ai-social-receipt { font-size: 11px; line-height: 1.5; color: var(--color-text-secondary); background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; padding: 6px 8px; word-break: break-all; }
+.ai-social-receipt a { color: var(--color-accent); }
+
+.ai-social-hosts { display: flex; flex-wrap: wrap; gap: 4px; }
+.ai-social-empty { font-size: 11px; color: var(--color-danger); }
+
+.ai-social-ledger { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 4px 6px; }
+.ai-social-ledger-row { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--color-text-secondary); padding: 4px 2px; border-bottom: 1px solid var(--color-border-subtle); }
+.ai-social-ledger-row:last-child { border-bottom: none; }
+.ai-social-ledger-when { color: var(--color-text-muted); flex: 0 0 auto; font-size: 10px; }
+.ai-social-ledger-action { flex: 0 0 auto; font-weight: 600; white-space: nowrap; }
+.ai-social-ledger-addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* 마크다운 렌더 (AI 챗 답변) */
 .md { white-space: normal; }
 .md > :first-child { margin-top: 0; }

@@ -1,0 +1,109 @@
+{
+  "schema": "auto-dev/handoff-chain@1",
+  "task_id": "agents-project-20260916",
+  "started_at": "2026-09-15T15:54:43Z",
+  "rollovers": 0,
+  "runs": [
+    {
+      "run_id": "run-20260915T154600Z-adca45",
+      "status": "success",
+      "at": "2026-09-15T15:54:43Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 523.1,
+        "context_chars": 10572,
+        "total_tokens": 342825,
+        "cache_read_tokens": 7468498
+      }
+    },
+    {
+      "run_id": "run-20260918T053054Z-3c840e",
+      "status": "success",
+      "at": "2026-09-18T06:05:10Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 2055.1,
+        "context_chars": 11318,
+        "total_tokens": 540430,
+        "cache_read_tokens": 42533846
+      }
+    },
+    {
+      "run_id": "run-20260918T071658Z-a991dc",
+      "status": "success",
+      "at": "2026-09-18T09:09:41Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 6762.7,
+        "context_chars": 12252,
+        "total_tokens": 4961301,
+        "cache_read_tokens": 359263584
+      }
+    },
+    {
+      "run_id": "run-20260918T091057Z-11e4a6",
+      "status": "success",
+      "at": "2026-09-18T10:05:36Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 3278.2,
+        "context_chars": 11490,
+        "total_tokens": 1628435,
+        "cache_read_tokens": 67910882
+      }
+    },
+    {
+      "run_id": "run-20260918T100753Z-492f08",
+      "status": "success",
+      "at": "2026-09-18T10:10:50Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 176.6,
+        "context_chars": 10319,
+        "total_tokens": 288513,
+        "cache_read_tokens": 3255039
+      }
+    },
+    {
+      "run_id": "run-20260918T101236Z-5d0d33",
+      "status": "interrupted",
+      "at": "2026-09-18T11:12:36Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 3600.2,
+        "context_chars": 11651,
+        "total_tokens": null,
+        "cache_read_tokens": null
+      }
+    },
+    {
+      "run_id": "run-20260918T111313Z-cf641c",
+      "status": "success",
+      "at": "2026-09-18T11:23:38Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 625.1,
+        "context_chars": 10138,
+        "total_tokens": 369509,
+        "cache_read_tokens": 19381366
+      }
+    }
+  ],
+  "progress_markers": [],
+  "cumulative": {
+    "elapsed_seconds": 17021.0,
+    "total_tokens": 8131013,
+    "cache_read_tokens": 499813215
+  },
+  "budget": {
+    "max_total_tokens": null,
+    "max_elapsed_seconds": null
+  }
+}

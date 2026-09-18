@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AiProviderDetection, AiProviderKind, TabSummary } from '../../shared/types'
 import { Markdown } from './Markdown'
 import { AiWriteStudio } from './AiWriteStudio'
+import { AiSocialPanel } from './AiSocialPanel'
 
 type Role = 'user' | 'assistant'
 interface ChatMessage {
@@ -90,7 +91,7 @@ interface TaskSummary {
   id: string; instruction: string; state: TaskState; mode: 'normal' | 'long'
   stepsUsed: number; maxSteps: number; segment: number
   elapsedMs: number; startedAt: number; endedAt?: number
-  waitReason?: string; retry?: TaskRetryInfo
+  waitReason?: string; waitActionUrl?: string; waitActionLabel?: string; retry?: TaskRetryInfo
   llmCalls: number; maxLlmCalls: number
   result?: string; resultFiles: string[]; needsVerify: boolean
 }
@@ -229,10 +230,11 @@ function relTime(ts: number): string {
 // SKILL 의 "한 뷰 = 한 목적" 을 지키려고 별도 상세 화면을 두지 않았다 — 카드 자체가 이미 상태·진척·
 // 대기 이유·버튼을 전부 담고 있어, 드릴다운 없이도 필요한 조작을 이 자리에서 끝낼 수 있다.
 function TaskCard({
-  t, elapsedLabel, retryLabel, pending, traceItems, evidence, answerDraft, canRerun,
+  t, windowId, elapsedLabel, retryLabel, pending, traceItems, evidence, answerDraft, canRerun,
   onPause, onResume, onCancel, onDelete, onAccept, onRerun, onConfirm, onAnswerChange, onAnswerSend,
 }: {
   t: TaskSummary
+  windowId: string
   elapsedLabel: string
   retryLabel: string | null
   pending?: TaskPending
@@ -280,6 +282,15 @@ function TaskCard({
         <div className="ai-task-note warn">
           완료를 확인해 주세요.
           {evidence ? <div className="ai-task-evidence">{evidence}</div> : <div className="ai-task-evidence dim">근거를 불러오는 중…</div>}
+        </div>
+      )}
+      {/* 사용자가 기다림을 풀려면 가야 할 곳(예: 로그인 계정 등록·허용) — 사유만 주고 끝내지 않는다. */}
+      {t.state === 'waiting-user' && t.waitActionUrl && (
+        <div className="ai-task-note warn">
+          <button className="ai-mini-btn" onClick={() => {
+            const u = t.waitActionUrl
+            if (u) void window.browserAPI?.tabs?.create?.(windowId, u)
+          }}>{t.waitActionLabel ?? '설정 열기'}</button>
         </div>
       )}
       {(t.state === 'failed' || t.state === 'cancelled') && t.result && (
@@ -361,6 +372,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   const [connectError, setConnectError] = useState<{ message: string; fix?: string } | null>(null)
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null)
   const [mode, setMode] = useState<'chat' | 'agent' | 'write'>('chat')
+  // 소셜 패널(이미지 생성→게시·블로그 참여) — 기존 하위 뷰(showHistory·showRuns 등)와 같은 방식으로
+  // 불리언 토글로 열고 닫는다. mode 를 늘리지 않는다(ai-sidebar-design 스킬: 최상위 모드 ≤ 2~3개).
+  const [socialOpen, setSocialOpen] = useState(false)
   // 챗
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -1274,6 +1288,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         <div className="ai-meta-actions">
           <span className="ai-provider" title={config ? `${config.providerLabel} · ${config.model}` : ''}>{config ? config.model : '…'}</span>
           <button className="ai-mini-btn" onClick={() => void window.browserAPI.tabs.create(windowId, 'browser://ai-memory', { background: false })} title="AI 기억 보기·편집">🧠 기억</button>
+          <button className={`ai-mini-btn ${socialOpen ? 'active' : ''}`} onClick={() => setSocialOpen((s) => !s)} title="이미지 생성→게시, 관심 블로그 댓글·좋아요 자동화">🎨 만들기</button>
           {mode === 'chat' && (
             <>
               <button className="ai-mini-btn" onClick={() => void compact()} disabled={streaming || compacting || messages.length - foldCount < 4}
@@ -1293,7 +1308,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         </div>
       </div>
 
-      {mode === 'write' ? (
+      {socialOpen ? (
+        <AiSocialPanel windowId={windowId} activeId={activeId} isInternal={isInternal} providerReady={providerReady} />
+      ) : mode === 'write' ? (
         <AiWriteStudio
           windowId={windowId}
           isInternal={isInternal}
@@ -1568,7 +1585,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             ) : (
               <div className="ai-task-list">
                 {ptasks.map((t) => (
-                  <TaskCard key={t.id} t={t}
+                  <TaskCard key={t.id} t={t} windowId={windowId}
                     elapsedLabel={fmtDuration(ptaskElapsed(t))}
                     retryLabel={ptaskRetryCountdown(t)}
                     pending={ptaskPending[t.id]}
@@ -1662,7 +1679,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             {livePtasks.length > 0 && (
               <div className="ai-task-list">
                 {livePtasks.map((t) => (
-                  <TaskCard key={t.id} t={t}
+                  <TaskCard key={t.id} t={t} windowId={windowId}
                     elapsedLabel={fmtDuration(ptaskElapsed(t))}
                     retryLabel={ptaskRetryCountdown(t)}
                     pending={ptaskPending[t.id]}

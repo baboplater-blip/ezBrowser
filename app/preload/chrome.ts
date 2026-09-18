@@ -440,6 +440,26 @@ const api = {
       ipcRenderer.invoke(IPC.ai.blogBuildTask, params),
     snsBuildTask: (params: { platform: 'instagram' | 'youtube' | 'tiktok'; mode: 'publish' | 'draft'; file: string; caption: string; title?: string; tags?: string[]; autoOpen?: boolean }): Promise<{ task: string; openUrl: string }> =>
       ipcRenderer.invoke(IPC.ai.snsBuildTask, params),
+    // ===== 생성물 파이프라인 · 생성→게시 워크플로 · 블로그 참여 (묶음 SOCIAL-1) =====
+    artifactList: (taskId: string): Promise<AiArtifactMeta[]> =>
+      ipcRenderer.invoke(IPC.ai.artifactList, { taskId }),
+    artifactData: (taskId: string, id: string): Promise<{ meta: AiArtifactMeta; dataUrl: string | null } | null> =>
+      ipcRenderer.invoke(IPC.ai.artifactData, { taskId, id }),
+    socialList: (): Promise<AiSocialWorkflow[]> => ipcRenderer.invoke(IPC.ai.socialList),
+    socialStart: (params: AiSocialStartParams): Promise<AiSocialWorkflow | null> =>
+      ipcRenderer.invoke(IPC.ai.socialStart, params),
+    socialApprove: (id: string, caption: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.socialApprove, { id, caption }),
+    socialChoose: (id: string, artifactId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.socialChoose, { id, artifactId }),
+    socialCancel: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialCancel, { id }),
+    socialDelete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialDelete, { id }),
+    onSocialChanged: (cb: (list: AiSocialWorkflow[]) => void) => on(IPC.ai.socialChanged, cb),
+    engageBuildTask: (params: AiEngageParams): Promise<{ task: string; openUrl: string; allowedHosts: string[] }> =>
+      ipcRenderer.invoke(IPC.ai.engageBuildTask, params),
+    engageLedger: (limit?: number): Promise<AiEngageLedgerEntry[]> =>
+      ipcRenderer.invoke(IPC.ai.engageLedger, { limit }),
+    engageLedgerClear: (): Promise<void> => ipcRenderer.invoke(IPC.ai.engageLedgerClear),
     reportBuildTask: (params: { url?: string; focus?: string; depth?: number }): Promise<{ task: string; readOnly: boolean }> =>
       ipcRenderer.invoke(IPC.ai.reportBuildTask, params),
     reportExport: (p: { title: string; markdown: string }): Promise<{ ok: boolean; path?: string }> =>
@@ -636,6 +656,58 @@ interface PersistentTask {
   startedAt: number
   endedAt?: number
   elapsedMs: number
+}
+
+// 생성물·워크플로·블로그 참여 타입 — 메인에서 import 하지 않고 여기 선언한다(프리로드 독립 원칙,
+// PersistentTaskSummary 와 같은 관례). 메인 쪽 정의가 바뀌면 IPC 응답 모양이 달라지므로 함께 고칠 것.
+interface AiArtifactMeta {
+  id: string; taskId: string; name: string; path: string
+  kind: 'image' | 'video' | 'file'
+  format: string; mime: string; bytes: number; sha256: string
+  width?: number; height?: number
+  sourceUrl: string; sourcePageUrl: string; sourceTabId: string; sourceFrameUrl?: string
+  capturedAt: number; origin: 'page-capture' | 'download-import'; label?: string
+}
+
+interface AiSocialStartParams {
+  service: 'genspark' | 'chatgpt' | 'custom'
+  customUrl?: string
+  prompt: string
+  platform: 'instagram' | 'youtube' | 'tiktok'
+  account?: string
+  tone?: string
+  tags?: string[]
+  mode: 'draft' | 'publish'
+  windowId: string | null
+  tabId: string
+}
+
+interface AiSocialWorkflow {
+  id: string
+  params: AiSocialStartParams
+  stage: 'generate' | 'review' | 'publish' | 'done' | 'failed' | 'cancelled'
+  taskIds: { generate?: string; publish?: string }
+  artifactId?: string
+  artifactPreview?: { width?: number; height?: number; bytes: number; format: string; sha256: string }
+  caption?: string
+  receipt?: { url?: string; evidence?: string; at: number }
+  error?: string
+  createdAt: number; updatedAt: number
+}
+
+interface AiEngageParams {
+  myBlogUrl?: string; topic?: string; searchUrl?: string; account?: string
+  maxPosts: number
+  actions: Array<'comment' | 'like'>
+  mode: 'draft' | 'act'
+  excludeHosts?: string[]
+  minBodyChars?: number
+  /** 글 사이 최소 간격(초). ⚠ 지시문 수준의 요청이며 코드가 강제하지 않는다. */
+  intervalSeconds?: number
+}
+
+interface AiEngageLedgerEntry {
+  key: string; account: string; action: 'comment' | 'like'; at: number; note?: string
 }
 
 interface PersistentTaskSummary {

@@ -255,6 +255,17 @@ export interface PasswordEntry {
   createdAt: number
   updatedAt: number
   lastUsedAt: number
+  // ===== 자동화 로그인 (계정별 명시 opt-in) =====
+  // 저장되어 있다는 사실만으로는 에이전트가 이 계정으로 로그인하지 않는다. 사용자가 계정마다 켜야 한다
+  // (마이그레이션: 기존 항목은 전부 false). 켜면 "입력 + 로그인 버튼 누르기" 까지 허용된다 —
+  // 자동 제출 권한을 저장과 분리해 달라는 요구를 이 한 플래그의 **명시성**으로 만족시킨다.
+  autoLoginAllowed?: boolean
+  /** 같은 origin 에 허용 계정이 여럿일 때 자동화가 쓸 기본 계정. 없으면 자동화는 사용자에게 고르라고 묻는다. */
+  preferred?: boolean
+  /** 연속 로그인 실패 횟수 — 계정 잠금을 유발하는 무한 재시도를 막는다. 성공하거나 비밀번호를 고치면 0. */
+  autoLoginFailures?: number
+  /** 이 시각(ms)까지 자동 로그인 잠김. 디스크에 남으므로 앱을 재시작해도 유지된다. */
+  autoLoginBlockedUntil?: number
 }
 
 export interface PasswordSummary {
@@ -262,6 +273,11 @@ export interface PasswordSummary {
   origin: string
   username: string
   updatedAt: number
+  autoLoginAllowed: boolean
+  preferred: boolean
+  scheme: 'https' | 'http'
+  autoLoginFailures: number
+  autoLoginBlockedUntil: number
 }
 
 export type WorkspaceColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'gray'

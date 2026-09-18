@@ -173,6 +173,9 @@ export const IPC = {
     remove: 'password:remove',
     changed: 'password:changed',
     available: 'password:available',
+    // 선등록(사용자가 설정에서 직접 추가/수정) — 신뢰된 내부 페이지만.
+    add: 'password:add',
+    update: 'password:update',
   },
   workspace: {
     list: 'workspace:list',
@@ -357,6 +360,21 @@ export const IPC = {
     blogDraftSave: 'ai:blog-draft-save',
     blogDraftRemove: 'ai:blog-draft-remove',
     blogDraftChanged: 'ai:blog-draft-changed',
+    // 생성→캡션→게시 워크플로 (묶음 SOCIAL-1)
+    socialList: 'ai:social-list',
+    socialStart: 'ai:social-start',
+    socialApprove: 'ai:social-approve',
+    socialChoose: 'ai:social-choose',
+    socialCancel: 'ai:social-cancel',
+    socialDelete: 'ai:social-delete',
+    socialChanged: 'ai:social-changed',
+    // 작업 산출물(캡처한 이미지·받은 파일)
+    artifactList: 'ai:artifact-list',
+    artifactData: 'ai:artifact-data',
+    // 관심 블로그 댓글·좋아요
+    engageBuildTask: 'ai:engage-build-task',
+    engageLedger: 'ai:engage-ledger',
+    engageLedgerClear: 'ai:engage-ledger-clear',
     collectorList: 'ai:collector-list',
     collectorAdd: 'ai:collector-add',
     collectorUpdate: 'ai:collector-update',

@@ -276,3 +276,50 @@ export function assessRisk(action: AgentAction, obs: PageObservation, ctx: RiskC
 
   return NONE
 }
+
+// ===== 참여 가드 (블로그 댓글·좋아요) =====
+//
+// 왜 필요한가: 중복 방지를 **지시문으로만** 하면 지켜지지 않는다. 실측(2026-09-18 하네스)에서
+// 같은 글에 댓글이 두 번 달렸고, 이미 눌린 좋아요를 다시 눌러 **취소**됐고, 초안 모드인데도
+// 댓글이 등록됐다. 장부에 기록만 하고 **행동을 막지 않으면** 그건 방지가 아니다.
+//
+// 그래서 발행 금지 표식(NO_PUBLISH_MARK)과 같은 방식으로 작업 지시문에 표식을 싣고,
+// 에이전트 루프가 **클릭 직전에 코드로** 막는다.
+
+export const ENGAGE_MARK_PREFIX = '[참여 가드]'
+
+export interface EngageGuard { account: string; mode: 'draft' | 'act'; comment: boolean; like: boolean }
+
+export function buildEngageMark(g: EngageGuard): string {
+  const acts = [g.comment ? 'comment' : '', g.like ? 'like' : ''].filter(Boolean).join(',')
+  // 계정 이름에 줄바꿈·파이프가 들어가면 파싱이 깨지므로 제거한다.
+  const acc = String(g.account ?? '').replace(/[|\r\n]/g, ' ').trim().slice(0, 120)
+  return `${ENGAGE_MARK_PREFIX} account=${acc} mode=${g.mode} actions=${acts}`
+}
+
+export function parseEngageMark(task: string): EngageGuard | null {
+  const line = String(task ?? '').split('\n').find((l) => l.includes(ENGAGE_MARK_PREFIX))
+  if (!line) return null
+  const acc = /account=([^\n]*?)\s+mode=/.exec(line)?.[1] ?? ''
+  const mode = /mode=(draft|act)/.exec(line)?.[1] === 'act' ? 'act' : 'draft'
+  const acts = (/actions=([a-z,]*)/.exec(line)?.[1] ?? '').split(',')
+  return { account: acc.trim(), mode, comment: acts.includes('comment'), like: acts.includes('like') }
+}
+
+// 클릭 라벨 분류. **취소를 먼저 본다** — "좋아요 취소" 는 좋아요가 아니라 취소다(순서를 뒤집으면
+// 이미 눌린 좋아요를 다시 눌러 풀어 버린다).
+const UNLIKE_RE = /(좋아요|공감|like)\s*(취소|해제)|(취소|해제)\s*(좋아요|공감)|unlike/i
+const LIKE_RE = /좋아요|공감|\blike\b|추천/i
+// 댓글 "등록" 동사가 함께 있을 때만 제출로 본다 — 그냥 "댓글" 이라는 글자는 목록 제목에도 흔하다.
+const COMMENT_SUBMIT_RE = /(댓글|덧글|리플|comment|reply)[^\n]{0,12}(등록|작성|남기|올리|달기|게시|보내|submit|post|send)|(등록|작성|남기|올리|달기)[^\n]{0,8}(댓글|덧글)/i
+
+export type EngageClick = 'comment' | 'like' | 'unlike' | null
+
+export function classifyEngageClick(label: string): EngageClick {
+  const s = String(label ?? '')
+  if (!s) return null
+  if (UNLIKE_RE.test(s)) return 'unlike'
+  if (COMMENT_SUBMIT_RE.test(s)) return 'comment'
+  if (LIKE_RE.test(s)) return 'like'
+  return null
+}

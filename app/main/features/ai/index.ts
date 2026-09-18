@@ -12,6 +12,8 @@ import { initConversations } from './conversations'
 import { initSavedTasks } from './saved-tasks'
 import { initAgentRuns } from './agent-runs'
 import { initTaskRuntime } from './task-runtime'
+import { initEngageLedger } from './blog-engage'
+import { initSocialWorkflows } from './social-workflow'
 import { initAgentSchedule } from './agent-schedule'
 
 export type { AiMessage, AiProviderId } from './providers'
@@ -51,6 +53,10 @@ export async function initAi(): Promise<void> {
   // 페이지를 조작하면(결제·게시 포함) 안 되므로, 끊긴 것은 '중단됨'으로 되살려 두고 사용자가 이어가게 한다.
   initTaskRuntime()
   initAgentSchedule()
+  // 댓글·좋아요 중복 방지 장부 — 재시작 뒤에도 같은 글에 두 번 달지 않으려면 부팅 때 읽어야 한다.
+  initEngageLedger()
+  // 생성→게시 워크플로 복원. 여기서도 **게시를 자동 재개하지 않는다** — 끊긴 것은 사용자가 잇는다.
+  initSocialWorkflows()
 }
 
 function currentModel(provider: AiProviderId): string {

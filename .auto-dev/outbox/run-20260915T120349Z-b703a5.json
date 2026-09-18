@@ -1,0 +1,27 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260915T120349Z-b703a5",
+  "recorded_at": "2026-09-15T13:05:00Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260915T120349Z-b703a5",
+    "project_id": "browser-build-36466a626d",
+    "status": "unclear",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "판정이 다른 실행(run-20260915T112617Z-0b2f2e)에 귀속됨 — 이번 실행(run-20260915T120349Z-b703a5)의 근거가 아님",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "38efa67a-90a4-40e8-8e31-6c92dd90f6d9",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "summary": "No leftover app processes — test-owned instances all cleaned up. The round is complete and the verdict below stands unchanged.\n\n**요약**: Electron **35.7.5 → 42.11.3**(Chromium 148 / Node 24) 판올림으로 **X15(확장 교차 워크스페이스 `chrome.scripting` 누출)를 해결**하고, 해당 검사를 GAP이 아닌 **필수 PASS/FAIL로 승격**했습니다(판정식 무수정, 같은 세션 정상 주입 양성 대조 유지). 버전은 메이저 번호가 아니라 **태그별 수정 파일 존재를 실측**해 골랐고 — `v39.0.0`에는 수정이 없다는 사실이 그 이유입니다 — 공식 지원 정책상 지원선 안(v45까지)이면서 호환 도약이 가장 작은 42.11.3을 채택했습니다.\n\n회귀 검증 중 빨개진 `session-restore`는 **엔진 탓으로 기록하지 않고** 35.7.5로 되돌려 2회 대조 재현해 **판올림 이전부터 있던 결함**임을 확정한 뒤, 검사 1건(낡은 pane 기대값)과 **제품 1건(복원된 잠자는 탭을 깨우면 스크롤·폼 유실)**을 고쳐 17/17로 만들었습니다.\n\n검증은 `npm run verify` 8/8(스모크 16/16) 포함 전 영역 통과, 성능은 판정 축 150MB ≤ 155MB PASS이며 총계 축 +12MB(adblock 고정비 증가)는 **예산을 손대지 않고 그대로 보고**했습니다.\n\nVERDICT-RUN: run-20260915T120349Z-b703a5\nVERDICT: pass",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260915T120349Z-b703a5\\stream.jsonl",
+    "error": null
+  }
+}

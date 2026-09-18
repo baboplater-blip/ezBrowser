@@ -37,6 +37,13 @@ import { buildSiteReportTask, type SiteReportParams } from '../features/ai/site-
 import {
   listSavedTasks, addSavedTask, removeSavedTask, renameSavedTask, touchSavedTask, savedTaskEvents, type SavedAgentTask,
 } from '../features/ai/saved-tasks'
+import { listArtifacts, getArtifact, resolveArtifactPath } from '../features/ai/artifacts'
+import {
+  workflowEvents, listWorkflows, startImagePost, approveAndPublish, chooseArtifact,
+  cancelWorkflow, deleteWorkflow, type ImagePostParams, type ImagePostWorkflow,
+} from '../features/ai/social-workflow'
+import { buildBlogEngageTask, listEngagements, clearEngagements, type BlogEngageParams } from '../features/ai/blog-engage'
+import { readFile } from 'node:fs/promises'
 import {
   listAgentRuns, getAgentRun, recordAgentEvent, deleteAgentRun, clearAgentRuns, agentRunEvents, type AgentRunSummary,
 } from '../features/ai/agent-runs'
@@ -423,6 +430,86 @@ export function registerAiIpc(): void {
       if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.blogDraftChanged, list)
     }
   })
+
+  // ===== 작업 산출물 (캡처한 이미지·받은 파일) =====
+  // 미리보기는 dataURL 로 준다 — 외피는 file:// 로 임의 경로를 읽지 못하고(읽게 하면 그 자체가 구멍),
+  // 산출물은 크지 않아(수백 KB) 한 번 실어 보내는 편이 안전하다.
+  ipcMain.handle(IPC.ai.artifactList, (e, args: { taskId: string }) => {
+    if (!isTrustedSender(e)) return []
+    const t = String(args?.taskId ?? '').trim()
+    return t ? listArtifacts(t) : []
+  })
+  ipcMain.handle(IPC.ai.artifactData, async (e, args: { taskId: string; id: string }) => {
+    if (!isTrustedSender(e)) return null
+    const t = String(args?.taskId ?? '').trim(); const id = String(args?.id ?? '').trim()
+    if (!t || !id) return null
+    const meta = getArtifact(t, id)
+    const p = resolveArtifactPath(t, id)   // 작업 폴더 밖이면 null — 경계는 여기서 지킨다
+    if (!meta || !p) return null
+    if (meta.bytes > 12 * 1024 * 1024) return { meta, dataUrl: null }  // 미리보기로 싣기엔 큼
+    try {
+      const buf = await readFile(p)
+      return { meta, dataUrl: `data:${meta.mime};base64,${buf.toString('base64')}` }
+    } catch { return { meta, dataUrl: null } }
+  })
+
+  // ===== 생성→캡션→게시 워크플로 =====
+  // 게시는 되돌릴 수 없으므로 **승인 단계를 코드로 분리**한다 — socialStart 는 생성까지만 하고,
+  // 실제 게시는 사용자가 캡션을 확인한 뒤 socialApprove 를 부를 때만 시작된다.
+  ipcMain.handle(IPC.ai.socialList, (e) => { if (!isTrustedSender(e)) return []; return listWorkflows() })
+  ipcMain.handle(IPC.ai.socialStart, (e, params: ImagePostParams) => {
+    if (!isTrustedSender(e)) return null
+    if (!params || typeof params !== 'object') return null
+    return startImagePost({
+      service: params.service === 'chatgpt' ? 'chatgpt' : params.service === 'custom' ? 'custom' : 'genspark',
+      customUrl: typeof params.customUrl === 'string' ? params.customUrl.slice(0, 500) : undefined,
+      prompt: String(params.prompt ?? '').slice(0, 4000),
+      platform: params.platform === 'youtube' ? 'youtube' : params.platform === 'tiktok' ? 'tiktok' : 'instagram',
+      account: typeof params.account === 'string' ? params.account.slice(0, 120) : undefined,
+      tone: typeof params.tone === 'string' ? params.tone.slice(0, 200) : undefined,
+      tags: Array.isArray(params.tags) ? params.tags.map(String).slice(0, 30) : [],
+      mode: params.mode === 'publish' ? 'publish' : 'draft',   // 기본은 초안 — 실수로 게시되지 않게
+      windowId: typeof params.windowId === 'string' ? params.windowId : null,
+      tabId: String(params.tabId ?? ''),
+    })
+  })
+  ipcMain.handle(IPC.ai.socialApprove, (e, args: { id: string; caption: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return approveAndPublish(String(args?.id ?? ''), String(args?.caption ?? '').slice(0, 5000))
+  })
+  ipcMain.handle(IPC.ai.socialChoose, (e, args: { id: string; artifactId: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return chooseArtifact(String(args?.id ?? ''), String(args?.artifactId ?? ''))
+  })
+  ipcMain.handle(IPC.ai.socialCancel, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; cancelWorkflow(String(args?.id ?? '')) })
+  ipcMain.handle(IPC.ai.socialDelete, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; deleteWorkflow(String(args?.id ?? '')) })
+  workflowEvents.on('changed', (list: ImagePostWorkflow[]) => {
+    for (const ctx of getAllWindows()) {
+      if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.socialChanged, list)
+    }
+  })
+
+  // ===== 관심 블로그 댓글·좋아요 =====
+  ipcMain.handle(IPC.ai.engageBuildTask, (e, params: BlogEngageParams) => {
+    if (!isTrustedSender(e)) return { task: '', openUrl: '', allowedHosts: [] }
+    return buildBlogEngageTask({
+      myBlogUrl: typeof params?.myBlogUrl === 'string' ? params.myBlogUrl.slice(0, 500) : undefined,
+      topic: typeof params?.topic === 'string' ? params.topic.slice(0, 300) : undefined,
+      searchUrl: typeof params?.searchUrl === 'string' ? params.searchUrl.slice(0, 500) : undefined,
+      account: typeof params?.account === 'string' ? params.account.slice(0, 120) : undefined,
+      maxPosts: Number(params?.maxPosts) || 5,
+      actions: Array.isArray(params?.actions) ? params.actions.filter((a) => a === 'comment' || a === 'like') : ['comment'],
+      mode: params?.mode === 'act' ? 'act' : 'draft',
+      excludeHosts: Array.isArray(params?.excludeHosts) ? params.excludeHosts.map(String).slice(0, 50) : [],
+      minBodyChars: Number(params?.minBodyChars) || undefined,
+      intervalSeconds: typeof params?.intervalSeconds === 'number' ? params.intervalSeconds : undefined,
+    })
+  })
+  ipcMain.handle(IPC.ai.engageLedger, (e, args: { limit?: number }) => {
+    if (!isTrustedSender(e)) return []
+    return listEngagements(Number(args?.limit) || 200)
+  })
+  ipcMain.handle(IPC.ai.engageLedgerClear, (e) => { if (!isTrustedSender(e)) return; clearEngagements() })
 
   // ===== 매일 자동 수집 (피드 수집기) =====
   ipcMain.handle(IPC.ai.collectorList, (e) => { if (!isTrustedSender(e)) return []; return listCollectors() })

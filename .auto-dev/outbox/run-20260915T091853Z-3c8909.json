@@ -1,0 +1,27 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260915T091853Z-3c8909",
+  "recorded_at": "2026-09-15T09:32:21Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260915T091853Z-3c8909",
+    "project_id": "browser-build-36466a626d",
+    "status": "unclear",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "a9b416bf-a1ba-4f5f-898c-e99d8d81d5a8",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "summary": "마감 보완 완료. `npm run verify` 등 통합 검증은 지시대로 재실행하지 않았고, 영향받은 하네스 두 개만 돌렸습니다.\n\n**실제 현행 한도** (소스에서 읽은 값)\n\n| 축 | 상한 | 무엇을 남기나 |\n|---|---|---|\n| 실행 이력 건수 | **50** | 최신 우선 |\n| **한 실행의 단계 수** | **120** | 최신 우선 — 오래된 단계부터 버림(종료 마커 보존) |\n| 대화 개수 | **100** | 고정(pinned) 우선 → 최신순 |\n| 대화당 메시지 | **200** | 최신 우선 |\n\n**바꾼 파일 2개** (제품 코드 변경 없음)\n- `build/verify-ai-persist-cdp.mjs` — **PS8 신설**. `scroll` 45바퀴로 182단계를 쌓아 상한을 넘긴 뒤 경계값 판정: 실측 **정확히 120단계** · 마지막 단계 = 종료 마커 · 최초 표식 제거 · **8초**.\n- `build/verify-extension-behavior-cdp.mjs` — **X13 강화**. \"아무 SW 나 127.0.0.1 포함 탭을 봄\" → **정확한 URL 로 보고한 SW 가 1개** + `tabs.get(id)` URL 일치 + **다른 세션은 같은 id 를 못 품** . 실측: SW 3개 중 1개만 보고, `id=3`, 나머지 두 세션 `{id:-1}` → 누출 0.\n\n**검사 수**: `verify-ai-persist` **8/8**(7→8), `verify-extension-behavior` **12/12 · GAP 0**.\n\n**음성 대조 2종** — ① 제품 결함 주입(`trackExtensionTab` 제거 → 재빌드·재패키징): X13·X11 FAIL, 나머지 10개 PASS 유지, 복구 후 **컴파일 산출물에서** 복구 확인. ② 판정식 결함 주입(`judgeX13` 함수화 후 같은 함수에 결함 데이터): M1~M4 **네 가지 모두 새 판정은 잡고 옛 판정은 놓쳤다**. 제품으로는 ②를 만들 수 없습니다 — 라이브러리가 세션 불일치 `addTab` 에 TypeError 를 던져 교차 등록 자체가 불가능하기 때문입니다.\n\n**한계**\n- X13 은 탭 하나에 대해 증명합니다. 워크스페이스마다 탭을 띄워 \"각 세션이 자기 탭만 본다\"를 전수 확인하지는 않았습니다(판정은 M4 로 준비돼 있음).\n- 워크스페이스별 확장 `chrome.storage` 분리는 지시대로 범위 밖으로 남겼습니다.\n- `.claude/skills/chrome-extensions-bridge/SKILL.md` 는 권한 거부로 **수정하지 않았고 재시도도 안 했습니다**. `.agents/` 사본만 갱신(+62/−4)돼 있어 **두 파일 내용이 다릅니다** — 동기화는 사람이 복사해야 합니다.\n- 모델·토큰 사용량은 상위 런처 몫이라 여기서 추정하지 않았습니다.\n\n**재개 사유**: 앞 run 이 ① 단계 상한 120 미검증 ② X13 의 약한 판정 ③ run 귀속 VERDICT 누락을 남겨, 그 세 가지만 좁혀 처리했습니다. `.auto-dev/verification.md` 에 **VERDICT-RUN: run-20260915T091853Z-3c8909 / VERDICT: pass** 를 기록하고 `result.md`·`progress.md`·`lessons.md` 를 갱신했습니다.",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260915T091853Z-3c8909\\stream.jsonl",
+    "error": null
+  }
+}

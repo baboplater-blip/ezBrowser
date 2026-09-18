@@ -1,0 +1,32 @@
+[
+  {
+    "kind": "positive",
+    "behavior": "Codex/Astra가 루트 AGENTS.md를 열면 이 프로젝트의 현행 제약(4원칙, 자유도 7축, 기본기능 OFF 지원, WebContentsView·프로세스 경계, 보안 기본값과 contextBridge, userData·시크릿 격리, 확장 충돌, TS·IPC·i18n·키맵 컨벤션, 검증 종결 규칙)을 전역 지침 중복 없이 한 번에 읽는다",
+    "check": "사용자가 요구한 규칙 32항을 정규식으로 본문 대조 → 32항 전부 존재, 누락 0. 분량 382,669바이트에서 155줄로 축소하고 전역 규칙(자율·검증·보고·효율기록·콘텐츠 읽기 제한)은 전역 AGENTS.md와 auto-dev SKILL.md로 명시 위임",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "이전 383KB 지침을 언제든 손실 없이 되찾을 수 있다",
+    "check": "sha256 + 바이트 크기 + cmp 3중 대조 → docs 아래 agent-guidance/AGENTS.before-2026-09-16.md 가 5d53dbc8066f580516bc0e4d2628c68c4c911fd179347dd982fd1cd97810664a, 382669 bytes, cmp 바이트 동일",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "낡은 사실을 현재형으로 말하지 않는다 — 문서를 읽은 에이전트가 없는 버전·없는 경로를 근거로 삼지 않는다",
+    "check": "금칙 패턴 6종(Electron 33 현재형, better-sqlite3 채택, 하드코딩 메모리·콜드스타트·번들 예산 수치, 하드코딩 verify 단계 수) 역탐지 → 위반 0. Electron 33, better-sqlite3, app 아래 shared/keymap.ts, app 아래 main/hackability 4건은 '현재 사실이 아니다' 서술 맥락에만 등장함을 줄 단위로 확인",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "죽은 링크로 독자를 보내지 않는다",
+    "check": "본문 백틱 경로 전수 실존 검사 → 실제 누락 0. 검증 중 초안이 적은 app 아래 main/hackability 디렉터리 부재를 발견해 실제 위치(app 아래 features)로 수정, 결함 1건을 출고 전 차단",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "소유 범위 밖 파일과 사용자 실행 환경을 건드리지 않는다",
+    "check": "git status 대조 + 앱 미실행 → 변경은 AGENTS.md(수정), docs 아래 agent-guidance(신규), .auto-dev(신규) 뿐. 이전 라운드의 미커밋 변경 19개 무접촉, 사용자 프로필·실행 중 인스턴스·PID 무접촉",
+    "result": "pass"
+  }
+]

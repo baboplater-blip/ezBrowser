@@ -1,0 +1,81 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260918T053054Z-3c840e",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-18T06:04:21Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "사용자가 열 수 있는 Windows 설치파일과 실행 폴더가 정확한 경로·버전·시각·해시와 함께 존재한다",
+      "check": "sha256sum·ls 실측: dist/ezBrowser-0.1.0-win-x64.exe · 116.2MB · 2026-09-18 14:53:34 · SHA256 5c57081c6dd2f4bfefe7f25a55da7baa92d3779b7e9805b8a1e338b44266689e · 0.1.0(Electron 42.11.3) · --publish never 로만 빌드, 외부 업로드 0, 미서명 명시",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "설치본으로 첫 실행부터 일상 탐색·재시작 복원까지 이어진다",
+      "check": "verify-install-cdp.mjs 를 최종 설치파일로 실행 9/9 PASS — 무인설치·설치본 app.asar 부팅·한국어 검색(날씨) 이동·탭 4개·뒤로/앞으로 복귀(I2d)·북마크 저장(I2e)·재기동 후 탭 복원(I2c)·제거 잔재 0",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "검증이 사용자의 실제 프로필과 실행 중인 앱을 건드리지 않는다",
+      "check": "I5 PASS — %APPDATA%/browser-build 파일 수 47개 → 47개 무변경. 모든 하네스는 격리 프로필(--user-data-dir)로만 구동, 패키징 전 실행 인스턴스 0 확인",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "AI 를 처음 눌렀을 때 실제로 쓸 수 있는 데까지 간다",
+      "check": "verify-ai-connect --live 12/12 PASS — 기본 상태(anthropic·키 없음)에서 후보 7종 판정, 하네스가 따로 잰 실제 환경과 4종 일치, 화면의 카드를 실제로 눌러 Claude Code CLI 6.2초 응답, 패널이 대화 화면으로 전환",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "연결이 안 될 때 가짜 성공 대신 원인과 해결책을 보여준다",
+      "check": "C8 PASS(알 수 없는 제공자 evil-provider 거부·설정 불변) · C5 PASS(준비 안 된 3종 전부 해결책 보유) · ai-errors 8/8(401·429·404·Ollama 연결실패 문구 + 취소 + 깨진 스트림)",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "밖에서 설정이 바뀌어도 AI 패널이 옛 상태에 머물지 않는다",
+      "check": "C9 — ai.enabled 를 패널 밖에서 false 로 바꾸자 화면이 즉시 반영. 최초 FAIL 이었고 원인은 AiTab 의 settings.onChange 미구독(실제 제품 결함), 구독 추가 후 PASS",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "positive",
+      "behavior": "변경 관련 회귀가 없고 최종 통합 검증을 1회 통과한다",
+      "check": "npm run verify 9/9 PASS · 42초(게이트 0 + 스모크 16종 + 순수함수 검사 + 신규 ai-connect). settings-welcome 10/10, ai-errors 8/8 targeted 확인",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [],
+    "blockers": [
+      "코드 서명 인증서가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 .pfx 를 제공하면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가)",
+      "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신을 확인하지 않았다 — 이 개발 PC 에서만 검증했고 했다고 쓰지 않는다(다른 기기 필요)"
+    ],
+    "optional_next": [
+      "browser://settings 의 AI 섹션에도 제공자 탐지 목록 노출(현재는 AI 패널·온보딩에만 있고 설정에는 상태 점검 버튼이 있음)",
+      "실제 웹 호환성 관찰 — Chromium 148 에서 실사이트가 어떻게 뜨는지는 로컬 픽스처 하네스가 재지 못한다",
+      "npm run verify:full(32단계·약 10분·화면 점유)은 사용자가 자리를 비울 때 1회 — 이번엔 변경 관련 범위만 targeted 로 돌렸다"
+    ],
+    "korean_line": "남은 작업: (차단) 코드 서명 인증서가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 .pfx 를 제공하면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신을 확인하지 않았다 — 이 개발 PC 에서만 검증했고 했다고 쓰지 않는다(다른 기기 필요); 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "npm run verify",
+    "passed": 48,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "이전 라운드가 .claude/settings.json 에서 공개배포 차단 deny 3종(npm run package --publish / gh release create / electron-builder --publish)을 제거해 둔 것을 발견. 되돌리지 말라는 지시에 따라 파일은 그대로 두되 커밋에는 넣지 않았다(원본 .claude/settings.json.bak-deploy). 사용자 판단 필요."
+}

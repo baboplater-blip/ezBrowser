@@ -125,6 +125,9 @@ export interface PersistentTask {
   result?: string
   verifyEvidence?: string
   waitReason?: string
+  // 사용자가 기다림을 풀려면 가야 할 곳(예: 로그인 계정 설정). 외피가 버튼으로 띄운다.
+  waitActionUrl?: string
+  waitActionLabel?: string
   retry?: { kind: RetryKind; attempt: number; nextAt: number; detail: string }
   readOnly: boolean
   incognito: boolean
@@ -138,7 +141,7 @@ export interface TaskSummary {
   id: string; instruction: string; state: TaskState; mode: 'normal' | 'long'
   stepsUsed: number; maxSteps: number; segment: number
   elapsedMs: number; startedAt: number; endedAt?: number
-  waitReason?: string; retry?: PersistentTask['retry']
+  waitReason?: string; waitActionUrl?: string; waitActionLabel?: string; retry?: PersistentTask['retry']
   llmCalls: number; maxLlmCalls: number
   result?: string; resultFiles: string[]; needsVerify: boolean
 }
@@ -371,6 +374,8 @@ function summaryOf(t: PersistentTask): TaskSummary {
     startedAt: t.startedAt,
     ...(t.endedAt !== undefined ? { endedAt: t.endedAt } : {}),
     ...(t.waitReason !== undefined ? { waitReason: t.waitReason } : {}),
+    ...(t.waitActionUrl !== undefined ? { waitActionUrl: t.waitActionUrl } : {}),
+    ...(t.waitActionLabel !== undefined ? { waitActionLabel: t.waitActionLabel } : {}),
     ...(t.retry !== undefined ? { retry: t.retry } : {}),
     llmCalls: t.usage.llmCalls,
     maxLlmCalls: t.budget.maxLlmCalls,
@@ -386,6 +391,28 @@ export function listTasks(): TaskSummary[] {
 
 export function getTask(id: string): PersistentTask | null {
   return tasksMap().get(id) ?? null
+}
+
+/**
+ * 아직 시작하지 않은 작업의 지시문을 바꾼다.
+ *
+ * 왜 필요한가: 지시문에 "이 작업의 산출물 id" 를 넣어야 하는 흐름이 있는데(생성→게시 워크플로),
+ * 그 id 는 **작업을 만든 뒤에야** 정해진다(산출물 폴더가 작업 id 로 갈리므로). 순서가 뒤집힌 셈이라
+ * 자리표시자를 넣어 만든 뒤 시작 전에 치환해야 한다.
+ *
+ * **시작한 작업은 거부한다** — 이미 도는 구간이 옛 지시문을 들고 있어, 바꾸면 같은 작업의 두 구간이
+ * 서로 다른 지시를 따르게 된다. 그건 디버깅이 불가능한 종류의 버그다.
+ */
+export function setTaskInstruction(id: string, instruction: string): boolean {
+  const task = getTask(id)
+  if (!task) return false
+  if (task.state !== 'queued') return false
+  const next = String(instruction ?? '').trim()
+  if (!next) return false
+  task.instruction = next
+  task.updatedAt = Date.now()
+  markDirty(task)
+  return true
 }
 
 function emitChanged(): void {
@@ -414,6 +441,8 @@ function setState(task: PersistentTask, next: TaskState, waitReason?: string): v
   if (next === 'running') {
     rt.runningSince = Date.now()
     delete task.waitReason
+    delete task.waitActionUrl
+    delete task.waitActionLabel
     delete task.retry   // 표시용 기록만 지운다. 연속 실패 카운터는 runtime 에 있다(위 주석 참고).
     // ⚠ waitKind 는 여기서 지우지 않는다. 일시정지와 확인 요청이 겹친 뒤 재개하면 "무엇을 기다렸는지"가
     //   사라져, 에이전트는 확인을 기다리는데 응답을 보낼 상대를 잃는 교착이 된다.
@@ -827,6 +856,12 @@ function onSegmentEvent(task: PersistentTask, evt: AgentEvent, box: { outcome: S
       const prefix = evt.challenge === 'captcha' ? '🧩 사람 확인이 필요합니다 — '
         : evt.challenge === 'login' ? '🔐 로그인이 필요합니다 — ' : ''
       setState(task, 'waiting-user', prefix + str(evt.message, isChallenge ? '직접 처리한 뒤 이어가기를 눌러 주세요.' : '추가 정보가 필요합니다.'))
+      // 사용자가 가야 할 곳이 분명하면(저장된 계정 등록·허용) 버튼으로 띄울 수 있게 함께 싣는다.
+      // browser:// 내부 페이지만 허용 — 페이지가 만든 문자열이 외피 버튼으로 흘러들지 않게 한다.
+      if (typeof evt.actionUrl === 'string' && evt.actionUrl.startsWith('browser://')) {
+        task.waitActionUrl = evt.actionUrl
+        task.waitActionLabel = str(evt.actionLabel, '설정 열기').slice(0, 40)
+      }
       return
     }
     // 감지 사실 자체는 트레이스로만 남긴다(상태 전환은 바로 뒤따르는 'ask' 가 한다).
@@ -899,6 +934,8 @@ async function runSegment(task: PersistentTask, tabId: string, stepBudget: numbe
         doneSubtasks: [...task.checkpoint.doneSubtasks],
       },
       allowedHosts: [...task.budget.allowedHosts],
+      // 산출물 바구니 = 이 작업. 구간이 바뀌어도 같은 폴더에 쌓이고, 다른 작업은 닿지 못한다.
+      taskId: task.id,
     }, (evt: AgentEvent) => onSegmentEvent(task, evt, box, trace))
   } catch (err) {
     // runAgentTask 가 던지면(제공자 오류 등) 루프가 영구 동결되지 않도록 여기서 오류 결과로 바꾼다.

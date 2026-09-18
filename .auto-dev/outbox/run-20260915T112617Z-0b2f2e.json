@@ -1,0 +1,27 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260915T112617Z-0b2f2e",
+  "recorded_at": "2026-09-15T11:57:00Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260915T112617Z-0b2f2e",
+    "project_id": "browser-build-36466a626d",
+    "status": "failed",
+    "verdict": "fail",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260915T112617Z-0b2f2e)에 귀속된 판정: fail",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "1a240d11-c1b7-45a5-8c20-a13ba49ca03c",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "summary": "## 3번(X15) 결과 — **미해결. VERDICT fail**\n\n현행 앱 범위에서 고칠 수 없음을 **추측이 아니라 Electron 소스로 확정**했고, 필요한 기술 결정까지 특정했습니다. 다만 조사 중 **실제 시크릿 유출 1건을 새로 찾아 고쳤습니다.**\n\n### 근거 — X15 의 정확한 원인\nElectron v35.7.5 `shell/browser/extensions/api/scripting/scripting_api.cc` 의 `CanAccessTarget` 이\n`electron::api::WebContents::FromID(target.tab_id)` — **프로세스 전역 레지스트리** — 로 탭을 풀고, **넘겨받은 `browser_context`·`include_incognito_information` 인자를 본문에서 한 번도 쓰지 않습니다**(원본 Chromium 은 같은 자리에서 `ExtensionTabUtil::GetTabById(..., browser_context, ...)` 로 프로필 범위를 겁니다). 남는 관문은 `CanAccessPage(대상 URL)` 즉 **host 권한뿐**입니다. `electron-chrome-extensions@4.9.0` 에는 `scripting` 구현이 **0건**이고 호출은 SW→Mojo→C++→대상 렌더러라 **우리 JS 를 지나지 않습니다.** 렌더러 래퍼는 우회 가능(지시상 금지)이고 Electron 35 에선 확장 컨텍스트 preload 가 실행조차 안 됩니다(임무 38).\n\n**필요한 결정은 \"Electron ≥39 판올림\" 하나 — 포크는 필요 없습니다.** upstream PR **#50906** `fix: scope extension tab-ID resolution to the calling BrowserContext`(2026-04-11) 가 `GetElectronTabById` 로 이 구멍을 막았고, 릴리스 브랜치 실측 결과 **35·36·37·38 미적용 / 39·40 적용**입니다. Chromium 메이저가 여러 번 바뀌는 엔진 교체라 이번 지시의 \"의존성 대규모 교체 금지\" 범위 밖이어서 **하지 않았습니다.** 대안 3종(렌더러 래퍼 / 워크스페이스별 확장 ID 분리 / 확장 미탑재)은 각각 우회 가능·대규모 파손·기능 삭제로 기각했습니다.\n\n### 시크릿 영향 — 물어보신 것을 실제로 쟀습니다\n- **시크릿 탭은 변조되지 않습니다**(신규 **X25**). 다른 워크스페이스 SW 에서 id 1~140 을 훑었고(살아있는 id 10개, 나머지 130개 `No tab with id` = **구간 소진**, 빠뜨리지 않음), 시크릿 탭 표식 `(없음)`→`(없음)`, `func` 실행도 false. 양성 대조로 **다른 워크스페이스 새 탭은 `yes` 로 주입**돼 검사가 공허하지 않음을 함께 확인했습니다.\n- **다만 안전한 이유가 Electron 이 아닙니다.** 브라우저 프로세스는 시크릿 탭 호출을 **수락**합니다(오류 없음). 막아주는 건 **우리가 시크릿 세션에 확장을 안 싣는 설계**(`isIncognitoSession`)이고 대상 렌더러에 확장이 없어 주입이 버려질 뿐입니다.\n- **실제 유출 발견·수정**(신규 **X26**): 외피(브라우저 UI)가 `file://` 로 뜨는 또 하나의 webContents 라 전역 id 조회에 걸렸고, 일반 워크스페이스의 확장이 **시크릿 창의 주소창 값을 그대로 읽어 갔습니다** — 하네스가 남긴 실제 문자열: `\"새 탭 확장 시험 🕶 시크릿 … http://127.0.0.1:49786/?x14incog\"`. `loadExtension(allowFileAccess: true→false)`(Electron·크롬 **양쪽의 기본값**)로 차단했고, **음성 대조**로 확인했습니다(수정 전 X26 FAIL → 수정·재빌드 후 PASS, 외피 응답이 `Cannot access contents of url \"file:///…\"` 로 전환).\n- 비용(정직하게): 사용자가 연 로컬 `fi",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260915T112617Z-0b2f2e\\stream.jsonl",
+    "error": null
+  }
+}

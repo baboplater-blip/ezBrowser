@@ -197,6 +197,7 @@
         <div class="nav-item" data-cat="search">검색</div>
         <div class="nav-item" data-cat="privacy">개인정보</div>
         <div class="nav-item" data-cat="permissions">사이트 권한</div>
+        <div class="nav-item" data-cat="accounts">🔐 로그인 계정</div>
         <div class="nav-item" data-cat="downloads">다운로드</div>
         <div class="nav-item" data-cat="freedom">자유도</div>
         <div class="nav-item" data-cat="workspace">워크스페이스</div>
@@ -256,7 +257,7 @@
       function render() {
         const main = document.getElementById('main')
         if (!settings) { main.innerHTML = '<div>로딩 중…</div>'; return }
-        const fns = { appearance, ai, widgets, adblock, search, privacy, permissions, downloads, freedom, workspace, keymap, design, update, data, about }
+        const fns = { appearance, ai, widgets, adblock, search, privacy, permissions, accounts, downloads, freedom, workspace, keymap, design, update, data, about }
         const fn = fns[currentCat] ?? appearance
         main.innerHTML = fn()
         bind()
@@ -561,6 +562,17 @@
           await window.internalAPI.permissions.clearAll()
           await refresh()
         })
+      }
+
+      function accounts() {
+        return '<h2>🔐 로그인 계정</h2>'
+          + '<div class="section">'
+          + '<div class="info-line">미리 등록한 아이디·비밀번호로 에이전트가 로그인 화면을 스스로 통과하게 할 수 있습니다. 계정을 추가한다고 자동으로 켜지지 않으며, <b>계정별로 명시적으로 "자동 로그인 허용"을 켜야만</b> 동작합니다.</div>'
+          + '<div class="info-line">CAPTCHA·인증코드(2단계 인증)는 자동으로 처리하지 않습니다 — 그때는 사람에게 넘깁니다.</div>'
+          + '</div>'
+          + '<div class="section">'
+          + row('로그인 계정 관리', '계정 추가·수정·삭제, 자동 로그인 허용 토글, 저장된 비밀번호 보기', '<a class="btn primary" href="browser://passwords" data-link>로그인 계정 관리 열기</a>')
+          + '</div>'
       }
 
       function downloads() {

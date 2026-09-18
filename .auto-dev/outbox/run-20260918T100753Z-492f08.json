@@ -1,0 +1,115 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T100753Z-492f08",
+  "recorded_at": "2026-09-18T10:10:50Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T100753Z-492f08",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T100753Z-492f08)의 구조화 완료 기록: pass (합격 기준 4건 전건 통과, 부정 사례 2건, 선언된 잔여 작업 없음) / 남은 작업: 코드 서명(.pfx) 적용 후 재빌드 — SmartScreen 경고 해소, 외부 clean Windows PC 에서 설치·실행·자동 업데이트 수신 검증; 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "cfc4938b-fc87-4c78-bcd7-412fd4614d91",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "안내서 방법 A와 빌드 표가 최종 rc.2 설치파일을 가리킨다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "설치 9/9와 게이트 통과가 rc.2 증거로 적혀 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "rc.1 실사이트 증거가 rc.2 증거로 읽히지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "미검증 항목이 갱신 과정에서 사라지지 않았다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [
+        "코드 서명(.pfx) 적용 후 재빌드 — SmartScreen 경고 해소",
+        "외부 clean Windows PC 에서 설치·실행·자동 업데이트 수신 검증"
+      ],
+      "blockers": [],
+      "optional_next": [
+        "rc.2 로 실사이트 장시간 작업 재실행(현재 실사이트 증거는 rc.1)",
+        "실제 시계 24시간 연속 실행 확인(현재 가상 시계만)",
+        "agent-safety A13 간헐 실패 원인 규명"
+      ],
+      "korean_line": "남은 작업: 코드 서명(.pfx) 적용 후 재빌드 — SmartScreen 경고 해소, 외부 clean Windows PC 에서 설치·실행·자동 업데이트 수신 검증; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T100753Z-492f08"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 176.6,
+        "context_chars": 10319,
+        "total_tokens": 288513,
+        "cache_read_tokens": 3255039
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9467,
+          "output": 21,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 26,
+          "output": 11465,
+          "cache_read": 3255039,
+          "cache_creation": 267534
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "문서 마감 완료. 코드·빌드·앱 재검증은 하지 않았습니다.\n\n## 고친 것 — `docs/QUICKSTART.md` 단일 파일 (+26 / −16)\n\n**1. 최종 설치파일로 갱신** (방법 A 13행 + 빌드 표)\n\n| | 전 | 후 |\n|---|---|---|\n| 파일 | `…rc.1-win-x64.exe` (121,830,650 B · 17:56) | **`…rc.2-win-x64.exe`** (121,839,792 B · **18:59**) |\n| SHA256 | `822656d5…` | **`4ae5aa3e…f4ba83`** |\n\n**2. 설치 미검증 문구 해소** — rc.1 안내서의 *\"이 설치파일의 설치→제거 흐름은 돌리지 않았습니다\"* 를 실제 증거로 교체: 무인 설치 → 설치본 `app.asar` 부팅 → 탭·검색·뒤로/앞으로·북마크·세션 복원 → 무인 제거 → **사용자 프로필 47→47 무접촉 9/9 PASS**. 함께 `npm run verify` 9/9(42s) · frames 15/15 · agent-loop 35/35 · universal 10/10 · 안전 15/15 기재하되, **A13 1회 실패는 \"재실행에서 통과\"로 그대로 적었습니다.**\n\n**3. 증거 귀속 분리** — \"확인한 범위의 경계\" 블록 신설. 실사이트 MDN/Wikipedia/GitHub **25.8분·312단계·114페이지는 rc.1 것**, **rc.2 는 로컬 2-오리진 회귀만**. 별도 불릿이라 섞어 읽을 수 없습니다.\n\n**4. 미검증 보존** — 실제 24시간·모든 사이트·외부 PC·코드 서명 전부 유지. 24시간은 *\"가상 시계로만 확인 · 실제 최장 25.8분\"* 으로 \"아직 남은 것\"에 4번 항목을 새로 세웠습니다.\n\n**낡은 cross-origin 설명은 없었습니다** — grep 결과 안내서에 해당 문구 0건, 유일한 `교차` 히트는 과거 업그레이드 기록의 *교차 세션* 주제라 무관. 교정 대상 없음.\n\n## 기록\n\n`.auto-dev/durable-agent-20260918-final.md` — 변경 전후 표, 실행 방법, 검증과 한계, **재작업 원인 2건**(① SOP 를 브라우저 자신에게 걸리는 제약으로 오판해 \"iframe 구조상 불가\"를 검사 합격조건으로까지 굳힌 것 ② `verify-install-cdp.mjs` 에 `0.1.0` 이 하드코딩돼 몇 달 전 파일을 조용히 검사한 것), **다음 개선 2줄**(완료 기준에 *설치파일 일치*·*공식 API 확인* 추가).\n\n## 보드\n\n`http://127.0.0.1:8793` (PID 6872) — **종료 예정**\n\n```\npython -X utf8 C:/Users/molma/.agents/skills/auto-dev/runtime/orchestrator.py board stop --root .\npython -X utf8 C:/Users/molma/.agents/skills/auto-dev/runtime/orchestrator.py board serve --root . --port 8793\n```\n\n## 완료 기록\n\n`run-20260918T100753Z-492f08` · **verdict pass** (기준 4개 — 긍정 2 / 부정 2), **전체 목표 완료 = no**.\n남은 필수: 코드 서명 적용 후 재빌드 · 외부 clean Windows 검증.\n선택적 후속: rc.2 로 실사이트 장시간 재실행 · 실제 24시간 확인 · A13 간헐 실패 규명.",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T100753Z-492f08\\stream.jsonl",
+    "error": null
+  }
+}

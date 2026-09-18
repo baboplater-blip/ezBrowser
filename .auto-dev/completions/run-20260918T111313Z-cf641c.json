@@ -1,0 +1,88 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260918T111313Z-cf641c",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-18T11:22:38Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "다른 사이트 iframe 격리 검사가 그 프레임 안을 실제로 읽고 판정한다 — 격리 월드(같은 렌더러)로 alt 출처 문서를 읽었다",
+      "check": "SL17 detail 에 읽은 경로와 읽은 문서 주소(https://127.0.0.1:61745/login)가 찍힌다",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "negative",
+      "behavior": "프레임을 읽지 못하면 통과시키지 않는다(빈 검사 금지) — 판정을 조인 직후 실제로 FAIL 이 났고 원인(CDP 구독자 시그니처 오용)을 고친 뒤 통과했다",
+      "check": "읽기 실패 시 SL17 이 FAIL(실제로 읽음=false)로 바뀐다",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "다른 사이트 iframe 이 최상위 페이지의 저장 계정을 가져가지 못한다",
+      "check": "읽은 alt 프레임의 아이디·비밀번호 칸이 비어 있다(user=\"\" pw길이=0)",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "양성 대조 — 같은 사이트 iframe 은 반대로 자동 입력된다(전부 안 채워져서 통과한 것이 아님)",
+      "check": "같은 출처 iframe 아이디 칸이 등록 계정으로 채워진다(user=\"demo-user\")",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "positive",
+      "behavior": "저장 계정 자동 로그인 기능 전체가 긍정·부정 양방향으로 동작한다(부정은 전부 비밀번호가 서버에 도달하지 않았는지로 판정)",
+      "check": "verify-saved-login-cdp 20종 — 20 PASS / 0 FAIL",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "positive",
+      "behavior": "프로젝트 마감 게이트가 통과한다",
+      "check": "npm run verify — 9/9 · 44초(smoke 16 포함)",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "배포 설치파일이 현재 소스보다 낡지 않았다 — 이번 라운드 변경은 하네스 1파일뿐이다",
+      "check": "rc.3 빌드 시각(20:03) 이후 app/pages 소스 변경 0건(20:03 자리 2개는 빌드 산출물)",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "positive",
+      "behavior": "사용자 문서가 최종 산출물과 일치한다",
+      "check": "QUICKSTART 가 rc.3 경로·121,855,049바이트·SHA256 aa859ef…·자동 로그인 20/20 을 가리킨다",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가)",
+      "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요)",
+      "실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인",
+      "저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지"
+    ],
+    "optional_next": [
+      "실사이트 첫 사용 시 화면을 보며 1회 동반 확인(사용자 승인 시)"
+    ],
+    "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인, (차단) 저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지; 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "node build/verify-saved-login-cdp.mjs (20) + npm run verify (9)",
+    "passed": 29,
+    "failed": 0,
+    "reran_only_failed": true
+  },
+  "notes": "앞 실행(run-20260918T101236Z-5d0d33)이 3600초 제한으로 중단돼 SL17 보강 지점부터 이어받았다. 앱 소스는 한 줄도 바꾸지 않았고(하네스 1파일만) 이미 통과한 무관 영역은 재실행하지 않았다. 앞 실행의 사용량은 result 이벤트가 없어 미계측이며 0으로 채우지 않았다. 이번 실행은 작업자 배정 없이 opus 단독 수행."
+}

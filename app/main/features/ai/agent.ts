@@ -15,10 +15,17 @@ import {
 import { downloadMedia, downloadStream, getCandidates } from '../video-download'
 import { getProfile, hasProfileData } from './profile'
 import { hasAgentFilesDir, listAgentFiles, resolveAgentFile } from './agent-files'
+import { listArtifacts, resolveArtifactPath } from './artifacts'
+import {
+  markBaseline, findNewImages, captureCandidate, waitForNewDownload, importFinishedDownload,
+  snapshotDownloadIds, hasImageBaseline, type CaptureCandidate,
+} from './capture'
 import { writeDownloadMd, safeFileName } from './conversations'
 import { detectChallenge, challengeKey, type ChallengeVerdict } from './challenge-detect'
+import { attemptAutoLogin, hasAutoLoginAccountFor } from './auto-login'
 import { hostAllowed as frameHostAllowed } from './frames'
-import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, type RiskVerdict, type CompletionSignal } from './agent-gate'
+import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, type RiskVerdict, type CompletionSignal } from './agent-gate'
+import { normalizeTargetUrl, alreadyDid, recordEngagement } from './blog-engage'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
 // 판단은 두 경로: 지원 제공자/모델이면 네이티브 tool-use(구조화 함수 호출, 더 안정적),
@@ -206,7 +213,7 @@ const AGENT_TOOLS: ToolSpec[] = [
   toolSpec('switch_tab', '[열린 탭] 번호로 전환', { index: { type: 'integer' } }, ['index']),
   toolSpec('close_tab', '[열린 탭] 번호를 닫기(지금 조작 중인 탭 제외)', { index: { type: 'integer' } }, ['index']),
   toolSpec('scroll', '페이지 스크롤', { direction: { type: 'string', enum: ['up', 'down'] } }, ['direction']),
-  toolSpec('upload_file', '파일/사진 업로드. "컴퓨터에서 선택" 같은 버튼은 클릭하지 말고 이 도구를 쓰세요. name 에 [자료 폴더] 의 파일 이름(하위 폴더면 photos/cat.jpg 처럼)을 주면 그 파일을 첨부하고, 생략하면 사용자가 창에서 고릅니다. 파일 입력이 없고 "여기에 파일을 끌어다 놓으세요" 식 드롭존만 있으면 ref 에 그 드롭존 요소 번호를 주세요(드래그&드롭으로 첨부).', { name: { type: 'string', description: '[자료 폴더] 의 파일 경로(예: cat.jpg 또는 photos/cat.jpg). 모르면 생략' }, ref: { type: 'integer', description: '드롭존 요소 번호(드래그&드롭으로 넣을 때만)' } }),
+  toolSpec('upload_file', '파일/사진 업로드. "컴퓨터에서 선택" 같은 버튼은 클릭하지 말고 이 도구를 쓰세요. artifact 에 이 작업이 capture_image·download 로 만든 산출물 id 를 주면 그 파일을 첨부합니다(권장 — 폴더로 옮길 필요 없음). name 에 [자료 폴더] 의 파일 이름(하위 폴더면 photos/cat.jpg 처럼)을 줄 수도 있고, 둘 다 생략하면 사용자가 창에서 고릅니다. 파일 입력이 없고 "여기에 파일을 끌어다 놓으세요" 식 드롭존만 있으면 ref 에 그 드롭존 요소 번호를 주세요(드래그&드롭으로 첨부).', { artifact: { type: 'string', description: '이 작업 산출물 id(예: art_1a2b3c...)' }, name: { type: 'string', description: '[자료 폴더] 의 파일 경로(예: cat.jpg 또는 photos/cat.jpg). 모르면 생략' }, ref: { type: 'integer', description: '드롭존 요소 번호(드래그&드롭으로 넣을 때만)' } }),
   toolSpec('read', '페이지를 다시 관찰', {}),
   toolSpec('wait', '잠시 대기', {}),
   toolSpec('wait_for', '요소나 텍스트가 나타날 때까지 대기(동적 페이지·로딩·AJAX·영상 업로드/인코딩 완료). selector(CSS) 또는 text 중 하나, timeout(ms). 대기는 작업 단계를 소모하지 않으므로 오래 걸리는 처리에는 큰 timeout 을 쓰세요.', { selector: { type: 'string' }, text: { type: 'string' }, timeout: { type: 'integer', description: '최대 대기 ms(기본 10000, 최대 300000=5분)' } }),
@@ -216,6 +223,8 @@ const AGENT_TOOLS: ToolSpec[] = [
   toolSpec('request_scope', '허용 사이트 목록 밖이라 열지 않은 프레임/사이트를 작업에 써야 할 때, 사용자에게 허용을 요청합니다. 사용자가 승인해야만 열립니다(임의 확대 불가).', { host: { type: 'string', description: '허용을 요청할 호스트(예: payments.example.com)' }, message: { type: 'string', description: '왜 필요한지 한 문장' } }, ['host']),
   toolSpec('drag', '요소/좌표에서 요소/좌표로 드래그(슬라이더·정렬·캔버스). 시작=ref 또는 xPct,yPct / 끝=toRef 또는 toXPct,toYPct.', { ref: { type: 'integer' }, xPct: { type: 'number' }, yPct: { type: 'number' }, toRef: { type: 'integer' }, toXPct: { type: 'number' }, toYPct: { type: 'number' } }),
   toolSpec('download', '사진·영상·파일 다운로드 — 실제 다운로드 엔진(쿠키·Referer·멀티커넥션·네이티브 HLS/DASH·yt-dlp)으로 저장. ref 에 사진(img)·영상(video)·링크 요소 번호를 주거나 url 을 직접 주세요. 둘 다 생략하면 지금 페이지에서 재생 중인 영상을 자동 감지해 받습니다(유튜브·인스타·틱톡 등). blob/스트리밍 영상도 처리됩니다.', { ref: { type: 'integer', description: '사진/영상/링크 요소의 [번호]' }, url: { type: 'string', description: '직접 지정할 미디어 URL' } }),
+  toolSpec('mark_baseline', '지금 화면의 이미지 목록을 "기준선"으로 기록합니다. AI 이미지 생성 사이트에서 **생성 버튼을 누르기 전에** 부르세요 — 이렇게 해야 나중에 capture_image 가 로고·광고·이전 결과물이 아닌 **방금 만들어진 이미지**만 골라냅니다.', {}),
+  toolSpec('capture_image', '기준선 이후 **새로 나타난 이미지**를 이 작업의 산출물 저장소에 저장합니다(생성된 그림 가져오기). 저장하면 산출물 id 를 돌려주고, upload_file 의 artifact 인자에 그 id 를 주면 바로 업로드됩니다. 후보가 여럿이면 목록을 돌려주니 index 로 고르세요 — 어느 것인지 확신이 없으면 고르지 말고 ask 로 사용자에게 물으세요.', { index: { type: 'integer', description: '후보가 여럿일 때 고를 번호(0부터)' } }),
   toolSpec('run_js', '페이지에서 자바스크립트를 실행하고 결과를 받음(추출·조작 만능). 마지막 값을 return 하세요.', { code: { type: 'string' } }, ['code']),
   toolSpec('autofill', '저장된 내 프로필(이름·주소·이메일·전화·카드 등)로 현재 페이지의 폼을 자동으로 채움. 가입·주문·신청 폼에 사용. 값은 안전 저장소에서 오며 당신(AI)에게는 노출되지 않습니다.', {}),
   toolSpec('remember', '다음에도 쓸 사실을 기억에 저장(사용자 이름·선호·자주 쓰는 값 등)', { text: { type: 'string' } }, ['text']),
@@ -252,7 +261,9 @@ function toolCallToAction(tc: ToolCall): AgentAction | null {
     case 'switch_tab': { const i = asNum(a.index); return i == null ? null : { action: 'switch_tab', index: i, thought } }
     case 'close_tab': { const i = asNum(a.index); return i == null ? null : { action: 'close_tab', index: i, thought } }
     case 'scroll': return { action: 'scroll', direction: a.direction === 'up' ? 'up' : 'down', thought }
-    case 'upload_file': return { action: 'upload_file', name: typeof a.name === 'string' ? a.name : undefined, ref: asNum(a.ref), thought }
+    case 'upload_file': return { action: 'upload_file', name: typeof a.name === 'string' ? a.name : undefined, artifact: typeof a.artifact === 'string' ? a.artifact : undefined, ref: asNum(a.ref), thought }
+    case 'mark_baseline': return { action: 'mark_baseline', thought }
+    case 'capture_image': return { action: 'capture_image', index: asNum(a.index), thought }
     case 'read': return { action: 'read', thought }
     case 'wait': return { action: 'wait', thought }
     case 'wait_for': return { action: 'wait_for', selector: typeof a.selector === 'string' ? a.selector : undefined, text: typeof a.text === 'string' ? a.text : undefined, timeout: asNum(a.timeout), thought }
@@ -308,7 +319,9 @@ function agentSystemPrompt(task: string): string {
     '- 다운로드: {"action":"download","ref":<사진/영상/링크 번호>} 또는 {"action":"download","url":"https://..."} 또는 {"action":"download"}(지금 페이지에서 재생 중인 영상 자동 감지). 사진·영상(HLS/DASH·유튜브/인스타/틱톡 포함)·파일을 실제 엔진으로 저장.',
     '- JS 실행: {"action":"run_js","code":"return document.title"}  (페이지에서 코드 실행하고 결과 받기 — 추출·조작 만능)',
     '- 내 정보 자동 채우기: {"action":"autofill"}  (저장된 프로필로 가입·주문·신청 폼을 한 번에 채움. 값은 안전 저장소에서 오며 당신에게 노출되지 않음)',
-    '- 파일 업로드: {"action":"upload_file","name":"cat.jpg"}  (사진/파일 첨부. "컴퓨터에서 선택" 버튼은 누르지 말고 이걸 쓰세요. name 은 [자료 폴더] 의 파일 경로 — 하위 폴더면 "photos/cat.jpg" 처럼. 모르면 생략하면 사용자가 고름). 파일 입력이 없고 "끌어다 놓으세요" 드롭존만 있으면 {"action":"upload_file","ref":<드롭존 번호>,"name":"cat.jpg"} 로 드래그&드롭.',
+    '- 이미지 기준선: {"action":"mark_baseline"}  (AI 이미지 생성 사이트에서 **생성 버튼을 누르기 전에** 부르세요. 지금 화면의 이미지를 기준선으로 잡아, 나중에 로고·광고·이전 결과가 아닌 새로 만들어진 그림만 가려냅니다.)',
+    '- 생성물 가져오기: {"action":"capture_image"} 또는 {"action":"capture_image","index":0}  (기준선 이후 새로 나타난 이미지를 이 작업의 산출물로 저장하고 id 를 돌려줍니다. 후보가 여럿이면 목록을 주니 index 로 고르고, 확신이 없으면 ask 로 사용자에게 물으세요.)',
+    '- 파일 업로드: {"action":"upload_file","artifact":"art_..."} (이 작업이 만든 산출물을 첨부 — 권장) 또는 {"action":"upload_file","name":"cat.jpg"}  (사진/파일 첨부. "컴퓨터에서 선택" 버튼은 누르지 말고 이걸 쓰세요. name 은 [자료 폴더] 의 파일 경로 — 하위 폴더면 "photos/cat.jpg" 처럼. 모르면 생략하면 사용자가 고름). 파일 입력이 없고 "끌어다 놓으세요" 드롭존만 있으면 {"action":"upload_file","ref":<드롭존 번호>,"name":"cat.jpg"} 로 드래그&드롭.',
     '- 다시 관찰: {"action":"read"}',
     '- 기억: {"action":"remember","text":"다음에도 쓸 사실을 저장(사용자 이름·선호·자주 쓰는 값 등)"}',
     '- 데이터 추출: {"action":"extract","rowSelector":".product","fields":{"상품명":".title","가격":".price","링크":"a@href"}}  (반복 항목을 화면 밖 것까지 한 번에 수집 — 권장·완전). 선택자를 못 쓰면 {"action":"extract","rows":[{"상품명":"...","가격":"..."}]} 로 직접. 여러 페이지면 각 페이지에서 extract 하면 누적되고, 다 모으면 done 하세요.',
@@ -737,6 +750,10 @@ export interface AgentTaskParams {
   resumeContext?: { progressSummary: string; doneSubtasks: string[] }
   // 이동 허용 호스트. [] 또는 미지정 = 제한 없음. 있으면 그 호스트(및 서브도메인)만 navigate/open_tab 허용.
   allowedHosts?: string[]
+  // 산출물(캡처한 이미지·받은 파일) 저장 바구니. 영속 작업이면 그 작업 id 를 준다.
+  // 지정하지 않으면 이 실행 한 번짜리 바구니(`session-<reqId>`)를 쓴다 — 다른 작업의 산출물에
+  // 손이 닿지 않게 하는 것이 목적이므로, 바구니를 **공유하지 마라**.
+  taskId?: string
 }
 
 // 허용 호스트 검사 — 사용자가 "이 사이트들에서만" 이라고 정한 범위를 코드로 강제한다.
@@ -745,12 +762,31 @@ export interface AgentTaskParams {
 // 규칙이 두 벌이면 한쪽만 조여져 구멍이 생긴다(최상위 이동은 막는데 프레임은 읽히는 식).
 const hostAllowed = frameHostAllowed
 
+// "아이디 먼저" 2단계 로그인의 1단계는 비밀번호 칸이 없어 challenge 로 잡히지 않는다(잡으면 오탐으로
+// 작업이 멈춘다). 이 연성 신호는 **자동 로그인을 시도할지 고를 때만** 쓰고, 사람에게 넘기는 판단에는 쓰지 않는다.
+// 오탐을 더 줄이려고 조건을 하나 더 건다: 로그인 전용으로 보이는 화면일 것(본문이 짧거나 주소가 로그인 경로).
+// 본문이 긴 콘텐츠 페이지의 헤더 로그인 위젯에 아이디를 넣고 눌러 버리는 사고를 막는다.
+const LOGIN_PATH_RE = /login|signin|sign-in|sign_in|auth|account|로그인/i
+function findSoftLoginHint(
+  obs: Pick<PageObservation, 'url' | 'text' | 'loginHint' | 'frames'>,
+): { url: string; host?: string } | null {
+  const dedicated = (url: string, text: string): boolean => text.length < 900 || LOGIN_PATH_RE.test(url)
+  for (const f of obs.frames ?? []) {
+    if (f.loginHint && dedicated(f.url, f.text ?? '')) return { url: f.url, host: f.host }
+  }
+  if (obs.loginHint && dedicated(obs.url, obs.text ?? '')) return { url: obs.url }
+  return null
+}
+
 // 읽기 전용(사이트 분석 보고서 등) 에서 차단하는 "페이지를 바꾸는" 동작 — 열람·이동·note/report 만 허용.
-const READONLY_BLOCKED = new Set(['type', 'run_js', 'upload_file', 'autofill', 'drag', 'download', 'key', 'select'])
+const READONLY_BLOCKED = new Set(['type', 'run_js', 'upload_file', 'autofill', 'drag', 'download', 'key', 'select', 'capture_image'])
 
 export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Promise<void> {
   const { reqId, tabId, task } = params
   const readOnly = !!params.readOnly
+  // 산출물 바구니 — 이 실행이 만든 파일이 들어가는 곳. 작업(task)마다 격리되므로 다른 작업이
+  // 만든 파일은 이 실행의 upload_file 로 닿지 않는다(경계 검사는 resolveArtifactPath 가 한다).
+  const artifactBucket = (params.taskId ?? '').trim() || `session-${reqId}`
   cancelledSet.delete(reqId)
   // ===== 취소 경계 =====
   // 취소의 계약은 "되돌리기"가 아니라 **"이 시점 이후로는 아무 것도 더 하지 않는다"** 이다.
@@ -837,10 +873,20 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       + (doneList ? `\n완료한 하위작업:\n${doneList}\n` : '')
       + '\n남은 부분을 현재 화면에서 이어서 진행하세요. 이미 발행·전송·결제가 끝난 것을 다시 실행하면 중복 사고입니다.'
   })()
+  // 이 작업이 이미 확보한 산출물 — 구간이 바뀌어 대화 이력이 압축돼도 id 는 잃지 않아야 한다
+  // (id 를 잃으면 업로드 단계에서 "파일이 어디 있지?" 로 되돌아가 처음부터 다시 만든다).
+  const artifactBlock = ((): string => {
+    const mine = listArtifacts(artifactBucket)
+    if (!mine.length) return ''
+    const lines = mine.slice(0, 10).map((a) =>
+      `- ${a.id} · ${a.format}${a.width ? ` ${a.width}x${a.height}` : ''} · ${Math.round(a.bytes / 1024)}KB${a.label ? ` · ${a.label}` : ''}`)
+    return '\n\n# 이 작업의 산출물 (이미 확보한 파일)\n' + lines.join('\n')
+      + '\n업로드할 때 {"action":"upload_file","artifact":"<id>"} 로 첨부하세요. 다시 만들거나 다시 받을 필요 없습니다.'
+  })()
   const hostBlock = params.allowedHosts && params.allowedHosts.length > 0
     ? `\n\n# 허용 사이트\n이 작업은 다음 사이트에서만 동작합니다: ${params.allowedHosts.join(', ')}. 다른 사이트로 이동하려 하면 거부됩니다.`
     : ''
-  const system = (useTools ? agentToolSystemPrompt(task) : agentSystemPrompt(task)) + priorContextBlock(priorTurns) + resumeBlock + hostBlock
+  const system = (useTools ? agentToolSystemPrompt(task) : agentSystemPrompt(task)) + priorContextBlock(priorTurns) + resumeBlock + artifactBlock + hostBlock
     + (useVision ? '\n\n# 화면 인식\n각 단계에 현재 화면의 스크린샷이 함께 제공됩니다. [조작 가능한 요소] 목록과 더불어 화면을 눈으로 보고 판단하세요(시각적 위치·색·이미지·레이아웃 등). ref 는 반드시 요소 목록의 번호를 사용합니다.'
       + '\n화면에는 보이지만 [조작 가능한 요소] 목록에 없는 대상(캔버스·커스텀 위젯 등)은 좌표 클릭을 쓰세요: '
       + (useTools ? 'click_at 도구에 xPct,yPct(화면 가로/세로의 0~100 %)를 지정.' : 'JSON `{"action":"click_at","xPct":<0~100>,"yPct":<0~100>}` 로 화면 가로/세로 백분율 위치를 클릭.')
@@ -878,6 +924,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
     return parts.join(' · ')
   }
   const recentSigs: string[] = [] // 최근 행동 지문(막힘 감지)
+  const capturedArtifacts: string[] = [] // 이 실행이 만든 산출물 id(완료 보고에 싣는다)
   let noParseStreak = 0           // 응답을 연속으로 못 읽은 횟수
   let failStreak = 0              // 행동이 연속으로 실패한 횟수
   let needVision = true           // 이번(첫) 단계에 스마트 비전 캡처가 필요한가(화면 변화·막힘 시 재설정)
@@ -885,6 +932,9 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
   const challengeResolved = new Set<string>()
   let challengeHandoffs = 0
   const CHALLENGE_HANDOFF_LIMIT = 5
+  // 같은 화면에서 자동 로그인을 두 번 시도하지 않는다. (구간을 넘는 상한은 계정에 디스크로 누적되는
+  // 실패 횟수가 맡는다 — 이건 한 구간 안의 즉시 재시도만 막는 값싼 잠금.)
+  const autoLoginTried = new Set<string>()
   const collected: Array<Record<string, string>> = [] // extract 로 모은 데이터(여러 페이지 누적)
   const seenRows = new Set<string>()                   // 중복 행 제거(같은 페이지 재추출 시 이중 집계 방지)
   const reportNotes: Array<{ url: string; title: string; md: string }> = [] // note 로 모은 보고서 재료(페이지별)
@@ -899,6 +949,8 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
   let publishedEvidence = false
   // 발행 금지 모드(임시저장·입력만) — 스튜디오가 작업 지시에 표식을 넣는다.
   const noPublish = isNoPublishTask(task)
+  // 참여 가드 — 블로그 댓글·좋아요를 **코드로** 막는다(장부에 기록만 하면 방지가 아니다).
+  const engageGuard = parseEngageMark(task)
   const history: AiMessage[] = []
   // 직전 행동 결과·거부·사용자 답변을 다음 관찰 앞에 붙인다. history 는 오직 user/assistant 쌍으로만
   // 늘어나므로 엄격한 교대(alternation)가 항상 보장된다 — Anthropic/Gemini 는 연속 같은 role 을 거부한다.
@@ -1001,22 +1053,74 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       // CAPTCHA 를 풀거나 우회하지 않는다 — 사용자가 직접 처리한 뒤 "계속" 이라고 하면 이어간다.
       {
         const ch: ChallengeVerdict | null = challengeHandoffs < CHALLENGE_HANDOFF_LIMIT ? detectChallenge(obs, challengeResolved) : null
-        if (ch) {
+
+        // 사람에게 넘기고 답을 기다린다. true = 사용자가 처리했다고 알려 줌(다시 관찰), false = 실행 종료.
+        const handoff = async (kind: 'login' | 'captcha', message: string, evidence: string, opts?: { accountSetup?: boolean }): Promise<boolean> => {
           challengeHandoffs++
           const askP = waitAsk(reqId) // 대기자를 emit 전에 등록(배치 동기 응답 대비)
-          emit({ type: 'challenge', kind: ch.kind, message: ch.reason, evidence: ch.evidence, url: obs.url })
-          emit({ type: 'ask', message: ch.reason, challenge: ch.kind })
+          emit({ type: 'challenge', kind, message, evidence, url: obs.url })
+          emit({
+            type: 'ask', message, challenge: kind,
+            // 계정 등록·허용이 필요한 경우엔 사용자가 바로 갈 곳을 함께 준다(외피가 버튼으로 띄운다).
+            ...(opts?.accountSetup ? { actionUrl: 'browser://passwords', actionLabel: '로그인 계정 설정 열기' } : {}),
+          })
           const answer = await askP
-          if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+          if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return false }
           if (answer == null) {
-            emit({ type: 'done', message: `${ch.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면에서 중단했습니다 — 직접 처리하신 뒤 이어가기를 눌러 주세요.`, needsUser: true })
-            return
+            emit({ type: 'done', message: `${kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면에서 중단했습니다 — 직접 처리하신 뒤 이어가기를 눌러 주세요.`, needsUser: true })
+            return false
           }
+          emit({ type: 'answer', text: answer })
+          pendingPrefix = `사용자가 ${kind === 'captcha' ? '사람 확인' : '로그인'} 화면을 직접 처리했습니다: ${answer}`
+          needVision = true
+          return true
+        }
+
+        // ===== 저장된 계정으로 자동 로그인 =====
+        // 강한 로그인 신호(보이는 비밀번호 칸)이거나, "아이디 먼저" 연성 신호 + 그 출처에 **사용자가 켜 둔**
+        // 계정이 있을 때만 시도한다. 연성 신호는 사람에게 넘기는 판단에 쓰지 않으므로, 켜 둔 계정이 없으면
+        // 아무 일도 일어나지 않는다(오탐으로 작업이 멈추지 않는다).
+        const soft = ch ? null : findSoftLoginHint(obs)
+        const autoTarget = ch?.kind === 'login'
+          ? { url: obs.url, host: ch.frameHost, key: ch.key }
+          : soft && hasAutoLoginAccountFor(soft.url)
+            ? { url: soft.url, host: soft.host, key: `soft:${soft.url}` }
+            : null
+        if (autoTarget && !readOnly && !autoLoginTried.has(autoTarget.key)) {
+          autoLoginTried.add(autoTarget.key)
+          if (await gate()) return
+          const res = await attemptAutoLogin({
+            wc,
+            gate: async () => (cancelledSet.has(reqId) || pausedSet.has(reqId)) ? true : false,
+            allowedHosts,
+            readOnly,
+            frameHost: autoTarget.host,
+            trace: (label, detail, ok) => emit({ type: 'result', ok, label, detail }),
+          })
+          if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+          if (res.status === 'success') {
+            // 로그인만 성공했다고 작업이 끝난 게 아니다 — 여기서 **원래 작업으로 돌아간다**.
+            if (ch) challengeResolved.add(ch.key)
+            noteSubtask(`${res.origin} 로그인(저장된 계정 ${res.username})`)
+            pendingPrefix = `저장된 계정(${res.username})으로 ${res.origin} 에 로그인했습니다. 이제 원래 작업을 이어서 진행하세요.`
+            needVision = true
+            continue
+          }
+          if (res.status === 'handoff') {
+            if (!(await handoff('login', res.reason ?? '로그인이 필요합니다.', res.detail ?? '자동 로그인 중단', { accountSetup: res.needsAccountSetup }))) return
+            continue
+          }
+          // skip — 이 화면은 자동 로그인 대상이 아니다. 계정 등록·허용이 필요해서라면 그 안내를 아래에 붙인다.
+          if (res.reason && ch) {
+            if (!(await handoff('login', `${ch.reason}\n\n${res.reason}`, ch.evidence, { accountSetup: true }))) return
+            continue
+          }
+        }
+
+        if (ch) {
+          if (!(await handoff(ch.kind, ch.reason, ch.evidence))) return
           // 사용자가 처리했다고 알려 줬다 → 같은 화면에서 다시 묻지 않는다. 다시 관찰부터(단계 소모 없음).
           challengeResolved.add(ch.key)
-          emit({ type: 'answer', text: answer })
-          pendingPrefix = `사용자가 ${ch.kind === 'captcha' ? '사람 확인' : '로그인'} 화면을 직접 처리했습니다: ${answer}`
-          needVision = true
           continue
         }
       }
@@ -1247,6 +1351,43 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       // ===== 중복 게시 방지 =====
       // 발행이 이미 끝났는데 화면이 리셋되면 모델은 "아직 안 됐다"고 보고 발행을 또 누른다 → 같은 글 2회 게시.
       // 완료 증거가 잡힌 뒤의 게시 클릭은 무조건 사용자 확인을 받고, 증거 없이 3회째면 사용자에게 묻는다.
+      // ===== 참여 가드 (댓글·좋아요) =====
+      // 요구: "댓글 중복 / 좋아요 토글 취소 방지". 지시문만으로는 지켜지지 않는다(실측에서 전부 뚫렸다).
+      // 클릭 직전에 장부를 **조회해서 막고**, 실제로 실행한 것만 장부에 적는다.
+      if (engageGuard && (action.action === 'click' || action.action === 'click_at')) {
+        const kind = classifyEngageClick(label)
+        if (kind) {
+          const targetKey = normalizeTargetUrl(obs.url)
+          const account = engageGuard.account || 'default'
+          // ① 이미 눌린 좋아요를 다시 누르면 **취소**된다 — 절대 누르지 않는다.
+          if (kind === 'unlike') {
+            emit({ type: 'result', ok: false, label, detail: '이미 좋아요가 눌려 있습니다 — 다시 누르면 취소되므로 누르지 않았습니다.' })
+            pendingPrefix = '이 글은 이미 좋아요가 눌려 있습니다(버튼이 "취소" 로 보입니다). 누르면 취소되므로 건너뜁니다. 다음 글로 넘어가세요.'
+            continue
+          }
+          // ② 초안 모드 — 등록·좋아요를 실행하지 않는다.
+          if (engageGuard.mode !== 'act') {
+            emit({ type: 'result', ok: false, label, detail: '초안 모드입니다 — 실제로 등록·좋아요하지 않았습니다.' })
+            pendingPrefix = '이 작업은 초안 모드입니다. 댓글 등록·좋아요 버튼은 누르지 않습니다. 작성한 댓글 초안을 note 로 기록하고 다음 글로 넘어가세요.'
+            continue
+          }
+          // ③ 사용자가 고르지 않은 행동은 하지 않는다.
+          if ((kind === 'comment' && !engageGuard.comment) || (kind === 'like' && !engageGuard.like)) {
+            emit({ type: 'result', ok: false, label, detail: '이 작업에서 요청하지 않은 행동입니다.' })
+            pendingPrefix = `이 작업에서는 ${kind === 'comment' ? '댓글' : '좋아요'}을(를) 하지 않기로 했습니다. 건너뛰고 다음으로 넘어가세요.`
+            continue
+          }
+          // ④ 같은 글·같은 계정·같은 행동은 두 번 하지 않는다(재시작 뒤에도 장부가 남는다).
+          if (alreadyDid(targetKey, account, kind)) {
+            emit({ type: 'result', ok: false, label, detail: `이미 이 글에 ${kind === 'comment' ? '댓글을 달았습니다' : '좋아요를 눌렀습니다'} — 중복이라 건너뜁니다.` })
+            pendingPrefix = `이 글(${targetKey})에는 이미 ${kind === 'comment' ? '댓글을 달았습니다' : '좋아요를 눌렀습니다'}. 중복이므로 건너뛰고 다음 글로 넘어가세요.`
+            continue
+          }
+          // 통과 — 실행 직전에 기록한다. 클릭 뒤에 적으면 실패·중단 시 기록이 빠져 다음에 또 단다.
+          recordEngagement({ key: targetKey, account, action: kind, note: label.slice(0, 120) })
+        }
+      }
+
       const publishish = (action.action === 'click' || action.action === 'click_at') && isPublishAction(label)
       // 임시저장·입력만 모드에서는 발행성 클릭을 아예 실행하지 않는다(지시문이 아니라 코드로 보장).
       if (publishish && noPublish) {
@@ -1508,6 +1649,68 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         needVision = true
         continue
       }
+      if (action.action === 'mark_baseline') {
+        // 생성 버튼을 누르기 전에 화면의 이미지를 기록해 둔다. 이게 없으면 뒤에 capture_image 가
+        // 로고·광고·이전 결과물과 방금 만든 그림을 구분할 방법이 없다.
+        emit({ type: 'action', label: '이미지 기준선 기록' })
+        const b = await markBaseline(wc, artifactBucket, currentTabId, allowedHosts)
+        emit({ type: 'result', ok: true, label: '기준선', detail: `기존 이미지 ${b.count}개를 기준선으로 기록` })
+        pendingPrefix = `기준선을 잡았습니다(지금 화면의 이미지 ${b.count}개). 이제 생성을 실행하고, 결과 이미지가 화면에 나타나면 capture_image 로 가져오세요.`
+        continue
+      }
+
+      if (action.action === 'capture_image') {
+        emit({ type: 'action', label: '생성물 가져오기' })
+        const found = await findNewImages(wc, artifactBucket, currentTabId, allowedHosts)
+        if (!found.candidates.length) {
+          const why = found.hadBaseline
+            ? `기준선 이후 새로 나타난 이미지가 없습니다(화면의 이미지 ${found.totalSeen}개는 모두 기준선에 있던 것이거나 ${256}px 미만입니다).`
+            : `가져올 만한 큰 이미지가 화면에 없습니다(이미지 ${found.totalSeen}개 확인).`
+          emit({ type: 'result', ok: false, label: '생성물 가져오기', detail: '새 이미지 없음' })
+          pendingPrefix = `${why} 생성이 아직 끝나지 않았다면 wait_for 로 기다린 뒤 다시 시도하고, 생성이 실패했다면 그 사실을 done/ask 로 보고하세요.`
+          continue
+        }
+        let chosen: CaptureCandidate | undefined
+        if (action.index != null && action.index >= 0 && action.index < found.candidates.length) {
+          chosen = found.candidates[action.index]
+        } else if (found.candidates.length === 1 && found.hadBaseline && !found.fallback) {
+          chosen = found.candidates[0]   // 기준선이 있고 **새로 생긴** 것이 딱 하나 → 그것이 생성물이다
+        }
+        if (!chosen) {
+          // 애매하면 **고르지 않는다**. 광고·썸네일을 생성물로 올리는 사고는 여기서 막는다.
+          const list = found.candidates
+            .map((c) => `[${c.index}] ${c.width}x${c.height} ${c.src.slice(0, 90)}`).join('\n')
+          const head = found.fallback
+            ? `기준선 이후 **새로 생긴** 이미지는 없습니다. 화면에 있는 큰 이미지 ${found.candidates.length}개를 후보로 보여드립니다 — 이 중에 방금 만든 것이 있는지 직접 확인하세요.`
+            : found.hadBaseline
+              ? `기준선 이후 새로 나타난 이미지가 ${found.candidates.length}개입니다.`
+              : `기준선을 기록하지 않아 어느 것이 방금 만든 그림인지 확신할 수 없습니다(후보 ${found.candidates.length}개).`
+          emit({ type: 'result', ok: false, label: '생성물 가져오기', detail: `후보 ${found.candidates.length}개 — 선택 필요` })
+          pendingPrefix = `${head}\n${list}\n방금 만든 것이 확실한 번호가 있으면 {"action":"capture_image","index":<번호>} 로 고르세요. `
+            + `확신이 서지 않으면 고르지 말고 ask 로 사용자에게 어느 것인지 물으세요(엉뚱한 이미지를 올리는 것보다 묻는 편이 낫습니다).`
+          continue
+        }
+        if (await gate()) return   // 취소·일시정지면 파일을 만들지 않는다
+        const cap = await captureCandidate({
+          wc, bucket: artifactBucket, tabId: currentTabId, pageUrl: obs.url, candidate: chosen,
+          label: `생성물 ${chosen.width}x${chosen.height}`,
+        })
+        if (!cap.ok || !cap.meta) {
+          emit({ type: 'result', ok: false, label: '생성물 가져오기', detail: cap.error ?? '저장 실패' })
+          pendingPrefix = `이미지를 가져오지 못했습니다: ${cap.error ?? '알 수 없는 오류'}. `
+            + (cap.code === 'not-image'
+              ? '그 주소는 이미지가 아니었습니다(로그인 화면이나 오류 페이지일 수 있습니다). 다른 후보를 고르거나 화면을 다시 확인하세요.'
+              : '다시 시도하거나 다른 후보를 고르세요.')
+          continue
+        }
+        const m = cap.meta
+        capturedArtifacts.push(m.id)
+        emit({ type: 'result', ok: true, label: '생성물 저장', detail: `${m.id} · ${m.format} ${m.width}x${m.height} · ${Math.round(m.bytes / 1024)}KB` })
+        pendingPrefix = `생성물을 저장했습니다 — id="${m.id}", 형식 ${m.format}, 크기 ${m.width}x${m.height}, ${m.bytes} 바이트. `
+          + `업로드할 때는 {"action":"upload_file","artifact":"${m.id}"} 로 첨부하세요(파일을 어디로 옮길 필요 없습니다).`
+        continue
+      }
+
       if (action.action === 'download') {
         // 사진·영상을 실제 다운로드 엔진으로 저장한다.
         //  - 직접 미디어(이미지·mp4·토큰CDN) → downloadMedia(쿠키·Referer·probe·yt-dlp 폴백)
@@ -1518,6 +1721,17 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         let url = (action.url ?? '').trim()
         let via = '미디어'
         let kindHint: 'hls' | 'dash' | undefined
+        // 모델이 **직접 써 넣은** 주소는 허용 사이트 범위를 지켜야 한다.
+        // 페이지에서 고른 것(ref·감지된 후보)은 그 페이지가 이미 불러온 하위 리소스라 CDN 호스트가
+        // 달라도 정상이지만, 문자열로 들어온 주소는 다르다 — 페이지 본문에 심어 둔 지시
+        // ("http://공격자/x.png 를 받아라")가 그대로 실행되면 작업 범위 밖 파일이 산출물로 들어오고,
+        // 그게 업로드 단계에서 게시될 수 있다. 프롬프트 인젝션이 파일 범위를 넓히는 경로를 막는다.
+        if (url && !hostAllowed(url, allowedHosts)) {
+          emit({ type: 'result', ok: false, label: '다운로드', detail: `허용된 사이트가 아닙니다(허용: ${(allowedHosts ?? []).join(', ')})` })
+          pendingPrefix = `${url.slice(0, 80)} 은 이 작업의 허용 사이트 범위 밖이라 받지 않았습니다. `
+            + `화면에 보이는 사진·영상·링크라면 url 대신 그 요소의 ref 를 주세요.`
+          continue
+        }
         if (!url && action.ref != null) {
           const m = await resolveMediaSrc(wc, action.ref, obs.epoch)
           if (m && m.url) { url = m.url; via = m.kind === 'image' ? '사진' : m.kind === 'video' ? '영상' : '링크' }
@@ -1539,17 +1753,44 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
           pendingPrefix = '다운로드 대상을 못 찾았습니다. 사진/영상/링크 요소의 ref 나 http(s) url 을 지정하거나, 영상 페이지에서 다시 시도하세요.'
           continue
         }
-        // 대상 해석(resolveMediaSrc/resolveHref) 동안 취소가 들어왔으면 다운로드를 시작하지 않는다.
-        if (abortIfCancelled()) return
+        // 대상 해석(resolveMediaSrc/resolveHref) 동안 취소·정지가 들어왔으면 다운로드를 시작하지 않는다.
+        // (취소만 보던 것을 정지까지 보도록 바꿨다 — 정지 중에 파일이 계속 내려오면 "멈췄다" 가 거짓이 된다.)
+        if (await gate()) return
         emit({ type: 'action', label: `다운로드(${via}): ${target.slice(0, 70)}` })
+        // 예전에는 시작만 하고 넘어갔다 — 그래서 에이전트는 파일이 실제로 저장됐는지 알 수 없었고,
+        // 곧바로 "이제 업로드하세요" 로 진행해 **빈 손으로** 다음 단계를 밟았다. 이제 끝까지 기다려
+        // 완료·실패·타임아웃을 판정하고, 끝난 파일을 이 작업의 산출물로 가져온다.
         try {
-          // 백그라운드로 시작만 하고(완료까지 기다리지 않음) 다음 단계로 — 진행률은 다운로드 패널에서 보인다.
+          const beforeIds = snapshotDownloadIds()
           const job = (isStream || !url)
             ? downloadStream(target, pageUrl, currentTabId, title, kindHint) // HLS/DASH 또는 페이지 추출(yt-dlp)
             : downloadMedia(url, pageUrl, currentTabId, title)               // 직접 미디어(이미지·mp4·토큰CDN)
           void job.catch((e) => console.warn('[ai-agent] download failed', e))
-          emit({ type: 'result', ok: true, label: '다운로드', detail: target.slice(0, 80) })
-          pendingPrefix = `${via} 다운로드를 시작했습니다(${target.slice(0, 80)}). 진행률은 다운로드 패널(Ctrl+J)에서 확인됩니다. 다른 항목이 더 있으면 이어서, 다 받았으면 done 하세요.`
+          const waited = await waitForNewDownload({
+            beforeIds,
+            isCancelled: () => cancelledSet.has(reqId),
+          })
+          if (cancelledSet.has(reqId)) { emit({ type: 'cancelled' }); return }
+          if (!waited.ok || !waited.item) {
+            emit({ type: 'result', ok: false, label: '다운로드', detail: waited.error ?? '실패' })
+            pendingPrefix = waited.code === 'timeout'
+              ? `다운로드가 제한 시간 안에 끝나지 않았습니다(${target.slice(0, 60)}). 다운로드 패널에서 계속 받고 있을 수 있습니다 — 더 기다리려면 wait_for 를, 포기하려면 다른 방법을 시도하세요.`
+              : `다운로드 실패: ${waited.error ?? '알 수 없는 오류'}. 다른 주소나 방법을 시도하세요.`
+            continue
+          }
+          const it = waited.item
+          const imported = importFinishedDownload({ bucket: artifactBucket, item: it, pageUrl, tabId: currentTabId })
+          if (imported.ok && imported.meta) {
+            const m = imported.meta
+            capturedArtifacts.push(m.id)
+            emit({ type: 'result', ok: true, label: '다운로드 완료', detail: `${it.filename} · ${Math.round(m.bytes / 1024)}KB · ${m.id}` })
+            pendingPrefix = `다운로드가 끝났습니다 — 파일 "${it.filename}", ${m.bytes} 바이트, 형식 ${m.format}, 산출물 id="${m.id}". `
+              + `업로드에 쓰려면 {"action":"upload_file","artifact":"${m.id}"} 로 첨부하세요. 더 받을 게 있으면 이어서, 없으면 다음 단계로.`
+          } else {
+            // 파일은 받았지만 산출물로 가져오지 못한 경우(용량 초과 등) — 받은 사실 자체는 정직하게 알린다.
+            emit({ type: 'result', ok: true, label: '다운로드 완료', detail: `${it.filename} (산출물 등록 실패: ${imported.error ?? ''})` })
+            pendingPrefix = `다운로드는 끝났습니다(${it.filename}, ${it.receivedBytes} 바이트). 다만 작업 산출물로 등록하지 못했습니다: ${imported.error ?? '알 수 없음'}.`
+          }
         } catch (e) {
           emit({ type: 'result', ok: false, label: '다운로드', detail: String(e).slice(0, 120) })
           pendingPrefix = `다운로드 시작 실패: ${String(e).slice(0, 120)}`
@@ -1575,9 +1816,24 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       if (action.action === 'upload_file') {
         // 지정 자료 폴더의 이름이 주어지면 그 파일을 바로 쓴다(자율). 폴더 밖·미존재면 거부(보안).
         const wanted = (action.name ?? '').trim()
+        const wantedArtifact = (action.artifact ?? '').trim()
         let picked: string[] = []
         let fromFolder = false
-        if (wanted) {
+        let fromArtifact = false
+        if (wantedArtifact) {
+          // 이 작업이 만든 산출물만 쓸 수 있다. 다른 작업의 id 를 줘도 resolveArtifactPath 가 null 을
+          // 돌려준다(작업 폴더 밖 realpath 거부) — "업로드는 자기 작업 산출물만" 이라는 경계다.
+          const p = resolveArtifactPath(artifactBucket, wantedArtifact)
+          if (p) { picked = [p]; fromArtifact = true }
+          else {
+            const mine = listArtifacts(artifactBucket)
+            emit({ type: 'result', ok: false, label: '파일 업로드', detail: `산출물 '${wantedArtifact}' 없음` })
+            pendingPrefix = mine.length
+              ? `이 작업의 산출물 중 '${wantedArtifact}' 는 없습니다. 쓸 수 있는 id: ${mine.map((a) => `${a.id}(${a.format} ${a.width ?? '?'}x${a.height ?? '?'})`).join(', ')}.`
+              : `이 작업은 아직 만든 산출물이 없습니다. 먼저 capture_image 나 download 로 파일을 확보하세요.`
+            continue
+          }
+        } else if (wanted) {
           const resolved = resolveAgentFile(wanted)
           if (resolved) { picked = [resolved]; fromFolder = true }
           else {
@@ -1599,7 +1855,12 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
             continue
           }
         }
-        const label = fromFolder ? `파일 업로드(자료 폴더): ${path.basename(picked[0] ?? '')}` : '파일 업로드'
+        // 파일을 페이지에 넘기는 것은 되돌릴 수 없는 전달이다(그 사이트로 바이트가 올라간다).
+        // 정지·취소가 파일 선택 대기·경로 해석 사이에 들어왔다면 **넘기지 않는다**.
+        if (await gate()) return
+        const label = fromArtifact
+          ? `파일 업로드(작업 산출물 ${wantedArtifact})`
+          : fromFolder ? `파일 업로드(자료 폴더): ${path.basename(picked[0] ?? '')}` : '파일 업로드'
         emit({ type: 'action', label })
         // ref 를 준 경우 = "이 드롭존에 떨어뜨려라". 파일 입력도 파일 선택 창도 안 쓰는 UI 대응.
         if (action.ref != null && action.ref >= 0) {
@@ -1651,6 +1912,11 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         const nt = createTab({ windowId, url })
         currentTabId = nt.id
         await waitTabLoad(nt.id)
+        // 새 탭도 기준선을 잡아 둔다(navigate 와 같은 이유).
+        if (!readOnly) {
+          const ntWc = getWebContentsByTabId(nt.id)
+          if (ntWc) await markBaseline(ntWc, artifactBucket, nt.id, allowedHosts).catch(() => ({ count: 0, images: [] }))
+        }
         emit({ type: 'result', ok: true, label: '새 탭', detail: url })
         pendingPrefix = `새 탭을 열고 이동했습니다: ${url}. 이제 그 탭을 조작합니다.`
         needVision = true
@@ -1725,7 +1991,14 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       if (action.action === 'navigate') {
         if (!action.url || !/^https?:/i.test(action.url)) result = { ok: false, detail: '유효하지 않은 URL' }
         else if (!hostAllowed(action.url, allowedHosts)) result = { ok: false, detail: `허용된 사이트가 아닙니다(허용: ${(allowedHosts ?? []).join(', ')})` }
-        else { emit({ type: 'action', label }); await navigateAndWait(wc, action.url); result = { ok: true, detail: '이동함' } }
+        else {
+          emit({ type: 'action', label })
+          await navigateAndWait(wc, action.url)
+          // 이동한 페이지의 이미지를 자동으로 기준선에 기록한다. 모델이 mark_baseline 을 잊어도
+          // "이 페이지에 원래 있던 것" 과 "그 뒤에 생긴 것" 이 구분된다(생성물 오인 방지의 기본선).
+          if (!readOnly) await markBaseline(wc, artifactBucket, currentTabId, allowedHosts).catch(() => ({ count: 0, images: [] }))
+          result = { ok: true, detail: '이동함' }
+        }
       } else {
         emit({ type: 'action', label })
         result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch, allowedHosts })
