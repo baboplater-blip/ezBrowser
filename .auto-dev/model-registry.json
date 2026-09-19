@@ -1,14 +1,15 @@
 {
   "opus": {
     "requested": "opus",
-    "resolved": "claude-opus-5",
-    "verified": true,
-    "method": "modelUsage",
+    "resolved": null,
+    "verified": false,
+    "method": "ambiguous",
     "candidates": [
       "claude-haiku-4-5-20251001",
-      "claude-opus-5"
+      "claude-opus-5",
+      "claude-sonnet-5"
     ],
-    "reason": "modelUsage에서 유일한 후보를 확인해 계열/ID가 일치함",
-    "checked_at": "2026-09-19T09:10:44.741065+00:00"
+    "reason": "배경 모델 제외 후 2개가 남아 특정 불가",
+    "checked_at": "2026-09-19T10:00:25.788650+00:00"
   }
 }

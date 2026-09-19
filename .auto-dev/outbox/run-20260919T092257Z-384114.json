@@ -1,0 +1,195 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T092257Z-384114",
+  "recorded_at": "2026-09-19T10:00:25Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T092257Z-384114",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T092257Z-384114)의 구조화 완료 기록: pass (합격 기준 13건 전건 통과, 부정 사례 7건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "fe4c3d39-79db-4dbc-89ed-6dae65aef50e",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "확인(review) 단계에서 계정을 UI 입력+저장 클릭으로 고칠 수 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "계정만 바뀌고 만든 이미지·캡션은 그대로 남는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "게시 여부가 확인되지 않은 동안에는 계정을 못 바꾼다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "옛 영수증(지난 게시 근거)이 새 계정의 근거로 재사용되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "옛 자동게시 선승인이 조용히 넓어지지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "계정을 손으로 고친 작업은 선승인 범위 안이어도 자동 게시되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "계정 변경과 편집 표시가 재시작 후에도 유지된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "시간대가 명시된 게시 시각은 어느 기계에서나 같은 절대 시각으로 읽힌다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "시간대가 없거나 로캘 의존인 시각 표기는 확정하지 않고 모름으로 남긴다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "오래된 글·미래 글 판정이 기계 시간대에 좌우되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "글 본문의 낱말이 영수증 완료 표시를 뒤집지 못한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "status 없는 옛 영수증은 예전 문장 판단으로 물러서 하위호환을 지킨다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c13",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "이번 변경이 기존 동작을 깨지 않았다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "코드 서명(.pfx) 적용 후 재빌드 — 인증서는 사용자만 제공 가능(상시 제약, 이월)",
+        "rc.13 설치파일의 설치→부팅→제거 검증 — 사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED, 우회하지 않았다(다른 PC/VM 필요, 이월)",
+        "실제 인스타그램·블로그·Genspark/ChatGPT 실화면 검증 — 실계정·크레딧 필요(이번 검증은 전부 로컬 픽스처, 이월)",
+        "초안까지만 → 게시까지 모드 변경 — 계정과 같은 부류의 불편이나 되돌릴 수 없는 게시 권한을 여는 일이라 사용자 결정 사항으로 남김"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T092257Z-384114"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 2248.1,
+        "context_chars": 12025,
+        "total_tokens": 1611367,
+        "cache_read_tokens": 100986528
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9440,
+          "output": 20,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 342,
+          "output": 121185,
+          "cache_read": 70609697,
+          "cache_creation": 505807
+        },
+        "claude-sonnet-5": {
+          "input": 170,
+          "output": 126102,
+          "cache_read": 30376831,
+          "cache_creation": 848301
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\evening-2000-20260919\\run-20260919T092257Z-384114-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\evening-2000-20260919\\run-20260919T092257Z-384114-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "**19:00 KST — 지시하신 세 건을 모두 끝내고 rc.13 까지 냈습니다.** (요청하신 19:50 영수증보다 50분 이르게 마감)\n\n## 고친 것\n\n**① 계정을 잘못 넣으면 워크플로를 통째로 다시 만들어야 했다** — 이번 본론입니다. 확인 단계 카드에 `올릴 계정` 줄이 생겨, 고치고 저장하면 **만든 이미지와 캡션은 그대로 남습니다**. 게시가 나갔거나 나갔는지 모르는 동안에는 코드가 잠급니다 — 그때 기준을 바꾸면 \"내 글인지\" 판정이 뒤바뀌어 **같은 글을 두 번 올리는 사고**로 이어지기 때문입니다.\n\n> 통합 중 **제 변경 안에서 구멍을 하나 찾아 닫았습니다.** 선승인은 계정에 묶여 있어서, 범위 밖 계정으로 시작한 작업의 계정 칸을 범위 안 계정으로 고치면 **입력칸 하나 고친 것만으로 자동 게시 대상이 됩니다.** 사용자가 \"게시해도 좋다\"를 누른 적이 없는데요. 손으로 고친 작업은 선승인이 있어도 확인을 받도록 막고, 재시작을 넘겨 유지되게 했습니다.\n\n**② 게시 시각 판정이 그 PC 의 시간대에 좌우됐다** — `Date.parse('2026-09-19T10:00')` 가 시간대 4곳에서 **최대 21시간 차이**로 갈렸습니다(검사가 매 실행 이 값을 함께 찍습니다). 이제 **시간대가 명시된 값만** 받고 `Date.UTC` 로 직접 계산합니다. 확정 못 하면 \"아니다\"라고 단정하지 않고 **모른다고 말하고 직접 확인하시게** 합니다 — 확정 거부가 곧 중복 게시로 가는 방향이라서요.\n\n**③ 글 내용의 낱말이 영수증 표시를 뒤집었다** — ✅/⚠ 를 영수증 문장 정규식으로 정했는데, 그 문장엔 글에서 읽어 온 발췌가 들어갑니다. 판정을 내린 자리에서 **상태값**으로 적고 화면은 그 값만 봅니다.\n\n## 검증 (돌린 것만)\n\n- **`npm run verify` 16/16 · 54초** (최종)\n- **신설 `verify-social-account-cdp` 27/27** — 실제 앱 + **실제 UI 클릭 → IPC**. 자산·캡션 보존, 안전하지 않은 편집 거부(화면·IPC 양쪽), 옛 영수증·선승인 미재사용, **재시작 보존**\n- **신설 `verify-post-time` 34/34** — 시간대 4곳에서 각각 자식 프로세스로 돌려 판정 일치 대조\n- 영향 범위 회귀: recovery 14/14 · sns-publish 7/7 · publish-evidence 8/8 · smoke 16/16\n- **음성 대조 2회**: 선승인 가드 제거 → 정확히 2건 FAIL(`{\"ok\":true}`), 재시작 복원 제거 → 1건 FAIL(`undefined`). 둘 다 복구를 **컴파일 산출물**에서 확인\n\n코드 검토도 받아 3건 반영했습니다(High 없음). 그중 둘은 **제가 방금 쓴 코드의 결함**이었습니다 — 주석으로 약속한 \"입력 중엔 덮어쓰지 않는다\"가 실제로는 없었고, 모르는 상태값 폴백이 ✅ 쪽(fail-open)이었습니다.\n\n## 산출물\n\n`dist\\ezBrowser-0.2.0-rc.13-win-x64.exe` · 121,924,032 B · `sha256 56520209b107068058bd41f1fac2821bfba8564b059aef466d7fe83846eeed98` · 18:52 · **`--publish never`** (GitHub 최신 릴리스 조회 결과 **여전히 0.1.0**, 변경 없음). 미서명입니다.\n\n## 하지 않은 것\n\n- **rc.13 설치→제거 검증 안 했습니다.** 이 PC 에 쓰시는 ezBrowser 가 가동 중이라 `verify-install` 이 스스로 BLOCKED 했고 **우회하지 않았습니다.**\n- 실제 인스타그램·블로그·생성 사이트 **실화면은 검증 못 했습니다** — 이번 검증은 전부 로컬 픽스처입니다.\n- 서명 인증서(.pfx)는 주셔야 합니다.\n- **`초안까지만` → `게시까지` 모드 변경은 일부러 안 했습니다.** 계정과 같은 부류의 불편이지만 되돌릴 수 없는 게시 권한을 여는 일이라, 범위 동결 직전에 검토 없이 손댈",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T092257Z-384114\\stream.jsonl",
+    "error": null
+  }
+}

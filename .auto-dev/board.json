@@ -3,8 +3,8 @@
   "project_id": null,
   "task_id": "social-workflows-20260918",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 150,
-  "updated_at": "2026-09-19T09:59:56Z",
+  "revision": 160,
+  "updated_at": "2026-09-19T13:29:08Z",
   "columns": [
     "대기",
     "진행",
@@ -927,20 +927,21 @@
     {
       "id": "run:run-20260919T092257Z-384114",
       "title": "Claude 실행 — User explicitly requests continuous necessary improvements until TODAY 2026-09-1",
-      "column": "진행",
+      "column": "완료",
       "owner": "Claude 팀장(lead)",
       "model": "opus",
-      "step": "세션 실행 중",
-      "evidence": null,
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260919T092257Z-384114)의 구조화 완료 기록: pass (합격 기준 13건 전건 통과, 부정 사례 7건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
       "blocker": null,
       "detail": "User explicitly requests continuous necessary improvements until TODAY 2026-09-19 20:00 KST and report then. Current 18:24 KST, about 96 minutes. Own this timed development block autonomously using auto-dev. Stop new feature scope by 19:25, finish tests/package/report by 19:50, reserve time for main review. Do not just sleep until deadline. Prioritize observed usability defects: existing workflow missing/wrong account currently requires recreate; implement clear review-stage account editing retaining image/caption, validating grants and invalidating stale verification, immutable during active publish/uncertain publication unless explicit safe resolution. Inspect existing APIs first and preserve all safety/persistence boundaries. Next timezone-less datetime Date.parse around page-actions.ts2161 depends on machine locale/timezone: accept only unambiguous actual post timestamps or retain uncertain, with timezone-independent old/future/ambiguous negatives and valid-offset positive. Fix receipt status UI using structured status rather than regex over page snippet, so words like 미확인 in actual post cannot turn verified receipt warning or vice versa. Inspect other directly related end-user blockers and fix only narrow reproducible defects if time permits. Do not broaden refactors/dependencies. This is general improvement request but main priority usable workflow, not more proof-only wrappers. Require actual UI-to-IPC isolated app tests for review account edit preserving asset/caption",
       "tags": [
         "run",
-        "resume"
+        "success",
+        "2248.1s"
       ],
       "required": true,
       "run_id": "run-20260919T092257Z-384114",
-      "updated_at": "2026-09-19T09:22:57Z"
+      "updated_at": "2026-09-19T10:00:25Z"
     },
     {
       "id": "evening-2000-fixes",
@@ -956,6 +957,129 @@
       "required": true,
       "run_id": null,
       "updated_at": "2026-09-19T09:57:40Z"
+    },
+    {
+      "id": "run:run-20260919T121840Z-b597cd",
+      "title": "Claude 실행 — User says continue development after rc.13. Bounded usable feature: turn existin",
+      "column": "진행",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "세션 실행 중",
+      "evidence": null,
+      "blocker": null,
+      "detail": "User says continue development after rc.13. Bounded usable feature: turn existing draft-only image workflow into explicitly user-confirmed publication WITHOUT regenerating image/caption. Inspect draft lifecycle first (review and completed draft receipt). Provide clear Korean/English UI showing destination/account/caption and final explicit publish confirmation; opening/changing mode/cancelling must NEVER publish. One-time explicit confirmation binds current workflow revision/account/platform/artifact hash/caption, no reused grants or autoPublish upon mode toggle/restart. Support existing review draft and completed draft safely, prohibit active publish/uncertain/already actually published, preserve old receipt/history accurately. Reuse existing publish gate, persistence barrier and resume protections. Validate missing account/expired or missing artifact/invalid revision gracefully without losing draft. Do not silently broaden grants, skip critical gate or invent authorization. New action needs actionId/rebind support if global action introduced; internal card control use existing conventions. ko/en together. Scope files social-workflow task model relevant IPC/preload AiSocialPanel/locales and focused harness/docs; preserve others edits. Ownership clear if delegate. Implement real UI-click to trusted IPC isolated tests: no regeneration same image hash and caption, cancel no side effects, missing account rejected, confirm exactly one fixture post, double-click/replay at most one",
+      "tags": [
+        "run",
+        "resume"
+      ],
+      "required": true,
+      "run_id": "run-20260919T121840Z-b597cd",
+      "updated_at": "2026-09-19T12:18:40Z"
+    },
+    {
+      "id": "draft-promotion-design",
+      "title": "초안→게시 승격 설계",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "수명주기 정독 후 설계 확정: 진입점 2개(review draft / done+receipt.status=draft), 바인딩=revision 해시, params.mode 불변 + promotedAt 도입(자동게시 부활 차단), 기존 게이트·내구성 경계 재사용",
+      "evidence": "social-workflow.ts 1001-1400 · autoPublishVerdict 936-968 · reviveWorkflow 280-400",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T12:24:53Z"
+    },
+    {
+      "id": "draft-promotion-core",
+      "title": "초안 승격 코어(main·IPC·preload)",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "promotedAt·priorReceipts 모델 + preparePromotion/confirmPromotion/cancelPromotion + 기존 게시 게이트 재사용 + 자동게시 차단 이중화",
+      "evidence": "순수 게이트 하네스 68 PASS/0 FAIL · 음성대조 7건 FAIL 확인 후 복원",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T12:43:06Z"
+    },
+    {
+      "id": "draft-promotion-ui",
+      "title": "초안 승격 확정 UI(ko/en)",
+      "column": "완료",
+      "owner": "작업자(senior-clean-coder)",
+      "model": "sonnet",
+      "step": "카드 내 승격 버튼 + 인라인 확정 패널(목적지·계정·이미지 해시·캡션 전문) + 지난 기록 접기. 취소는 confirm 을 부르지 않음",
+      "evidence": "tsc renderer 0 · CSS 토큰 6종 전부 정의 확인 · 번들 gzip 115.91KB",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T12:49:42Z"
+    },
+    {
+      "id": "draft-promotion-pure-harness",
+      "title": "승격 게이트 순수 하네스",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "73종(거부 20경로·1회용·바인딩·되돌리기·재시작 보존) · quick+full 등록",
+      "evidence": "73 PASS/0 FAIL · 음성대조 2회(7건·4건 FAIL 후 복원)",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T12:49:42Z"
+    },
+    {
+      "id": "draft-promotion-e2e",
+      "title": "승격 e2e 하네스(실제 UI·실제 게시)",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "승격 e2e 하네스(실제 UI·실제 게시)",
+      "evidence": "35 PASS/0 FAIL/0 SKIP · DP1~DP11 · 픽스처 수신 4건 · 대조(취소0 vs 확정1) 성립",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T13:29:08Z"
+    },
+    {
+      "id": "draft-promotion-review",
+      "title": "코드 검토 반영(높음3·보통3·사소4)",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "코드 검토 반영(높음3·보통3·사소4)",
+      "evidence": "크래시 시 초안 유실·조용한 실패·선부팅 표시 잔존 등 10건 수정 후 재검증",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T13:29:08Z"
+    },
+    {
+      "id": "draft-promotion-rc14",
+      "title": "rc.14 빌드·마감 게이트",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "rc.14 빌드·마감 게이트",
+      "evidence": "npm run verify 17/17 59s · 스모크 16/16 · NSIS --publish never sha256 ddc43a2b…",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T13:29:08Z"
     }
   ],
   "summary": {
@@ -972,9 +1096,9 @@
     "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
   },
   "source": {
-    "kind": "completion-record",
-    "run_id": "run-20260919T092257Z-384114",
-    "at": "2026-09-19T09:59:56Z"
+    "kind": "run-start",
+    "run_id": "run-20260919T121840Z-b597cd",
+    "at": "2026-09-19T12:18:40Z"
   },
   "warnings": []
 }

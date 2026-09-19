@@ -47,7 +47,33 @@ interface SocialWorkflow {
   error?: string
   createdAt: number
   updatedAt: number
+  /** 사용자가 이 초안을 게시로 올린 시각. 있으면 이미 승격된 작업이다. */
+  promotedAt?: number
+  /** 승격 전의 지난 영수증들(초안 준비 기록 등). 최신이 뒤. */
+  priorReceipts?: Array<{ url?: string; evidence?: string; status?: ReceiptStatus; at: number; taskId?: string; note?: string }>
 }
+
+/** 초안 승격("이 초안을 게시하기") 확인 계획 — main 의 socialPromotePrepare 가 돌려주는 값을 그대로 미러링. */
+interface AiPromotionPlan {
+  token: string
+  workflowId: string
+  revision: string
+  platform: SocialPlatform
+  platformLabel: string
+  platformLabelEn: string
+  account: string
+  caption: string
+  artifactId: string
+  artifactSha256: string
+  artifactBytes: number
+  artifactFormat: string
+  tags: string[]
+  source: 'review' | 'completed-draft'
+  expiresAt: number
+}
+type AiPromotePrepareResult =
+  | { ok: true; plan: AiPromotionPlan }
+  | { ok: false; error: string; errorEn: string }
 type PublishResolution = 'verify' | 'published' | 'not-published'
 interface WorkflowRecovery {
   kind: 'caption-interrupted' | 'caption-failed' | 'publish-uncertain' | 'publish-storage-failed'
@@ -131,6 +157,26 @@ const RECEIPT_MARK: Record<ReceiptStatus | 'legacy-unverified' | 'legacy-ok', { 
 }
 
 /**
+ * "이 초안을 게시하기" 버튼을 보일지. main 이 최종 권한을 갖지만(같은 판정을 다시 하고 토큰을 낸다),
+ * 불가능한 상황에서 버튼 자체를 숨기는 것이 1차 방어다.
+ *
+ * ⚠ `stage === 'review'` 일 때만 `taskIds.publish` 를 확인한다 — `stage === 'done'` 인 초안은
+ *   "초안 준비" 작업 기록이 `taskIds.publish` 에 정상적으로 남아 있으므로, 그 필드로 두 단계를
+ *   함께 걸러내면 완료된 초안의 버튼이 항상 사라진다.
+ */
+function canPromote(w: SocialWorkflow): boolean {
+  if (w.params.mode === 'publish') return false          // 애초에 게시 작업이다
+  if (w.promotedAt) return false                          // 이미 승격했다
+  if (w.publishUncertain || w.verifyTaskId) return false  // 게시 여부 불확실 — 손대지 않는다
+  if (w.stage === 'review') {
+    if (w.taskIds.publish) return false                   // 게시 작업 레코드가 남아 있다
+    return !w.captionPending && !w.captionError && !!w.caption?.trim()
+  }
+  if (w.stage === 'done') return w.receipt?.status === 'draft'
+  return false
+}
+
+/**
  * 확인 단계의 계정 편집 한 줄. 계정은 **게시 전에는 아무 곳에도 나가지 않는** 표시·대조용 값이라
  * 여기서 고쳐도 안전하다. 실제 허용 여부는 main(`setWorkflowAccount`)이 판정하고, 여기서는
  * 그 결과(성공/거부 사유/선승인 범위)를 사용자 말로 옮긴다.
@@ -191,11 +237,67 @@ function AccountRow({ w, onSaveAccount }: {
   )
 }
 
+/**
+ * 초안 승격 확정 패널 — 무엇이 어디로 나가는지 마지막으로 한눈에 보여준 뒤에만 게시로 넘긴다.
+ * 이미지·캡션은 여기서 절대 다시 만들지 않는다(그대로 올라간다는 것이 이 패널의 존재 이유).
+ */
+function PromotePanel({ plan, busy, onConfirm, onCancel }: {
+  plan: AiPromotionPlan
+  busy: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="ai-social-promote-panel" data-testid="social-promote-panel" data-revision={plan.revision}>
+      <div className="ai-social-promote-title">
+        ⚠ 정말 게시할까요?<span className="ai-social-en">Publish for real?</span>
+      </div>
+      <div className="ai-social-promote-row">
+        <span className="ai-social-promote-label">목적지 / Destination</span>
+        <span data-testid="social-promote-platform">{plan.platformLabel} ({plan.platformLabelEn})</span>
+      </div>
+      <div className="ai-social-promote-row">
+        <span className="ai-social-promote-label">계정 / Account</span>
+        <span data-testid="social-promote-account">@{plan.account}</span>
+      </div>
+      <div className="ai-social-promote-row">
+        <span className="ai-social-promote-label">이미지 / Image</span>
+        <span data-testid="social-promote-hash">
+          {plan.artifactFormat} · {formatBytes(plan.artifactBytes)} · sha256 {plan.artifactSha256.slice(0, 12)}…
+        </span>
+      </div>
+      <div className="ai-social-promote-caption" data-testid="social-promote-caption">{plan.caption}</div>
+      {plan.tags.length > 0 && (
+        /* 태그는 캡션 끝에 실제로 붙어 나간다 — 보여 주지 않으면 확인 화면이 올라갈 내용과 달라진다. */
+        <div className="ai-social-promote-tags" data-testid="social-promote-tags">
+          {plan.tags.map((tg) => `#${tg}`).join(' ')}
+        </div>
+      )}
+      <div className="ai-hint">
+        이미지와 캡션은 다시 만들지 않습니다 — 위 내용 그대로 올라갑니다.
+        <span className="ai-social-en">Nothing is regenerated — exactly the image and caption above will be posted.</span>
+      </div>
+      <div className="ai-handoff-note ai-err">
+        되돌릴 수 없습니다.<span className="ai-social-en">This cannot be undone.</span>
+      </div>
+      <div className="ai-task-actions">
+        <button className="ai-send ai-social-promote-go" data-testid="social-promote-go" onClick={onConfirm} disabled={busy}>
+          {busy ? '게시하는 중…' : (<>게시 확정<span className="ai-social-en">Publish</span></>)}
+        </button>
+        <button className="ai-mini-btn" data-testid="social-promote-cancel" onClick={onCancel} disabled={busy}>
+          취소<span className="ai-social-en">Cancel</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ===== 카드(뷰1의 진행 중 워크플로 1개) =====
 function SocialCard({
   w, candidates, previewData, captionDraft,
   onChooseCandidate, onCaptionChange, onApprove, onCancel, onDelete, onRetry,
   onRetryCaption, onSaveCaption, onSaveAccount, onResolvePublish,
+  promotion, promoteError, promoteBusy, onPromote, onPromoteConfirm, onPromoteCancel,
 }: {
   w: SocialWorkflow
   candidates: Array<{ meta: ArtifactMeta; dataUrl: string | null }> | undefined
@@ -211,6 +313,12 @@ function SocialCard({
   onSaveCaption: (caption: string) => void
   onSaveAccount: (account: string) => Promise<{ ok: boolean; error?: string; autoPublish?: string; handleShaped?: boolean }>
   onResolvePublish: (choice: PublishResolution) => void
+  promotion: AiPromotionPlan | undefined
+  promoteError: { error: string; errorEn: string } | undefined
+  promoteBusy: boolean
+  onPromote: () => void
+  onPromoteConfirm: () => void
+  onPromoteCancel: () => void
 }) {
   const terminal = w.stage === 'done' || w.stage === 'failed' || w.stage === 'cancelled'
   const rStatus = receiptStatusOf(w.receipt)
@@ -218,7 +326,7 @@ function SocialCard({
   // 영수증 자체가 없으면 예전처럼 중립으로 둔다 — 없는 것을 경고로 바꾸는 것은 이번 범위가 아니다.
   const unresolved = !!w.receipt && !RECEIPT_OK.has(rStatus ?? '')
   return (
-    <div className={`ai-social-card ${w.stage === 'done' ? (unresolved ? 'warn' : 'ok') : w.stage === 'failed' ? 'warn' : ''}`}>
+    <div className={`ai-social-card ${w.stage === 'done' ? (unresolved ? 'warn' : 'ok') : w.stage === 'failed' ? 'warn' : ''}`} data-workflow-id={w.id}>
       <div className="ai-task-head">
         <span className="ai-task-badge">{PLATFORM_LABEL[w.params.platform]}</span>
         <span className="ai-task-instruction" title={w.params.prompt}>{w.params.prompt}</span>
@@ -226,6 +334,7 @@ function SocialCard({
       <div className="ai-task-meta">
         <span>{SERVICE_LABEL[w.params.service]}</span>
         <span>· {w.params.mode === 'publish' ? '게시까지' : '초안까지만'}</span>
+        {w.promotedAt && <span>· 초안→게시 승격됨 <span className="ai-social-en-inline">promoted</span></span>}
       </div>
 
       {w.stage === 'failed' || w.stage === 'cancelled' ? (
@@ -329,23 +438,63 @@ function SocialCard({
         )
       )}
 
+      {/* 승격 전의 지난 기록 — 지우거나 덮어쓰지 않고 접어서 보존한다.
+          ⚠ `done` 안에 두지 않는다: 승격이 실패해 단계가 'review' 로 돌아간 경우에도 이 기록은
+             남아 있어야 사용자가 "무슨 일이 있었는지" 를 볼 수 있다(데이터로만 보존하고 화면에서
+             사라지면 보존하지 않은 것과 같다). */}
+      {w.priorReceipts && w.priorReceipts.length > 0 && (
+        <details className="ai-social-prior">
+          <summary>이전 기록 {w.priorReceipts.length}건 <span className="ai-social-en-inline">Previous records</span></summary>
+          <div className="ai-social-prior-list">
+            {w.priorReceipts.map((r, i) => (
+              <div key={`${r.at}-${i}`} className="ai-social-prior-item">
+                {/* 시각이 유효할 때만 보여 준다 — 손상된 기록의 0 을 그대로 쓰면 "1970년" 이 뜬다. */}
+                {r.at > 0 && <span className="ai-social-prior-when">{fmtWhen(r.at)}</span>}
+                {r.evidence && <span className="ai-social-prior-evidence">{r.evidence}</span>}
+                {r.note && <span className="ai-hint">{r.note}</span>}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
       {w.stage === 'done' && (
-        <div className="ai-social-receipt">
-          {w.receipt?.url && <div><a href={w.receipt.url} target="_blank" rel="noreferrer">{w.receipt.url}</a></div>}
-          {w.receipt?.evidence && (
-            <div className="ai-social-receipt-status" data-status={rStatus ?? ''}>
-              {/* 모르는 값은 **경고 쪽**으로 떨어뜨린다(fail-closed) — 확인 안 된 것을 ✅ 로 보이는 것이
-                  반대 경우보다 훨씬 나쁘다. 저장소 복원의 방향과 같다. */}
-              {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).icon}{' '}
-              {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).label}{w.receipt.evidence}
-            </div>
-          )}
-          {w.receipt?.at ? <div className="ai-hint">{fmtWhen(w.receipt.at)}</div> : null}
-        </div>
+        <>
+          <div className="ai-social-receipt">
+            {w.receipt?.url && <div><a href={w.receipt.url} target="_blank" rel="noreferrer">{w.receipt.url}</a></div>}
+            {w.receipt?.evidence && (
+              <div className="ai-social-receipt-status" data-status={rStatus ?? ''}>
+                {/* 모르는 값은 **경고 쪽**으로 떨어뜨린다(fail-closed) — 확인 안 된 것을 ✅ 로 보이는 것이
+                    반대 경우보다 훨씬 나쁘다. 저장소 복원의 방향과 같다. */}
+                {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).icon}{' '}
+                {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).label}{w.receipt.evidence}
+              </div>
+            )}
+            {w.receipt?.at ? <div className="ai-hint">{fmtWhen(w.receipt.at)}</div> : null}
+          </div>
+        </>
       )}
 
       {w.stage === 'failed' && <div className="ai-task-note warn">{w.error || '실패했습니다.'}</div>}
       {w.stage === 'cancelled' && <div className="ai-task-note warn">취소되었습니다.</div>}
+
+      {/* 초안 승격("이 초안을 게시하기") — review 의 CTA·done 의 영수증 블록이 위에서 이미 그려진 뒤라,
+          여기 한 곳에 두면 두 단계 모두에서 "그 아래" 에 자연히 나타난다. */}
+      {canPromote(w) && !promotion && (
+        <button className="ai-mini-btn ai-social-promote" onClick={onPromote} disabled={promoteBusy}
+          title="이미지와 캡션을 다시 만들지 않고, 지금 이대로 게시합니다 / Publishes as-is — no image or caption is regenerated">
+          📤 이 초안을 게시하기
+          <span className="ai-social-en">Publish this draft</span>
+        </button>
+      )}
+      {promoteError && (
+        <div data-testid="social-promote-error" className="ai-handoff-note ai-err">
+          {promoteError.error}<span className="ai-social-en-inline">{promoteError.errorEn}</span>
+        </div>
+      )}
+      {promotion && (
+        <PromotePanel plan={promotion} busy={promoteBusy} onConfirm={onPromoteConfirm} onCancel={onPromoteCancel} />
+      )}
 
       <div className="ai-task-actions">
         {(w.stage === 'generate' || w.stage === 'review' || w.stage === 'publish') && (
@@ -391,6 +540,10 @@ export function AiSocialPanel({
   const [previewData, setPreviewData] = useState<Record<string, string | null>>({})
   const [captionDrafts, setCaptionDrafts] = useState<Record<string, string>>({})
   const captionSeededRef = useRef<Set<string>>(new Set())
+  // 초안 승격("이 초안을 게시하기") — 워크플로 id 별로 열린 확정 패널·오류·진행중 여부를 든다.
+  const [promotions, setPromotions] = useState<Record<string, AiPromotionPlan>>({})
+  const [promoteErrors, setPromoteErrors] = useState<Record<string, { error: string; errorEn: string }>>({})
+  const [promoteBusyIds, setPromoteBusyIds] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     void window.browserAPI.ai.socialList().then(setWorkflows)
@@ -440,6 +593,80 @@ export function AiSocialPanel({
       }
     }
   }, [workflows])
+
+  // 열린 확정 패널이 낡아지면 자동으로 닫는다 — 사용자가 **더 이상 사실이 아닌 화면**을 보며
+  // 게시 확정을 누르는 일을 막는다. 낡는 경우는 셋이다.
+  //   ① 이미 승격됐다(promotedAt) ② 계획을 딸 때의 단계에서 벗어났다
+  //   ③ 확정이 묶여 있는 사실 — 캡션·계정 — 이 그 사이에 바뀌었다
+  // ③ 은 메인이 확정 시점에 revision 으로 다시 걸러 내지만(그래서 안전은 이미 확보돼 있다),
+  // 화면에 옛 캡션이 그대로 떠 있으면 사용자는 "확인한 대로 나간다" 고 믿는다. 화면이 거짓말을
+  // 하지 않게 하는 것이 여기 목적이다.
+  useEffect(() => {
+    setPromotions((prev) => {
+      if (Object.keys(prev).length === 0) return prev
+      let changed = false
+      const next = { ...prev }
+      for (const w of workflows) {
+        const plan = next[w.id]
+        if (!plan) continue
+        const expectedStage: SocialStage = plan.source === 'review' ? 'review' : 'done'
+        const drifted = (w.caption ?? '').trim() !== plan.caption
+          || (w.params.account ?? '').trim() !== plan.account
+          || w.params.platform !== plan.platform
+          || (w.artifactId ?? '') !== plan.artifactId
+        if (w.promotedAt || w.stage !== expectedStage || drifted) {
+          delete next[w.id]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [workflows])
+
+  const requestPromote = async (id: string) => {
+    setPromoteErrors((prev) => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }; delete next[id]; return next
+    })
+    const r: AiPromotePrepareResult = await window.browserAPI.ai.socialPromotePrepare(id)
+    if (!r.ok) {
+      setPromoteErrors((prev) => ({ ...prev, [id]: { error: r.error, errorEn: r.errorEn } }))
+      return
+    }
+    setPromotions((prev) => ({ ...prev, [id]: r.plan }))
+  }
+  const cancelPromote = (id: string) => {
+    setPromotions((prev) => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }; delete next[id]; return next
+    })
+    void window.browserAPI.ai.socialPromoteCancel(id)
+  }
+  const confirmPromote = async (id: string) => {
+    const plan = promotions[id]
+    if (!plan) return
+    setPromoteBusyIds((prev) => ({ ...prev, [id]: true }))
+    try {
+      const r = await window.browserAPI.ai.socialPromoteConfirm(id, plan.token)
+      setPromotions((prev) => {
+        if (!(id in prev)) return prev
+        const next = { ...prev }; delete next[id]; return next
+      })
+      // 토큰이 이미 무효라 실패했을 수 있으므로, 같은 패널을 다시 열어 두지 않는다 —
+      // 다시 시도하려면 승격 버튼을 눌러 새 확정을 받아야 한다.
+      if (!r.ok) {
+        setPromoteErrors((prev) => ({
+          ...prev,
+          [id]: { error: r.error || '게시를 확정하지 못했습니다.', errorEn: r.errorEn || 'Could not confirm the publish.' },
+        }))
+      }
+    } finally {
+      setPromoteBusyIds((prev) => {
+        if (!(id in prev)) return prev
+        const next = { ...prev }; delete next[id]; return next
+      })
+    }
+  }
 
   const startGenerate = async () => {
     if (!activeId || genBusy || !prompt.trim()) return
@@ -617,6 +844,12 @@ export function AiSocialPanel({
                   onSaveCaption={(caption) => saveCaption(w.id, caption)}
                   onSaveAccount={(account) => saveAccount(w.id, account)}
                   onResolvePublish={(choice) => resolvePublish(w.id, choice)}
+                  promotion={promotions[w.id]}
+                  promoteError={promoteErrors[w.id]}
+                  promoteBusy={!!promoteBusyIds[w.id]}
+                  onPromote={() => void requestPromote(w.id)}
+                  onPromoteConfirm={() => void confirmPromote(w.id)}
+                  onPromoteCancel={() => cancelPromote(w.id)}
                 />
               ))}
             </div>

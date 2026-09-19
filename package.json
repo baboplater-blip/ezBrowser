@@ -1,6 +1,6 @@
 {
   "name": "browser-build",
-  "version": "0.2.0-rc.13",
+  "version": "0.2.0-rc.14",
   "private": true,
   "description": "가볍고 자유로운 Chromium 기반 데스크톱 브라우저 — Cốc Cốc 스타일 기본 기능 + 크롬 확장 호환 + Vivaldi/Arc 수준 자유도",
   "main": "app/dist/main/index.js",

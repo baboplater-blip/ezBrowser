@@ -155,9 +155,15 @@
       "run_id": "run-20260919T090518Z-84dee6",
       "status": "success",
       "at": "2026-09-19T09:10:44Z"
+    },
+    {
+      "session_id": "fe4c3d39-79db-4dbc-89ed-6dae65aef50e",
+      "run_id": "run-20260919T092257Z-384114",
+      "status": "success",
+      "at": "2026-09-19T10:00:25Z"
     }
   ],
-  "last_run_id": "run-20260919T092257Z-384114",
+  "last_run_id": "run-20260919T121840Z-b597cd",
   "baseline": {
     "user_quality": null,
     "interventions": null,

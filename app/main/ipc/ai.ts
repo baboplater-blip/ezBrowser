@@ -43,6 +43,7 @@ import {
   workflowEvents, listWorkflows, startImagePost, approveAndPublish, chooseArtifact,
   cancelWorkflow, deleteWorkflow, grantAutoPublish, getAutoPublishGrant, revokeAutoPublish,
   retryCaption, setCaption, setWorkflowAccount, resolvePublishUncertainty,
+  preparePromotion, confirmPromotion, cancelPromotion,
   type ImagePostParams, type ImagePostWorkflow, type GrantInput, type PublishResolution,
 } from '../features/ai/social-workflow'
 import { buildBlogEngageTask, listEngagements, clearEngagements, type BlogEngageParams } from '../features/ai/blog-engage'
@@ -527,6 +528,23 @@ export function registerAiIpc(): void {
       return { ok: false, error: '알 수 없는 선택입니다.' }
     }
     return resolvePublishUncertainty(String(args?.id ?? ''), raw)
+  })
+  // ===== 초안 승격 =====
+  // 되돌릴 수 없는 게시가 시작되는 입구는 **socialPromoteConfirm 하나뿐**이다. prepare 는 화면에
+  // 보여 줄 내용을 만들 뿐이고(디스크 쓰기 0·작업 생성 0), cancel 은 그 화면을 닫는 것뿐이다.
+  // 셋 다 신뢰 sender 검증 — 모델·페이지는 이 채널에 도달할 수 없다.
+  ipcMain.handle(IPC.ai.socialPromotePrepare, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음', errorEn: 'Not permitted' }
+    return preparePromotion(String(args?.id ?? ''))
+  })
+  ipcMain.handle(IPC.ai.socialPromoteConfirm, (e, args: { id: string; token: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음', errorEn: 'Not permitted' }
+    // 토큰은 우리가 발급한 UUID 다 — 길이만 제한하고 내용은 상수 비교로 판정한다(부분 일치 없음).
+    return confirmPromotion(String(args?.id ?? ''), String(args?.token ?? '').slice(0, 200))
+  })
+  ipcMain.handle(IPC.ai.socialPromoteCancel, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return { ok: false }
+    return cancelPromotion(String(args?.id ?? ''))
   })
   ipcMain.handle(IPC.ai.socialCancel, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; cancelWorkflow(String(args?.id ?? '')) })
   ipcMain.handle(IPC.ai.socialDelete, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; deleteWorkflow(String(args?.id ?? '')) })

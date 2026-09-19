@@ -1704,9 +1704,38 @@ export async function setFileInputFiles(wc: WebContents, filePaths: string[]): P
       return { ok: false, detail: `이 화면의 파일 입력은 다른 형식을 요구합니다(accept="${best.accept}") — 올리려는 파일 형식과 맞는 업로드 화면인지 확인하세요` }
     }
     await dbg.sendCommand('DOM.setFileInputFiles', { files: filePaths, nodeId: best.nodeId }, best.sessionId)
+
+    // 붙였다고 말하기 전에 **정말 붙었는지** 읽어서 확인한다 — 첨부가 조용히 0개로 끝난 것을
+    // "성공" 으로 보고하면 빈 게시물이 올라간다(SEC-1 의 "무검증 성공 제거" 와 같은 원칙).
+    //
+    // ⚠ 여기서 `input`/`change` 를 **직접 쏘지 않는다.** Puppeteer 는 쏘지만, 이 Chromium(148)에서는
+    //   `DOM.setFileInputFiles` 가 이미 change 를 발생시킨다 — 2026-09-19 에 음성 대조로 확인했다
+    //   (이벤트 발송을 빼고 픽스처 업로드 위저드를 끝까지 돌려 게시 1건이 그대로 도착했다).
+    //   필요 없는 중복 발송은 change 를 세는 사이트에서 같은 업로드를 두 번 처리하게 만들 수 있으므로
+    //   넣지 않는다. 근거 없이 "혹시 몰라" 남기지 않는다.
+    let landed = -1
+    try {
+      const resolved = await dbg.sendCommand(
+        'DOM.resolveNode', { nodeId: best.nodeId }, best.sessionId,
+      ) as { object?: { objectId?: string } }
+      const objectId = resolved?.object?.objectId
+      if (objectId) {
+        const r = await dbg.sendCommand('Runtime.callFunctionOn', {
+          objectId,
+          functionDeclaration: 'function () { return this.files ? this.files.length : -1 }',
+          returnByValue: true,
+        }, best.sessionId) as { result?: { value?: number } }
+        landed = typeof r?.result?.value === 'number' ? r.result.value : -1
+      }
+    } catch { /* 확인 자체가 안 되면 아래에서 개수를 말하지 않는다(거짓말하지 않는다) */ }
+
+    if (landed === 0) {
+      return { ok: false, detail: '파일을 첨부했지만 입력칸이 비어 있습니다 — 이 화면이 파일을 거부했을 수 있습니다' }
+    }
     const where = best.sessionId ? '(프레임 안 입력)' : ''
     const acc = best.accept ? ` accept="${best.accept}"` : ''
-    return { ok: true, detail: `파일 ${filePaths.length}개 첨부됨${where}${acc}` }
+    const note = landed > 0 ? ` · 입력칸 파일 ${landed}개 확인` : ''
+    return { ok: true, detail: `파일 ${filePaths.length}개 첨부됨${where}${acc}${note}` }
   } catch (err) {
     return { ok: false, detail: '파일 첨부 실패: ' + (err instanceof Error ? err.message : String(err)) }
   } finally {

@@ -1,5 +1,6 @@
 import { app } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { getSetting } from '../../storage/settings'
 import { getAiKey } from './keys'
@@ -82,6 +83,21 @@ export interface PublishReceipt {
   at: number
 }
 
+/**
+ * 밀려난 영수증. **초안을 게시로 올려도 그때까지의 기록은 지우지 않는다.**
+ *
+ * 왜 (2026-09-19): 완료된 초안(`receipt.status==='draft'`)을 승격하면 그 자리에 새 게시 영수증이
+ * 들어온다. 옛 영수증을 그냥 덮어쓰면 "이 작업은 언제 초안까지 준비됐는가" 라는 사실이 사라진다 —
+ * 게시는 되돌릴 수 없는 일이고, 그 앞뒤 기록은 사용자가 나중에 무슨 일이 있었는지 재구성하는
+ * 유일한 근거다. 지우지 않고 옆으로 옮긴다.
+ */
+export interface PriorReceipt extends PublishReceipt {
+  /** 그 영수증을 만든 게시 작업 id(있으면). 작업 자체는 ai-tasks.json 에 그대로 남는다. */
+  taskId?: string
+  /** 왜 밀려났는지 한 줄. */
+  note?: string
+}
+
 /** 중단 후 사용자가 이어가려면 필요한 안내. 없으면 정상 진행 중이다. */
 export interface WorkflowRecovery {
   kind: 'caption-interrupted' | 'caption-failed' | 'publish-uncertain' | 'publish-storage-failed'
@@ -151,6 +167,20 @@ export interface ImagePostWorkflow {
    * 작업이 실제로 다시 돌기 시작하면 지운다 — 그 뒤의 중단은 **새로운 불확실**이므로 다시 묻는다.
    */
   uncertaintyResolvedFor?: string
+  /**
+   * 사용자가 **이 초안을 게시로 올리겠다고 한 번 확정한** 시각(confirmPromotion).
+   *
+   * ⚠ 왜 `params.mode` 를 'publish' 로 바꾸지 않고 따로 적는가: mode 를 바꾸면 그 워크플로가
+   *   **자동 게시 선승인의 대상으로 들어온다**(autoPublishVerdict 의 첫 관문이 mode 검사다).
+   *   사용자가 한 건을 손으로 확정한 사실이 "앞으로 이 작업은 자동으로 나가도 좋다" 로 번지면
+   *   안 된다. 그래서 처음 고른 모드는 그대로 두고 "이번 한 건을 올린다" 는 사실만 따로 남긴다.
+   *
+   * 재시작을 넘겨 유지된다 — 안 그러면 다시 켰을 때 실제로 게시된 작업의 영수증이 "초안" 으로
+   * 잘못 적히고, 같은 초안을 또 승격할 수 있게 된다(중복 게시).
+   */
+  promotedAt?: number
+  /** 승격 전의 지난 영수증들(초안 준비 기록 등). 최신이 뒤. */
+  priorReceipts?: PriorReceipt[]
   /** 중단 후 사용자가 이어가려면 필요한 안내. 없으면 정상 진행 중이다. */
   recovery?: WorkflowRecovery
   receipt?: PublishReceipt   // 게시 영수증
@@ -182,6 +212,8 @@ export const workflowEvents = new EventEmitter()
 const FILE_NAME = 'ai-social-workflows.json'
 const STORE_LABEL = '이미지 게시 작업'
 const MAX_WORKFLOWS = 50
+/** 한 워크플로가 보존하는 지난 영수증 수. 감사 추적이지 무한 로그가 아니다. */
+const MAX_PRIOR_RECEIPTS = 10
 
 const GEN_URL: Record<'genspark' | 'chatgpt', string> = {
   genspark: 'https://www.genspark.ai/',
@@ -277,6 +309,26 @@ function strListOpt(v: unknown, cap: number): string[] | undefined {
  * 안전에 쓰이는 값(단계·플랫폼)이 손상된 파일에서 이상한 값으로 들어오면 검사 자체가 무력해지므로
  * 여기서 모양을 검증하고, 핵심 식별자가 없으면 통째로 버린다.
  */
+/** 밀려난 영수증 목록 복원. 모양이 아닌 항목은 조용히 버린다(기록은 참고용이라 fail-open 이 안전하다). */
+function revivePriorReceipts(raw: unknown): PriorReceipt[] {
+  if (!Array.isArray(raw)) return []
+  const out: PriorReceipt[] = []
+  for (const item of raw.slice(-MAX_PRIOR_RECEIPTS)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const o = item as Record<string, unknown>
+    out.push({
+      ...(typeof o.url === 'string' && o.url ? { url: o.url } : {}),
+      ...(typeof o.evidence === 'string' && o.evidence ? { evidence: o.evidence } : {}),
+      // 현재 영수증과 같은 규칙 — 모르는 값은 status 없음으로 둔다(임의 문자열을 'verified' 로 받지 않는다).
+      ...(RECEIPT_STATUSES.has(str(o.status)) ? { status: o.status as ReceiptStatus } : {}),
+      ...(typeof o.taskId === 'string' && o.taskId ? { taskId: o.taskId } : {}),
+      ...(typeof o.note === 'string' && o.note ? { note: o.note } : {}),
+      at: num(o.at, 0),
+    })
+  }
+  return out
+}
+
 function reviveWorkflow(raw: unknown): ImagePostWorkflow | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const o = raw as Record<string, unknown>
@@ -345,6 +397,8 @@ function reviveWorkflow(raw: unknown): ImagePostWorkflow | null {
       }
     : undefined
 
+  const priorReceipts = revivePriorReceipts(o.priorReceipts)
+
   const createdAt = num(o.createdAt, Date.now())
   const stageValid = STAGES.has(str(o.stage))
 
@@ -385,6 +439,16 @@ function reviveWorkflow(raw: unknown): ImagePostWorkflow | null {
     ...(!diedWhilePreparing && typeof o.uncertaintyResolvedFor === 'string' && o.uncertaintyResolvedFor
       ? { uncertaintyResolvedFor: o.uncertaintyResolvedFor } : {}),
     ...(!diedWhilePreparing && recovery ? { recovery } : {}),
+    // 승격 사실은 **키가 있으면 승격된 것**으로 본다(값이 손상됐으면 1). 이 방향이 fail-closed 다:
+    //   · 잊어버리면 → 실제로 게시된 작업의 영수증이 "초안" 으로 잘못 적히고, 같은 초안을 또 승격할
+    //     수 있게 된다(= 중복 게시).
+    //   · 기억하면  → 추가 승격이 막히고(evaluatePromotion 이 거부), 게시는 여전히 사용자의 별도
+    //     클릭을 요구한다. 잃을 것이 없다.
+    // accountEditedAt 과 같은 규칙이다.
+    ...(o.promotedAt !== undefined && o.promotedAt !== null
+      ? { promotedAt: typeof o.promotedAt === 'number' && Number.isFinite(o.promotedAt) && o.promotedAt > 0 ? o.promotedAt : 1 }
+      : {}),
+    ...(priorReceipts.length ? { priorReceipts } : {}),
     ...(receipt ? { receipt } : {}),
     ...(!stageValid
       ? { error: '저장된 상태를 복구할 수 없어 중단으로 표시합니다.' }
@@ -499,6 +563,9 @@ function pruneWorkflows(): void {
   for (const w of removable) {
     if (map.size <= MAX_WORKFLOWS) break
     map.delete(w.id)
+    // 사라진 워크플로의 확정 화면은 함께 닫는다(고아 티켓을 남기지 않는다).
+    dropPromotionTicket(w.id)
+    publishedBeforeThisBoot.delete(w.id)
   }
 }
 
@@ -677,6 +744,9 @@ export function retryCaption(id: string): { ok: boolean; error?: string } {
   delete wf.captionError
   delete wf.recovery
   wf.captionPending = true
+  // 캡션을 비우고 처음부터 다시 쓰는 중 — 열려 있던 승격 확인은 무효가 된다(캡션이 비어 있어
+  // evaluatePromotion 이 먼저 거부한다). 티켓을 지우지 않는 이유는 setCaption 의 주석과 같다.
+  delete wf.promotedAt
   touch(wf)
   void draftCaptionInto(id)
   return { ok: true }
@@ -697,6 +767,16 @@ export function setCaption(id: string, caption: string): { ok: boolean; error?: 
   delete wf.captionError
   delete wf.recovery
   delete wf.captionPending
+  // 캡션은 승격 확정이 묶이는 사실 중 하나다 — 바뀌면 그 확인은 무효가 된다.
+  //
+  // ⚠ 여기서 티켓을 **지우지 않는다**(2026-09-19, 순수 하네스가 잡은 것). 지우면 확정 시점에
+  //   "바뀐 것이 캡션입니다" 대신 "유효한 확인이 없습니다" 라는 뭉뚱그린 사유만 나온다 —
+  //   사용자는 무엇을 고쳐야 하는지 알 수 없다. 티켓을 남겨 두면 confirmPromotion 의 revision
+  //   재검사가 **무엇이 달라졌는지** 짚어 준다. 남은 티켓 자체로는 아무것도 게시할 수 없으므로
+  //   (그 재검사를 반드시 통과해야 한다) 안전에는 차이가 없고 설명만 좋아진다.
+  //   화면에 남은 확인 창은 렌더러가 내용 불일치를 보고 닫는다.
+  // 이미 소비된 승격(promotedAt)은 다른 문제다 — 내용이 바뀌었으면 그 승인은 더 이상 유효하지 않다.
+  delete wf.promotedAt
   touch(wf)
   return { ok: true }
 }
@@ -763,6 +843,10 @@ export function setWorkflowAccount(id: string, account: string): SetAccountResul
   else delete wf.params.account
   // 손으로 고친 작업은 선승인이 있어도 확인을 받는다(autoPublishVerdict 의 주석 참고).
   wf.accountEditedAt = Date.now()
+  // 계정도 승격 확정이 묶이는 사실이다 — 바뀌면 그 확인은 무효가 된다(사용자가 승인한 것은
+  // "이 계정으로 올린다" 였다). 티켓을 여기서 지우지 않는 이유는 setCaption 의 주석과 같다 —
+  // 남겨 두어야 확정 시점에 "바뀐 것은 계정입니다" 라고 짚어 줄 수 있고, 남아도 게시되지 않는다.
+  delete wf.promotedAt
 
   // ── 지난 판정의 흔적을 지운다. 남겨 두면 **옛 계정으로 만든 근거**가 새 계정의 근거로 읽힌다.
   delete wf.receipt              // 영수증은 옛 계정 기준의 결론이다
@@ -946,6 +1030,10 @@ export function autoPublishVerdict(wf: ImagePostWorkflow, now = Date.now()): { o
   if (grant.consumed.includes(wf.id)) return { ok: false, why: '이미 이 선승인으로 진행한 작업입니다' }
 
   if (wf.params.mode !== 'publish') return { ok: false, why: '초안 모드 작업입니다' }
+  // 사용자가 **손으로 한 건을 확정한** 작업(초안 승격)은 선승인의 대상이 아니다. 지금은 승격이
+  // params.mode 를 바꾸지 않으므로 위 검사에서 이미 걸리지만, 그 설계가 바뀌어도 자동 게시가
+  // 되살아나지 않도록 여기서도 명시적으로 막는다(방어 이중화).
+  if (wf.promotedAt) return { ok: false, why: '사용자가 직접 확정해 올린 초안입니다' }
   // 선승인보다 **먼저 만들어진** 작업은 그 승인의 대상이 아니다(이전에 저장해 둔 작업이 나중에
   // 만든 승인으로 갑자기 게시되는 일을 막는다).
   if (wf.createdAt < grant.createdAt) return { ok: false, why: '선승인 이전에 만들어진 작업입니다' }
@@ -996,6 +1084,483 @@ function maybeAutoPublish(wf: ImagePostWorkflow): void {
   store.markDirty()
 }
 
+// ===== 초안 승격(promotion) — "만들어 둔 초안을, 다시 만들지 않고 게시로 올린다" =====
+//
+// 왜 이 경로가 따로 있는가 (2026-09-19, 사용자 요청): 지금까지 초안 모드로 만든 워크플로는
+// **게시로 올릴 방법이 전혀 없었다.** 이미지와 캡션이 멀쩡히 있는데도 게시하려면 같은 프롬프트로
+// 워크플로를 처음부터 다시 만들어야 했다 — 생성 크레딧을 다시 쓰고, 나오는 그림도 캡션도 달라진다.
+// 사용자가 확인하고 마음에 들어 한 **바로 그** 결과물이 아니게 된다.
+//
+// 그래서 승격은 **아무것도 다시 만들지 않는다.** 이미 보관된 산출물 파일과 이미 저장된 캡션을
+// 그대로 쓰고, 기존 게시 경로(runPublishStage → 내구성 경계 → 작업 시작)에 그대로 얹는다.
+// 새 게시 엔진을 만들지 않는다 — 게이트·경계·이어가기 보호를 전부 재사용한다.
+//
+// 안전 모델(요구사항 그대로):
+//   · **여는 것·모드를 보는 것·취소하는 것만으로는 절대 게시되지 않는다.** 게시는 오직
+//     confirmPromotion 한 경로에서만 시작된다. preparePromotion 은 디스크에 아무것도 쓰지 않고
+//     아무 작업도 만들지 않는다.
+//   · 확정은 **1회용**이고 그 순간의 사실에 **묶인다**(revision = 플랫폼·계정·산출물·해시·캡션).
+//     하나라도 달라지면 옛 확정은 무효다.
+//   · 확정은 **선승인(grant)이 아니다.** 다음 건에 재사용되지 않고, 자동 게시로 번지지도 않는다
+//     (promotedAt 주석 참고).
+
+/** 확정 화면이 보여 줄 "무엇이 어디로 나가는가". 이 값에 묶여 확정이 성립한다. */
+export interface PromotionPlan {
+  /** 이 확정 1회에만 쓰이는 토큰. 메모리에만 있고 디스크로 나가지 않는다. */
+  token: string
+  workflowId: string
+  /** 바인딩 지문 — 플랫폼·계정·산출물 id·산출물 해시·캡션으로 만든다. */
+  revision: string
+  platform: SnsPlatform
+  platformLabel: string
+  platformLabelEn: string
+  account: string
+  caption: string
+  artifactId: string
+  artifactSha256: string
+  artifactBytes: number
+  artifactFormat: string
+  /**
+   * 캡션 끝에 실제로 붙어 나가는 해시태그. 화면이 "위 내용 그대로 올라갑니다" 라고 말하려면
+   * 이것도 보여 줘야 한다 — sns-publish 의 captionWithTags 가 캡션에 덧붙인다.
+   */
+  tags: string[]
+  /** 어느 초안에서 올리는가 — 확인 단계 초안인가, 이미 끝난 초안인가. */
+  source: PromotionSource
+  expiresAt: number
+}
+
+export type PromotionSource = 'review' | 'completed-draft'
+
+export type PromotePrepareResult =
+  | { ok: true; plan: PromotionPlan }
+  | { ok: false; error: string; errorEn: string }
+
+export interface PromoteConfirmResult { ok: boolean; error?: string; errorEn?: string }
+
+/** 거부 사유는 한국어·영어를 **함께** 돌려준다 — 화면이 두 언어를 같이 보여 준다. */
+interface PromotionRejection { error: string; errorEn: string }
+
+function rejectPromotion(error: string, errorEn: string): PromotionRejection {
+  return { error, errorEn }
+}
+
+const PLATFORM_LABEL_EN: Record<SnsPlatform, string> = {
+  instagram: 'Instagram', youtube: 'YouTube', tiktok: 'TikTok',
+}
+
+/**
+ * 열려 있는 확정(워크플로당 최대 하나). **메모리에만 있다 — 디스크로 절대 나가지 않는다.**
+ *
+ * 이것이 "확정 전에 재시작하면 아무것도 나가지 않는다" 의 근거다. 승인을 파일에 적어 두면 그 파일이
+ * 곧 재시작을 넘어 살아남는 권한이 된다("한 번 확정" 이 아니게 된다). 앱이 꺼지면 확정도 사라지고,
+ * 사용자는 화면에서 다시 확인해야 한다.
+ */
+const promotionTickets = new Map<string, PromotionPlan>()
+/** 확정 화면을 열어 둔 채 자리를 비운 경우까지 승인이 살아 있지 않도록 하는 상한. */
+const PROMOTION_TTL_MS = 10 * 60_000
+
+/** 확정 화면을 닫는다(취소·무효화 공용). 부작용은 이것뿐이다. */
+function dropPromotionTicket(id: string): void {
+  promotionTickets.delete(id)
+}
+
+/**
+ * 확정이 묶이는 **사실들의 지문**. 이 값이 달라졌다는 것은 사용자가 확인했던 것과 지금 올라갈 것이
+ * 다르다는 뜻이므로, 옛 확정은 무효다.
+ */
+function promotionRevision(wf: ImagePostWorkflow, artifactSha256: string): string {
+  // ⚠ 구분자로 NUL 을 쓰지 않는다 — 소스에 실제 NUL 바이트가 들어가면 git·grep 이 이 파일을
+  //   **바이너리로 취급**해 diff·검색이 무력해진다(2026-09-19 에 실제로 겪었다).
+  //   JSON 배열 직렬화는 길이·인용이 명시돼 필드 경계가 섞일 수 없고(주입 불가) 순수 ASCII 다.
+  const material = JSON.stringify([
+    'promotion-v1',
+    wf.params.platform,
+    normAccount(wf.params.account),
+    wf.artifactId ?? '',
+    artifactSha256,
+    (wf.caption ?? '').trim(),
+    // 태그는 캡션 끝에 실제로 붙어 나간다(sns-publish 의 captionWithTags) — 확인 화면이 보여 주는
+    // 것과 올라가는 것이 같으려면 이 축도 확정에 묶여야 한다.
+    (wf.params.tags ?? []).join(','),
+  ])
+  return createHash('sha256').update(material, 'utf8').digest('hex')
+}
+
+/** 확정과 지금 사이에 **무엇이** 달라졌는지 사람 말로. 뭉뚱그린 "무효" 보다 고치기 쉽다. */
+function describePromotionDrift(plan: PromotionPlan, wf: ImagePostWorkflow, shaNow: string): PromotionRejection {
+  const ko: string[] = []
+  const en: string[] = []
+  if (plan.platform !== wf.params.platform) { ko.push('플랫폼'); en.push('platform') }
+  if (normAccount(plan.account) !== normAccount(wf.params.account)) { ko.push('계정'); en.push('account') }
+  if (plan.caption !== (wf.caption ?? '').trim()) { ko.push('캡션'); en.push('caption') }
+  if (plan.artifactId !== (wf.artifactId ?? '') || plan.artifactSha256 !== shaNow) { ko.push('이미지'); en.push('image') }
+  if (plan.tags.join(',') !== (wf.params.tags ?? []).join(',')) { ko.push('해시태그'); en.push('hashtags') }
+  const what = ko.length ? ko.join('·') : '작업 내용'
+  const whatEn = en.length ? en.join(', ') : 'the workflow'
+  return rejectPromotion(
+    `확인한 뒤에 ${what}이(가) 바뀌어서 이 확인은 더 이상 유효하지 않습니다 — 아무것도 게시하지 않았습니다. `
+    + '"이 초안을 게시하기"를 다시 눌러 바뀐 내용을 확인해 주세요.',
+    `The ${whatEn} changed after you reviewed it, so this confirmation is no longer valid — nothing was published. `
+    + 'Press "Publish this draft" again to review the updated content.',
+  )
+}
+
+/**
+ * 확정된 승격 한 건을 게시 경로 끝까지 들고 가는 쪽지.
+ *
+ * 왜 필요한가: 승격의 장부 정리(옛 영수증을 `priorReceipts` 로 옮기고 `promotedAt` 을 세우는 것)는
+ * **내구성 경계 직전**에 해야 안전하다(startPublishTask 의 주석 참고). 그런데 "무엇이 옛 것인가" 는
+ * 확정 시점에만 알 수 있으므로, 그 사실을 여기 담아 넘긴다. 게시가 시작되지 못하면 같은 쪽지로
+ * 정확히 되돌린다.
+ */
+interface PromotionCarry {
+  /** 확정 시점에 이 워크플로가 들고 있던 게시 작업 id(완료된 초안이면 그 초안 작업). */
+  priorTaskId?: string
+  /** 확정 시점의 영수증(완료된 초안이면 "초안까지 준비" 영수증). */
+  priorReceipt?: PublishReceipt
+  /** 확정 시점의 단계 — 되돌릴 때 여기로 돌아간다. */
+  priorStage: WorkflowStage
+  /** 장부 정리를 실제로 수행했는가(수행 전에 실패했으면 되돌릴 것이 없다). */
+  applied?: boolean
+  /** priorReceipts 에 넣은 **바로 그 항목**(되돌릴 때 그것만 골라 뺀다). */
+  movedPrior?: PriorReceipt
+}
+
+/**
+ * 승격 장부 정리를 되돌린다 — **아무것도 나가지 않았을 때만** 부른다.
+ * 돌아갈 단계를 돌려준다(되돌릴 것이 없으면 null).
+ */
+function undoPromotionBookkeeping(wf: ImagePostWorkflow, promo?: PromotionCarry): WorkflowStage | null {
+  delete wf.promotedAt
+  if (!promo?.applied) return null
+  if (promo.movedPrior) {
+    wf.priorReceipts = (wf.priorReceipts ?? []).filter((p) => p !== promo.movedPrior)
+    if (!wf.priorReceipts.length) delete wf.priorReceipts
+  }
+  if (promo.priorReceipt) wf.receipt = promo.priorReceipt
+  if (promo.priorTaskId) wf.taskIds.publish = promo.priorTaskId
+  promo.applied = false
+  return promo.priorStage
+}
+
+/** 승격 대상이 갖춰야 하는 것들. evaluatePromotion 이 통과시킬 때만 만들어진다. */
+interface PromotionSubject {
+  source: PromotionSource
+  genTaskId: string
+  artifactId: string
+  artifactSha256: string
+  artifactBytes: number
+  artifactFormat: string
+  caption: string
+  account: string
+}
+
+/**
+ * **지금 이 워크플로를 승격해도 되는가.** prepare 와 confirm 이 **같은 함수**를 쓴다 — 화면을 열 때
+ * 통과했다고 확정 시점에도 통과한다는 보장이 없기 때문이다(그 사이에 게시가 시작됐을 수도, 산출물이
+ * 지워졌을 수도 있다). 하나라도 어긋나면 사유를 돌려주고 **아무것도 바꾸지 않는다**(fail-closed).
+ */
+function evaluatePromotion(wf: ImagePostWorkflow): PromotionSubject | PromotionRejection {
+  // ── 이미 승격했다 / 애초에 초안이 아니다
+  if (wf.promotedAt) {
+    return rejectPromotion(
+      '이미 게시로 올린 초안입니다 — 같은 초안을 두 번 올리지 않습니다.',
+      'This draft has already been promoted — it will not be published twice.')
+  }
+  if (wf.params.mode === 'publish') {
+    return rejectPromotion(
+      '초안이 아니라 처음부터 게시로 만든 작업입니다 — 확인 단계의 "이대로 게시"를 쓰세요.',
+      'This workflow was created in publish mode, not as a draft — use "Publish now" in the review step.')
+  }
+
+  // ── 게시가 진행 중이거나, 나갔는지 모르는 동안에는 손대지 않는다(중복 게시 방지)
+  if (wf.publishUncertain || wf.verifyTaskId) {
+    return rejectPromotion(
+      '게시 여부가 확인되지 않아 올릴 수 없습니다 — 먼저 "게시 여부 확인"으로 결론을 내 주세요. '
+      + '확인 없이 올리면 같은 글이 두 번 올라갈 수 있습니다.',
+      'Publication status is unresolved, so this cannot be promoted — resolve it first with "Check if published". '
+      + 'Promoting without checking risks posting the same thing twice.')
+  }
+  if (publishAttempts.has(wf.id)) {
+    return rejectPromotion(
+      '이미 게시를 준비하는 중입니다.',
+      'A publish attempt is already being prepared.')
+  }
+
+  // ── 단계별 자격
+  let source: PromotionSource
+  if (wf.stage === 'review') {
+    source = 'review'
+    // 확인 단계인데 게시 작업 레코드가 살아 있다 = 지난 시도가 아직 끝나지 않았다.
+    if (publishTaskAlive(wf)) {
+      return rejectPromotion(
+        '이미 만들어진 게시 작업이 남아 있습니다 — 그 작업을 마치거나 취소한 뒤에 올려 주세요.',
+        'An existing publish task is still alive — finish or cancel it first.')
+    }
+    if (wf.captionPending) {
+      return rejectPromotion('캡션을 쓰는 중입니다 — 끝난 뒤에 올려 주세요.', 'The caption is still being drafted — wait until it finishes.')
+    }
+    if (wf.captionError) {
+      return rejectPromotion(
+        '캡션을 만들지 못한 상태입니다 — 캡션을 직접 쓰거나 다시 만든 뒤에 올려 주세요.',
+        'The caption failed to generate — write or regenerate it before promoting.')
+    }
+    // approveAndPublish 와 같은 가드를 여기에도 둔다. 지금은 "확인 단계인데 영수증이 있다" 조합에
+    // 이르는 경로를 찾지 못했지만, 같은 뜻의 방어를 한쪽에만 두면 나중에 갈린다.
+    if (wf.receipt) {
+      return rejectPromotion(
+        '이미 게시가 진행된 기록이 있습니다 — 확인한 뒤 다시 시작해 주세요.',
+        'A publication record already exists for this workflow — check it before starting again.')
+    }
+  } else if (wf.stage === 'done') {
+    source = 'completed-draft'
+    // ⚠ fail-closed: status 가 없는 **예전 판본 영수증**은 초안인지 실제 게시인지 알 수 없다.
+    //   모르는 것을 초안으로 취급하면 이미 올라간 글을 또 올린다.
+    if (wf.receipt?.status !== 'draft') {
+      return wf.receipt?.status
+        ? rejectPromotion(
+            '이 작업은 이미 게시까지 끝났습니다 — 초안이 아닙니다.',
+            'This workflow already completed a real publication — it is not a draft.')
+        : rejectPromotion(
+            '예전 판본이라 초안인지 실제 게시인지 확인할 수 없어 올리지 않습니다 — 직접 확인한 뒤 새로 만들어 주세요.',
+            'This record predates publication-status tracking, so we cannot tell a draft from a real post — check manually and create a new workflow.')
+    }
+  } else {
+    return rejectPromotion(
+      `지금은 올릴 수 있는 단계가 아닙니다(현재: ${STAGE_LABEL[wf.stage] ?? wf.stage}).`,
+      `Not in a promotable state (currently: ${wf.stage}).`)
+  }
+
+  // ── 지난 기록 중 하나라도 "실제로 게시됐다" 면 올리지 않는다
+  if (wf.priorReceipts?.some((r) => r.status && r.status !== 'draft')) {
+    return rejectPromotion(
+      '이 작업에는 이미 실제 게시 기록이 있습니다 — 다시 올리지 않습니다.',
+      'This workflow already has a real publication on record — it will not be published again.')
+  }
+
+  // ── 무엇을, 어디로, 누구 이름으로
+  const caption = (wf.caption ?? '').trim()
+  if (!caption) {
+    return rejectPromotion(
+      '캡션이 비어 있습니다 — 캡션을 쓴 뒤에 올려 주세요(프롬프트를 캡션으로 대신 올리지 않습니다).',
+      'The caption is empty — write one first (the prompt is never posted as a caption).')
+  }
+  const account = (wf.params.account ?? '').trim()
+  if (!account) {
+    return rejectPromotion(
+      '계정이 비어 있습니다 — 어느 계정으로 올릴지 정해야 게시할 수 있습니다.',
+      'No account is set — choose which account to post as before publishing.')
+  }
+
+  // ── 올릴 이미지가 **지금도** 그대로 있는가
+  const genTaskId = wf.taskIds.generate
+  const artifactId = wf.artifactId
+  if (!genTaskId || !artifactId) {
+    return rejectPromotion(
+      '올릴 이미지 기록이 없습니다 — 이 초안으로는 게시할 수 없습니다.',
+      'No stored image is linked to this draft — it cannot be published.')
+  }
+  const meta = getArtifact(genTaskId, artifactId)
+  const srcPath = meta ? resolveArtifactPath(genTaskId, artifactId) : null
+  if (!meta || !srcPath || !existsSync(srcPath)) {
+    return rejectPromotion(
+      '보관된 이미지 파일을 찾을 수 없습니다(지워졌거나 정리됨) — 초안은 그대로 남아 있으니 이미지를 다시 만들어야 합니다.',
+      'The stored image file is gone (deleted or cleaned up) — the draft itself is intact, but the image must be regenerated.')
+  }
+  // **지금 디스크에 있는 바이트를 직접 해싱한다.** 기록된 값끼리 비교하면 파일이 제자리에서
+  // 교체된 경우(사용자가 그림을 덮어썼다든지)를 못 잡는다 — 그러면 사용자가 확인한 것과 다른
+  // 그림이 나간다. 되돌릴 수 없는 일이므로 산출물 상한(50MB) 안에서 한 번 더 읽는 값을 치른다.
+  let actualSha: string
+  try {
+    actualSha = createHash('sha256').update(readFileSync(srcPath)).digest('hex')
+  } catch {
+    return rejectPromotion(
+      '보관된 이미지 파일을 읽을 수 없습니다 — 초안은 그대로 남아 있습니다.',
+      'The stored image file could not be read — the draft itself is intact.')
+  }
+  // 확인 단계에서 기록해 둔 지문과 지금 파일의 지문이 다르면 **다른 그림**이다.
+  const expectedSha = wf.artifactPreview?.sha256 || meta.sha256
+  if (actualSha !== expectedSha || (wf.artifactPreview?.sha256 && wf.artifactPreview.sha256 !== meta.sha256)) {
+    return rejectPromotion(
+      '보관된 이미지가 처음 확인한 것과 달라졌습니다 — 안전을 위해 올리지 않습니다.',
+      'The stored image no longer matches the one originally reviewed — refusing to publish.')
+  }
+
+  return {
+    source,
+    genTaskId,
+    artifactId,
+    artifactSha256: meta.sha256,
+    artifactBytes: meta.bytes,
+    artifactFormat: meta.format,
+    caption,
+    account,
+  }
+}
+
+/**
+ * ① 확정 화면에 보여 줄 내용을 만든다. **아무것도 게시하지 않고, 디스크에 아무것도 쓰지 않는다.**
+ * 이미 열려 있던 확정이 있으면 그것을 대체한다(하나만 산다 — 어느 것이 유효한지 모르는 상태를
+ * 만들지 않는다).
+ */
+export function preparePromotion(id: string): PromotePrepareResult {
+  const wf = wfMap().get(id)
+  if (!wf) {
+    dropPromotionTicket(id)
+    return { ok: false, error: '작업을 찾을 수 없습니다.', errorEn: 'Workflow not found.' }
+  }
+  const subject = evaluatePromotion(wf)
+  if ('error' in subject) {
+    // 자격을 잃었으면 열려 있던 확정도 함께 닫는다.
+    dropPromotionTicket(id)
+    return { ok: false, ...subject }
+  }
+  const plan: PromotionPlan = {
+    token: randomUUID(),
+    workflowId: id,
+    revision: promotionRevision(wf, subject.artifactSha256),
+    platform: wf.params.platform,
+    platformLabel: SNS_LABEL[wf.params.platform],
+    platformLabelEn: PLATFORM_LABEL_EN[wf.params.platform],
+    account: subject.account,
+    caption: subject.caption,
+    artifactId: subject.artifactId,
+    artifactSha256: subject.artifactSha256,
+    artifactBytes: subject.artifactBytes,
+    artifactFormat: subject.artifactFormat,
+    tags: [...(wf.params.tags ?? [])],
+    source: subject.source,
+    expiresAt: Date.now() + PROMOTION_TTL_MS,
+  }
+  promotionTickets.set(id, plan)
+  return { ok: true, plan }
+}
+
+/** ② 확정 화면을 닫는다. **부작용은 이것뿐이다** — 워크플로는 한 글자도 바뀌지 않는다. */
+export function cancelPromotion(id: string): { ok: true } {
+  dropPromotionTicket(id)
+  return { ok: true }
+}
+
+/**
+ * ③ 사용자가 확정했다 — **여기서만** 게시가 시작된다.
+ *
+ * 토큰은 **검사보다 먼저 소비한다.** 그래야 연타·재전송이 두 번째 게시로 이어질 수 없다
+ * (두 번째 호출은 볼 티켓이 없다). 확정이 거부되면 사용자는 화면에서 다시 확인해야 한다 —
+ * 그것이 "한 번 확정" 의 뜻이다.
+ */
+export function confirmPromotion(id: string, token: string): PromoteConfirmResult {
+  const wf = wfMap().get(id)
+  if (!wf) return { ok: false, error: '작업을 찾을 수 없습니다.', errorEn: 'Workflow not found.' }
+
+  const ticket = promotionTickets.get(id)
+  // 1회용 — 성공하든 거부되든 이 티켓은 여기서 사라진다.
+  dropPromotionTicket(id)
+
+  if (!ticket) {
+    return {
+      ok: false,
+      error: '유효한 확인이 없습니다(이미 사용했거나 앱을 다시 켰습니다) — "이 초안을 게시하기"를 다시 눌러 주세요. 아무것도 게시하지 않았습니다.',
+      errorEn: 'No valid confirmation is open (already used, or the app restarted) — press "Publish this draft" again. Nothing was published.',
+    }
+  }
+  if (!token || token !== ticket.token) {
+    return {
+      ok: false,
+      error: '확인 정보가 맞지 않아 게시하지 않았습니다 — 다시 확인해 주세요.',
+      errorEn: 'The confirmation did not match, so nothing was published — please confirm again.',
+    }
+  }
+  if (Date.now() > ticket.expiresAt) {
+    return {
+      ok: false,
+      error: '확인한 지 오래되어 만료되었습니다 — 다시 확인해 주세요. 아무것도 게시하지 않았습니다.',
+      errorEn: 'The confirmation expired — please confirm again. Nothing was published.',
+    }
+  }
+
+  // 화면을 열 때 통과했다고 지금도 통과하는 것은 아니다 — 같은 기준으로 다시 본다.
+  const subject = evaluatePromotion(wf)
+  if ('error' in subject) return { ok: false, ...subject }
+
+  // 사용자가 확인한 그 사실들이 지금도 그대로인가.
+  const revisionNow = promotionRevision(wf, subject.artifactSha256)
+  if (revisionNow !== ticket.revision) {
+    return { ok: false, ...describePromotionDrift(ticket, wf, subject.artifactSha256) }
+  }
+
+  // ── 여기서부터 게시로 간다 ─────────────────────────────────────────────────────────
+  //
+  // ⚠ 장부(옛 영수증 → priorReceipts, promotedAt)는 **여기서 건드리지 않는다.** 탭 이동이 비동기라
+  //   그 사이에 디스크로 새어 나가면, 거기서 앱이 죽었을 때 완료된 초안을 통째로 잃는다.
+  //   정리는 startPublishTask 가 내구성 경계 직전에 한 번에 한다(그 주석 참고). 지금은 "무엇이
+  //   옛 것인가" 만 쪽지에 담아 넘긴다.
+  const promo: PromotionCarry = {
+    priorStage: wf.stage,
+    ...(wf.taskIds.publish ? { priorTaskId: wf.taskIds.publish } : {}),
+    ...(wf.receipt ? { priorReceipt: wf.receipt } : {}),
+  }
+  // 이전 부팅에서 게시 단계였다는 표시는 **그 부팅의 사실**이다. 지금 새로 만드는 게시 작업의
+  // `queued` 와는 아무 상관이 없는데, 남아 있으면 재조정이 갓 태어난 작업을 "불확실" 로 보고
+  // 차단해 승격이 결정론적으로 실패한다(2026-09-19 코드 검토 H3).
+  publishedBeforeThisBoot.delete(wf.id)
+  delete wf.error
+  delete wf.recovery
+  delete wf.uncertaintyResolvedFor
+  touch(wf)
+
+  // 기존 게시 경로를 그대로 탄다 — 게이트·내구성 경계·이어가기 보호를 재사용한다.
+  const onAbort = (reason?: string): void => failPromotion(wf, promo, reason)
+  const r = runPublishStage(wf, subject.genTaskId, subject.artifactId, { onAbort, promotion: promo })
+  if (!r.ok) {
+    failPromotion(wf, promo, r.error)
+    return { ok: false, error: r.error ?? '게시를 시작하지 못했습니다.', errorEn: r.error ?? 'Failed to start publishing.' }
+  }
+  return { ok: true }
+}
+
+/**
+ * 승격이 **시작도 못 하고** 끝났다 — 되돌리고, **왜 그런지 화면에 남긴다.**
+ *
+ * 왜 사유를 남기는가 (2026-09-19 코드 검토 H1): 확정은 동기적으로 `ok:true` 를 돌려주므로 화면은
+ * 확인 창을 닫는다. 그 뒤 비동기 탭 준비가 실패하면 예전 판은 조용히 되돌리기만 했다 — 카드가
+ * 원래대로 돌아오고 **아무 흔적도 남지 않아**, 사용자는 "눌렀는데 아무 일도 안 일어난다" 를
+ * 반복하게 된다. 아무것도 나가지 않은 것은 맞지만, 그 사실을 말해 주어야 한다.
+ */
+function failPromotion(wf: ImagePostWorkflow, promo: PromotionCarry, reason?: string): void {
+  const cur = wfMap().get(wf.id)
+  if (!cur || cur !== wf) return
+  // 이미 **다른** 게시 작업이 만들어졌다 = 실제로 나갔을 수 있다. 손대지 않는다.
+  if (cur.taskIds.publish && cur.taskIds.publish !== promo.priorTaskId) return
+  // 사용자가 취소했거나 다른 경로로 끝났으면 그 결론을 되살리지 않는다 — 승인만 거둔다.
+  if (cur.stage === 'cancelled') { delete cur.promotedAt; touch(cur); return }
+
+  // 아무것도 나가지 않았으므로 **확정을 누르기 전 그 단계로** 돌아간다. 'failed' 로 닫아 버리면
+  // (abortPublishPrep 이 확인 단계 승격에 대해 그렇게 한다) 멀쩡한 이미지·캡션을 두고도 처음부터
+  // 다시 만들어야 한다 — abortPublishBeforeStart 가 'review' 로 되돌리는 것과 같은 이유다.
+  const restored = undoPromotionBookkeeping(cur, promo)
+  cur.stage = restored ?? promo.priorStage
+  delete cur.error
+  cur.recovery = {
+    kind: 'publish-storage-failed',
+    stoppedAt: reason || '게시를 시작하지 못했습니다.',
+    nextAction: '아직 아무것도 올라가지 않았습니다 — 원인을 확인한 뒤 다시 "이 초안을 게시하기"를 '
+      + '눌러 주세요. 만든 이미지와 캡션은 그대로 남아 있습니다.',
+    at: Date.now(),
+  }
+  touch(cur)
+}
+
+/**
+ * 이 워크플로가 **지금** 실제로 게시하는가. 처음 고른 모드(params.mode)에, 사용자가 나중에 초안을
+ * 올리겠다고 확정한 사실(promotedAt)을 더한 값이다. 게시 작업을 만들 때와 영수증을 적을 때 **둘 다**
+ * 이 함수를 써야 한다 — 한쪽만 쓰면 실제로는 게시했는데 영수증이 "초안" 이라고 적히는 식으로 어긋난다.
+ */
+function effectivePublishMode(wf: ImagePostWorkflow): 'draft' | 'publish' {
+  return wf.params.mode === 'publish' || wf.promotedAt ? 'publish' : 'draft'
+}
+
 // ===== 2단계 승인 → 3단계 게시 =====
 
 export function approveAndPublish(id: string, caption: string): { ok: boolean; error?: string } {
@@ -1017,15 +1582,18 @@ export function approveAndPublish(id: string, caption: string): { ok: boolean; e
 }
 
 /** 준비 단계에서 멈췄다 — 게시는 하지 않고 이유를 남긴다. */
-function abortPublishPrep(wf: ImagePostWorkflow, reason: string, onAbort?: () => void): void {
+function abortPublishPrep(wf: ImagePostWorkflow, reason: string, onAbort?: (reason?: string) => void): void {
   publishAttempts.delete(wf.id)
   // 이미 다른 경로로 끝난(취소·완료) 워크플로의 결론을 덮어쓰지 않는다.
   if (wf.stage === 'publish' && !wf.taskIds.publish) {
     wf.stage = 'failed'
     wf.error = reason
+    // 초안 승격이었다면 그 승인은 여기서 거둔다 — **아무것도 나가지 않았으므로** 남겨 둘 이유가
+    // 없고, 남겨 두면 다음 클릭이 확인 없이 실제 게시로 간다(1회 확정의 뜻이 흐려진다).
+    delete wf.promotedAt
     touch(wf)
   }
-  onAbort?.()
+  onAbort?.(reason)
 }
 
 /**
@@ -1101,7 +1669,7 @@ async function waitForTabLoad(tabId: string): Promise<void> {
  */
 function runPublishStage(
   wf: ImagePostWorkflow, genTaskId: string, artifactId: string,
-  opts?: { auto?: boolean; onAbort?: () => void },
+  opts?: { auto?: boolean; onAbort?: (reason?: string) => void; promotion?: PromotionCarry },
 ): { ok: boolean; error?: string } {
   const srcMeta = getArtifact(genTaskId, artifactId)
   const srcPath = resolveArtifactPath(genTaskId, artifactId)
@@ -1130,7 +1698,15 @@ function runPublishStage(
       // 이 선점이 더 이상 내 것이 아니면(삭제됐거나 다른 시도가 가져갔다) 아무것도 지우지 않고 물러난다.
       if (!cur || cur !== wf || publishAttempts.get(wf.id) !== attempt) { opts?.onAbort?.(); return }
       // 취소되었거나 이미 게시 작업이 생겼다 — 내 선점은 더 이상 쓸모없으니 거두고 게시하지 않는다.
-      if (cur.stage !== 'publish' || cur.taskIds.publish || cur.receipt) {
+      //
+      // ⚠ 초안 승격은 예외가 하나 있다: 완료된 초안을 올릴 때는 **그 초안이 남긴** 게시 작업 기록과
+      //   영수증이 아직 제자리에 있다(일부러 그렇게 둔다 — 탭 이동 중에 앱이 죽어도 디스크의 완료된
+      //   초안이 훼손되지 않게 하려고, 그 정리를 내구성 경계 직전까지 미룬다). 그래서 "이미 있다" 가
+      //   아니라 "**내가 알고 시작한 그것과 다른 것이** 생겼다" 를 본다.
+      const promo = opts?.promotion
+      const foreignTask = cur.taskIds.publish && cur.taskIds.publish !== promo?.priorTaskId
+      const foreignReceipt = cur.receipt && cur.receipt !== promo?.priorReceipt
+      if (cur.stage !== 'publish' || foreignTask || foreignReceipt) {
         publishAttempts.delete(wf.id)
         opts?.onAbort?.()
         return
@@ -1153,7 +1729,7 @@ function runPublishStage(
         }
       }
       publishAttempts.delete(wf.id)
-      startPublishTask(cur, srcMeta, srcPath, artifactId, res.tabId, allowedHosts)
+      startPublishTask(cur, srcMeta, srcPath, artifactId, res.tabId, allowedHosts, opts?.promotion)
     })
     .catch((err) => {
       abortPublishPrep(wf, `게시 준비 중 오류가 발생했습니다: ${String(err)}`, opts?.onAbort)
@@ -1179,11 +1755,13 @@ function clearPublishPendingBlock(taskId: string): void {
 /** ③ 게시 작업 생성 → 산출물 복사 → 지시문 치환 → 시작. 전부 동기다. */
 function startPublishTask(
   wf: ImagePostWorkflow, srcMeta: ArtifactMeta, srcPath: string,
-  artifactId: string, tabId: string, allowedHosts: string[],
+  artifactId: string, tabId: string, allowedHosts: string[], promo?: PromotionCarry,
 ): void {
   const built = buildSnsTask({
     platform: wf.params.platform,
-    mode: wf.params.mode === 'publish' ? 'publish' : 'draft',
+    // 처음 고른 모드 + 사용자가 초안을 올리겠다고 확정한 사실. 둘 중 하나라도 '게시' 면 실제로 올린다.
+    // (승격이면 `promotedAt` 은 아래 내구성 경계 직전에야 세워지므로 여기서는 promo 로 판단한다.)
+    mode: promo ? 'publish' : effectivePublishMode(wf),
     // 사람이 읽는 표시용 — 실제 첨부는 아래 artifact 자리표시자로 지시한다(자료 폴더가 아니다).
     file: `(작업 산출물 ${artifactId})`,
     caption: wf.caption ?? wf.params.prompt,
@@ -1282,9 +1860,39 @@ function startPublishTask(
   // 위해). 경계 flush 직전에 적어야 그 flush 에 함께 실린다.
   wf.publishStartedAt = Date.now()
 
+  // ── 초안 승격의 장부 이동도 **바로 여기서** 한다(확정 시점이 아니라) ────────────────────
+  //
+  // 왜 이렇게 늦게 하는가 (2026-09-19 코드 검토가 잡은 결함): 예전 판은 확정 즉시 옮겼다. 그런데
+  // 그 직후의 탭 이동은 **비동기**라, 400ms 디바운스 저장이 그 사이에 한 번만 돌아도 디스크에
+  // `stage:'publish' + 게시 작업 없음 + 영수증 없음` 이 남는다. 거기서 앱이 죽으면 복원이 그것을
+  // `diedWhilePreparing` 으로 보고 **'failed' 로 굳혀** 완료된 초안을 통째로 잃는다 — 아무것도
+  // 게시되지 않았는데 이미지를 다시 만들어야 한다(이 기능이 존재하는 이유 자체가 무력화된다).
+  //
+  // 이제 옛 초안의 영수증·게시 작업 기록은 **마지막 순간까지 제자리에 있다.** 탭 이동 중에 죽으면
+  // 복원이 그 초안을 예전 그대로 되살린다. 그리고 여기서부터 아래 flush 까지는 전부 동기이므로,
+  // 디스크에 "승격했다" 가 나타나는 시점과 게시 작업이 나타나는 시점이 **같은 flush** 안에 있다.
+  if (promo) {
+    if (promo.priorReceipt) {
+      promo.movedPrior = {
+        ...promo.priorReceipt,
+        ...(promo.priorTaskId ? { taskId: promo.priorTaskId } : {}),
+        note: '초안 준비 기록 — 사용자가 게시로 올리기 전',
+      }
+      wf.priorReceipts = [...(wf.priorReceipts ?? []), promo.movedPrior].slice(-MAX_PRIOR_RECEIPTS)
+      delete wf.receipt
+    }
+    // 이 한 건을 올린다는 사실. params.mode 는 건드리지 않는다(자동 게시로 번지지 않게).
+    wf.promotedAt = Date.now()
+    // 옛 초안 작업에 대해 남아 있던 "모르겠다" 표시는 이 시점에 사실이 아니다 — 지금부터 이
+    // 워크플로의 게시는 **바로 아래에서 시작하는 새 작업**이고, 그 작업의 결론으로 판단한다.
+    delete wf.publishUncertain
+    delete wf.recovery
+    promo.applied = true
+  }
+
   const saved = persistPublishBoundary()
   if (!saved.ok) {
-    abortPublishBeforeStart(wf, pubTask.id, saved.failed)
+    abortPublishBeforeStart(wf, pubTask.id, saved.failed, promo)
     return
   }
 
@@ -1299,7 +1907,7 @@ function startPublishTask(
   // 직접 시작하면 이 워크플로가 모르는 게시가 나간다. 같은 규칙으로 깨끗이 물러난다.
   const started = startTask(pubTask.id)
   if (!started.ok) {
-    abortPublishBeforeStart(wf, pubTask.id, [`게시 작업을 시작하지 못했습니다(${started.error ?? '알 수 없는 이유'})`])
+    abortPublishBeforeStart(wf, pubTask.id, [`게시 작업을 시작하지 못했습니다(${started.error ?? '알 수 없는 이유'})`], promo)
   }
 }
 
@@ -1336,7 +1944,9 @@ export function persistPublishBoundary(): { ok: boolean; failed: string[] } {
  *  - 자동 게시는 다시 시도하지 않는다 — 선승인 소비 기록(consumed)이 이미 남아 있어
  *    autoPublishVerdict 가 거부한다. 사람이 원인을 본 뒤에만 다시 간다.
  */
-function abortPublishBeforeStart(wf: ImagePostWorkflow, pubTaskId: string, failed: string[]): void {
+function abortPublishBeforeStart(
+  wf: ImagePostWorkflow, pubTaskId: string, failed: string[], promo?: PromotionCarry,
+): void {
   // ⚠ 차단 자체는 **이미 디스크에 있다.** 이 작업은 `blockedReason` 과 함께 태어났으므로, 디스크에
   //   이 작업이 존재하는 모든 판본은 막혀 있다(createTask 의 주석 참고).
   //
@@ -1360,11 +1970,16 @@ function abortPublishBeforeStart(wf: ImagePostWorkflow, pubTaskId: string, faile
   // `publishUncertain` 을 세워 두었을 수 있다. 아직 **아무것도 나가지 않았으므로** 불확실할 것이
   // 없다 — 남겨 두면 상태가 거짓말을 한다(지금 UI 는 안 읽지만, 상태는 사실이어야 한다).
   delete wf.publishUncertain
-  wf.stage = 'review'
+  // 초안 승격이었다면 **옮겨 둔 장부까지 제자리로** 돌린다 — 아무것도 나가지 않았으므로 되돌릴
+  // 것이 없고, 사용자는 원인을 고친 뒤 다시 확인해서 올리면 된다(이미지·캡션은 그대로 남아 있다).
+  const wasPromotion = !!promo?.applied || !!wf.promotedAt
+  const restoredStage = undoPromotionBookkeeping(wf, promo)
+  wf.stage = restoredStage ?? 'review'
   wf.recovery = {
     kind: 'publish-storage-failed',
     stoppedAt: `게시를 시작하지 않았습니다 — 막힌 곳: ${failed.join(', ')}.`,
-    nextAction: '디스크 여유 공간과 파일 권한을 확인한 뒤 다시 "게시"를 눌러 주세요. '
+    nextAction: '디스크 여유 공간과 파일 권한을 확인한 뒤 '
+      + (wasPromotion ? '다시 "이 초안을 게시하기"를 눌러 확인해 주세요. ' : '다시 "게시"를 눌러 주세요. ')
       + '아직 아무것도 올라가지 않았으므로 중복 게시 걱정 없이 다시 시도할 수 있습니다.',
     at: Date.now(),
   }
@@ -1387,6 +2002,7 @@ export function cancelWorkflow(id: string): void {
   if (activeTaskId) cancelTask(activeTaskId)
   // 게시 준비(탭 이동)가 돌고 있었다면 그 선점을 거둔다 — 이동이 끝나도 게시 작업을 만들지 않는다.
   publishAttempts.delete(id)
+  dropPromotionTicket(id)
   wf.stage = 'cancelled'
   touch(wf)
 }
@@ -1397,6 +2013,7 @@ export function deleteWorkflow(id: string): void {
   if (!wfMap().delete(id)) return
   publishAttempts.delete(id)
   verifyMissSince.delete(id)
+  dropPromotionTicket(id)
   store.markDirty()
   workflowEvents.emit('changed', listWorkflows())
 }
@@ -1501,6 +2118,18 @@ function reconcilePublish(wf: ImagePostWorkflow): void {
   // 남길 수 있다).
   if (wf.verifyTaskId) { reconcileVerifyTask(wf); return }
 
+  // 게시 준비(탭 이동)가 도는 중에는 **옛 작업의 상태로 이 워크플로의 결론을 내지 않는다.**
+  //
+  // 왜 (2026-09-19, DP10 이 결정론적으로 잡았다): 완료된 초안을 승격하면 준비 구간 동안
+  // `taskIds.publish` 는 **아직 그 초안이 남긴 옛 작업**을 가리킨다(새 작업은 내구성 경계 직전에야
+  // 만들어진다 — startPublishTask 주석). 그 사이에 taskEvents 가 한 번만 튀어도 여기가 옛 작업을
+  // 보고 결론을 쓴다: 옛 작업이 사라졌으면 "게시 여부 불확실" 을 세우고(실제로 그랬다), 남아 있고
+  // completed 면 영수증을 쓰며 stage 를 'done' 으로 되돌려 **진행 중인 승격을 취소**시킨다.
+  // 준비 구간은 `publishAttempts` 가 표시한다(①선점 ~ ③작업 생성 직전).
+  // 일반 게시 경로는 이 구간에 taskIds.publish 자체가 없어 어차피 아래에서 반환된다 —
+  // 이 가드가 실제로 바꾸는 것은 승격 경로뿐이다.
+  if (publishAttempts.has(wf.id)) return
+
   const pubTaskId = wf.taskIds.publish
   if (!pubTaskId) return
   const t = getTask(pubTaskId)
@@ -1521,6 +2150,7 @@ function reconcilePublish(wf: ImagePostWorkflow): void {
   if (t.state === 'failed' || t.state === 'cancelled') {
     wf.stage = t.state === 'cancelled' ? 'cancelled' : 'failed'
     if (t.state === 'failed') wf.error = t.result || '게시 작업이 실패했습니다.'
+    publishedBeforeThisBoot.delete(wf.id)
     delete wf.publishUncertain
     delete wf.recovery
     touch(wf)
@@ -1528,7 +2158,10 @@ function reconcilePublish(wf: ImagePostWorkflow): void {
   }
 
   if (t.state === 'completed') {
-    const isDraft = wf.params.mode !== 'publish'
+    // ⚠ params.mode 가 아니라 **effectivePublishMode** 다. 승격된 초안은 mode 가 'draft' 로 남아
+    //   있지만 실제로는 게시했다 — 여기서 mode 만 보면 진짜 게시에 "초안까지 준비(게시 안 함)"
+    //   영수증이 붙어, 사용자가 올라가지 않은 줄 알고 같은 글을 또 올린다.
+    const isDraft = effectivePublishMode(wf) !== 'publish'
     wf.receipt = {
       ...(!isDraft && t.checkpoint.tabUrl ? { url: t.checkpoint.tabUrl } : {}),
       evidence: isDraft ? '초안까지 준비(게시 안 함)' : (t.verifyEvidence ?? t.result ?? '게시 완료'),
@@ -1537,6 +2170,10 @@ function reconcilePublish(wf: ImagePostWorkflow): void {
       at: Date.now(),
     }
     wf.stage = 'done'
+    // 결론이 났다 — "이전 부팅에서 게시 단계였다" 는 표시는 역할을 다했다. 남겨 두면 나중에 이
+    // 워크플로가 다시 게시 단계에 들어갔을 때(예: 초안 승격) 갓 만든 `queued` 작업을 지난 부팅의
+    // 것으로 오인해 차단한다.
+    publishedBeforeThisBoot.delete(wf.id)
     delete wf.error
     delete wf.publishUncertain
     delete wf.recovery

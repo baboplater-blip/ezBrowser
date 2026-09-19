@@ -1,0 +1,133 @@
+{
+ "schema": "auto-dev/completion-record@1",
+ "run_id": "run-20260919T121840Z-b597cd",
+ "project_id": "browser-build-36466a626d",
+ "verdict": "pass",
+ "written_at": "2026-09-19T13:29:55Z",
+ "criteria": [
+  {
+   "id": "c1",
+   "kind": "positive",
+   "behavior": "확인 단계 초안을 카드 버튼→확정 클릭으로 올리면 이미지·캡션을 다시 만들지 않고 그대로 1건이 게시된다",
+   "check": "e2e DP1·DP4(실제 DOM 클릭→신뢰 IPC): 픽스처 수신 sha256 57b2aa02…=시드 산출물 sha256 일치, artifactId art_dp1→art_dp1, genTaskId 불변, 캡션 문자열 일치, publishes 0→1",
+   "result": "pass"
+  },
+  {
+   "id": "c2",
+   "kind": "positive",
+   "behavior": "이미 \"초안까지 준비\"로 끝난 작업도 같은 방식으로 올릴 수 있고, 그때까지의 기록이 보존된다",
+   "check": "e2e DP10: publishes 0→1, 옛 draft 영수증이 priorReceipts 에 그대로 보존, 새 receipt.status=verified(draft 아님)",
+   "result": "pass"
+  },
+  {
+   "id": "c3",
+   "kind": "negative",
+   "behavior": "확정 화면을 열거나 취소하는 것만으로는 아무것도 게시되지 않는다",
+   "check": "e2e DP2: 패널 열림→취소 클릭 후 publishes 0→0, promotedAt 없음, 새 게시작업 없음, 워크플로 취소 전과 동일. 같은 실행의 DP4(+1)와 대조 성립(하네스가 출력)",
+   "result": "pass"
+  },
+  {
+   "id": "c4",
+   "kind": "negative",
+   "behavior": "계정이 없으면 화면·IPC 양쪽에서 거부하고 초안(캡션·이미지)을 잃지 않는다",
+   "check": "e2e DP3: 화면 오류에 계정 없음 한국어+영어 표시, 확정 화면 없이 IPC 직접 호출도 거부, 캡션·artifactId 보존. 순수 게이트가 같은 경로를 재확인",
+   "result": "pass"
+  },
+  {
+   "id": "c5",
+   "kind": "negative",
+   "behavior": "확정 버튼 연타·같은 확인 재전송으로도 게시가 1건을 넘지 않는다",
+   "check": "e2e DP5: 연타 후 publishes 0→1, 재전송 prepare=\"이미 게시로 올린 초안입니다\"·confirm=\"유효한 확인이 없습니다\" 모두 거부. 순수 게이트: 틀린 토큰 1회로 확인이 소진돼 뒤이은 정상 토큰도 거부",
+   "result": "pass"
+  },
+  {
+   "id": "c6",
+   "kind": "negative",
+   "behavior": "확인 뒤 캡션·계정이 바뀌면 옛 확인으로 게시되지 않고, 무엇이 바뀌었는지 알려 준다",
+   "check": "e2e DP6·DP6-ACC: 거부 사유에 \"캡션\"/\"caption\" 및 \"계정\"/\"account\" 명시, publishes 0→0, promotedAt 없음. 음성 대조로 바인딩 지문을 무력화하니 바뀐 캡션으로 실제 게시가 나가는 것을 검사가 잡음",
+   "result": "pass"
+  },
+  {
+   "id": "c7",
+   "kind": "negative",
+   "behavior": "확정 전에 앱이 강제 종료되면 승인이 디스크에 남지 않아 재시작해도 아무것도 나가지 않는다",
+   "check": "e2e DP7·DP7-RESUME: 확정 패널을 연 채 taskkill /T /F → 디스크 promotedAt 없음, 확인 토큰이 파일에 없음, 재시작 후 옛 토큰 confirm 거부, 초안 온전, publishes 0",
+   "result": "pass"
+  },
+  {
+   "id": "c8",
+   "kind": "negative",
+   "behavior": "게시가 나간 뒤 강제 종료되면 \"올라갔는지 모른다\"로 남고 중복 게시하지 않는다",
+   "check": "e2e DP8: 서버가 파일을 받은 직후(응답 보류) 강제 종료 → 재시작 후 불확실 표시·이어가기 차단, 픽스처 기록 1건 유지(중복 없음)",
+   "result": "pass"
+  },
+  {
+   "id": "c9",
+   "kind": "negative",
+   "behavior": "게시 중이거나 게시 여부가 불확실한 동안에는 버튼이 보이지 않고 IPC 직접 호출도 거부된다",
+   "check": "e2e DP9-STAGE·DP9-UNCERTAIN: .ai-social-promote 버튼 부재 확인 + prepare/confirm 둘 다 거부(ko+en)",
+   "result": "pass"
+  },
+  {
+   "id": "c10",
+   "kind": "negative",
+   "behavior": "보관 이미지가 사라졌거나 내용이 바뀌었으면 거부하고 초안은 남는다",
+   "check": "e2e DP11(파일 삭제): 거부 + 캡션·stage 보존 + publishes 0. 순수 게이트 ⑩: 같은 경로의 파일을 다른 바이트로 덮어쓰면 거부(실제 바이트 재해싱), 되돌리면 다시 통과(양성 대조)",
+   "result": "pass"
+  },
+  {
+   "id": "c11",
+   "kind": "negative",
+   "behavior": "손으로 한 건 확정한 것이 자동 게시 선승인으로 번지지 않는다",
+   "check": "순수 게이트 ⑥: params.mode 를 바꾸지 않으므로 선승인 범위에 들어오지 않고, autoPublishVerdict 가 promotedAt 작업을 \"직접 확정\" 사유로 거부(선승인 생성은 대조군으로 성공 확인)",
+   "result": "pass"
+  },
+  {
+   "id": "c12",
+   "kind": "positive",
+   "behavior": "게시가 시작조차 못 하면 초안이 원래 상태로 되돌아가고 이유가 화면에 남는다",
+   "check": "순수 게이트 ⑧: 확정 후 탭 준비 실패 → stage·receipt·게시작업 id 원복, priorReceipts 늘지 않음, recovery 에 사유 존재, 다시 올릴 수 있음. 음성 대조로 되돌리기를 빼니 4건 FAIL(초안이 failed 로 굳음)",
+   "result": "pass"
+  },
+  {
+   "id": "c13",
+   "kind": "positive",
+   "behavior": "승격 사실이 재시작을 넘겨 유지돼, 실제 게시가 \"초안\" 영수증으로 잘못 기록되지 않는다",
+   "check": "순수 게이트 ⑦: promotedAt·priorReceipts 복원 확인, 손상된 값은 fail-closed 로 \"승격됨\" 취급(잊으면 중복 게시로 이어지므로). 음성 대조: 확정 즉시 디스크 기록(옛 동작)을 재현하니 H2 회귀 검사가 FAIL",
+   "result": "pass"
+  },
+  {
+   "id": "c14",
+   "kind": "positive",
+   "behavior": "확인 화면이 실제로 올라갈 내용(목적지·계정·이미지 지문·캡션·해시태그)을 한국어와 영어로 함께 보여 준다",
+   "check": "e2e DP6·DP6-ACC 에서 실제 패널 렌더 확인(data-testid 6종). 순수 게이트 ⑨: plan.tags 가 실제 붙어 나갈 태그와 같고, 태그가 다르면 바인딩 지문도 달라짐",
+   "result": "pass"
+  },
+  {
+   "id": "c15",
+   "kind": "positive",
+   "behavior": "기존 기능에 회귀 없이 마감 게이트가 통과한다",
+   "check": "npm run verify 17/17 PASS 59s(스모크 16/16 · persistence-boundary 27 · publish-evidence 8 · agent-gate 8 · intent-routing 8 · ai-connect 9 포함), typecheck 3/3 무경고",
+   "result": "pass"
+  }
+ ],
+ "missing_work": {
+  "pending_owned_work": [],
+  "pending_background_prose": null,
+  "criteria_failed": []
+ },
+ "whole_task": {
+  "declared": true,
+  "all_requested_work_complete": true,
+  "remaining_required": [],
+  "blockers": [],
+  "optional_next": [
+   "실제 구독 모델로 승격 e2e 1회(이번은 결정론 확보를 위해 가짜 LLM 각본)",
+   "확인 화면에 이미지 미리보기 썸네일 추가(현재는 형식·크기·sha256 앞 12자)",
+   "승격 실패가 탭 이동 실패로 끝난 확인 단계 초안의 단계 처리 재검토(현재 기존 게시 경로와 동일)"
+  ],
+  "korean_line": "남은 작업: 없음(이번 범위); 전체 요청 완료: 예"
+ },
+ "scope_note": "코드 서명·rc.14 설치파일 설치검증·실제 SNS 게시는 사용자 지시에서 이번 범위와 분리해 보고하도록 명시된 이월 제한이다(이번 범위의 잔여가 아님). 상세는 .auto-dev/draft-promotion-20260919-final.md 6절.",
+ "tool_note": "orchestrator.py 가 이 설치본에 없어 CLI(complete record/board update/note) 를 쓸 수 없었다. 같은 스키마로 직접 기록했다."
+}

@@ -472,6 +472,14 @@ const api = {
     }> => ipcRenderer.invoke(IPC.ai.socialSetAccount, { id, account }),
     socialResolvePublish: (id: string, choice: AiPublishResolution): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.ai.socialResolvePublish, { id, choice }),
+    // 초안 승격 — prepare 는 **확인 화면을 만들 뿐** 아무것도 게시하지 않는다(디스크 쓰기 0).
+    // 실제 게시는 confirm 한 곳에서만 시작된다. cancel 은 그 화면을 닫는 것뿐이다.
+    socialPromotePrepare: (id: string): Promise<AiPromotePrepareResult> =>
+      ipcRenderer.invoke(IPC.ai.socialPromotePrepare, { id }),
+    socialPromoteConfirm: (id: string, token: string): Promise<{ ok: boolean; error?: string; errorEn?: string }> =>
+      ipcRenderer.invoke(IPC.ai.socialPromoteConfirm, { id, token }),
+    socialPromoteCancel: (id: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC.ai.socialPromoteCancel, { id }),
     socialCancel: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialCancel, { id }),
     socialDelete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialDelete, { id }),
     onSocialChanged: (cb: (list: AiSocialWorkflow[]) => void) => on(IPC.ai.socialChanged, cb),
@@ -740,11 +748,48 @@ interface AiSocialWorkflow {
   publishUncertain?: boolean
   /** 읽기 전용 확인 작업 id(게시 여부 확인 중). */
   verifyTaskId?: string
+  /**
+   * 사용자가 이 초안을 게시로 올리겠다고 **한 번 확정한** 시각. 있으면 이미 승격된 작업이라
+   * 다시 승격할 수 없다. `params.mode` 는 그대로 'draft' 로 남는다(자동 게시로 번지지 않게).
+   */
+  promotedAt?: number
+  /** 승격 전의 지난 영수증들(초안 준비 기록 등). 최신이 뒤. 지우지 않고 보존한다. */
+  priorReceipts?: Array<{
+    url?: string; evidence?: string
+    status?: 'verified' | 'user-confirmed' | 'draft' | 'unverified'
+    at: number; taskId?: string; note?: string
+  }>
   /** 중단 후 사용자가 이어가려면 필요한 안내. 없으면 정상 진행 중이다. */
   recovery?: AiWorkflowRecovery
   error?: string
   createdAt: number; updatedAt: number
 }
+
+/** 확정 화면이 보여 줄 "무엇이 어디로 나가는가". 이 값에 묶여 확정이 성립한다. */
+interface AiPromotionPlan {
+  /** 이 확정 1회에만 쓰이는 토큰. 저장하지 말 것 — 메인도 메모리에만 들고 있다. */
+  token: string
+  workflowId: string
+  /** 플랫폼·계정·산출물·해시·캡션의 지문. 하나라도 바뀌면 옛 확정은 무효다. */
+  revision: string
+  platform: 'instagram' | 'youtube' | 'tiktok'
+  platformLabel: string
+  platformLabelEn: string
+  account: string
+  caption: string
+  artifactId: string
+  artifactSha256: string
+  artifactBytes: number
+  artifactFormat: string
+  /** 캡션 끝에 실제로 붙어 나가는 해시태그(# 없이). 확정 화면이 함께 보여 준다. */
+  tags: string[]
+  source: 'review' | 'completed-draft'
+  expiresAt: number
+}
+
+type AiPromotePrepareResult =
+  | { ok: true; plan: AiPromotionPlan }
+  | { ok: false; error: string; errorEn: string }
 
 /** 게시 여부 불확실을 푸는 방법 — 코드가 정한 3가지뿐이다. */
 type AiPublishResolution = 'verify' | 'published' | 'not-published'

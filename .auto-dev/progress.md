@@ -321,3 +321,5 @@ sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · `--
 - [2026-09-19T09:05:18Z] run-20260919T090518Z-84dee6 시작 (model=opus, task=FORMAT/REPORT ONLY follow-up. Prior rc.12 implementation/tests/package accepted; do NOT edit source/rebuild/retest/insta)
 - [2026-09-19T09:10:44Z] run-20260919T090518Z-84dee6 종료 status=success (이번 실행(run-20260919T090518Z-84dee6)의 구조화 완료 기록: pass (합격 기준 12건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
 - [2026-09-19T09:22:57Z] run-20260919T092257Z-384114 시작 (model=opus, task=User explicitly requests continuous necessary improvements until TODAY 2026-09-19 20:00 KST and report then. Current 18:)
+- [2026-09-19T10:00:25Z] run-20260919T092257Z-384114 종료 status=success (이번 실행(run-20260919T092257Z-384114)의 구조화 완료 기록: pass (합격 기준 13건 전건 통과, 부정 사례 7건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-19T12:18:40Z] run-20260919T121840Z-b597cd 시작 (model=opus, task=User says continue development after rc.13. Bounded usable feature: turn existing draft-only image workflow into explici)

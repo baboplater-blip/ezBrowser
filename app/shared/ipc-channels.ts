@@ -377,6 +377,11 @@ export const IPC = {
     // 확인 단계에서 계정 고치기 — 계정을 빠뜨리거나 잘못 넣었을 때 워크플로를 다시 만들지 않아도 된다.
     socialSetAccount: 'ai:social-set-account',
     socialResolvePublish: 'ai:social-resolve-publish',
+    // 초안 승격 — 만들어 둔 초안을 다시 만들지 않고 게시로 올린다. prepare 는 **확인 화면을 만들 뿐**
+    // 아무것도 게시하지 않고 디스크에 쓰지도 않는다. 실제 게시는 confirm 한 경로에서만 시작된다.
+    socialPromotePrepare: 'ai:social-promote-prepare',
+    socialPromoteConfirm: 'ai:social-promote-confirm',
+    socialPromoteCancel: 'ai:social-promote-cancel',
     // 작업 산출물(캡처한 이미지·받은 파일)
     artifactList: 'ai:artifact-list',
     artifactData: 'ai:artifact-data',

@@ -2609,3 +2609,44 @@ button:not(.tab):not(.si-toggle):not(.sidepanel-tab):not(.ai-fold-toggle):not(:d
 .ai-social-auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ai-social-auto-row .ai-write-label { margin: 0; }
 .ai-input-sm { width: 64px; flex: 0 0 auto; }
+
+/* 영문 보조 문구 — 한 버튼·문장 안에서 둘째 줄로 작게(사이드바가 280px 라 항상 줄바꿈). */
+.ai-social-en { font-size: 0.85em; opacity: 0.65; display: block; }
+/* 위와 같은 문구지만 짧은 인라인(메타·오류 줄) 자리에서는 줄바꿈하지 않고 옆에 붙인다. */
+.ai-social-en-inline { font-size: 0.85em; opacity: 0.65; margin-left: 4px; }
+
+/* 초안 승격("이 초안을 게시하기") 버튼 — 확인 단계 CTA 아래 / 완료된 초안의 영수증 아래에 온다. */
+.ai-social-promote { width: 100%; justify-content: center; height: auto; padding: 7px 10px; text-align: center; line-height: 1.4; }
+
+/* 승격 확정 패널 — 게시로 넘기기 전 마지막 확인. 경고 성격이라 테두리를 강조하되 도크 폭(280px)을 넘지 않는다. */
+.ai-social-promote-panel {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--color-accent); border-radius: 8px;
+  padding: 8px 10px; background: var(--color-bg-base);
+  max-width: 100%; overflow-wrap: break-word; word-break: break-word;
+}
+.ai-social-promote-title { font-size: 12px; font-weight: 700; color: var(--color-text-primary); }
+.ai-social-promote-row { display: flex; flex-direction: column; gap: 1px; font-size: 11px; }
+.ai-social-promote-label { color: var(--color-text-muted); font-size: 10px; }
+.ai-social-promote-caption {
+  font-size: 11px; color: var(--color-text-secondary); background: var(--color-bg-subtle, rgba(127,127,127,0.08));
+  border: 1px solid var(--color-border-subtle); border-radius: 6px; padding: 6px 8px;
+  max-height: 96px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+.ai-social-promote-go { flex: 1 1 auto; }
+
+/* 승격 전 지난 기록(접힘) — 지우지 않고 보존한다. */
+.ai-social-prior { border: 1px dashed var(--color-border-subtle); border-radius: 6px; padding: 4px 8px; }
+.ai-social-prior summary { font-size: 10px; color: var(--color-text-secondary); cursor: pointer; }
+.ai-social-prior-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.ai-social-prior-item { display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: var(--color-text-secondary); }
+.ai-social-prior-when { color: var(--color-text-muted); }
+.ai-social-prior-evidence { word-break: break-word; }
+
+/* 확정 화면의 해시태그 줄 — 캡션 끝에 실제로 붙어 나가는 것을 함께 보여 준다. */
+.ai-social-promote-tags {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  word-break: break-all;
+  margin-top: 2px;
+}
