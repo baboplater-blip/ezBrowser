@@ -19,6 +19,7 @@ import { getProfile, setProfile, storageAvailable, PROFILE_FIELDS, profileEvents
 import { generateBlogDraft, generateSeriesPlan, refineBlogBody, type BlogDraftParams, type SeriesPlanParams, type RefineParams } from '../features/ai/blog-writer'
 import { buildBlogTask, NAVER_WRITE_URL, type BlogTaskParams } from '../features/ai/blog-publish'
 import { buildSnsTask, type SnsTaskParams } from '../features/ai/sns-publish'
+import { detectWorkflowIntent } from '../features/ai/intent'
 import {
   listBlogDrafts, getBlogDraft, saveBlogDraft, removeBlogDraft, blogDraftEvents, type BlogDraftSummary,
 } from '../features/ai/blog-drafts'
@@ -41,7 +42,8 @@ import { listArtifacts, getArtifact, resolveArtifactPath } from '../features/ai/
 import {
   workflowEvents, listWorkflows, startImagePost, approveAndPublish, chooseArtifact,
   cancelWorkflow, deleteWorkflow, grantAutoPublish, getAutoPublishGrant, revokeAutoPublish,
-  type ImagePostParams, type ImagePostWorkflow, type GrantInput,
+  retryCaption, setCaption, setWorkflowAccount, resolvePublishUncertainty,
+  type ImagePostParams, type ImagePostWorkflow, type GrantInput, type PublishResolution,
 } from '../features/ai/social-workflow'
 import { buildBlogEngageTask, listEngagements, clearEngagements, type BlogEngageParams } from '../features/ai/blog-engage'
 import { readFile } from 'node:fs/promises'
@@ -454,6 +456,13 @@ export function registerAiIpc(): void {
     } catch { return { meta, dataUrl: null } }
   })
 
+  // 입력창 한 줄을 워크플로 폼값으로 읽는다 — **순수 판독 전용**이다.
+  // 어떤 작업도 시작하지 않고 자동 게시 승인(grant)도 만들지 않는다. 승인 입구는 socialGrant 하나뿐.
+  ipcMain.handle(IPC.ai.intentDetect, (e, args: { text?: string }) => {
+    if (!isTrustedSender(e)) return null
+    return detectWorkflowIntent(String(args?.text ?? ''))
+  })
+
   // ===== 생성→캡션→게시 워크플로 =====
   // 게시는 되돌릴 수 없으므로 **승인 단계를 코드로 분리**한다 — socialStart 는 생성까지만 하고,
   // 실제 게시는 사용자가 캡션을 확인한 뒤 socialApprove 를 부를 때만 시작된다.
@@ -496,6 +505,29 @@ export function registerAiIpc(): void {
   })
   ipcMain.handle(IPC.ai.socialGrantGet, (e) => { if (!isTrustedSender(e)) return null; return getAutoPublishGrant() })
   ipcMain.handle(IPC.ai.socialGrantRevoke, (e) => { if (!isTrustedSender(e)) return; revokeAutoPublish() })
+  // ===== 중단 후 복구 =====
+  // 셋 다 **새 작업을 만들지 않고** 멈춘 그 작업을 이어간다. 특히 게시 해소는 되돌릴 수 없는 결정이라
+  // 선택지를 코드로 제한한다(자유 문자열을 받지 않는다).
+  ipcMain.handle(IPC.ai.socialRetryCaption, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return retryCaption(String(args?.id ?? ''))
+  })
+  ipcMain.handle(IPC.ai.socialSetCaption, (e, args: { id: string; caption: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return setCaption(String(args?.id ?? ''), String(args?.caption ?? '').slice(0, 5000))
+  })
+  ipcMain.handle(IPC.ai.socialSetAccount, (e, args: { id: string; account: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return setWorkflowAccount(String(args?.id ?? ''), String(args?.account ?? '').slice(0, 200))
+  })
+  ipcMain.handle(IPC.ai.socialResolvePublish, (e, args: { id: string; choice: PublishResolution }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    const raw = String(args?.choice ?? '')
+    if (raw !== 'verify' && raw !== 'published' && raw !== 'not-published') {
+      return { ok: false, error: '알 수 없는 선택입니다.' }
+    }
+    return resolvePublishUncertainty(String(args?.id ?? ''), raw)
+  })
   ipcMain.handle(IPC.ai.socialCancel, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; cancelWorkflow(String(args?.id ?? '')) })
   ipcMain.handle(IPC.ai.socialDelete, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; deleteWorkflow(String(args?.id ?? '')) })
   workflowEvents.on('changed', (list: ImagePostWorkflow[]) => {
@@ -843,14 +875,19 @@ function registerPersistentTaskIpc(): void {
 
   const mutate = (
     channel: string,
-    apply: (task: PersistentTask, e: IpcMainInvokeEvent, args: { id: string; [k: string]: unknown }) => void,
+    // 거절을 돌려줄 수 있는 채널은 `{ok:false, error}` 를 반환한다 — 그대로 사용자에게 전한다.
+    // (아무것도 돌려주지 않으면 기존대로 `{ok:true}`.)
+    apply: (
+      task: PersistentTask, e: IpcMainInvokeEvent, args: { id: string; [k: string]: unknown },
+    ) => void | { ok: boolean; error?: string },
   ): void => {
     ipcMain.handle(channel, (e, args: { id: string; [k: string]: unknown }) => {
       if (!isTrustedSender(e)) return taskOwnershipDenied()
       const task = typeof args?.id === 'string' && args.id ? getTask(args.id) : null
       if (!task) return taskNotFound()
       if (!ownsTask(e, task)) return taskOwnershipDenied()
-      apply(task, e, args)
+      const r = apply(task, e, args)
+      if (r && r.ok === false) return { ok: false, error: r.error ?? '요청을 처리할 수 없습니다.' }
       return { ok: true }
     })
   }

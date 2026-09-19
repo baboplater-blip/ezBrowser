@@ -42,6 +42,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import http from 'node:http'
+import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,12 +104,20 @@ async function main() {
   const profileDir = path.join(args.out, 'profile')
   fs.rmSync(profileDir, { recursive: true, force: true })
   fs.mkdirSync(profileDir, { recursive: true })
+  // 내보내기 산출물이 떨어질 격리 폴더(= settings.downloads.defaultPath).
+  const exportDir = path.join(args.out, 'downloads')
+  fs.rmSync(exportDir, { recursive: true, force: true })
+  fs.mkdirSync(exportDir, { recursive: true })
   fs.writeFileSync(path.join(profileDir, 'settings.json'), JSON.stringify({
     setup: { completed: true },
     // 강제 종료 뒤 재부팅하므로 **'지난 세션 복원' 모달**이 창 생성을 막는다(임무 23 에서 규명).
     // last-session 이면 묻지 않고 자동 복원한다 — session-restore 하네스와 같은 방식.
     startup: { mode: 'last-session', urls: [] },
     adblock: { enabled: false },
+    // 내보내기(writeDownloadMd)가 사용자의 실제 Downloads 폴더를 건드리지 않도록 격리한다.
+    // PS13 이 "이 설정이 실제로 적용되는가"를 검사한다 — 설정만 심고 확인하지 않으면
+    // 하네스가 조용히 실제 폴더에 파일을 남긴다(전에 그랬다).
+    downloads: { defaultPath: exportDir, askEveryTime: false },
     ai: {
       enabled: true, provider: 'ollama', ollamaUrl: llm.url,
       // 허용목록에 없는 모델 이름 → 네이티브 도구 대신 JSON 액션 경로(결정론적).
@@ -605,6 +614,48 @@ async function main() {
         noBackup && untouched && intact,
         `새 백업 ${after.backups - before.backups}개(0 이어야) · 파일 바이트 불변=${untouched}`
         + ` · 대화 ${convs.length}개 · 실행이력 ${runs.length}개 · 내용 온전=${intact}`)
+    }
+
+    // ---- PS13: 내보내기가 설정한 저장 위치를 실제로 지키는가 (실제 Downloads 폴더 무접촉) ----
+    //
+    // 왜 필요한가: writeDownloadMd 가 app.getPath('downloads') 로 고정돼 있어, 사용자가 저장 위치를
+    // 바꿔도 AI 보고서·대화 내보내기만 OS Downloads 폴더로 샜다. 검증 하네스도 그 경로로 사용자의
+    // 실제 폴더에 파일을 만들었다. 설정을 심는 것만으로는 부족하다 — **적용되는지**를 봐야 한다.
+    {
+      // PS12 에서 띄운 앱이 그대로 살아 있다(대화 2건 보유).
+      const realDownloads = path.join(os.homedir(), 'Downloads')
+      const mdBefore = new Set(
+        fs.existsSync(realDownloads)
+          ? fs.readdirSync(realDownloads).filter((f) => f.toLowerCase().endsWith('.md'))
+          : [],
+      )
+      const exportedBefore = fs.readdirSync(exportDir).length
+
+      const convId = await evalIn(shell,
+        'window.browserAPI.ai.convList().then(l => (l && l[0] && l[0].id) || "")', true)
+      const res = convId
+        ? await evalIn(shell, `window.browserAPI.ai.convExport(${JSON.stringify(convId)})`, true)
+        : null
+
+      const savedPath = res && typeof res.path === 'string' ? res.path : ''
+      // 대소문자·구분자 차이로 오판하지 않도록 정규화해서 비교한다(Windows).
+      const norm = (p) => path.resolve(p).toLowerCase()
+      const insideExportDir = !!savedPath && norm(savedPath).startsWith(norm(exportDir) + path.sep)
+      const fileThere = !!savedPath && fs.existsSync(savedPath)
+      const exportedAfter = fs.readdirSync(exportDir).length
+
+      const mdAfter = fs.existsSync(realDownloads)
+        ? fs.readdirSync(realDownloads).filter((f) => f.toLowerCase().endsWith('.md'))
+        : []
+      const leaked = mdAfter.filter((f) => !mdBefore.has(f))
+
+      check('PS13', '내보내기가 설정한 저장 위치를 지키고 실제 Downloads 폴더를 건드리지 않는다',
+        !!convId && res?.ok === true && insideExportDir && fileThere && leaked.length === 0
+          && exportedAfter > exportedBefore,
+        `대화 id=${convId || '(없음)'} · ok=${res?.ok} · 저장 경로=${savedPath || '(없음)'}`
+        + ` · 격리폴더 안=${insideExportDir} · 파일 존재=${fileThere}`
+        + ` · 격리폴더 파일 ${exportedBefore}→${exportedAfter}`
+        + ` · 실제 Downloads 새 .md ${leaked.length}개${leaked.length ? ` (${leaked.join(', ')})` : ''}`)
     }
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)

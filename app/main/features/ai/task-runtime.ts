@@ -5,7 +5,7 @@ import {
   cancelAgentTask, confirmAgentStep, pauseAgentTask, replyAgentAsk, resumeAgentTask, runAgentTask,
   type AgentEvent,
 } from './agent'
-import { isPublishAction } from './agent-gate'
+import { isPublishAction, normalizeAccountName, normalizeVerifyText, type ReadSighting } from './agent-gate'
 import {
   getTab, getTabPartition, getWebContentsByTabId, listTabs, listTabsInWorkspace,
 } from '../../tabs/tab-service'
@@ -46,7 +46,11 @@ const MAX_EXTERNAL_WRITES = 50
 /** UI 목록에 싣는 지시 길이. */
 const SUMMARY_INSTRUCTION_CHARS = 200
 
-const FILE_NAME = 'ai-tasks.json'
+/**
+ * 작업 저장 파일. **export 한다** — social-workflow 가 "저장이 막혔다" 고 사용자에게 알릴 때
+ * 파일명을 손으로 적다가 틀린 적이 있다(찾아가면 없는 파일을 가리켰다). 이름은 한 곳에서만 온다.
+ */
+export const FILE_NAME = 'ai-tasks.json'
 const STORE_LABEL = '작업'
 
 // 예산 기본값 — normal 은 "사용자가 보고 있는 한 번의 지시", long 은 "자리를 비운 사이 오래 도는 작업".
@@ -124,11 +128,23 @@ export interface PersistentTask {
   resultFiles: string[]
   result?: string
   verifyEvidence?: string
+  /**
+   * 이 작업이 **실제로 화면에서 관찰한** 대조 근거(읽기 전용 확인 작업 전용).
+   * 에이전트 루프가 관찰 텍스트·주소에서 직접 뽑아 적는다 — **모델이 만들 수 없는 값**이다.
+   * 모델의 결론(산문)을 이 기록과 대조해야 "봤다고 말한 것"과 "실제로 본 것"이 갈린다.
+   */
+  readSightings?: ReadSighting[]
   waitReason?: string
   // 사용자가 기다림을 풀려면 가야 할 곳(예: 로그인 계정 설정). 외피가 버튼으로 띄운다.
   waitActionUrl?: string
   waitActionLabel?: string
   retry?: { kind: RetryKind; attempt: number; nextAt: number; detail: string }
+  /**
+   * 이어가기(resumeTask/startTask 의 interrupted 경로) 전에 먼저 확인해야 하는 이유. 있으면 이어가기가
+   * 거부된다. 원인은 이 파일이 몰라도 된다(예: social-workflow.ts 가 "게시 여부가 확인되지 않았다" 를
+   * 세운다) — setResumeBlock 은 문자열만 받아 저장할 뿐이다.
+   */
+  resumeBlockedReason?: string
   readOnly: boolean
   incognito: boolean
   ownerWindowId: string | null
@@ -142,6 +158,7 @@ export interface TaskSummary {
   stepsUsed: number; maxSteps: number; segment: number
   elapsedMs: number; startedAt: number; endedAt?: number
   waitReason?: string; waitActionUrl?: string; waitActionLabel?: string; retry?: PersistentTask['retry']
+  resumeBlockedReason?: string
   llmCalls: number; maxLlmCalls: number
   result?: string; resultFiles: string[]; needsVerify: boolean
 }
@@ -228,6 +245,47 @@ function strList(v: unknown, cap: number): string[] {
   return v.filter((x): x is string => typeof x === 'string' && x.length > 0).slice(0, cap)
 }
 
+/** 한 작업이 들고 갈 관찰 근거 상한 — 근거는 몇 건이면 충분하고, 파일이 부풀면 저장이 느려진다. */
+const MAX_SIGHTINGS = 5
+
+/**
+ * 디스크에서 읽은 관찰 근거를 **모양이 맞는 것만** 남긴다. 손상·조작된 파일이 근거로 둔갑해
+ * 게시 완료를 확정시키지 못하게, 필수 필드가 하나라도 빠지면 그 항목을 버린다.
+ */
+function sanitizeSightings(v: unknown): { readSightings?: ReadSighting[] } {
+  if (!Array.isArray(v)) return {}
+  const out: ReadSighting[] = []
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue
+    const o = raw as Record<string, unknown>
+    const url = str(o.url).slice(0, 500)
+    const needle = normalizeVerifyText(str(o.needle)).slice(0, 300)
+    const at = num(o.at)
+    if (!url || !needle || !(at > 0)) continue
+    // 작성자·게시 시각도 **모양이 맞을 때만** 복원한다. 특히 `authorScope` 가 'post' 가 아니면
+    // 작성자를 통째로 버린다 — 손상·조작된 파일이 "글 안에서 읽은 계정" 인 척하지 못하게.
+    const author = normalizeAccountName(o.author)
+    const postedAt = num(o.postedAt)
+    out.push({
+      url, host: str(o.host).slice(0, 200), needle, snippet: str(o.snippet).slice(0, 300), at,
+      ...(author && o.authorScope === 'post'
+        ? {
+          author,
+          authorScope: 'post' as const,
+          // 손상·조작 파일이 휴리스틱 값을 '구조적'으로 승격해 **확정 거부**를 만들지 못하게,
+          // 정확히 'structural' 일 때만 그대로 두고 나머지는 보수적으로 낮춘다.
+          authorSource: o.authorSource === 'structural' ? ('structural' as const) : ('heuristic' as const),
+        }
+        : {}),
+      ...(postedAt > 0 ? { postedAt } : {}),
+      ...(str(o.postedAtText) ? { postedAtText: str(o.postedAtText).slice(0, 60) } : {}),
+      ...(str(o.ambiguous) ? { ambiguous: str(o.ambiguous).slice(0, 120) } : {}),
+    })
+    if (out.length >= MAX_SIGHTINGS) break
+  }
+  return out.length ? { readSightings: out } : {}
+}
+
 const TASK_STATES: ReadonlySet<string> = new Set<TaskState>([
   'queued', 'running', 'paused', 'waiting-user', 'retrying', 'interrupted',
   'needs-verify', 'completed', 'failed', 'cancelled',
@@ -295,7 +353,10 @@ function reviveTask(raw: unknown): PersistentTask | null {
     resultFiles: strList(o.resultFiles, 100),
     ...(typeof o.result === 'string' ? { result: o.result } : {}),
     ...(typeof o.verifyEvidence === 'string' ? { verifyEvidence: o.verifyEvidence } : {}),
+    ...(sanitizeSightings(o.readSightings)),
     ...(typeof o.waitReason === 'string' ? { waitReason: o.waitReason } : {}),
+    ...(typeof o.resumeBlockedReason === 'string' && o.resumeBlockedReason
+      ? { resumeBlockedReason: o.resumeBlockedReason.slice(0, 300) } : {}),
     readOnly: o.readOnly === true,
     // 시크릿 작업은 애초에 저장되지 않는다. 파일에 있다면 과거 결함의 흔적이므로 그대로 믿지 않는다.
     incognito: false,
@@ -355,8 +416,15 @@ function markDirty(task: PersistentTask): void {
   if (!task.incognito) store.markDirty()
 }
 
-export function flushTasks(): void {
-  store.flush()
+/**
+ * 작업 목록을 **지금 디스크에 확정한다**. 종료 훅과, 되돌릴 수 없는 외부 쓰기 직전의
+ * 내구성 경계(social-workflow 의 persistPublishBoundary)가 함께 쓴다.
+ *
+ * @returns 확정됐는가. `false` 면 메모리의 최신 작업 목록이 디스크에 없다 —
+ *   그 상태로 외부 쓰기를 시작하면 재시작한 제품이 "무엇을 하려 했는지" 를 잃는다.
+ */
+export function flushTasks(): boolean {
+  return store.flush()
 }
 
 // ===== 목록·이벤트 =====
@@ -377,6 +445,7 @@ function summaryOf(t: PersistentTask): TaskSummary {
     ...(t.waitActionUrl !== undefined ? { waitActionUrl: t.waitActionUrl } : {}),
     ...(t.waitActionLabel !== undefined ? { waitActionLabel: t.waitActionLabel } : {}),
     ...(t.retry !== undefined ? { retry: t.retry } : {}),
+    ...(t.resumeBlockedReason !== undefined ? { resumeBlockedReason: t.resumeBlockedReason } : {}),
     llmCalls: t.usage.llmCalls,
     maxLlmCalls: t.budget.maxLlmCalls,
     ...(t.result !== undefined ? { result: t.result } : {}),
@@ -481,6 +550,17 @@ export function createTask(args: {
   instruction: string; tabId: string; windowId: string | null
   mode?: 'normal' | 'long'; readOnly?: boolean; incognito?: boolean
   budget?: Partial<TaskBudget>
+  /**
+   * **태어날 때부터 막힌 작업**으로 만든다 — `startTask`/`resumeTask` 가 거부한다.
+   *
+   * 왜 생성 시점이어야 하는가 (2026-09-19): 되돌릴 수 없는 외부 쓰기(게시)를 하는 작업은
+   * "저장이 확정됐을 때만 시작 가능" 해야 한다. 그런데 만든 **뒤에** 막으면, 그 사이에 디바운스
+   * 저장이 한 번 돌면 디스크에는 **막히지 않은** 작업이 남는다. 그 상태로 앱이 죽으면 재시작한
+   * 사용자가 작업 목록에서 그것을 직접 시작할 수 있고 — 그것이 곧 경계를 우회한 게시다.
+   * 태어날 때 막으면 **디스크에 존재하는 모든 판본이 막혀 있다**(구조적 보장). 저장 확정을
+   * 확인한 뒤에야 `clearResumeBlock` 으로 푼다.
+   */
+  blockedReason?: string
 }): TaskSummary | null {
   const instruction = str(args.instruction).trim()
   if (!instruction) return null   // 빈 지시로는 작업을 만들지 않는다(T1 부정 사례)
@@ -525,6 +605,8 @@ export function createTask(args: {
     externalWrites: [],
     createdAt: now, updatedAt: now, startedAt: now,
     elapsedMs: 0,
+    ...(str(args.blockedReason).trim()
+      ? { resumeBlockedReason: str(args.blockedReason).trim().slice(0, 300) } : {}),
   }
 
   tasksMap().set(task.id, task)
@@ -839,6 +921,45 @@ function onSegmentEvent(task: PersistentTask, evt: AgentEvent, box: { outcome: S
     case 'action': {
       const label = str(evt.label)
       if (isPublishAction(label)) recordExternalWrite(task, label)
+      return
+    }
+    // 에이전트 루프가 **실제로 관찰한** 대조 근거. 모델의 응답이 아니라 관찰 텍스트·주소에서
+    // 뽑은 값이라, 뒤에서 이 기록과 모델의 결론을 대조할 수 있다(social-workflow 의 게시 여부 확인).
+    case 'sighting': {
+      const url = str(evt.url).slice(0, 500)
+      const needle = normalizeVerifyText(str(evt.needle)).slice(0, 300)
+      if (!url || !needle) return
+      const list = task.readSightings ?? (task.readSightings = [])
+      if (list.some((s) => s.url === url && s.needle === needle)) return   // 같은 페이지·같은 문구는 한 번만
+      // 작성자·게시 시각은 관찰이 읽어 낸 경우에만 싣는다. **빈 값을 기본값으로 채우지 않는다** —
+      // 그러면 "읽지 못했다"(사람이 확인해야 함)가 "그런 표기가 없었다"로 조용히 바뀐다.
+      const author = normalizeAccountName(evt.author)
+      const postedAt = num(evt.postedAt)
+      const next: ReadSighting = {
+        url, host: str(evt.host).slice(0, 200), needle, snippet: str(evt.snippet).slice(0, 300), at: Date.now(),
+        ...(author && evt.authorScope === 'post'
+          ? {
+            author,
+            authorScope: 'post' as const,
+            authorSource: evt.authorSource === 'structural' ? ('structural' as const) : ('heuristic' as const),
+          }
+          : {}),
+        ...(postedAt > 0 ? { postedAt } : {}),
+        ...(str(evt.postedAtText) ? { postedAtText: str(evt.postedAtText).slice(0, 60) } : {}),
+        ...(str(evt.ambiguous) ? { ambiguous: str(evt.ambiguous).slice(0, 120) } : {}),
+      }
+      if (list.length >= MAX_SIGHTINGS) {
+        // ⚠ 상한에 닿았다고 **무조건 버리지 않는다.** 확인 에이전트는 보통 홈 피드 → 탐색 → 프로필
+        //   순으로 돌아다니는데, 앞선 페이지에서 쓸모없는 근거(모호·작성자 없음)가 상한을 채우면
+        //   **마지막에 도달한 프로필의 진짜 근거가 조용히 버려진다**. 결과는 안전한 쪽(모름)이지만,
+        //   자동 확인이 "왜 안 되는지 모르게" 죽고 사용자에겐 무관한 사유만 나열된다.
+        //   판정에 쓰일 가능성이 낮은 것부터 밀어낸다.
+        const weakIdx = list.findIndex((s) => s.ambiguous || !s.author)
+        if (weakIdx < 0) return          // 전부 쓸모 있는 근거면 새것을 버린다(기존 보존)
+        list.splice(weakIdx, 1)
+      }
+      list.push(next)
+      markDirty(task)
       return
     }
     // waitKind 는 setState **전에** 정한다 — 'changed' 를 받은 쪽이 곧바로 confirmTask 를 불러도
@@ -1218,18 +1339,59 @@ function stopEverything(task: PersistentTask): void {
   rt.waitKind = null
 }
 
-export function startTask(id: string): void {
-  const task = getTask(id)
+/**
+ * 이 작업의 이어가기를 막는다(또는 `null` 로 푼다). 원인은 이 파일이 몰라도 된다 — 예컨대
+ * social-workflow.ts 는 게시 작업이 `interrupted` 로 끝났는데 완료 근거가 없을 때(게시됐는지
+ * 확인이 안 될 때) 이걸로 이어가기를 막아 중복 게시를 막는다. 사용자가 게시 여부를 직접 확인하기
+ * 전까지는 startTask/resumeTask 둘 다 이 작업을 다시 실행하지 못한다(아래 두 함수 참고).
+ *
+ * 같은 값이 이미 반영돼 있으면 다시 쓰지 않는다 — taskEvents 는 잦게 발생하므로, 멱등이 아니면
+ * 호출자가 매 tick 마다 이 함수를 불러도 무의미한 저장·재알림이 반복된다.
+ */
+export function setResumeBlock(taskId: string, reason: string | null): void {
+  const task = getTask(taskId)
   if (!task) return
-  if (task.state !== 'queued' && task.state !== 'interrupted' && task.state !== 'paused') return
-  beginRun(task)
+  const next = reason ? reason.trim().slice(0, 300) : ''
+  const cur = task.resumeBlockedReason ?? ''
+  if (cur === next) return
+  if (next) task.resumeBlockedReason = next
+  else delete task.resumeBlockedReason
+  task.updatedAt = Date.now()
+  markDirty(task)
+  emitChanged()
 }
 
-export function resumeTask(id: string): void {
+/**
+ * 시작/이어가기의 결과. **거절을 조용히 삼키지 않는다** — 예전에는 두 함수가 `void` 라
+ * IPC 가 무조건 `{ok:true}` 를 돌려줬고, 차단이 제대로 걸린 경우에도 화면에는 "성공" 으로 보였다
+ * (사용자는 버튼을 눌러도 아무 일이 없는 이유를 알 수 없고, 검사는 차단을 확인할 수 없었다).
+ */
+export interface StartResult { ok: boolean; error?: string }
+
+export function startTask(id: string): StartResult {
   const task = getTask(id)
-  if (!task) return
-  if (task.state !== 'paused' && task.state !== 'interrupted') return
+  if (!task) return { ok: false, error: '작업을 찾을 수 없습니다.' }
+  if (task.state !== 'queued' && task.state !== 'interrupted' && task.state !== 'paused') {
+    return { ok: false, error: `지금 상태(${task.state})에서는 시작할 수 없습니다.` }
+  }
+  // startTask 도 'interrupted' 를 실행 상태로 되돌릴 수 있는 경로다 — resumeTask 와 같은 관문을 둔다
+  // (관문이 한쪽에만 있으면 다른 쪽으로 우회해 차단이 무력화된다).
+  if (task.resumeBlockedReason) return { ok: false, error: task.resumeBlockedReason }
   beginRun(task)
+  return { ok: true }
+}
+
+export function resumeTask(id: string): StartResult {
+  const task = getTask(id)
+  if (!task) return { ok: false, error: '작업을 찾을 수 없습니다.' }
+  if (task.state !== 'paused' && task.state !== 'interrupted') {
+    return { ok: false, error: `지금 상태(${task.state})에서는 이어갈 수 없습니다.` }
+  }
+  // 게시 여부가 불확실한 채로 이어가면 중복 게시 위험이 있다 — social-workflow.ts 가 세운 차단을
+  // 사용자가 먼저 풀어야 한다(resolvePublishUncertainty 로).
+  if (task.resumeBlockedReason) return { ok: false, error: task.resumeBlockedReason }
+  beginRun(task)
+  return { ok: true }
 }
 
 /**

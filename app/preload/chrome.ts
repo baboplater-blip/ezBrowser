@@ -4,7 +4,7 @@ import type {
   ActionDescriptor, AdblockStats, AiConnectResult, AiProviderDetection, AiProviderKind, Bookmark, BookmarkFolder,
   BookmarkTree, DownloadItem, ExtensionSummary, HistoryEntry, KeyBinding,
   MacroSummary, MediaCandidate, OmniboxSuggestion, ReadLaterItem, SearchEngine, TabGroup, TabGroupColor, TabSummary, TopSite, UserChromeState,
-  Workspace, WorkspaceState,
+  Workspace, WorkflowIntent, WorkspaceState,
 } from '../shared/types'
 
 type Unsubscribe = () => void
@@ -440,6 +440,9 @@ const api = {
       ipcRenderer.invoke(IPC.ai.blogBuildTask, params),
     snsBuildTask: (params: { platform: 'instagram' | 'youtube' | 'tiktok'; mode: 'publish' | 'draft'; file: string; caption: string; title?: string; tags?: string[]; autoOpen?: boolean }): Promise<{ task: string; openUrl: string }> =>
       ipcRenderer.invoke(IPC.ai.snsBuildTask, params),
+    // 입력창에 친 한 줄을 워크플로 폼값으로 읽는다(순수 판독 — 아무 작업도 시작하지 않는다).
+    intentDetect: (text: string): Promise<WorkflowIntent | null> =>
+      ipcRenderer.invoke(IPC.ai.intentDetect, { text }),
     // ===== 생성물 파이프라인 · 생성→게시 워크플로 · 블로그 참여 (묶음 SOCIAL-1) =====
     artifactList: (taskId: string): Promise<AiArtifactMeta[]> =>
       ipcRenderer.invoke(IPC.ai.artifactList, { taskId }),
@@ -457,6 +460,18 @@ const api = {
       ipcRenderer.invoke(IPC.ai.socialGrant, input),
     socialGrantGet: (): Promise<AiAutoPublishGrant | null> => ipcRenderer.invoke(IPC.ai.socialGrantGet),
     socialGrantRevoke: (): Promise<void> => ipcRenderer.invoke(IPC.ai.socialGrantRevoke),
+    socialRetryCaption: (id: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.socialRetryCaption, { id }),
+    socialSetCaption: (id: string, caption: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.socialSetCaption, { id, caption }),
+    /** 확인 단계에서 계정 고치기. 이미지·캡션은 그대로 유지된다(main 의 setWorkflowAccount 참고). */
+    socialSetAccount: (id: string, account: string): Promise<{
+      ok: boolean; error?: string
+      autoPublish?: 'covered' | 'not-covered' | 'none'
+      handleShaped?: boolean
+    }> => ipcRenderer.invoke(IPC.ai.socialSetAccount, { id, account }),
+    socialResolvePublish: (id: string, choice: AiPublishResolution): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.socialResolvePublish, { id, choice }),
     socialCancel: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialCancel, { id }),
     socialDelete: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ai.socialDelete, { id }),
     onSocialChanged: (cb: (list: AiSocialWorkflow[]) => void) => on(IPC.ai.socialChanged, cb),
@@ -650,6 +665,12 @@ interface PersistentTask {
   resultFiles: string[]
   result?: string
   verifyEvidence?: string
+  /**
+   * 이 작업이 **화면에서 실제로 관찰한** 대조 근거(읽기 전용 확인 작업). 에이전트 루프가 관찰
+   * 텍스트·주소에서 직접 적은 값이라 **모델이 만들 수 없다** — "봤다고 말한 것" 과 "실제로 본 것" 을
+   * 가르는 자리다. 게시 여부 확인의 완료 확정은 이 기록과 대조해야만 내려진다.
+   */
+  readSightings?: Array<{ url: string; host: string; needle: string; snippet: string; at: number }>
   waitReason?: string
   retry?: PersistentTaskRetry
   readOnly: boolean
@@ -702,8 +723,30 @@ interface AiSocialWorkflow {
   /** 자동 게시 선승인으로 진행됐는가. */
   autoPublished?: boolean
   receipt?: { url?: string; evidence?: string; at: number }
+  /** 캡션 초안이 아직 진행 중(앱이 꺼지면 이 값이 남아 '중단'을 알아낸다). */
+  captionPending?: boolean
+  /** 사용자가 캡션을 직접 손봤다 — 늦게 도착한 모델 응답이 덮어쓰지 않는다. */
+  captionUserEdited?: boolean
+  /** 게시가 실제로 됐는지 확인되지 않았다 — 확인 전에는 이어가기를 막는다. */
+  publishUncertain?: boolean
+  /** 읽기 전용 확인 작업 id(게시 여부 확인 중). */
+  verifyTaskId?: string
+  /** 중단 후 사용자가 이어가려면 필요한 안내. 없으면 정상 진행 중이다. */
+  recovery?: AiWorkflowRecovery
   error?: string
   createdAt: number; updatedAt: number
+}
+
+/** 게시 여부 불확실을 푸는 방법 — 코드가 정한 3가지뿐이다. */
+type AiPublishResolution = 'verify' | 'published' | 'not-published'
+
+interface AiWorkflowRecovery {
+  kind: 'caption-interrupted' | 'caption-failed' | 'publish-uncertain' | 'publish-storage-failed'
+  /** 무슨 단계에서 멈췄는지 */
+  stoppedAt: string
+  /** 다음에 무엇을 하면 되는지 */
+  nextAction: string
+  at: number
 }
 
 interface AiAutoPublishGrantInput {

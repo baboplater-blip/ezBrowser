@@ -2442,9 +2442,18 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 .ai-social-preview { width: 100%; max-height: 220px; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border-subtle); background: var(--color-bg-base); display: flex; align-items: center; justify-content: center; min-height: 60px; }
 .ai-social-preview img { max-width: 100%; max-height: 220px; object-fit: contain; display: block; }
 .ai-social-preview-meta { font-size: 10px; color: var(--color-text-muted); }
+/* 중단 후 복구 안내 — 어디서 멈췄는지 / 다음에 무엇을 할지 / 저장된 산출물 미리보기 */
+.ai-social-recovery { border: 1px dashed var(--color-border-subtle); border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.ai-social-recovery.warn { border-color: color-mix(in srgb, var(--color-warning) 55%, var(--color-border-subtle)); border-style: solid; }
+.ai-social-recovery-head { font-size: 11px; font-weight: 600; }
 
 .ai-social-receipt { font-size: 11px; line-height: 1.5; color: var(--color-text-secondary); background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; padding: 6px 8px; word-break: break-all; }
 .ai-social-receipt a { color: var(--color-accent); }
+/* 확인 단계 계정 고치기 — 입력칸과 저장 버튼이 한 줄에 붙는다(좁은 280px 도크 기준). */
+.ai-social-account { display: flex; flex-direction: column; gap: 3px; }
+.ai-social-account-row { display: flex; gap: 4px; align-items: center; }
+.ai-social-account-input { flex: 1 1 auto; min-width: 0; }
+.ai-social-account-save { flex: 0 0 auto; white-space: nowrap; }
 
 .ai-social-hosts { display: flex; flex-wrap: wrap; gap: 4px; }
 .ai-social-empty { font-size: 11px; color: var(--color-danger); }
@@ -2455,6 +2464,12 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 .ai-social-ledger-when { color: var(--color-text-muted); flex: 0 0 auto; font-size: 10px; }
 .ai-social-ledger-action { flex: 0 0 auto; font-weight: 600; white-space: nowrap; }
 .ai-social-ledger-addr { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 워크플로 의도 확인 카드 — 자연어 요청이 기존 생산 워크플로(이미지→SNS 게시/블로그 참여)와 일치할 때 */
+.ai-intent-card { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--color-accent); border-radius: 8px; padding: 10px; margin-bottom: 8px; background: var(--color-bg-sunken); }
+.ai-intent-head { font-size: 12px; font-weight: 600; color: var(--color-text-primary); line-height: 1.4; }
+.ai-write-label.ai-field-needed { color: var(--color-danger); font-weight: 600; }
+.ai-write-label.ai-field-needed::after { content: ' *'; }
 
 /* 마크다운 렌더 (AI 챗 답변) */
 .md { white-space: normal; }

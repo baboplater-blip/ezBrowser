@@ -1,0 +1,70 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T071013Z-10952b",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T07:15:22Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "사용자가 더블클릭할 rc.10 설치파일이 실제로 디스크에 있고, 그 exe 에 박힌 버전이 package.json 과 같은 0.2.0-rc.10 이다",
+      "check": "dist\\ezBrowser-0.2.0-rc.10-win-x64.exe 존재 · 121,903,289바이트 · VersionInfo ProductVersion=FileVersion=0.2.0-rc.10",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "안내서에 적힌 설치파일 경로·크기·해시가 디스크의 그 파일과 그대로 맞는다",
+      "check": "node crypto 로 직접 계산한 SHA256 ea6ee034edfcb6eeceedb5fddbdf3de165a31caecb8990b9538c15e00ba1ec5e 를 QUICKSTART 349~350행에 기재",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "안내서가 다른 빌드의 해시를 이 빌드 것이라고 말하지 않는다",
+      "check": "틀린 주장이던 ffc3734b…(실제 rc.8 해시)를 rc.9 것이라 적은 문장 제거. 남은 1건은 그 오류를 바로잡는 설명문. rc.9 실제 해시 a6cd5b02… 와 대조해 확인",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "빌드가 원격 저장소에 아무것도 올리지 않는다",
+      "check": "--publish never 로 실행 · 빌드 로그에 uploading/publishing 라인 0건(publish 문자열 히트 4건은 전부 publisherName 사용중단 경고)",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "사용자가 지금 쓰고 있는 설치본과 실행 중인 앱을 건드리지 않는다",
+      "check": "ezBrowser 5개 프로세스가 %LOCALAPPDATA% 에서 계속 가동 · 종료 0회 · 설치/제거 0회 · 빌드 대상은 dist 뿐이라 파일 잠금 없음",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "이번 실행이 앱 코드를 바꾸지 않는다",
+      "check": "git status 의 app/ 수정 목록이 세션 시작 스냅샷과 동일 · 이번 편집은 docs/QUICKSTART.md 와 .auto-dev/recovery-flow-20260919-final.md 둘뿐",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": true,
+    "remaining_required": [],
+    "blockers": [],
+    "optional_next": [
+      "rc.10 설치파일 설치→부팅→제거 실검증 — 이번 지시가 금지한 범위(사용자 실설치본 가동 중). 실측은 rc.2 가 마지막",
+      "마감 게이트의 package 단계를 --dir 로만 두는 한 설치파일은 계속 자동 생성되지 않는다 — 게이트에 NSIS 단계를 넣을지는 제품 결정"
+    ],
+    "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+  },
+  "verification": {
+    "command": null,
+    "passed": null,
+    "failed": null,
+    "reran_only_failed": false
+  },
+  "notes": "코드 변경 0. 패키징·문서·결과기록만. 검증 재실행 없음(마감 게이트 16:04 이후 손으로 고친 소스 없음)."
+}

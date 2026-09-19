@@ -1,0 +1,83 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T054859Z-ab41eb",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "fail",
+  "written_at": "2026-09-19T06:15:38Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "앱을 강제 종료하고 다시 켜도, 생성 전 화면 기록이 남아 있어 광고가 아니라 방금 만든 그림이 산출물로 저장된다",
+      "check": "verify-recovery-cdp.mjs R1 — 미끼 900x900 / 생성물 800x600 을 놓고 taskkill /T /F 후 같은 --user-data-dir 로 재기동, 재개 후 capture_image 가 저장한 파일의 sha256 대조 → 실측: sha=34e9e6be10a7(생성물, 800x600). 같은 하네스가 수정 전 빌드에서는 ea16c8042eff(미끼 900x900)를 저장했다(2회 연속 재현)",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "negative",
+      "behavior": "재시작 후 그 페이지로 돌아와도, 이미 그려진 생성물을 '원래 있던 것'으로 기준선에 삼키지 않는다",
+      "check": "navigate/새 탭의 자동 기준선을 soft 모드로 바꿔 기존 기준선을 덮지 않게 하고, R1 재개 경로가 실제로 그 경로를 지나는지 확인 → 실측: 재개 후에도 R1 이 생성물을 집는다(덮어썼다면 후보 0개가 되어 실패했을 것)",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "캡션 작성 중 앱이 꺼지면, 아무 안내 없이 영구 정지하지 않는다",
+      "check": "verify-recovery-cdp.mjs R2 — 캡션 LLM 응답 전 강제 종료 후 재기동, socialList 에서 caption/captionError/recovery 유무 확인(재시작 2초 후에도 재확인) → 실측: recovery 힌트 있음. 수정 전 빌드에서는 caption=false, captionError=false, recovery=false 로 막다른 상태였다",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "부팅만으로 캡션 모델을 다시 부르지 않는다(사용자가 재시도/직접입력을 고른다)",
+      "check": "R2 에서 재기동 2초 후 상태 재확인 — 자동 재시도가 있었다면 caption 이 채워졌을 것 → 실측: 2초 후에도 캡션 없음, recovery 안내만 있음",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "게시 단계의 기존 경합 방어(게시 0건 또는 1건)가 이번 변경으로 깨지지 않는다",
+      "check": "verify-auto-publish.mjs 51종 — 취소·철회·기한·중복승인·재시작·리다이렉트·탭소멸 전 구간 → 실측: 수정 전 51/51 과 동일(회귀 0)",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "positive",
+      "behavior": "패키징된 rc.8 을 설치 없이 실행해도 브라우저 기본 동작이 정상이다",
+      "check": "smoke-cdp.mjs 를 dist/win-unpacked(rc.8) 에 대고 실행 — 탭·주소창·북마크·설정·팔레트·광고차단·다크모드·시크릿·z-order 16종",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "positive",
+      "behavior": "마감 게이트가 통과한다",
+      "check": "npm run verify (typecheck·build·package·smoke 포함 13단계)",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [
+    "R3(게시 전송 후 응답 유실·앱 종료) 픽스처 검증 미구현 — C 구역 코드(publishUncertain·resume 차단·읽기전용 확인)는 들어갔으나 재시작 경로가 하네스로 증명되지 않았다. SNS_OPEN_URL.instagram 이 실제 외부 주소라 --host-resolver-rules + 자체서명 인증서 격리 필요(openssl 가용 확인)"
+  ],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [
+      "R3 픽스처 검증 구현 후 게시 중단→재시작 중복게시 0건 실증",
+      "R3(게시 전송 후 응답 유실·앱 종료) 픽스처 검증 미구현 — C 구역 코드(publishUncertain·resume 차단·읽기전용 확인)는 들어갔으나 재시작 경로가 하네스로 증명되지 않았다. SNS_OPEN_URL.instagram 이 실제 외부 주소라 --host-resolver-rules + 자체서명 인증서 격리 필요(openssl 가용 확인)"
+    ],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — rc.8 미서명",
+      "rc.8 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 있어 verify-install 이 스스로 BLOCKED(우회하지 않음)",
+      "실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처)"
+    ],
+    "optional_next": [],
+    "korean_line": "남은 작업: R3 픽스처 검증 구현 후 게시 중단→재시작 중복게시 0건 실증, R3(게시 전송 후 응답 유실·앱 종료) 픽스처 검증 미구현 — C 구역 코드(publishUncertain·resume 차단·읽기전용 확인)는 들어갔으나 재시작 경로가 하네스로 증명되지 않았다. SNS_OPEN_URL.instagram 이 실제 외부 주소라 --host-resolver-rules + 자체서명 인증서 격리 필요(openssl 가용 확인), (차단) 코드 서명 인증서(.pfx) 없음 — rc.8 미서명, (차단) rc.8 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 있어 verify-install 이 스스로 BLOCKED(우회하지 않음), (차단) 실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "node build/verify-recovery-cdp.mjs",
+    "passed": 2,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "코드 변경 전 수정 전 빌드 스냅샷(dist-before)으로 R1·R2 실패를 먼저 재현한 뒤 고쳤고, 같은 하네스를 --main 으로 수정 후 빌드에 다시 돌렸다. 사용자 실앱/프로필/다운로드 무접촉(전부 격리 프로필, 하네스가 spawn 한 PID 트리만 종료). rc.8: dist/ezBrowser-0.2.0-rc.8-win-x64.exe sha256 ffc3734b7abeecdad4d18682f8e8fda0e24e01cfc58e9d47c03c11ce40a8357a (--publish never)"
+}

@@ -169,8 +169,23 @@ export function loadJsonObject(
 export interface JsonStore {
   /** 상태가 바뀌었다 — 디바운스 저장 예약. */
   markDirty(): void
-  /** 종료 시 동기 저장. 저장할 변경이 없으면 **파일을 건드리지 않는다**. */
-  flush(): void
+  /**
+   * 종료 시 동기 저장. 저장할 변경이 없으면 **파일을 건드리지 않는다**.
+   *
+   * @returns **디스크에 확정됐는가.** `true` = 쓸 것이 없었거나 착지에 성공했다.
+   *   `false` = 직렬화·쓰기·rename 중 하나가 실패해 **메모리의 최신 상태가 디스크에 없다**.
+   *
+   * 왜 값을 돌려주는가 (2026-09-19): 예전에는 `void` 라 실패가 경고 로그로만 흘렀다. 그래서
+   * "저장을 확정한 뒤에 되돌릴 수 없는 외부 쓰기를 시작한다" 는 경계가 **말로만** 지켜졌고,
+   * 디스크가 막힌 순간 호출자는 아무것도 모른 채 게시를 시작했다(사용자가 나중에 상황을
+   * 설명받을 길이 사라진다). 실패를 **호출자가 볼 수 있어야** 그 경계가 코드로 지켜진다.
+   *   종료 훅처럼 결과를 볼 수 없는 호출자는 그대로 무시해도 된다(반환값을 안 보면 예전과 같다).
+   *
+   * ⚠ **보장의 한계**: `writeFileSync` + `renameSync` 까지만 한다(`fsync` 는 하지 않는다).
+   *   즉 `true` 는 "**앱이 죽어도** 파일 시스템이 이 내용을 갖고 있다" 는 뜻이지, 전원이 끊겨도
+   *   디스크 플래터에 닿았다는 뜻은 아니다. 이 코드가 막으려는 것은 앱 크래시·강제 종료다.
+   */
+  flush(): boolean
   /** 부분 손상으로 항목을 버렸을 때 — 원본을 복사본으로 보존하고 몇 개를 버렸는지 알린다. */
   reportDropped(dropped: number, kept: number): void
 }
@@ -284,13 +299,13 @@ export function createJsonStore(opts: {
     if (seq > persistedSeq) scheduleTimer()
   }
 
-  function flush(): void {
+  function flush(): boolean {
     if (timer) { clearTimeout(timer); timer = null; firstDirtyAt = 0 }
-    if (seq <= persistedSeq) return  // 저장할 변경 없음 — 정상 파일을 건드리지 않는다
+    if (seq <= persistedSeq) return true  // 저장할 변경 없음 — 정상 파일을 건드리지 않는다(이미 확정 상태)
     const mySeq = seq
     const text = serialize()
-    if (text === null) return
-    writeSyncAt(mySeq, text)
+    if (text === null) return false      // 직렬화 실패 — 메모리의 최신 상태가 디스크에 없다
+    return writeSyncAt(mySeq, text)      // 쓰기·rename 실패도 그대로 전달한다
   }
 
   function reportDropped(dropped: number, kept: number): void {

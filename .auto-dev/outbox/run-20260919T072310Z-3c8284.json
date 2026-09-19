@@ -1,0 +1,160 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T072310Z-3c8284",
+  "recorded_at": "2026-09-19T08:10:26Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T072310Z-3c8284",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T072310Z-3c8284)의 구조화 완료 기록: pass (합격 기준 8건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "9fbba817-6ef0-4b7c-9d00-cc1876e448f7",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "저장이 확정되지 않으면 게시를 시작하지 않는다 — 직렬화·쓰기(.tmp)·rename(chmod 0o444→EPERM) 실패를 실제 주입하면 flush()가 false 를 돌려주고 기존 파일이 보존되며 .tmp 잔재가 0개",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "저장소를 되돌리면 최신 스냅샷이 실제로 저장되고 재시작해 다시 읽어도 레코드가 정확히 1건이며, 변경이 없으면 파일을 건드리지 않는다(mtime 불변)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "AI 가 '게시됨'이라고 말하기만 해서는 완료로 닫히지 않는다 — 서버에 올라간 적 없는 캡션에 표지를 내게 하면 stage=publish 유지, stoppedAt='근거를 찾지 못했습니다', readSightings 비어 있음, 서버 게시 추가 0건",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "실제로 올라간 글은 확인으로 완료 확정되고 영수증에 출처 주소와 화면 발췌가 남는다(receipt.url=https://www.instagram.com/, 발췌='게시물 #1 — 문구: r3 테스트 캡션'), 추가 게시 0건",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "'게시안됨' 한 줄로 이어가기 차단이 자동으로 풀리지 않는다(resumeBlockedReason 유지). 사람이 직접 고르면 풀린다(양성 대조)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "아직 올리지 않고 입력만 해 둔 캡션은 근거가 되지 않는다 — 근거 수집을 편집영역(textarea·input·contenteditable) 제외 인페이지 스크립트로 옮긴 뒤에도 실제 게시물은 그대로 찾는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "시작되지 않은 게시 작업으로 경계를 우회할 수 없다 — abort 는 setResumeBlock→flush→deleteTask→flush 순서라 삭제가 디스크에 못 닿아도 남는 것은 '시작할 수 없는 작업'이고 startTask·resumeTask 가 둘 다 이를 본다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "검사가 실제로 무언가를 잡는다 — 호스트·시각을 보지 않는 느슨한 판정에 같은 데이터를 먹이면 통과해 버리고, 실제 판정은 거부한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "R3-VER-INT(확인 작업이 도는 중 강제 종료) 시나리오 추가 — interrupted 분기는 구조적으로만 확인했다",
+        "P 그룹(저장 실패)의 음성 대조 실행 — 현재는 코드 주석의 논리적 근거만 있다",
+        "실제 구독 모델·실제 SNS 로 확인 경로 재확인 — 이번 라운드는 로컬 픽스처 + 각본 LLM",
+        "설치파일 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 가동 중이라 우회하지 않았다"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T072310Z-3c8284"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 2835.6,
+        "context_chars": 12237,
+        "total_tokens": 1980222,
+        "cache_read_tokens": 134213770
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9490,
+          "output": 20,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 522,
+          "output": 197385,
+          "cache_read": 109925400,
+          "cache_creation": 926054
+        },
+        "claude-sonnet-5": {
+          "input": 136,
+          "output": 96299,
+          "cache_read": 24288370,
+          "cache_creation": 750316
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\persistence-evidence-20260919\\run-20260919T072310Z-3c8284-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\persistence-evidence-20260919\\run-20260919T072310Z-3c8284-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "**판정 pass** — 요청한 두 결함을 고쳤고, 고치는 길에 드러난 결함 여섯 건을 함께 닫았습니다.\n\n## 결함 ① — 저장이 막혀도 글은 나갔다\n\n`JsonStore.flush()` 가 `void` 라 실패가 경고 로그로만 흘렀고, 게시 직전 호출부는 두 flush 의 결과를 보지 않고 그대로 `startTask` 를 불렀습니다. **바로 위 주석이 이 경계를 말로는 설명하고 있었다는 점**이 성격을 보여 줍니다 — 경계를 지키는 것은 주석이 아니라 반환값입니다(`writeSyncAt` 은 이미 `false` 를 돌려주고 있었는데 `flush()` 가 그 값을 버렸습니다).\n\n`flush(): boolean` → `flushTasks(): boolean` → `persistPublishBoundary()`. 실패하면 게시를 시작하지 않고, **`failed` 가 아니라 `review` 로** 물러나 다시 누르면 이어지게 했습니다. 고아 `queued` 작업으로 우회하는 길은 `setResumeBlock` → flush → delete → flush 순서로 막았습니다(삭제가 디스크에 못 닿아도 남는 것은 '시작할 수 없는 작업').\n\n## 결함 ② — \"말한 것\"을 \"본 것\"으로 썼다\n\n모델의 `게시됨:` 한 줄은 페이지를 한 번도 보지 않아도 나옵니다. 이제 런타임이 관찰에서 직접 적는 `readSightings`(모델이 만들 수 없는 값)와 대조합니다. 비대칭은 의도했습니다 — **있는 것은 볼 수 있어도 없는 것은 증명할 수 없으므로**, `게시안됨` 은 자동 해제하지 않고 사람 경로만 남깁니다.\n\n## 검사가 꺼낸 것들\n\n- 확인이 끊기거나 그 기록이 사라지면 **\"확인하는 중…\"에서 영구 고착**(확인 버튼도 비활성)\n- **차단을 푸는 행위가 스스로 차단을 되살렸다** — `setResumeBlock(null)` 이 쏜 이벤트가 같은 호흡에서 재차단. 응답은 `ok` 인데 화면은 그대로, 즉 안전 장치의 유일한 탈출구가 막혀 있었습니다\n- 적대적 리뷰가 높음 2건 추가: **인페이지 정규식 `\\s` 가 템플릿 리터럴에서 `s` 로 접혀 전체 본문 대조가 죽어 있었고**(문법 오류가 아니라 조용히 틀립니다), **`innerText` 가 작성창 내용을 포함**해 \"입력만 하고 안 올린 캡션\"이 게시 근거로 둔갑할 수 있었습니다 — 모델의 결론과 런타임의 관찰이 같은 화면 하나에 함께 속는 상관된 실패라, 근거 수집을 편집영역 제외 인페이지 스크립트로 옮겼습니다\n\n기존 R3-RO 는 \"표지만 있으면 완료\"를 **통과 조건**으로 삼아 지금 고친 결함을 굳히고 있었습니다. 완화가 아니라 **조건을 나눠** 다시 썼고, 같은 표지로 정반대 결론이 나오는 두 검사(R3-VER-POS / R3-VER-FORGED)가 핵심 증거입니다.\n\n## 검증 — 52 PASS / 0 FAIL\n\n`npm run verify` **14/14 · 50s** · `verify-recovery --only R3` **9/9**(리뷰 수정 뒤 재현) · 신규 `persistence-boundary` **13/13**(직렬화·쓰기·rename 실패 **실제 주입** + 복구 양성 대조 + 재시작 중복 없음) · 재패키징 후 스모크 **16/16** · typecheck 3/3. 검출력도 확인했습니다 — 느슨한 판정에 같은 데이터를 먹이면 통과해 버립니다(E-NEG).\n\n**산출물**: `dist\\ezBrowser-0.2.0-rc.11-win-x64.exe` · 121,910,720 B · sha256 `4ef108aec369029e66b027fd704a52f7b021f78efa50814dbc94ad96a56bef0e` · 17:06 · `--publish never`(GitHub 최신 릴리스는 여전히 `0.1.0`). 소스 17:03 → dist 17:05 → 설치파일 17:06 으로 체인을 확인했습니다. 실행 중이던 rc.5 실설치본과 실제 프로필은 건드리지 않았고, 잔재 프로세스 0입니다.\n\n## 모델·사용량\n\n지휘 `claude",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T072310Z-3c8284\\stream.jsonl",
+    "error": null
+  }
+}

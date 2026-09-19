@@ -1,0 +1,89 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T042628Z-5824c1",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T05:12:00Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "에이전트 입력창에 '등산 관련 블로그 3개 글에 댓글 달아줘' 라고 적으면 바로 실행되지 않고 주제·글 수가 미리 채워진 확인 카드가 먼저 뜬다",
+      "check": "verify-intent-ui IU1·IU2 — 카드 등장 + 영속 작업 0개→0개(누르기 전 실행 없음) + 주제 '등산'·글 수 3 실측",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "계정을 채우고 실행을 누르면 양식(만들어 올리기)으로 시작한 것과 똑같은 레시피 지시문으로 영속 작업이 시작된다",
+      "check": "verify-intent-ui IU3 — 생성된 작업 지시문에 [참여 가드] 표식·id=guid·limit=3·account=tester·# 안전 지침 전부 포함, allowedHosts 7개",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "positive",
+      "behavior": "실제 구독 Claude CLI 가 그 경로로 블로그 댓글 작업을 완주하고, 코드가 강제하는 글 수 한도가 실제로 걸린다",
+      "check": "실행 프로필 직접 확인 — ptask state=completed(105.7초·11호출), ai-engage-quota comment=2(한도 도달), 장부에 서로 다른 글 2건, ai-agent-runs 부재(ptask 경로)",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "다운로드 저장 위치를 바꾸면 AI 대화·보고서 내보내기도 그 폴더에 저장된다",
+      "check": "verify-ai-persist PS13 — 저장 경로가 격리 폴더 안, 사용자 실제 Downloads 새 .md 0개",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "계정을 비워 두면 실행 버튼이 잠겨 아무 작업도 시작되지 않는다",
+      "check": "verify-intent-ui IU2 — 계정 입력 전 run 버튼 disabled=true, 채운 뒤 false",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "질문·금지·인용문·페이지 본문 붙여넣기·조종 문구에서는 작업 폼이 만들어지지 않는다",
+      "check": "verify-intent-routing I3~I6 19건 전부 null + verify-intent-ui IU4(질문은 카드 없이 평범한 작업으로 감)",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "'게시까지' 를 골라도 자동 게시 토글을 켜지 않으면 자동 게시 선승인이 생기지 않는다",
+      "check": "verify-intent-ui IU5 — socialGrantGet() 이 실행 전후 모두 비어 있음",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "negative",
+      "behavior": "원문에 계정 핸들이 있어도 계정을 추론하지 않는다",
+      "check": "verify-intent-routing I7 — missing 에 account 가 항상 포함",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [
+      "이미지→게시 워크플로의 게시 단계가 탭을 게시 사이트로 옮기지 않아 waiting-user 로 멈춘다(원인 확정, 비가역 경로라 미수정). 수정 후 실모델 R-SNS 재검증 필요"
+    ],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — rc.6 미서명",
+      "rc.6 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 가동 중이라 verify-install 이 BLOCKED. 우회하지 않음",
+      "실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처)"
+    ],
+    "optional_next": [
+      "AiTab 계열 UI 문구의 ko/en 로케일 메커니즘 도입(현재 이 컴포넌트 트리는 한국어 하드코딩이 관례)"
+    ],
+    "korean_line": "남은 작업: 이미지→게시 워크플로의 게시 단계가 탭을 게시 사이트로 옮기지 않아 waiting-user 로 멈춘다(원인 확정, 비가역 경로라 미수정). 수정 후 실모델 R-SNS 재검증 필요, (차단) 코드 서명 인증서(.pfx) 없음 — rc.6 미서명, (차단) rc.6 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 가동 중이라 verify-install 이 BLOCKED. 우회하지 않음, (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "npm run verify(13/13) + verify-intent-ui(5/5) + verify-all --only ai-persist(14/14)",
+    "passed": 32,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": ""
+}

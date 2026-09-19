@@ -4,6 +4,7 @@ import {
   listObservationFrames, frameFromId, computeFrameOffset, setRefRouting, resolveRefRoute,
   hostAllowed, hostOf, type RefSlot,
 } from './frames'
+import { POST_TIME_FN_SRC } from './agent-gate'
 
 // 에이전트의 눈과 손 — 페이지를 관찰(observe)하고 행동(execute)한다.
 // 콘텐츠 페이지 컨텍스트에서 executeJavaScript 로 실행(제스처·번역·리더와 동일 패턴).
@@ -1914,4 +1915,301 @@ export async function readUrlInPage(
   } catch (e) {
     return { ok: false, error: String(e).slice(0, 200) }
   }
+}
+
+/**
+ * 화면에서 대조 문구를 찾는다(게시 여부 확인 전용). **작성 중인 글은 근거로 세지 않는다.**
+ *
+ * 왜 관찰(observePage)의 본문 조각으로는 안 되는가 — 두 가지다.
+ *
+ * ① **잘린다.** 관찰이 프롬프트에 싣는 본문은 1800자 상한이다. 계정 첫 화면은 메뉴·안내가 길어서
+ *    실제로 올라간 글이 그 뒤에 있으면 조각에는 안 보인다. 그 상태로 "근거 없음" 이라고 결론 내면
+ *    **실제로 올라간 글을 못 봤다고 말하는 셈**이다.
+ *
+ * ② **작성창의 글까지 들어 있다.** `innerText` 는 contenteditable·textarea 의 내용을 포함한다.
+ *    게시 작업이 캡션을 **입력만 하고** 중단된 탭이 열려 있으면, 확인 작업이 그 탭으로 넘어가
+ *    "내 캡션이 이 사이트 화면에 보인다" 를 근거로 삼을 수 있다 — 아무것도 올라가지 않았는데
+ *    완료로 확정된다. 모델의 결론과 런타임의 관찰이 **같은 화면 하나에 함께 속는** 경로다
+ *    (이 저장소는 2026-09-13 에 같은 성질의 오탐을 완료 문구 쪽에서 이미 겪었다).
+ *    그래서 편집 가능한 영역(textarea·input·contenteditable)의 텍스트는 **아예 빼고** 읽는다.
+ *
+ * 돌려주는 것은 **찾았는가와 짧은 발췌뿐**이라 프롬프트가 커지지 않는다(본문 전체를 모델에게
+ * 보내지 않는다). 최상위 문서만 본다 — 교차 출처 프레임까지 뒤지면 "다른 사이트에서 본 것" 과
+ * 구분이 흐려진다.
+ *
+ * ⚠ 인페이지 스크립트는 템플릿 리터럴 안에 있으므로 정규식의 백슬래시를 **두 번** 써야 한다
+ *   (`\s`). 한 번만 쓰면 `\s` 가 `s` 로 접혀 `/s+/g` 가 나가고, 문법 오류가 아니라서 조용히 틀린다.
+ */
+export async function probeVerifyNeedles(
+  wc: WebContents, needles: string[],
+): Promise<VerifyProbeHit | null> {
+  if (wc.isDestroyed() || needles.length === 0) return null
+  const want = needles.filter((n) => typeof n === 'string' && n.length > 0)
+  if (want.length === 0) return null
+  try {
+    const res = (await wc.executeJavaScript(VERIFY_PROBE_SCRIPT(want), true)) as Record<string, unknown> | null
+    if (!res || typeof res.needle !== 'string' || !res.needle) return null
+    const hit: VerifyProbeHit = {
+      needle: res.needle,
+      snippet: typeof res.snippet === 'string' ? res.snippet : '',
+    }
+    // 작성자는 **글 영역 안에서 읽은 것만** 근거가 된다. 스크립트가 그 밖에서 읽었다면(그럴 수 없게
+    // 짜여 있지만, 이 검사는 계약을 코드로 못 박는 자리다) 여기서 버린다.
+    if (typeof res.author === 'string' && res.author && res.authorScope === 'post') {
+      hit.author = res.author
+      hit.authorScope = 'post'
+      // 출처를 함께 넘긴다 — 판정이 "확정 거부" 와 "모름" 을 가를 때 쓴다.
+      // 알 수 없으면 보수적으로 heuristic 으로 본다(확정 거부에 쓰지 않는다).
+      hit.authorSource = res.authorSource === 'structural' ? 'structural' : 'heuristic'
+    }
+    if (typeof res.postedAt === 'number' && Number.isFinite(res.postedAt) && res.postedAt > 0) {
+      hit.postedAt = res.postedAt
+      if (typeof res.postedAtText === 'string' && res.postedAtText) hit.postedAtText = res.postedAtText.slice(0, 60)
+    } else if (typeof res.postedAtUnclear === 'string' && res.postedAtUnclear) {
+      // 시각 표기는 있었지만 시간대가 없어 확정하지 못했다 — 사용자에게 **왜** 모르는지 그대로 말한다.
+      hit.postedAtUnclear = res.postedAtUnclear.slice(0, 120)
+    }
+    if (typeof res.ambiguous === 'string' && res.ambiguous) hit.ambiguous = res.ambiguous.slice(0, 120)
+    return hit
+  } catch {
+    return null
+  }
+}
+
+/** `probeVerifyNeedles` 가 돌려주는 것 — `ReadSighting` 의 관찰 부분과 같은 모양. */
+export interface VerifyProbeHit {
+  needle: string
+  snippet: string
+  author?: string
+  authorScope?: 'post'
+  /** 작성자를 어떻게 읽었는가 — 구조적 표기(신뢰)인가 위치·모양 추정(휴리스틱)인가. */
+  authorSource?: 'structural' | 'heuristic'
+  postedAt?: number
+  postedAtText?: string
+  /** 시각 표기는 있었지만 시간대가 없어 확정하지 못한 사유. `postedAt` 이 없을 때만 채워진다. */
+  postedAtUnclear?: string
+  ambiguous?: string
+}
+
+/**
+ * 인페이지 대조 스크립트. 문구를 찾는 데서 끝나지 않고 **그 문구가 있는 글 한 건**을 특정해
+ * 작성자와 게시 시각까지 같이 읽는다(agent-gate 의 `sightingSupportsPublication` 이 그 셋으로 판정).
+ *
+ * 설계에서 물러설 수 없는 두 가지:
+ *
+ *  ① **작성자는 글 영역 안에서만 읽는다.** 화면 전체에서 찾으면 대부분의 사이트가 전역 막대에
+ *     표시하는 **로그인한 내 계정**이 잡힌다 — 그러면 남의 글 페이지에서도 "내 글" 로 읽힌다.
+ *     못 찾으면 못 찾은 채로 둔다(판정이 "모름" 으로 처리한다). 밖으로 넓혀 찾지 않는다.
+ *
+ *  ② **상대시각은 짧고 통째로 시각인 요소에서만 읽는다.** 글 영역 전체 텍스트에 정규식을 걸면
+ *     캡션 안의 "3일 전에 갔던 카페" 같은 문장이 게시 시각으로 둔갑한다. 그래서 `<time datetime>`
+ *     을 최우선으로 보고, 없으면 **20자 이하이고 전체가 시각 표기인** 요소만 본다.
+ *
+ * ⚠ 이 스크립트는 템플릿 리터럴 안에 있다 — 정규식 백슬래시는 **두 번**(`\\s`, `\\d`). 한 번만 쓰면
+ *   문법 오류 없이 조용히 다른 정규식이 나간다(이 파일이 2026-09-19 에 실제로 겪은 결함이다).
+ */
+function VERIFY_PROBE_SCRIPT(want: string[]): string {
+  return `(function(){
+  try {
+    // 게시 시각 파서 — agent-gate 의 \`parseUnambiguousPostTime\` **그 함수 자체**를 넣는다.
+    // 문자열로 따로 적어 두면 언젠가 갈라지고, 그때 갈라진 쪽은 조용히 틀린 시각을 낸다.
+    ${POST_TIME_FN_SRC}
+    // ⚠ contenteditable 은 **대소문자 구분 없이** 잡아야 한다. 예전엔 [contenteditable="true"] 로
+    //   값 정확 일치를 걸어 \`contenteditable="TRUE"\` 를 놓쳤다 — 그러면 "입력만 하고 안 올린 캡션"이
+    //   게시 근거로 둔갑한다(이 배제가 그 사고를 막는 유일한 장치다).
+    var SKIP = 'script,style,noscript,template,textarea,input,select,[contenteditable]:not([contenteditable="false"]):not([contenteditable="FALSE"])';
+    var GLOBAL_NAV = 'nav,header,[role="banner"],[role="navigation"]';
+    var CONTAINER = 'article,[role="article"],[data-post-id],li';
+    var MAX_CONTAINER_TEXT = 3000;
+    var MAX_HOPS = 10;
+
+    // ── 1) 보이는 텍스트를 모으되, 조각마다 **어느 요소에서 왔는지**를 같이 기억한다.
+    //    (예전 판은 통째로 이어 붙인 뒤 정규화해서 위치 정보를 잃었다 — 그러면 글을 특정할 수 없다.)
+    var hay = '';
+    var map = [];
+    var walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (node) {
+        var el = node.parentElement;
+        if (!el) return NodeFilter.FILTER_REJECT;
+        // 작성 중인 글·스크립트 본문은 "화면에 올라간 글" 이 아니다.
+        if (el.closest(SKIP)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (var n = walker.nextNode(); n; n = walker.nextNode()) {
+      var raw = n.nodeValue;
+      if (!raw) continue;
+      var piece = String(raw).replace(/\\s+/g, ' ').trim().toLowerCase();
+      if (!piece) continue;
+      if (hay.length) hay += ' ';
+      var start = hay.length;
+      hay += piece;
+      map.push({ el: n.parentElement, end: hay.length });
+    }
+    if (!hay) return null;
+
+    // ── 2) 문구 찾기. **긴 것부터** — 더 구체적인 근거를 남긴다.
+    //    (호출자가 내림차순으로 넘기지만 여기서 다시 정렬한다. 규칙이 호출 순서에 기대면
+    //     호출자가 바뀌는 순간 조용히 달라진다 — agent-gate.matchNeedleInText 도 스스로 정렬한다.)
+    var needles = ${JSON.stringify(want)}.slice().sort(function (a, b) { return b.length - a.length; });
+    var found = null;
+    for (var i = 0; i < needles.length; i++) {
+      var at = hay.indexOf(needles[i]);
+      if (at >= 0) { found = { needle: needles[i], at: at }; break; }
+    }
+    if (!found) return null;
+    var from = Math.max(0, found.at - 40);
+    var out = {
+      needle: found.needle,
+      snippet: hay.slice(from, found.at + found.needle.length + 40).trim().slice(0, 200),
+    };
+
+    // ── 3) 그 문구가 **어느 글**에 있는가.
+    var startEl = null;
+    for (var k = 0; k < map.length; k++) {
+      if (map[k].end > found.at) { startEl = map[k].el; break; }
+    }
+    if (!startEl) { out.ambiguous = '문구가 있는 요소를 특정하지 못했습니다'; return out; }
+
+    var container = null;
+    var cur = startEl;
+    for (var hop = 0; cur && hop < MAX_HOPS; hop++) {
+      if (cur === document.body || cur === document.documentElement) break;
+      if (cur.matches && cur.matches(CONTAINER)) { container = cur; break; }
+      cur = cur.parentElement;
+    }
+    if (!container) { out.ambiguous = '글 단위 영역을 찾지 못했습니다'; return out; }
+    if (container.closest && container.closest(GLOBAL_NAV)) {
+      out.ambiguous = '글 영역이 전역 탐색 영역 안에 있습니다'; return out;
+    }
+    if (container.querySelector && container.querySelector(GLOBAL_NAV)) {
+      out.ambiguous = '글 영역에 전역 탐색 영역이 섞여 있습니다'; return out;
+    }
+    if ((container.textContent || '').length > MAX_CONTAINER_TEXT) {
+      out.ambiguous = '글 영역이 너무 커서 한 건으로 볼 수 없습니다'; return out;
+    }
+
+    // ── 4) 작성자 — **컨테이너 안에서만**, 그리고 **캡션보다 위에 있는 것만**.
+    //
+    // 왜 위치까지 보는가 (2026-09-19, 적대적 리뷰가 잡았다): 글 영역 안에서만 읽어도 부족하다.
+    //  ⓐ **캡션 안의 멘션**("@friend")은 작성자 표기와 글자 모양이 똑같다. 그것을 작성자로 읽으면
+    //     내 글을 "@friend 의 글" 로 단정하고, 사용자는 "내 글이 아니라는데?" 하며 **"게시 안 됨"**
+    //     을 눌러 차단을 풀고 **같은 글을 또 올린다**. 반대로 남이 나를 멘션한 글은 "내 글" 로
+    //     읽혀 **거짓 완료**가 된다. 양쪽 다 비가역이다.
+    //  ⓑ **댓글 작성자 링크**도 같은 모양이라, 댓글이 하나만 달려도 후보가 여러 개가 돼 버린다.
+    //
+    // 거의 모든 소셜 레이아웃에서 **작성자는 캡션 위**, 멘션·댓글은 **캡션 아래**다. 그래서
+    // 캡션 위치 앞의 후보만 보고, 그중 **캡션에 가장 가까운 것**(바로 위)을 고른다.
+    // 구조적 표기(data-author/data-account)는 위치와 무관하게 신뢰한다.
+    var structural = [];
+    var heuristic = [];   // { name, pos }
+    function normName(v) {
+      var s = String(v == null ? '' : v).trim().replace(/^@+/, '').replace(/\\/+$/, '');
+      return /^[A-Za-z0-9._-]{2,30}$/.test(s) ? s.toLowerCase() : '';
+    }
+    function posOf(el) {
+      // 이 요소의 텍스트가 hay 의 어디쯤에서 시작하는가(대략) — map 을 거꾸로 훑어 찾는다.
+      for (var q = 0; q < map.length; q++) {
+        if (map[q].el && (map[q].el === el || el.contains(map[q].el))) return map[q].end;
+      }
+      return -1;
+    }
+    if (container.getAttribute) {
+      var c1 = normName(container.getAttribute('data-account')) || normName(container.getAttribute('data-author'));
+      if (c1 && structural.indexOf(c1) < 0) structural.push(c1);
+    }
+    var tagged = container.querySelectorAll('[data-account],[data-author]');
+    for (var a = 0; a < tagged.length; a++) {
+      var c2 = normName(tagged[a].getAttribute('data-account') || tagged[a].getAttribute('data-author'));
+      if (c2 && structural.indexOf(c2) < 0) structural.push(c2);
+    }
+    if (structural.length > 1) {
+      out.ambiguous = '작성자 표기가 여러 개입니다(' + structural.slice(0, 3).join(', ') + ')';
+      return out;
+    }
+    if (structural.length === 1) {
+      out.author = structural[0];
+      out.authorScope = 'post';
+      out.authorSource = 'structural';   // 이 출처의 불일치만 "확정" 으로 쓴다
+    } else {
+      var cands = container.querySelectorAll('a[href], span, b, strong, h1, h2, h3');
+      for (var c = 0; c < cands.length; c++) {
+        var el2 = cands[c];
+        var name = '';
+        var tx = (el2.textContent || '').trim();
+        if (/^@[A-Za-z0-9._-]{2,30}$/.test(tx)) name = normName(tx);
+        if (!name && el2.tagName === 'A') {
+          var p = '';
+          try { p = new URL(el2.getAttribute('href'), location.href).pathname; } catch (e) { p = ''; }
+          var m = /^\\/([A-Za-z0-9._-]{2,30})\\/?$/.exec(p);
+          if (m) name = normName(m[1]);
+        }
+        if (!name) continue;
+        var pos = posOf(el2);
+        if (pos < 0 || pos > found.at) continue;   // 캡션보다 아래(멘션·댓글)는 작성자가 아니다
+        heuristic.push({ name: name, pos: pos });
+      }
+      if (heuristic.length) {
+        heuristic.sort(function (x, y) { return x.pos - y.pos; });
+        out.author = heuristic[heuristic.length - 1].name;   // 캡션 바로 위
+        out.authorScope = 'post';
+        out.authorSource = 'heuristic';   // 불일치해도 "확정" 으로 쓰지 않는다(모름으로 낮춘다)
+      }
+    }
+
+    // ── 5) 게시 시각 — 컨테이너 안에서 찾은 것 중 **가장 이른 값**.
+    //
+    // 왜 가장 이른 값인가: 글 상세에는 댓글마다 시각이 있고, DOM 순서로 첫 번째를 집으면 **댓글 시각**을
+    // 잡기 쉽다. 댓글은 언제나 글보다 뒤이므로 판정이 **체계적으로 "더 최근" 쪽으로 기울고**,
+    // 오래 지난 글에 최근 댓글이 달린 경우 그 지난 글이 이번 게시의 근거로 통과한다.
+    // 글은 자기 댓글보다 새로울 수 없다 — 가장 이른 값이 글의 시각에 가장 가깝다.
+    //
+    // ⚠ 시각은 **시간대가 명시된 값만** 받는다(__bbPostTime). 오프셋 없는 \`datetime\` 을 Date.parse 로
+    //   읽으면 기계의 지역 시간으로 해석되어, 같은 글이 PC 마다 "새 글"/"지난 글" 로 갈린다.
+    //   확정할 수 없으면 읽지 않고 **모름으로 남긴다**(사유는 postedAtUnclear 로 알린다).
+    var now = Date.now();
+    var best = 0, bestText = '';
+    var sawTzLess = false;
+    var times = container.querySelectorAll('time[datetime]');
+    for (var t2 = 0; t2 < times.length; t2++) {
+      var parsed = __bbPostTime(times[t2].getAttribute('datetime'));
+      if (!parsed) { sawTzLess = true; continue; }
+      if (!best || parsed < best) {
+        best = parsed;
+        bestText = ((times[t2].textContent || '').trim() || times[t2].getAttribute('datetime') || '').slice(0, 60);
+      }
+    }
+    if (!best) {
+      var UNITS = [
+        { re: /^(\\d{1,4})\\s*초\\s*전$/, ms: 1000 },
+        { re: /^(\\d{1,4})\\s*분\\s*전$/, ms: 60000 },
+        { re: /^(\\d{1,4})\\s*시간\\s*전$/, ms: 3600000 },
+        { re: /^(\\d{1,4})\\s*일\\s*전$/, ms: 86400000 },
+        { re: /^(\\d{1,4})\\s*seconds?\\s+ago$/i, ms: 1000 },
+        { re: /^(\\d{1,4})\\s*minutes?\\s+ago$/i, ms: 60000 },
+        { re: /^(\\d{1,4})\\s*hours?\\s+ago$/i, ms: 3600000 },
+        { re: /^(\\d{1,4})\\s*days?\\s+ago$/i, ms: 86400000 },
+      ];
+      var stamps = container.querySelectorAll('time,span,small,abbr,a,div,p');
+      for (var d = 0; d < stamps.length; d++) {
+        var st = (stamps[d].textContent || '').replace(/\\s+/g, ' ').trim();
+        if (!st || st.length > 20) continue;
+        var val = 0;
+        if (/^(방금|방금 전|just now)$/i.test(st)) val = now;
+        else {
+          for (var u = 0; u < UNITS.length; u++) {
+            var mm = UNITS[u].re.exec(st);
+            if (mm) { val = now - (parseInt(mm[1], 10) * UNITS[u].ms); break; }
+          }
+        }
+        if (val && (!best || val < best)) { best = val; bestText = st; }
+      }
+    }
+    if (best) { out.postedAt = best; out.postedAtText = bestText; }
+    else if (sawTzLess) {
+      out.postedAtUnclear = '글의 시각 표기에 시간대가 없어 어느 시점인지 확정할 수 없습니다';
+    }
+    return out;
+  } catch (e) { return null; }
+})()`
 }

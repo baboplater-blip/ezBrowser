@@ -1,0 +1,125 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T081120Z-5036e5",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T09:03:17Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "negative",
+      "behavior": "같은 사이트·같은 캡션이어도 **남의 계정 글**은 게시 근거가 되지 않는다. 프로필 링크 등 추정으로 읽은 경우 '모름'(uncertain)으로 남기고 읽은 값을 사유에 보여 주며, data-author 같은 명시 표기면 확정 거부한다 — 어느 쪽도 완료로 닫지 않는다",
+      "check": "E-WRONG-AUTHOR · E-WRONG-AUTHOR-STRUCT (verify-publish-evidence-cdp, 실제 DOM) + V8 (verify-persistence-boundary)",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "negative",
+      "behavior": "내 계정 글이라도 **이번 게시 시도보다 오래된 글**(30일 전)은 확정 거부된다. 미래 시각(예약 게시) 역시 완료 근거가 아니다",
+      "check": "E-OLD (실제 DOM) · V10 · V8-FUTURE",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "positive",
+      "behavior": "내 계정이 방금 올린 글은 근거로 인정되어 완료 확정되고, 영수증에 계정과 시각이 남는다 — 실제 앱 흐름에서 '@ez_test_account 계정의 글(방금)에서 이 캡션을 직접 확인했습니다'",
+      "check": "E-POS (실제 DOM) · V11 · R3-VER-POS (verify-recovery-cdp, 실제 앱)",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "화면 구조를 글 단위로 잡을 수 없으면 '아니다'가 아니라 **'모른다'**로 남아 사람이 확인한다(단정하면 사용자가 차단을 풀어 중복 게시한다)",
+      "check": "E-AMBIG (실제 DOM) · V5~V7·V9",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "사이트 전역 막대의 **로그인한 내 계정 표기**, 캡션 속 **@멘션**, **댓글 작성자**가 글쓴이로 새지 않는다. 내 글에 남을 멘션하고 댓글이 달려 있어도 작성자는 내 계정으로 읽힌다",
+      "check": "E-NO-GLOBAL · E-MENTION (실제 DOM, nav 에 내 계정을 일부러 배치)",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "positive",
+      "behavior": "게시 여부 확인 작업이 **도는 도중 강제 종료**돼도, 재시작 뒤 '확인하는 중…'에서 굳지 않고 확인을 다시 실행할 수 있다. 읽기 전용이므로 서버 게시는 전혀 늘지 않는다(3→3→3)",
+      "check": "R3-VER-INT (verify-recovery-cdp, 실제 taskkill 후 재기동)",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "ai-tasks.json / ai-social-workflows.json 저장이 막힌 상태로 게시를 승인하면 **서버 게시가 한 건도 나가지 않고**(증가 0), 재시작 전·후 모두 남은 게시 작업을 시작·재개로 우회할 수 없다. 저장을 되돌린 뒤 명시 재시도하면 **정확히 1건**만 올라간다(0건도 2건도 실패)",
+      "check": "R3-STORE-TASKS · R3-STORE-SOCIAL (실제 앱에 디렉터리 치환으로 저장 실패 주입, 재부팅 시 자동 격리되면 재주입)",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "negative",
+      "behavior": "차단을 기록하는 저장 자체가 실패해도 우회할 수 없다 — 게시 작업은 **태어날 때부터 차단**되어 만들어지고, 디스크에 적힌 queued 게시 작업 역시 차단된 상태이며 start·resume 두 경로 모두 거부된다",
+      "check": "B1·B2·B4 (verify-persistence-boundary, 디스크 파일을 직접 읽어 resumeBlockedReason 확인) + R3 의 실제 잔존 작업 ptaskStart 거부",
+      "result": "pass"
+    },
+    {
+      "id": "c9",
+      "kind": "positive",
+      "behavior": "차단이 무조건적이지 않다 — 빗장을 풀면 같은 작업이 정상 시작되고, 빗장 없이 만든 작업은 디스크에서도 막혀 있지 않다(양성 대조)",
+      "check": "B3 · B-NEG (verify-persistence-boundary)",
+      "result": "pass"
+    },
+    {
+      "id": "c10",
+      "kind": "positive",
+      "behavior": "검사가 실제로 무언가를 잡는다 — 계정·게시시각을 보지 않는 옛 3필드 판정 복제본에 같은 근거를 먹이면 통과해 버리고, 실제 판정은 거부한다",
+      "check": "E-NEG (실제 DOM) · V-NEG (순수 판정)",
+      "result": "pass"
+    },
+    {
+      "id": "c11",
+      "kind": "positive",
+      "behavior": "기존 동작에 회귀가 없다 — 마감 게이트와 실제로 내보낸 바이너리의 스모크가 모두 통과한다",
+      "check": "npm run verify 15/15(54s) · 패키징 후 dist/win-unpacked 스모크 16/16 · verify-recovery 전체 14/14 · typecheck 3/3",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": true,
+    "remaining_required": [],
+    "blockers": [
+      "rc.12 설치파일의 설치→부팅→제거 검증 — 이 PC 에서 사용자 실설치본 5 프로세스가 가동 중이라 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(다른 PC/VM 필요).",
+      "코드 서명 인증서(.pfx) 미제공 — rc.12 미서명(SmartScreen 경고). 사용자 제공 사항.",
+      "실제 인스타그램·유튜브·틱톡 실계정 검증 — 실계정 게시는 사용자 승인 사항이라 자율 범위 밖. 이번 검증은 전부 로컬 픽스처 + 각본 LLM."
+    ],
+    "optional_next": [
+      "이미 만들어진 워크플로의 계정을 나중에 채우는 경로(현재는 새 작업 생성 시에만 입력 가능 — 리뷰 M5)",
+      "작성자 표기가 캡션 위에 없는 레이아웃 대응(현재는 '모름'으로 남는다)",
+      "타임존 없는 datetime 의 신뢰도 처리(현재는 파싱해 쓰되 미래 경계로만 방어)"
+    ]
+  },
+  "artifact": {
+    "installer": "dist/ezBrowser-0.2.0-rc.12-win-x64.exe",
+    "bytes": 121920416,
+    "sha256": "02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44",
+    "built_at": "2026-09-19 17:58 (KST)",
+    "publish": "never — GitHub 최신 릴리스 조회 결과 여전히 0.1.0",
+    "signed": false
+  },
+  "tests_passed": {
+    "total": 49,
+    "failed": 0,
+    "skipped": 0,
+    "breakdown": {
+      "verify-persistence-boundary": 27,
+      "verify-publish-evidence-cdp": 8,
+      "verify-recovery-cdp": 14
+    },
+    "gates": {
+      "npm run verify": "15/15",
+      "smoke(packaged)": "16/16",
+      "typecheck": "3/3"
+    }
+  }
+}

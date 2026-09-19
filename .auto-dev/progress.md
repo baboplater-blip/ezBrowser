@@ -269,3 +269,55 @@ A10 취소 후 무산출·A11 교차출처 iframe 업로드) + C1·C4·C5·C7 PA
 - **설치파일 설치/제거는 검증하지 않았다** — `verify-install` 이 이 PC 의 **사용자 실설치본**을 감지해
   스스로 BLOCKED. 우회·실프로필 변경·VM 설치 **하지 않았다**. 설치 흐름 실증은 `rc.2` 까지가 정본이고,
   rc.5 는 `win-unpacked` 직접 실행으로 확인했다.
+
+- [2026-09-18T13:05:04Z] run-20260918T123309Z-8d6072 종료 status=success (이번 실행(run-20260918T123309Z-8d6072)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 10건, 선언된 잔여 작업 없음) / 남은 작업: rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요), (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처), (차단) 깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월); 전체 요청 완료: 아니오)
+- [2026-09-19T04:26:28Z] run-20260919T042628Z-5824c1 시작 (model=opus, task=사용자 계속개발 요청. 이전rc5 이어서 핵심실사용경로 보강만. 지금 소스git변경은 .auto-dev원장 주로, 기존 사용자변경보존. 메인 확인한 갭: verify-social-realmodel-cdp.mjs R-)
+- [2026-09-19T05:13:07Z] run-20260919T042628Z-5824c1 종료 status=success (이번 실행(run-20260919T042628Z-5824c1)의 구조화 완료 기록: pass (합격 기준 8건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 이미지→게시 워크플로의 게시 단계가 탭을 게시 사이트로 옮기지 않아 waiting-user 로 멈춘다(원인 확정, 비가역 경로라 미수정). 수정 후 실모델 R-SNS 재검증 필요, (차단) 코드 서명 인증서(.pfx) 없음 — rc.6 미서명, (차단) rc.6 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 가동 중이라 verify-install 이 BLOCKED. 우회하지 않음, (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오)
+- [2026-09-19T05:13:48Z] run-20260919T051348Z-4f8c92 시작 (model=opus, task=직전 run042628 의 필수잔여 R-SNS 실패만 수정후마감. pass받았어도 사용자요구SNS 생산경로미완료므로 그냥끝내지말라. 메인확인 social-workflow.ts runPublishStage 668~74)
+- [2026-09-19T05:43:47Z] run-20260919T051348Z-4f8c92 종료 status=success (이번 실행(run-20260919T051348Z-4f8c92)의 구조화 완료 기록: pass (합격 기준 7건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: rc.7 설치파일 설치→부팅→제거 검증(사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED — 우회하지 않음), (차단) 코드 서명 인증서(.pfx) 없음 — rc.7 미서명, (차단) 실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오)
+- [2026-09-19T05:48:59Z] run-20260919T054859Z-ab41eb 시작 (model=opus, task=사용자 계속개발. 다음 bounded 범위는 생성/SNS workflow 중단후복구 신뢰성. 현재미커밋 app source 다수는 이전우리가만든rc7 변경이며 전부보존; baseline에서 덮어쓰거나reset금지. )
+- [2026-09-19T06:14:09Z] [intervention] 70분 목표 초과(약 90분). 원인은 재현-우선 순서 제약: 수정 전 빌드로 실패를 먼저 재현해야 해서 하네스 작성이 임계경로였다. 해소책으로 수정 전 app/dist 를 스냅샷으로 떠 --main 옵션을 추가하게 해 빌드 경합을 없앴다. R3(게시 중단)는 게시 호스트 격리 미구현으로 SKIP 처리하고 코드만 반영했다.
+- [2026-09-19T06:16:06Z] run-20260919T054859Z-ab41eb 종료 status=failed (이번 실행(run-20260919T054859Z-ab41eb)의 구조화 완료 기록: fail (합격 기준 7건))
+- [2026-09-19T06:16:50Z] run-20260919T061650Z-6ae248 시작 (model=opus, task=직전run054859 fail 이유 필수R3 SKIP만 닫아라. 사용자계속개발 요청내필수잔여. 외부격리host-resolver/cert는 새로운문제아님: build/verify-social-realmodel-cdp.)
+- [2026-09-19T06:47:10Z] run-20260919T061650Z-6ae248 종료 status=success (이번 실행(run-20260919T061650Z-6ae248)의 구조화 완료 기록: pass (합격 기준 6건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 실제 구독 Claude CLI 로 한 번 돌리는 '로컬 격리 읽기검증 복구' 스모크 — 이번 라운드의 R3 는 전부 결정론 fake-LLM 각본으로 돌렸다(실모델 미사용); 전체 요청 완료: 아니오)
+- [2026-09-19T06:48:02Z] run-20260919T064802Z-9a8e0a 시작 (model=opus, task=복구라운드 필수잔여2점 끝까지마감. R3가짜LLM통과자체는신뢰하고 재검사중복없음. 1) ai-tasks.json 게시task유실원인 확정하고 필요수정. .auto-dev/recovery-flow-20260919-fi)
+- [2026-09-19T07:09:24Z] run-20260919T064802Z-9a8e0a 종료 status=success (이번 실행(run-20260919T064802Z-9a8e0a)의 구조화 완료 기록: pass (합격 기준 5건 전건 통과, 부정 사례 3건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-19T07:10:13Z] run-20260919T071013Z-10952b 시작 (model=opus, task=코드/검증완료는신뢰하나 마감실제불일치 발견. 지금 package.json version rc.10이지만 dist에는rc.9까지만있어 rc.10설치파일없음. QUICKSTART 첫줄/13/348~357 rc.9이며 h)
+- [2026-09-19T07:15:55Z] run-20260919T071013Z-10952b 종료 status=success (이번 실행(run-20260919T071013Z-10952b)의 구조화 완료 기록: pass (합격 기준 6건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-19T07:23:10Z] run-20260919T072310Z-3c8284 시작 (model=opus, task=Continue authorized development. Bounded round: fix two confirmed safety/correctness defects in existing social workflow)
+- [2026-09-19T08:10:26Z] run-20260919T072310Z-3c8284 종료 status=success (이번 실행(run-20260919T072310Z-3c8284)의 구조화 완료 기록: pass (합격 기준 8건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-19T08:11:20Z] run-20260919T081120Z-5036e5 시작 (model=opus, task=Required same-scope follow-up. Original requested wrong-account and interrupted verification checks cannot be optional. )
+## run-20260919T081120Z-5036e5 — 게시 확인의 계정·게시시각 축 + 확인 중단 복구 + 저장 실패 앱 주입 (2026-09-19)
+
+사용자 지시: **"wrong-account 와 interrupted 검증은 선택이 될 수 없다."** 직전 라운드가
+`optional_next` 로 미뤄 둔 것을 필수로 승격해 닫았다. 상세는
+[publication-evidence-20260919-final.md](publication-evidence-20260919-final.md).
+
+### 제품 변경
+1. **게시 확인 판정에 두 축 추가** — 글 영역 안에서 읽은 **작성자 계정**과 **글 자체의 게시 시각**.
+   같은 사이트·같은 캡션이어도 **남의 글**이거나 **지난 글**이면 근거로 쓰지 않는다.
+2. **"확정 거부" 와 "모름"(`uncertain`) 분리** — 읽지 못한 것을 "아니다" 로 단정하면 사용자가
+   차단을 풀어 **중복 게시**한다. 모름은 사람이 확인하는 경로로 보낸다.
+3. **작성자는 글 영역 안, 그리고 캡션보다 위에서만** 읽는다 — 전역 막대의 로그인 표기, 캡션 속 멘션,
+   댓글 작성자가 전부 배제된다.
+4. **게시 작업은 태어날 때부터 차단** — 내구성 경계가 확정된 뒤에만 푼다. 예전에는 "막는 행위 자체가
+   저장에 의존" 해서, 저장이 막힌 바로 그 순간 차단도 기록되지 않았다.
+5. 부수: 유튜브 확인 호스트 분리(`SNS_VERIFY_URL` — 확인이 구조적으로 불가능했다) · 저장 실패 안내가
+   **존재하지 않는 파일명**(`ai-social.json`)을 가리키던 것 수정(실제는 `ai-social-workflows.json`).
+
+### 검증 — 49 PASS / 0 FAIL / 0 SKIP
+`verify-persistence-boundary` **27**(B 그룹 신설: 디스크에 적힌 `queued` 게시 작업도 막혀 있음 +
+음성 대조) · `verify-publish-evidence-cdp` **8**(신규, 실제 DOM) · `verify-recovery-cdp` **14**
+(신규 R3-VER-INT·R3-STORE-TASKS·R3-STORE-SOCIAL 포함, 한 번에 실행) · `npm run verify` **15/15 · 54s** ·
+패키징 후 스모크 **16/16**.
+
+산출물: `dist/ezBrowser-0.2.0-rc.12-win-x64.exe` · 121,920,416 B ·
+sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · `--publish never`
+(GitHub 최신 릴리스 조회 결과 여전히 `0.1.0`).
+- [2026-09-19T09:05:00Z] [intervention] 하네스 작업자의 R3-STORE-SOCIAL 이 FAIL 로 나왔는데, 원인은 제품이 아니라 **내 브리핑의 파일명 오류**였다(`ai-social.json` → 실제 `ai-social-workflows.json`). 결과 파일을 직접 읽어 "승인 직후 게시 1건" 을 보고 제품 결함을 의심했으나, 저장소 상수를 확인해 내 잘못임을 확인하고 즉시 정정해 전달했다. 같은 이름이 **사용자에게 보이는 오류 문구**에도 박혀 있어 제품 쪽도 상수 참조로 고쳤다.
+- [2026-09-19T09:06:00Z] [intervention] 작업자 두 명 모두 "전부 PASS" 로 보고했으나, 최신 결과 파일을 열어 보니 신규 3종이 `SKIP` 으로 찍혀 있었다(시나리오를 따로 돌려 결과 파일이 덮어써짐). 보고를 그대로 쓰지 않고 **한 번의 실행으로 전 시나리오**를 직접 재실행해 14/14 를 확보했고, `--only` 가 쉼표 목록을 받도록 고쳐 재발을 막았다.
+
+- [2026-09-19T09:04:46Z] run-20260919T081120Z-5036e5 종료 status=unclear (whole_task.all_requested_work_complete=true 인데 남은 필수 작업/차단이 3건 선언됨 — 전체 완료로 인정하지 않는다: rc.12 설치파일의 설치→부팅→제거 검증 — 이 PC 에서 사용자 실설치본 5 프로세스가 가동 중이라 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(다른 PC/VM 필요).)
+- [2026-09-19T09:05:18Z] run-20260919T090518Z-84dee6 시작 (model=opus, task=FORMAT/REPORT ONLY follow-up. Prior rc.12 implementation/tests/package accepted; do NOT edit source/rebuild/retest/insta)
+- [2026-09-19T09:10:44Z] run-20260919T090518Z-84dee6 종료 status=success (이번 실행(run-20260919T090518Z-84dee6)의 구조화 완료 기록: pass (합격 기준 12건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-19T09:22:57Z] run-20260919T092257Z-384114 시작 (model=opus, task=User explicitly requests continuous necessary improvements until TODAY 2026-09-19 20:00 KST and report then. Current 18:)

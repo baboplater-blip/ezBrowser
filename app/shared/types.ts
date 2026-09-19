@@ -478,3 +478,44 @@ export interface AiConnectResult {
   diagnosis?: AiDiagnosisSummary
   error?: string
 }
+
+// ===== 에이전트 입력창 의도 해석 (묶음 INTENT-1) =====
+// 사용자가 직접 친 자연어 요청을 생산 워크플로의 **폼 미리채움**으로 읽은 결과.
+// 이 타입들은 제안값만 담는다 — 게시·참여 권한은 여기서 만들어지지 않는다.
+
+export type WorkflowIntentKind = 'image-post' | 'blog-engage'
+
+export interface ImagePostIntentFields {
+  service: 'genspark' | 'chatgpt' | 'custom'
+  /** 사용자가 그려 달라고 한 내용 */
+  prompt: string
+  /** 못 고르면 null — missing 에 'platform' 이 함께 온다 */
+  platform: 'instagram' | 'youtube' | 'tiktok' | null
+  /** 제안값일 뿐. 실제 게시 여부는 기존 승인 단계가 결정한다. */
+  mode: 'draft' | 'publish'
+  tags: string[]
+}
+
+export interface BlogEngageIntentFields {
+  topic: string
+  /** 원문에 내 블로그 주소가 있을 때만 */
+  myBlogUrl: string
+  actions: ('comment' | 'like')[]
+  mode: 'draft' | 'act'
+  /** 1~20 */
+  maxPosts: number
+  /** 원문에 검색·목록 주소가 있을 때만, 없으면 '' */
+  searchUrl: string
+}
+
+export interface WorkflowIntent {
+  kind: WorkflowIntentKind
+  /** 사용자에게 보여 줄 한 줄 한국어 요약 */
+  summary: string
+  /** 사용자가 한 번 설정해야 하는 것: 'platform' | 'account' | 'prompt' | 'topic' | 'maxPosts' */
+  missing: string[]
+  /** 무엇을 보고 이렇게 판단했는지 — 디버깅·검사용 근거 토큰 */
+  matched: string[]
+  image?: ImagePostIntentFields
+  blog?: BlogEngageIntentFields
+}

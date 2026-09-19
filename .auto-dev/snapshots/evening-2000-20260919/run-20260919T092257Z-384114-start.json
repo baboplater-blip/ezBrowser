@@ -1,0 +1,49 @@
+{
+  "schema": "auto-dev/gpt-snapshot@1",
+  "task_id": "evening-2000-20260919",
+  "kind": "start",
+  "run_id": "run-20260919T092257Z-384114",
+  "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+  "session_path": "C:\\Users\\molma\\.codex\\sessions\\2026\\09\\16\\rollout-2026-09-16T00-45-18-01a0a5be-7929-71d3-bf83-c9ae8354e44a.jsonl",
+  "session_started_at": "2026-09-15T15:45:18.735Z",
+  "cli_version": "0.154.0-alpha.6.2",
+  "model": "gpt-6-astra",
+  "recorded_at": "2026-09-19T09:22:57Z",
+  "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다",
+  "scope_excludes": [
+    "이 시각 이후의 모든 턴"
+  ],
+  "staleness": "스냅샷은 채취 시각의 파일 상태다. 부모 세션이 계속 돌면 이 값은 즉시 낡는다 — 낡음을 없앨 수는 없고, 필요하면 `snapshot refresh-parent-final` 로 다시 찍는다.",
+  "usage": {
+    "input_tokens": 115797897,
+    "cached_input_tokens": 114816640,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 112257,
+    "reasoning_output_tokens": 19304,
+    "total_tokens": 115910154
+  },
+  "usage_source": "token_usage_record.thread_token_usage",
+  "counters": {
+    "observed_usage_events": 1650,
+    "tool_calls_observed": 811,
+    "tool_outputs_observed": 810,
+    "tool_roundtrips_observed": 810,
+    "turns_observed": 12,
+    "records_scanned": 5881,
+    "malformed_lines": 0,
+    "scan_complete": true,
+    "note": "observed_usage_events 는 세션 파일에 남은 **양(+)의 사용량 이벤트 수**이며 청구 요청 수가 아니다. tool_calls_observed 는 세션에 기록된 도구 호출 수이며 왕복(호출+출력)은 tool_roundtrips_observed 로 따로 센다. 어느 값도 과금 단위가 아니다."
+  },
+  "boundary": {
+    "last_turn_id": "01a0b8f9-28c7-79b0-8a54-91c799a8c28e",
+    "last_record_timestamp": "2026-09-19T09:22:46.710Z",
+    "records_scanned": 5881
+  },
+  "scan": {
+    "file_size_bytes": 9230241,
+    "scanned_bytes": 9230241,
+    "complete": true,
+    "reads_other_sessions": false,
+    "returns_conversation_content": false
+  }
+}

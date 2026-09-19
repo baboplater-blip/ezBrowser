@@ -371,10 +371,18 @@ export const IPC = {
     socialGrant: 'ai:social-grant',
     socialGrantGet: 'ai:social-grant-get',
     socialGrantRevoke: 'ai:social-grant-revoke',
+    // 중단 후 복구 (묶음 RECOVERY-1) — 캡션 재시도·직접 입력, 게시 여부 불확실 해소
+    socialRetryCaption: 'ai:social-retry-caption',
+    socialSetCaption: 'ai:social-set-caption',
+    // 확인 단계에서 계정 고치기 — 계정을 빠뜨리거나 잘못 넣었을 때 워크플로를 다시 만들지 않아도 된다.
+    socialSetAccount: 'ai:social-set-account',
+    socialResolvePublish: 'ai:social-resolve-publish',
     // 작업 산출물(캡처한 이미지·받은 파일)
     artifactList: 'ai:artifact-list',
     artifactData: 'ai:artifact-data',
     // 관심 블로그 댓글·좋아요
+    intentDetect: 'ai:intent-detect',
+
     engageBuildTask: 'ai:engage-build-task',
     engageLedger: 'ai:engage-ledger',
     engageLedgerClear: 'ai:engage-ledger-clear',

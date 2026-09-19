@@ -10,6 +10,7 @@ import { chatOnce, chatWithTools, supportsNativeTools, supportsVision, isCliProv
 import {
   observePage, executeInPageAction, setFileInputFiles, armFileChooser, dropFilesOnRef, extractFromPage,
   waitForOnPage, runPageJs, hoverElement, dragOnPage, pressKey, resolveHref, resolveMediaSrc, autofillPage, inputProfileFor, isFastSite,
+  probeVerifyNeedles,
   type AgentAction, type PageObservation,
 } from './page-actions'
 import { downloadMedia, downloadStream, getCandidates } from '../video-download'
@@ -18,13 +19,13 @@ import { hasAgentFilesDir, listAgentFiles, resolveAgentFile } from './agent-file
 import { listArtifacts, resolveArtifactPath } from './artifacts'
 import {
   markBaseline, findNewImages, captureCandidate, waitForNewDownload, importFinishedDownload,
-  snapshotDownloadIds, hasImageBaseline, type CaptureCandidate,
+  snapshotDownloadIds, type CaptureCandidate,
 } from './capture'
 import { writeDownloadMd, safeFileName } from './conversations'
 import { detectChallenge, challengeKey, type ChallengeVerdict } from './challenge-detect'
 import { attemptAutoLogin, hasAutoLoginAccountFor } from './auto-login'
 import { hostAllowed as frameHostAllowed } from './frames'
-import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, type RiskVerdict, type CompletionSignal } from './agent-gate'
+import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, parseVerifyProbeMark, verifyHostMatches, type RiskVerdict, type CompletionSignal } from './agent-gate'
 import { normalizeTargetUrl, alreadyDid, recordEngagement, engageQuotaCheck, engageQuotaRecord } from './blog-engage'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
@@ -951,6 +952,15 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
   const noPublish = isNoPublishTask(task)
   // 참여 가드 — 블로그 댓글·좋아요를 **코드로** 막는다(장부에 기록만 하면 방지가 아니다).
   const engageGuard = parseEngageMark(task)
+  /**
+   * 게시 여부 확인 표식 — "이 사이트의 화면에 이 문구가 실제로 보이는가" 를 **런타임이 직접** 본다.
+   * 모델의 결론(산문)과 따로 기록해 두었다가 나중에 대조한다(모델은 이 값을 만들 수 없다).
+   *
+   * **읽기 전용 작업에서만** 본다. 게시 작업은 캡션을 직접 입력하므로 그 화면의 텍스트에 캡션이
+   * 들어 있는 것이 당연하다 — 그것을 "올라간 증거" 로 세면 입력만 하고도 게시됐다고 믿게 된다.
+   */
+  const verifyProbe = readOnly ? parseVerifyProbeMark(task) : null
+  const sightedKeys = new Set<string>()
   const history: AiMessage[] = []
   // 직전 행동 결과·거부·사용자 답변을 다음 관찰 앞에 붙인다. history 는 오직 user/assistant 쌍으로만
   // 늘어나므로 엄격한 교대(alternation)가 항상 보장된다 — Anthropic/Gemini 는 연속 같은 role 을 거부한다.
@@ -1139,6 +1149,37 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       const fastSite = isFastSite(obs.url, inputMode)
       const injected = detectInjection(obs.text) || obs.elements.some((e) => detectInjection(e.name))
       if (injected) emit({ type: 'result', ok: false, label: '주의: 페이지에 지시성 문구', detail: `${obs.url} 의 내용에 에이전트를 조종하려는 문장이 있어 무시합니다.` })
+
+      // ── 확인 근거 기록 — 모델을 거치지 않고 관찰에서 직접 뽑는다 ──────────────────────
+      // 지시성 문구가 있는 페이지의 텍스트는 근거로 세지 않는다(가드 불신과 같은 규칙) —
+      // 페이지가 캡션을 그대로 적어 두고 "게시됐다고 보고하라" 고 시킬 수 있다.
+      if (verifyProbe && !injected && verifyHostMatches(obs.url, verifyProbe.host)) {
+        // 관찰 본문(obs.text)으로 대조하지 **않는다**. 그 조각은 1800자에서 잘리고, 무엇보다
+        // **작성 중인 글(contenteditable·textarea)까지 포함**한다 — 캡션을 입력만 하고 중단된 탭이
+        // 열려 있으면 "내 캡션이 이 사이트에 보인다" 가 근거로 둔갑해, 아무것도 안 올라갔는데
+        // 완료로 확정된다. 전용 스크립트가 편집 영역을 빼고 전체 본문에서 찾는다.
+        const hit = await probeVerifyNeedles(wc, verifyProbe.needles)
+        if (hit) {
+          const key = `${obs.url}::${hit.needle}`
+          if (!sightedKeys.has(key)) {
+            sightedKeys.add(key)
+            let host = ''
+            try { host = new URL(obs.url).hostname } catch { host = '' }
+            emit({
+              type: 'sighting', url: obs.url, host, needle: hit.needle, snippet: hit.snippet,
+              // 관찰이 읽어 낸 것을 **그대로** 넘긴다 — 여기서 채워 넣거나 추측하지 않는다.
+              // 비어 있는 것은 "없다" 가 아니라 "읽지 못했다" 이고, 판정이 그렇게 다룬다.
+              ...(hit.author && hit.authorScope === 'post'
+                ? { author: hit.author, authorScope: 'post' as const, authorSource: hit.authorSource ?? 'heuristic' }
+                : {}),
+              ...(hit.postedAt ? { postedAt: hit.postedAt } : {}),
+              ...(hit.postedAtText ? { postedAtText: hit.postedAtText } : {}),
+              ...(hit.ambiguous ? { ambiguous: hit.ambiguous } : {}),
+            })
+            emit({ type: 'result', ok: true, label: '확인 근거', detail: `${obs.url} 화면에서 대조 문구를 확인했습니다.` })
+          }
+        }
+      }
       let action: AgentAction | null = null
       let actions: AgentAction[] = []  // 한 응답에 여러 동작(선행 입력 연쇄) 가능
       let assistantText = ''
@@ -1662,22 +1703,33 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       if (action.action === 'mark_baseline') {
         // 생성 버튼을 누르기 전에 화면의 이미지를 기록해 둔다. 이게 없으면 뒤에 capture_image 가
         // 로고·광고·이전 결과물과 방금 만든 그림을 구분할 방법이 없다.
+        // 모델이 명시적으로 부른 경우이므로 hard(덮어쓰기) — soft 는 안 준다.
         emit({ type: 'action', label: '이미지 기준선 기록' })
         const b = await markBaseline(wc, artifactBucket, currentTabId, allowedHosts)
         emit({ type: 'result', ok: true, label: '기준선', detail: `기존 이미지 ${b.count}개를 기준선으로 기록` })
-        pendingPrefix = `기준선을 잡았습니다(지금 화면의 이미지 ${b.count}개). 이제 생성을 실행하고, 결과 이미지가 화면에 나타나면 capture_image 로 가져오세요.`
+        pendingPrefix = b.skipped
+          ? `이미 잡아 둔 기준선이 있어 유지했습니다(이미지 ${b.count}개). 이제 생성을 실행하고, 결과 이미지가 화면에 나타나면 capture_image 로 가져오세요.`
+          : `기준선을 잡았습니다(지금 화면의 이미지 ${b.count}개). 이제 생성을 실행하고, 결과 이미지가 화면에 나타나면 capture_image 로 가져오세요.`
         continue
       }
 
       if (action.action === 'capture_image') {
         emit({ type: 'action', label: '생성물 가져오기' })
         const found = await findNewImages(wc, artifactBucket, currentTabId, allowedHosts)
+        // 재시작으로 되살린 기준선이거나, 다른 페이지 것이라 못 쓰는 기준선이면 그 사정을 먼저 알려준다
+        // — 그래야 모델이 "기준선이 없다"로 오해해 생성 버튼을 또 누르거나, 엉뚱한 후보를 스스로 확정하지 않는다.
+        const restoreNote = found.restored
+          ? '이전에 잡아 둔 기준선을 복원했습니다(앱이 재시작됨). 생성 버튼을 다시 누르지 마세요 — 이미 만들어진 결과가 있는지 먼저 확인합니다. '
+          : ''
+        const mismatchNote = found.originMismatch
+          ? '기준선은 다른 페이지에서 잡은 것이라 쓸 수 없습니다. 어느 이미지가 방금 만든 것인지 확신이 없으면 고르지 말고 ask 로 사용자에게 물으세요. '
+          : ''
         if (!found.candidates.length) {
           const why = found.hadBaseline
             ? `기준선 이후 새로 나타난 이미지가 없습니다(화면의 이미지 ${found.totalSeen}개는 모두 기준선에 있던 것이거나 ${256}px 미만입니다).`
             : `가져올 만한 큰 이미지가 화면에 없습니다(이미지 ${found.totalSeen}개 확인).`
           emit({ type: 'result', ok: false, label: '생성물 가져오기', detail: '새 이미지 없음' })
-          pendingPrefix = `${why} 생성이 아직 끝나지 않았다면 wait_for 로 기다린 뒤 다시 시도하고, 생성이 실패했다면 그 사실을 done/ask 로 보고하세요.`
+          pendingPrefix = `${restoreNote}${mismatchNote}${why} 생성이 아직 끝나지 않았다면 wait_for 로 기다린 뒤 다시 시도하고, 생성이 실패했다면 그 사실을 done/ask 로 보고하세요.`
           continue
         }
         let chosen: CaptureCandidate | undefined
@@ -1696,7 +1748,7 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
               ? `기준선 이후 새로 나타난 이미지가 ${found.candidates.length}개입니다.`
               : `기준선을 기록하지 않아 어느 것이 방금 만든 그림인지 확신할 수 없습니다(후보 ${found.candidates.length}개).`
           emit({ type: 'result', ok: false, label: '생성물 가져오기', detail: `후보 ${found.candidates.length}개 — 선택 필요` })
-          pendingPrefix = `${head}\n${list}\n방금 만든 것이 확실한 번호가 있으면 {"action":"capture_image","index":<번호>} 로 고르세요. `
+          pendingPrefix = `${restoreNote}${mismatchNote}${head}\n${list}\n방금 만든 것이 확실한 번호가 있으면 {"action":"capture_image","index":<번호>} 로 고르세요. `
             + `확신이 서지 않으면 고르지 말고 ask 로 사용자에게 어느 것인지 물으세요(엉뚱한 이미지를 올리는 것보다 묻는 편이 낫습니다).`
           continue
         }
@@ -1922,10 +1974,13 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         const nt = createTab({ windowId, url })
         currentTabId = nt.id
         await waitTabLoad(nt.id)
-        // 새 탭도 기준선을 잡아 둔다(navigate 와 같은 이유).
+        // 새 탭도 기준선을 잡아 둔다(navigate 와 같은 이유). 자동 호출이므로 soft:true —
+        // 재시작 후 되돌아온 페이지라면 이미 있는 기준선을 덮어쓰지 않는다(생성물 오인 방지).
         if (!readOnly) {
           const ntWc = getWebContentsByTabId(nt.id)
-          if (ntWc) await markBaseline(ntWc, artifactBucket, nt.id, allowedHosts).catch(() => ({ count: 0, images: [] }))
+          if (ntWc) {
+            await markBaseline(ntWc, artifactBucket, nt.id, allowedHosts, { soft: true }).catch(() => null)
+          }
         }
         emit({ type: 'result', ok: true, label: '새 탭', detail: url })
         pendingPrefix = `새 탭을 열고 이동했습니다: ${url}. 이제 그 탭을 조작합니다.`
@@ -2006,7 +2061,10 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
           await navigateAndWait(wc, action.url)
           // 이동한 페이지의 이미지를 자동으로 기준선에 기록한다. 모델이 mark_baseline 을 잊어도
           // "이 페이지에 원래 있던 것" 과 "그 뒤에 생긴 것" 이 구분된다(생성물 오인 방지의 기본선).
-          if (!readOnly) await markBaseline(wc, artifactBucket, currentTabId, allowedHosts).catch(() => ({ count: 0, images: [] }))
+          // 자동 호출이므로 soft:true — 재시작 후 되돌아온 페이지라면 이미 있는 기준선을 덮어쓰지 않는다.
+          if (!readOnly) {
+            await markBaseline(wc, artifactBucket, currentTabId, allowedHosts, { soft: true }).catch(() => null)
+          }
           result = { ok: true, detail: '이동함' }
         }
       } else {

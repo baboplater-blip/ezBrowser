@@ -1,0 +1,220 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T113955Z-851f2b",
+  "recorded_at": "2026-09-18T12:32:16Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T113955Z-851f2b",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T113955Z-851f2b)의 구조화 완료 기록: pass (합격 기준 16건 전건 통과, 부정 사례 9건, 선언된 잔여 작업 없음) / 남은 작업: rc.4 설치파일의 격리 설치→부팅→제거 검증 — verify-install 이 스스로 BLOCKED(이 PC 에 사용자가 실제로 쓰는 ezBrowser 설치본이 등록돼 있어 무인 설치·제거가 그것을 덮어쓰거나 지운다). 우회하지 않았다. 다른 PC/VM 필요, (차단) Genspark·ChatGPT 의 실제 이미지 생성 화면 흐름 미검증 — 로그인·생성 크레딧이 필요해 자율 범위 밖. 공개 정보로는 진입 주소와 '생성이 워크스페이스 안이고 고정 URL 이 아니다' 까지만 확인, (차단) 실제 SNS 게시·실제 블로그 댓글 미실시 — 검증은 전부 로컬 픽스처. 실계정 조작은 사용자 승인 사항, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이전 라운드부터 이월); 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "00979df3-0967-440a-affb-676d008fa47c",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "AI 생성 사이트에서 만든 그림이 작업 산출물로 저장되고 그 실제 바이트가 게시처에 그대로 도착한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "파일을 폴더로 옮기지 않고 산출물 id 만으로 업로드된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "다운로드가 완료될 때까지 기다리고 결과를 돌려준다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "로그인 쿠키가 필요한 이미지도 받아 온다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "교차 출처 iframe 안의 업로드 폼에도 첨부된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "블로그 본문을 실제로 읽고 그 내용에 근거해 댓글을 쓴다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "게시는 사용자가 캡션을 확인하고 누를 때만 시작된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "기존 로고·광고·썸네일·이전 결과물을 생성물로 오인하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "생성물 후보가 여럿이면 임의로 고르지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "이미지인 척하는 HTML·빈 파일·잘린 파일을 산출물로 받지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "다른 작업의 산출물은 업로드할 수 없다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "취소하면 파일이 만들어지지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c13",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "같은 글에 댓글을 두 번 달지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c14",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "이미 눌린 좋아요를 다시 눌러 취소하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c15",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "초안 모드에서는 실제 등록·좋아요가 일어나지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c16",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "페이지 본문에 심은 지시가 파일 범위를 넓히지 못한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [
+        "rc.4 설치파일의 격리 설치→부팅→제거 검증 — verify-install 이 스스로 BLOCKED(이 PC 에 사용자가 실제로 쓰는 ezBrowser 설치본이 등록돼 있어 무인 설치·제거가 그것을 덮어쓰거나 지운다). 우회하지 않았다. 다른 PC/VM 필요"
+      ],
+      "blockers": [
+        "Genspark·ChatGPT 의 실제 이미지 생성 화면 흐름 미검증 — 로그인·생성 크레딧이 필요해 자율 범위 밖. 공개 정보로는 진입 주소와 '생성이 워크스페이스 안이고 고정 URL 이 아니다' 까지만 확인",
+        "실제 SNS 게시·실제 블로그 댓글 미실시 — 검증은 전부 로컬 픽스처. 실계정 조작은 사용자 승인 사항",
+        "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이전 라운드부터 이월)"
+      ],
+      "optional_next": [
+        "writeDownloadMd 가 settings.downloads.defaultPath 를 무시하고 항상 OS 기본 다운로드 폴더에 쓴다(하네스가 실사용자 Downloads 에 파일 생성 — 확인 후 삭제). 이번 범위 밖이라 기록만",
+        "블로그 '글 사이 간격' 은 지시문 수준이며 코드 강제가 아니다 — 참여 가드 자리에 쿨다운을 붙이면 강제할 수 있다"
+      ],
+      "korean_line": "남은 작업: rc.4 설치파일의 격리 설치→부팅→제거 검증 — verify-install 이 스스로 BLOCKED(이 PC 에 사용자가 실제로 쓰는 ezBrowser 설치본이 등록돼 있어 무인 설치·제거가 그것을 덮어쓰거나 지운다). 우회하지 않았다. 다른 PC/VM 필요, (차단) Genspark·ChatGPT 의 실제 이미지 생성 화면 흐름 미검증 — 로그인·생성 크레딧이 필요해 자율 범위 밖. 공개 정보로는 진입 주소와 '생성이 워크스페이스 안이고 고정 URL 이 아니다' 까지만 확인, (차단) 실제 SNS 게시·실제 블로그 댓글 미실시 — 검증은 전부 로컬 픽스처. 실계정 조작은 사용자 승인 사항, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이전 라운드부터 이월); 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T113955Z-851f2b"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 3141.1,
+        "context_chars": 12203,
+        "total_tokens": 3859289,
+        "cache_read_tokens": 158828007
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 22767,
+          "output": 338,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 344,
+          "output": 170716,
+          "cache_read": 73074168,
+          "cache_creation": 542080
+        },
+        "claude-sonnet-5": {
+          "input": 478,
+          "output": 375032,
+          "cache_read": 85753839,
+          "cache_creation": 2747534
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\social-workflows-20260918\\run-20260918T113955Z-851f2b-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\social-workflows-20260918\\run-20260918T113955Z-851f2b-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "요청하신 기능을 실제로 동작하게 만들었고, 검증에서 나온 결함까지 고쳤습니다.\n\n## 무엇이 없어서 안 됐나\n\n\"그림을 만들어 → 캡션 붙여 → SNS 에 올려라\" 에서 **가운데가 끊겨 있었습니다.** `download` 는 시작만 하고 결과를 몰랐고(그래서 빈 손으로 \"이제 업로드하세요\" 로 넘어갔습니다), `upload_file` 은 사람이 손으로 지정한 폴더만 봤습니다. 그림 한 장 올리려면 파일을 직접 옮겨야 했습니다.\n\n## 만든 것\n\n**작업별 격리 산출물 저장소**를 두고 그 사이를 이었습니다. 이제 `capture_image` 가 생성물을 잡아 저장하고 `upload_file` 이 그 id 로 바로 첨부합니다 — 옮길 필요가 없습니다.\n\n가장 어려운 건 **\"어느 그림이 방금 만든 것인가\"** 였습니다. 화면엔 로고·광고·썸네일이 이미 잔뜩 있어서 \"이미지 가져와\" 로는 광고를 집습니다. 생성 **전** 화면을 기준선으로 잡고 그 뒤 새로 생긴 것만 후보로 보며, **둘 이상이면 자동으로 고르지 않고** 물어봅니다. 받은 바이트는 매직 바이트로 실제 형식·치수를 읽어 **HTML 위장·빈 파일**을 거부합니다.\n\n**게시는 확인 단계를 거쳐야만** 시작됩니다(생성 → 미리보기+캡션 확인 → 게시). 블로그 쪽은 본문을 읽지 못한 글엔 댓글을 달지 않습니다. **둘 다 기본값은 \"초안\"** 입니다.\n\n## 검증이 제 값을 했습니다\n\n실제 앱 e2e **19/19 PASS**. 핵심 증거는 **화면에서 가져온 그림의 실제 바이트가 게시처에 sha256 그대로 도착**한 것입니다.\n\n그리고 1차 실행에서 **C2·C3·C6 이 FAIL** 이었고, 그게 진짜 결함이었습니다 — 같은 글에 댓글이 두 번 달리고, **이미 눌린 좋아요가 취소되고**, 초안 모드가 뚫렸습니다. 원인은 하나: 방지가 전부 **지시문 수준**이라 장부는 기록만 하고 아무도 조회하지 않았습니다. 판정을 클릭 직전 **코드 차단**으로 옮겨 고친 뒤 재검증해 통과했습니다. 그 밖에 통합 중 `upload_file`·`download` 가 정지·취소 관문을 지나지 않던 것, 다운로드가 형식 검증을 건너뛰던 것, `download` 의 모델 지정 url 에 허용 사이트 검사가 없던 것(본문에 심은 지시가 파일 범위를 넓히는 경로)도 고쳤습니다.\n\n`npm run verify` **11/11 · 45초**. 신규 상설 검사 2종(15 + 35)은 둘 다 **음성 대조로 검출력을 확인**했습니다.\n\n산출물: `dist/ezBrowser-0.2.0-rc.4-win-x64.exe` (SHA256 `a855ffaf…`). 커밋만 했고 push·배포는 하지 않았습니다.\n\n## 하지 못한 것\n\n- **설치→부팅→제거 검증을 못 했습니다.** 검사 도구가 스스로 멈췄습니다 — 이 PC 에 **직접 쓰고 계신 ezBrowser 설치본**이 있어서, 무인 설치·제거가 그걸 덮어쓰거나 지웁니다. **우회하지 않았습니다.** 다른 PC 나 VM 이 필요합니다.\n- **Genspark·ChatGPT 의 실제 생성 화면 흐름은 시험하지 못했습니다**(로그인·크레딧 필요). 확인한 건 진입 주소와 \"생성이 워크스페이스 안에 있고 고정 URL 이 아니다\" 까지입니다. 그래서 레시피는 생성 기능을 못 찾으면 헤매지 않고 **물어봅니다.** 각 서비스에서의 성공은 미검증입니다.\n- 실제 SNS 게시·실제 블로그 댓글은 하지 않았습니다(전부 로컬 픽스처).\n- **\"글 사이 간격\" 은 AI 에게 요청하는 것이지 코드 강제가 아닙니다** — 화면에도 그렇게 적었습니다.\n- 검증 하네스가 부수적으로 찾은 기존 결함 하나(`writeDownloadMd` 가 다운로드 위치 설정을 무시하고 항상 OS 기본 폴더에 씀)는 범위 밖이라 **기록만** 했습니다.\n\n한 가지 방법론적 사실도 그대로 남겼습니다: e2e 의 A4(HTML 위장 거부)는 음성 대조 결과 **그 방어선을 실제로 타지 않는다**는 게 드러났습니다(브라우저가 앞단에서 걸러냄). 그 방어선 자체는 단위 검사가 직접 ",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T113955Z-851f2b\\stream.jsonl",
+    "error": null
+  }
+}

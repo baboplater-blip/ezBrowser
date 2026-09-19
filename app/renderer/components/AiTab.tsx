@@ -135,6 +135,20 @@ function newId(): string {
   try { return crypto.randomUUID() } catch { return `${Date.now()}-${Math.round(Math.random() * 1e9)}` }
 }
 
+// ===== 워크플로 의도 감지 — 백엔드(app/shared/types.ts) 타입을 필요한 만큼만 로컬 미러링
+// (AiSocialPanel.tsx 와 동일 관례: 각 컴포넌트가 쓰는 모양만 로컬로 선언 — shared 타입 착지 시점과
+// 무관하게 이 파일이 동작한다). 자연어 요청이 기존 생산 워크플로(이미지 생성→SNS 게시, 블로그
+// 댓글·좋아요)와 일치하면 평범한 에이전트로 바로 보내지 않고 확인 카드를 먼저 띄운다. =====
+type WorkflowIntentKind = 'image-post' | 'blog-engage'
+interface WorkflowIntent {
+  kind: WorkflowIntentKind
+  summary: string        // 사용자에게 보여 줄 한 줄 요약
+  missing: string[]      // 'platform' | 'account' | 'prompt' | 'topic' | 'maxPosts'
+  matched: string[]
+  image?: { service: 'genspark' | 'chatgpt' | 'custom'; prompt: string; platform: 'instagram' | 'youtube' | 'tiktok' | null; mode: 'draft' | 'publish'; tags: string[] }
+  blog?: { topic: string; myBlogUrl: string; actions: ('comment' | 'like')[]; mode: 'draft' | 'act'; maxPosts: number; searchUrl: string }
+}
+
 // 에이전트에 무엇이든 시킬 수 있음을 보여주는 예시 작업(발견성). 클릭하면 입력창에 채워지고, 사용자가
 // 자기 사이트에 맞게 다듬어 실행한다(자동 실행 아님 — 되돌리기 어려운 동작은 실행 시 확인 게이트가 잡음).
 const AGENT_EXAMPLES: Array<{ label: string; task: string }> = [
@@ -470,6 +484,55 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   // 부팅 시 마지막 대화 자동 복원이 늦게 도착해, 그 사이 사용자가 이미 입력을 시작한 경우
   // 덮어쓰지 않도록 상호작용 여부를 추적한다.
   const startedRef = useRef(false)
+
+  // ===== 워크플로 의도 확인 카드 — 카드는 제안일 뿐이며 실행은 사용자가 버튼을 눌러야만 시작된다.
+  // 자동 게시 선승인도 마찬가지(토글을 직접 켰을 때만 grant 를 부른다. intent.image.mode==='publish'
+  // 라는 이유만으로는 절대 부르지 않는다). =====
+  const [pendingIntent, setPendingIntent] = useState<WorkflowIntent | null>(null)
+  const [intentSourceText, setIntentSourceText] = useState('') // '일반 에이전트로 실행' 이 그대로 쓸 원문
+  const [intentBusy, setIntentBusy] = useState(false)
+  const [intentError, setIntentError] = useState<string | null>(null)
+  // image-post 카드 필드 — 감지값으로 시드하고 이후 사용자가 편집(계정은 감지 대상이 아니라 항상 비움)
+  const [icService, setIcService] = useState<'genspark' | 'chatgpt' | 'custom'>('genspark')
+  const [icCustomUrl, setIcCustomUrl] = useState('')
+  const [icPrompt, setIcPrompt] = useState('')
+  const [icPlatform, setIcPlatform] = useState<'instagram' | 'youtube' | 'tiktok' | ''>('')
+  const [icAccount, setIcAccount] = useState('')
+  const [icMode, setIcMode] = useState<'draft' | 'publish'>('draft')
+  const [icTags, setIcTags] = useState<string[]>([])
+  const [icAutoPublish, setIcAutoPublish] = useState(false)
+  const [icAutoMaxPosts, setIcAutoMaxPosts] = useState(1)
+  const [icAutoMinutes, setIcAutoMinutes] = useState(30)
+  // blog-engage 카드 필드
+  const [bcTopic, setBcTopic] = useState('')
+  const [bcMyBlogUrl, setBcMyBlogUrl] = useState('')
+  const [bcDoComment, setBcDoComment] = useState(true)
+  const [bcDoLike, setBcDoLike] = useState(true)
+  const [bcMaxPosts, setBcMaxPosts] = useState(5)
+  const [bcIntervalSeconds, setBcIntervalSeconds] = useState(30)
+  const [bcMode, setBcMode] = useState<'draft' | 'act'>('draft')
+  const [bcAccount, setBcAccount] = useState('')
+  const [bcExcludeHosts, setBcExcludeHosts] = useState('')
+  const [bcSearchUrl, setBcSearchUrl] = useState('')
+
+  // 새 카드가 뜰 때만 감지값으로 필드를 시드한다(그 뒤엔 사용자 편집을 덮어쓰지 않음 — 캡션 초안
+  // 시딩(review 단계)과 같은 패턴). 계정은 감지 대상이 아니므로 항상 비워 강조한다.
+  useEffect(() => {
+    if (!pendingIntent) return
+    if (pendingIntent.kind === 'image-post' && pendingIntent.image) {
+      const img = pendingIntent.image
+      setIcService(img.service); setIcCustomUrl(''); setIcPrompt(img.prompt)
+      setIcPlatform(img.platform ?? ''); setIcAccount(''); setIcMode(img.mode); setIcTags(img.tags ?? [])
+      setIcAutoPublish(false); setIcAutoMaxPosts(1); setIcAutoMinutes(30)
+    } else if (pendingIntent.kind === 'blog-engage' && pendingIntent.blog) {
+      const b = pendingIntent.blog
+      setBcTopic(b.topic ?? ''); setBcMyBlogUrl(b.myBlogUrl ?? '')
+      setBcDoComment(!b.actions || b.actions.length === 0 || b.actions.includes('comment'))
+      setBcDoLike(!b.actions || b.actions.length === 0 || b.actions.includes('like'))
+      setBcMaxPosts(b.maxPosts && b.maxPosts > 0 ? b.maxPosts : 5)
+      setBcIntervalSeconds(30); setBcMode(b.mode ?? 'draft'); setBcAccount(''); setBcExcludeHosts(''); setBcSearchUrl(b.searchUrl ?? '')
+    }
+  }, [pendingIntent])
 
   const bodyRef = useRef<HTMLDivElement>(null)
   const activeId = active?.id
@@ -1073,8 +1136,20 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
       void window.browserAPI.ai.repeatStart({ task: t, windowId, tabId: activeId, intervalMinutes: Math.max(0.1, repeatEvery), count: Math.max(0, repeatCount), autoConfirm: repeatAuto })
       setAgentTask('') // 전송 후 입력창 비우기
     } else {
-      startPersistentTask(t)
+      // 평범한 단발 실행만 먼저 기존 생산 워크플로(이미지→SNS 게시·블로그 참여)와 일치하는지
+      // 확인한다. 일치해도 자동으로 시작하지 않고 카드를 띄워 사용자가 직접 고른다 —
+      // 입력창은 지우지 않는다('일반 에이전트로 실행'이 원문을 그대로 써야 하기 때문).
+      void detectWorkflowIntent(t)
     }
+  }
+  const detectWorkflowIntent = async (t: string) => {
+    try {
+      const intent = await window.browserAPI.ai.intentDetect(t)
+      if (intent) { setIntentSourceText(t); setPendingIntent(intent); return }
+    } catch {
+      // 감지 실패가 실행을 막으면 안 된다 — 평범한 에이전트로 그대로 진행.
+    }
+    startPersistentTask(t)
   }
   const onAgentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runAgentOrRepeat() }
@@ -1108,6 +1183,86 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
       runPtaskAction(window.browserAPI.ai.ptaskStart(summary.id))
     })
   }
+
+  // ===== 워크플로 의도 확인 카드 — 실행 =====
+  const dismissIntentCard = () => { setPendingIntent(null); setIntentError(null); setIntentBusy(false) }
+  const runIntentAsPlainAgent = () => {
+    const t = intentSourceText
+    dismissIntentCard()
+    startPersistentTask(t)
+  }
+  const intentCanExecute = pendingIntent
+    ? pendingIntent.kind === 'image-post'
+      ? !!icPlatform && icPrompt.trim() !== '' && icAccount.trim() !== '' && (icService !== 'custom' || icCustomUrl.trim() !== '')
+      : (bcTopic.trim() !== '' || bcMyBlogUrl.trim() !== '') && (bcDoComment || bcDoLike) && bcAccount.trim() !== ''
+    : false
+  const executeIntent = async () => {
+    if (!pendingIntent || intentBusy || !activeId || !intentCanExecute) return
+    setIntentBusy(true); setIntentError(null)
+    try {
+      if (pendingIntent.kind === 'image-post') {
+        // 자동 게시 선승인은 작업을 만들기 전에 등록한다 — 작업이 먼저 생기면 범위 밖으로 판정되어
+        // 자동 게시되지 않는다(AiSocialPanel.startGenerate 와 동일 규칙). intent.image.mode==='publish'
+        // 라는 이유만으로는 절대 grant 를 부르지 않는다 — 사용자가 '맡기고 자동 게시'를 직접 켰을 때만.
+        if (icMode === 'publish' && icAutoPublish) {
+          const g = await window.browserAPI.ai.socialGrant({
+            platform: icPlatform as 'instagram' | 'youtube' | 'tiktok',
+            accounts: [icAccount.trim()],
+            maxPosts: icAutoMaxPosts,
+            minutes: icAutoMinutes,
+          })
+          if (!g) setIntentError('자동 게시 선승인을 등록하지 못했습니다 — 확인 후 게시로 진행합니다.')
+        }
+        const w = await window.browserAPI.ai.socialStart({
+          service: icService,
+          customUrl: icService === 'custom' ? icCustomUrl.trim() : undefined,
+          prompt: icPrompt.trim(),
+          platform: icPlatform as 'instagram' | 'youtube' | 'tiktok',
+          account: icAccount.trim(),
+          tags: icTags,
+          mode: icMode,
+          windowId,
+          tabId: activeId,
+        })
+        if (!w) { setIntentError('작업을 시작하지 못했습니다.'); return }
+        setPendingIntent(null)
+        setSocialOpen(true) // 진행 상황은 🎨 만들기 패널의 카드에서 볼 수 있다
+      } else if (pendingIntent.kind === 'blog-engage') {
+        const actions: Array<'comment' | 'like'> = []
+        if (bcDoComment) actions.push('comment')
+        if (bcDoLike) actions.push('like')
+        const res = await window.browserAPI.ai.engageBuildTask({
+          topic: bcTopic.trim() || undefined,
+          myBlogUrl: bcMyBlogUrl.trim() || undefined,
+          searchUrl: bcSearchUrl.trim() || undefined,
+          account: bcAccount.trim(),
+          maxPosts: Math.max(1, Math.min(20, bcMaxPosts)),
+          actions,
+          mode: bcMode,
+          excludeHosts: bcExcludeHosts.split(',').map((s) => s.trim()).filter(Boolean),
+          intervalSeconds: Math.max(0, Math.min(600, bcIntervalSeconds)),
+        })
+        // openUrl 처리는 AiSocialPanel.startEngage 와 동일 — 먼저 그 주소로 이동한 뒤 잠깐 기다리고
+        // ptask 를 만든다(레시피가 실어 보낸 안전 지침·가드 표식을 그대로 쓴다 — 가공하지 않는다).
+        await window.browserAPI.omnibox.navigate(windowId, activeId, res.openUrl)
+        await new Promise((r) => setTimeout(r, 1200))
+        const summary = await window.browserAPI.ai.ptaskCreate({
+          instruction: res.task, tabId: activeId, mode: 'normal', budget: { allowedHosts: res.allowedHosts },
+        })
+        if (!summary) { setIntentError('작업을 만들지 못했습니다.'); return }
+        const startRes = await window.browserAPI.ai.ptaskStart(summary.id)
+        if (!startRes?.ok) { setIntentError(startRes?.error || '작업을 시작하지 못했습니다.'); return }
+        setPendingIntent(null)
+        setMode('agent')
+        setPtaskNotice('작업을 시작했습니다 — 📌 작업에서 진행 상황을 볼 수 있습니다.')
+      }
+    } catch (e) {
+      setIntentError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIntentBusy(false)
+    }
+  }
+
   const pausePtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskPause(id))
   const resumePtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskResume(id))
   const cancelPtask = (id: string) => runPtaskAction(window.browserAPI.ai.ptaskCancel(id))
@@ -1859,6 +2014,136 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                   <div className="ai-repeat-meta">{r.doneCount}회 완료됨</div>
                 </div>
               ))}
+            </div>
+          )}
+          {pendingIntent && (
+            <div className="ai-intent-card" data-intent="card" data-intent-kind={pendingIntent.kind}>
+              <div className="ai-intent-head">
+                🔗 이 요청을 {pendingIntent.kind === 'image-post' ? '이미지 생성 → SNS 게시' : '블로그 댓글·좋아요'} 작업으로 실행할까요?
+              </div>
+              <div className="ai-hint">{pendingIntent.summary}</div>
+
+              {pendingIntent.kind === 'image-post' ? (
+                <>
+                  <label className="ai-write-label">생성 서비스</label>
+                  <div className="ai-chips">
+                    {(['genspark', 'chatgpt', 'custom'] as const).map((s) => (
+                      <button key={s} className={`ai-chip ${icService === s ? 'active' : ''}`} data-intent="service" data-intent-value={s} onClick={() => setIcService(s)}>
+                        {s === 'genspark' ? 'Genspark' : s === 'chatgpt' ? 'ChatGPT' : '직접 입력'}
+                      </button>
+                    ))}
+                  </div>
+                  {icService === 'custom' && (
+                    <input className="ai-input" value={icCustomUrl} placeholder="생성 서비스 URL" onChange={(e) => setIcCustomUrl(e.target.value)} />
+                  )}
+
+                  <label className="ai-write-label">만들 이미지</label>
+                  <textarea className="ai-input" rows={2} value={icPrompt} placeholder="어떤 이미지를 만들지 설명하세요"
+                    data-intent="prompt" onChange={(e) => setIcPrompt(e.target.value)} />
+
+                  <label className={`ai-write-label ${!icPlatform ? 'ai-field-needed' : ''}`}>게시할 곳</label>
+                  <div className="ai-chips" data-intent="platform" data-intent-needed={!icPlatform ? '1' : undefined}>
+                    {(['instagram', 'youtube', 'tiktok'] as const).map((p) => (
+                      <button key={p} className={`ai-chip ${icPlatform === p ? 'active' : ''}`} onClick={() => setIcPlatform(p)}>
+                        {p === 'instagram' ? '인스타그램' : p === 'youtube' ? '유튜브' : '틱톡'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className={`ai-write-label ${!icAccount.trim() ? 'ai-field-needed' : ''}`}>계정</label>
+                  <input className="ai-input" value={icAccount} placeholder="게시할 계정 표시 이름"
+                    data-intent="account" data-intent-needed={!icAccount.trim() ? '1' : undefined} onChange={(e) => setIcAccount(e.target.value)} />
+
+                  <label className="ai-write-label">진행 방식</label>
+                  <div className="ai-chips">
+                    <button className={`ai-chip ${icMode === 'draft' ? 'active' : ''}`} data-intent="mode" data-intent-value="draft" onClick={() => setIcMode('draft')}>초안까지만</button>
+                    <button className={`ai-chip ${icMode === 'publish' ? 'active' : ''}`} data-intent="mode" data-intent-value="publish" onClick={() => setIcMode('publish')}>게시까지</button>
+                  </div>
+
+                  {icTags.length > 0 && (
+                    <div className="ai-chips">
+                      {icTags.map((tag) => <span key={tag} className="ai-chip tag">#{tag}</span>)}
+                    </div>
+                  )}
+
+                  {icMode === 'publish' && (
+                    <>
+                      <div className="ai-handoff-note ai-err">⚠ 실제 계정에 게시됩니다. 되돌릴 수 없습니다.</div>
+                      {/* 한 번 맡기면 끝까지 — 다만 사용자가 여기서 직접 켤 때만(AiSocialPanel 과 같은 문구·규칙). */}
+                      <label className="ai-write-label">캡션 확인 없이 게시(이번 작업 한정)</label>
+                      <div className="ai-chips" data-intent="autopublish">
+                        <button className={`ai-chip ${icAutoPublish ? '' : 'active'}`} onClick={() => setIcAutoPublish(false)}>확인 후 게시</button>
+                        <button className={`ai-chip ${icAutoPublish ? 'active' : ''}`} onClick={() => setIcAutoPublish(true)}>맡기고 자동 게시</button>
+                      </div>
+                      {icAutoPublish && (
+                        <>
+                          <div className="ai-social-auto-row">
+                            <label className="ai-write-label">최대 건수</label>
+                            <input className="ai-input ai-input-sm" type="number" min={1} max={50} value={icAutoMaxPosts}
+                              onChange={(e) => setIcAutoMaxPosts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+                            <label className="ai-write-label">유효 시간(분)</label>
+                            <input className="ai-input ai-input-sm" type="number" min={5} max={1440} value={icAutoMinutes}
+                              onChange={(e) => setIcAutoMinutes(Math.max(5, Math.min(1440, Number(e.target.value) || 5)))} />
+                          </div>
+                          <div className="ai-handoff-note ai-err">
+                            ⚠ {icPlatform ? (icPlatform === 'instagram' ? '인스타그램' : icPlatform === 'youtube' ? '유튜브' : '틱톡') : '(게시할 곳 미지정)'} ·
+                            계정 "{icAccount.trim() || '(계정 미지정)'}" 로 최대 {icAutoMaxPosts}건을 {icAutoMinutes}분 안에 <b>확인 없이 게시</b>합니다.
+                            이미지가 모호하거나 캡션 생성이 실패하면 자동 게시하지 않고 확인을 기다립니다.
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
+              ) : pendingIntent.kind === 'blog-engage' ? (
+                <>
+                  <label className={`ai-write-label ${!bcTopic.trim() && !bcMyBlogUrl.trim() ? 'ai-field-needed' : ''}`}>주제</label>
+                  <input className="ai-input" value={bcTopic} placeholder="예: 홈트레이닝, 캠핑 장비"
+                    data-intent="topic" data-intent-needed={!bcTopic.trim() && !bcMyBlogUrl.trim() ? '1' : undefined} onChange={(e) => setBcTopic(e.target.value)} />
+
+                  <label className="ai-write-label">내 블로그 주소 (선택 — 위와 하나는 필요)</label>
+                  <input className="ai-input" value={bcMyBlogUrl} placeholder="https://blog.naver.com/내블로그" onChange={(e) => setBcMyBlogUrl(e.target.value)} />
+
+                  <label className="ai-write-label">무엇을</label>
+                  <div className="ai-chips">
+                    <label className="ai-write-autoopen"><input type="checkbox" checked={bcDoComment} data-intent="action" data-intent-value="comment" onChange={(e) => setBcDoComment(e.target.checked)} /><span>댓글</span></label>
+                    <label className="ai-write-autoopen"><input type="checkbox" checked={bcDoLike} data-intent="action" data-intent-value="like" onChange={(e) => setBcDoLike(e.target.checked)} /><span>좋아요</span></label>
+                  </div>
+
+                  <div className="ai-social-auto-row">
+                    <label className="ai-write-label">글 수</label>
+                    <input className="ai-input ai-input-sm" type="number" min={1} max={20} value={bcMaxPosts}
+                      data-intent="maxposts" onChange={(e) => setBcMaxPosts(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} />
+                    <label className="ai-write-label">간격(초)</label>
+                    <input className="ai-input ai-input-sm" type="number" min={0} max={600} value={bcIntervalSeconds}
+                      data-intent="interval" onChange={(e) => setBcIntervalSeconds(Math.max(0, Math.min(600, Number(e.target.value) || 0)))} />
+                  </div>
+
+                  <label className={`ai-write-label ${!bcAccount.trim() ? 'ai-field-needed' : ''}`}>계정</label>
+                  <input className="ai-input" value={bcAccount} placeholder="댓글에 쓸 이름"
+                    data-intent="account" data-intent-needed={!bcAccount.trim() ? '1' : undefined} onChange={(e) => setBcAccount(e.target.value)} />
+
+                  <label className="ai-write-label">진행 방식</label>
+                  <div className="ai-chips">
+                    <button className={`ai-chip ${bcMode === 'draft' ? 'active' : ''}`} data-intent="mode" data-intent-value="draft" onClick={() => setBcMode('draft')}>초안만</button>
+                    <button className={`ai-chip ${bcMode === 'act' ? 'active' : ''}`} data-intent="mode" data-intent-value="act" onClick={() => setBcMode('act')}>실제로 남기기</button>
+                  </div>
+                  {bcMode === 'act' && <div className="ai-handoff-note ai-err">⚠ 실제로 댓글/좋아요가 등록됩니다. 되돌릴 수 없습니다.</div>}
+
+                  <label className="ai-write-label">제외할 사이트 (선택, 쉼표)</label>
+                  <input className="ai-input" value={bcExcludeHosts} placeholder="example.com, ads.co.kr" onChange={(e) => setBcExcludeHosts(e.target.value)} />
+                </>
+              ) : null}
+
+              {intentError && <div className="ai-handoff-note ai-err" data-intent="error">{intentError}</div>}
+              {!activeId && <div className="ai-hint">활성 탭이 필요합니다.</div>}
+              <div className="ai-write-actions">
+                <button className="ai-send ai-social-cta" data-intent="run" onClick={() => void executeIntent()} disabled={intentBusy || !activeId || !intentCanExecute}>
+                  {intentBusy ? '실행 중…' : '이 작업으로 실행'}
+                </button>
+                <button className="ai-mini-btn" data-intent="fallback" onClick={runIntentAsPlainAgent} disabled={intentBusy}>일반 에이전트로 실행</button>
+                <button className="ai-mini-btn" data-intent="cancel" onClick={dismissIntentCard} disabled={intentBusy}>취소</button>
+              </div>
             </div>
           )}
           {ptaskNotice && <div className="ai-handoff-note">{ptaskNotice}</div>}

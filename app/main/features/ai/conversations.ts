@@ -5,6 +5,8 @@ import { existsSync } from 'node:fs'
 import { writeFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { createJsonStore, loadJsonObject } from './json-store'
+// 부작용 없는 경로 해석기만 가져온다(downloads/index 를 통째로 끌어오면 세션·종료 훅까지 딸려 온다).
+import { defaultDownloadDir } from '../downloads/dir'
 
 // AI 챗 대화 영속화 — 재시작해도 대화가 남고, 여러 스레드를 오가며 이어갈 수 있게 한다.
 // userData/ai-chats.json 하나에 모든 대화를 담는다.
@@ -295,9 +297,13 @@ export function safeFileName(name: string): string {
 }
 
 // 다운로드 폴더에 마크다운 파일을 충돌 없이 기록(대화·보고서 내보내기 공용 — 다이얼로그/블롭 우회).
+//
+// 저장 위치는 **다운로드와 같은 규칙**(설정의 downloads.defaultPath 우선 → 없으면 OS 기본)을 따른다.
+// 전에는 app.getPath('downloads') 로 고정돼 있어, 사용자가 저장 위치를 바꿔 놔도 AI 보고서·대화
+// 내보내기만 OS Downloads 폴더로 샜다(검증 하네스도 그래서 사용자의 실제 폴더를 건드렸다).
 export async function writeDownloadMd(base: string, md: string): Promise<{ ok: boolean; path?: string }> {
   try {
-    const dir = app.getPath('downloads')
+    const dir = defaultDownloadDir()
     await mkdir(dir, { recursive: true })
     let file = path.join(dir, `${base}.md`)
     let n = 1

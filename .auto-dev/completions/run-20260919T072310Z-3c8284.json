@@ -1,0 +1,86 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T072310Z-3c8284",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T08:09:57Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "저장이 확정되지 않으면 게시를 시작하지 않는다 — 직렬화·쓰기(.tmp)·rename(chmod 0o444→EPERM) 실패를 실제 주입하면 flush()가 false 를 돌려주고 기존 파일이 보존되며 .tmp 잔재가 0개",
+      "check": "P1~P3 (verify-persistence-boundary)",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "저장소를 되돌리면 최신 스냅샷이 실제로 저장되고 재시작해 다시 읽어도 레코드가 정확히 1건이며, 변경이 없으면 파일을 건드리지 않는다(mtime 불변)",
+      "check": "P4~P6 (verify-persistence-boundary)",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "AI 가 '게시됨'이라고 말하기만 해서는 완료로 닫히지 않는다 — 서버에 올라간 적 없는 캡션에 표지를 내게 하면 stage=publish 유지, stoppedAt='근거를 찾지 못했습니다', readSightings 비어 있음, 서버 게시 추가 0건",
+      "check": "R3-VER-FORGED (verify-recovery-cdp)",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "실제로 올라간 글은 확인으로 완료 확정되고 영수증에 출처 주소와 화면 발췌가 남는다(receipt.url=https://www.instagram.com/, 발췌='게시물 #1 — 문구: r3 테스트 캡션'), 추가 게시 0건",
+      "check": "R3-VER-POS (verify-recovery-cdp)",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "'게시안됨' 한 줄로 이어가기 차단이 자동으로 풀리지 않는다(resumeBlockedReason 유지). 사람이 직접 고르면 풀린다(양성 대조)",
+      "check": "R3-VER-NOTPUB (verify-recovery-cdp)",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "아직 올리지 않고 입력만 해 둔 캡션은 근거가 되지 않는다 — 근거 수집을 편집영역(textarea·input·contenteditable) 제외 인페이지 스크립트로 옮긴 뒤에도 실제 게시물은 그대로 찾는다",
+      "check": "리뷰 수정 후 R3 전 시나리오 재실행",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "시작되지 않은 게시 작업으로 경계를 우회할 수 없다 — abort 는 setResumeBlock→flush→deleteTask→flush 순서라 삭제가 디스크에 못 닿아도 남는 것은 '시작할 수 없는 작업'이고 startTask·resumeTask 가 둘 다 이를 본다",
+      "check": "코드 경로 감사 + R3 차단 실측(ptaskStart 거부=true)",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "positive",
+      "behavior": "검사가 실제로 무언가를 잡는다 — 호스트·시각을 보지 않는 느슨한 판정에 같은 데이터를 먹이면 통과해 버리고, 실제 판정은 거부한다",
+      "check": "E-NEG (verify-persistence-boundary)",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": true,
+    "remaining_required": [],
+    "blockers": [],
+    "optional_next": [
+      "R3-VER-INT(확인 작업이 도는 중 강제 종료) 시나리오 추가 — interrupted 분기는 구조적으로만 확인했다",
+      "P 그룹(저장 실패)의 음성 대조 실행 — 현재는 코드 주석의 논리적 근거만 있다",
+      "실제 구독 모델·실제 SNS 로 확인 경로 재확인 — 이번 라운드는 로컬 픽스처 + 각본 LLM",
+      "설치파일 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 가동 중이라 우회하지 않았다"
+    ],
+    "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+  },
+  "verification": {
+    "command": "npm run verify (14/14) + verify-recovery-cdp --only R3 (9 PASS/0 FAIL) + verify-persistence-boundary (13/13) + smoke-cdp on packaged win-unpacked (16/16)",
+    "passed": 52,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "구현 뒤 적대적 코드 리뷰(치명 0·높음 2·중간 3·낮음 5) 반영 후 전 검증 재실행. 높음 2건은 실제 동작 결함(인페이지 정규식이 템플릿 리터럴에서 죽어 있었음 / 작성 중인 캡션이 게시 근거로 둔갑 가능). 기존 R3-RO 는 옛 결함을 기대값으로 굳히고 있어 완화가 아니라 조건을 나눠 다시 썼다."
+}

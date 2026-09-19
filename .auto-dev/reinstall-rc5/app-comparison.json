@@ -1,0 +1,8 @@
+{
+  "installedVersion": "0.2.0-rc.5",
+  "applicationFilesCompared": 173,
+  "differences": [
+    "\\app\\dist\\renderer\\assets\\index-DwNdCKp4.js",
+    "\\app\\dist\\renderer\\index.html"
+  ]
+}

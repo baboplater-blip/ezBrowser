@@ -94,6 +94,17 @@ const deny = (name, patch, expectWhy) => {
   t(name, v.ok === false && (!expectWhy || v.why.includes(expectWhy)), JSON.stringify(v))
 }
 
+// 계정 칸을 **손으로 고친** 작업은 선승인 범위 안이어도 확인을 받는다.
+// 왜: 범위 밖 계정으로 시작한 작업의 계정을 범위 안 계정으로 고치면, 텍스트 한 칸 편집만으로
+// 그 작업이 자동 게시 대상이 된다 — 사용자가 "게시해도 좋다" 를 누른 적이 없는데 글이 나간다.
+// (양성 대조는 바로 위 okV — 같은 워크플로가 **고치지 않았을 때는** 허용된다.)
+deny('계정을 손으로 고친 작업은 선승인이 있어도 확인을 받는다', { accountEditedAt: Date.now() }, '직접 고친')
+t('계정 편집 표시는 다른 조건이 모두 맞아도 단독으로 막는다(양성 대조와 한 쌍)', (() => {
+  const clean = W.autoPublishVerdict(base())              // 같은 재료, 편집 표시만 없음
+  const edited = W.autoPublishVerdict({ ...base(), accountEditedAt: Date.now() })
+  return clean.ok === true && edited.ok === false
+})(), JSON.stringify({ clean: W.autoPublishVerdict(base()), edited: W.autoPublishVerdict({ ...base(), accountEditedAt: Date.now() }) }))
+
 deny('초안 모드는 자동 게시하지 않는다', { params: { ...base().params, mode: 'draft' } }, '초안')
 deny('승인한 계정이 아니면 자동 게시하지 않는다', { params: { ...base().params, account: '다른계정' } }, '계정')
 deny('계정이 비어 있으면(미지정) 승인 계정과 다르므로 거부', { params: { ...base().params, account: '' } }, '계정')
@@ -157,16 +168,70 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
     if (k.includes(path.join('dist', 'main', 'features', 'ai'))) delete require.cache[k]
   }
 
-  const created = []          // 만들어진 작업들(지시문 포함)
+  const created = []          // 만들어진 작업들(지시문 포함 · 어느 탭으로 만들었는지)
+
+  // 탭은 진짜 브라우저가 필요하므로 최소 대역만 세운다. **무엇을 검사하려는지**가 여기에 있다 —
+  // 게시 단계가 탭을 게시 사이트로 실제로 옮기는가(navigations), 그리고 옮기는 동안 끼어든
+  // 취소·철회·중복 승인에도 게시 작업이 0건으로 남는가.
+  const tabs = require(resolve('../../tabs/tab-service.js'))
+  const navigations = []      // 우리 코드가 실제로 부른 loadURL 기록
+  const tabState = new Map()  // tabId -> { url, gone, slow }
+  const setTab = (id, url, extra = {}) => { tabState.set(id, { url, gone: false, slow: false, ...extra }); return id }
+  let pendingNav = null       // slow 탭의 로드 완료를 테스트가 직접 풀어준다
+  const fakeWc = (id) => {
+    const st = tabState.get(id)
+    if (!st || st.gone) return null
+    return {
+      isDestroyed: () => !!tabState.get(id)?.gone,
+      getURL: () => tabState.get(id)?.url ?? '',
+      isLoading: () => false,
+      once: () => {},
+      loadURL: (u) => {
+        navigations.push({ tabId: id, url: u })
+        const cur = tabState.get(id)
+        // 리다이렉트 흉내: landsAt 이 있으면 최종 URL 이 그것이 된다.
+        const final = cur?.landsAt ?? u
+        if (cur?.slow) return new Promise((res) => { pendingNav = () => { cur.url = final; res() } })
+        if (cur) cur.url = final
+        return Promise.resolve()
+      },
+    }
+  }
+  tabs.getWebContentsByTabId = (id) => fakeWc(id)
+  tabs.createTab = (o) => {
+    if (o.workspaceId === '(없음)') throw new Error('워크스페이스 없음')
+    const id = 'tab-new'
+    setTab(id, o.url ?? 'about:blank')
+    navigations.push({ tabId: id, url: o.url, created: true })
+    return { id }
+  }
+
   const rt = require(resolve('task-runtime.js'))
   let genState = 'running'
-  rt.createTask = (o) => { const task = { id: 'task-' + (created.length + 1), instruction: o.instruction }; created.push(task); return task }
-  rt.startTask = () => {}
+  rt.createTask = (o) => {
+    const task = {
+      id: 'task-' + (created.length + 1),
+      instruction: o.instruction,
+      tabId: o.tabId,
+      allowedHosts: o.budget?.allowedHosts ?? [],
+      // 체크포인트는 제품의 createTask 가 **그 탭의 실제 URL** 로 잡는다(여기선 스텁이라 직접 읽어 흉내).
+      tabUrl: tabState.get(o.tabId)?.url ?? '',
+    }
+    created.push(task)
+    return task
+  }
+  // 실제 startTask 는 StartResult(`{ ok, error? }`)를 돌려준다. 스텁이 아무것도 안 돌려주면
+  // 호출부가 결과를 확인하는 순간 예외가 나고, 그 예외가 게시 준비 실패로 둔갑해 **선승인 건수
+  // 환불**까지 일으킨다(이 스텁의 결함이 제품 결함처럼 보였다 — 2026-09-19).
+  rt.startTask = () => ({ ok: true })
   rt.setTaskInstruction = () => true
   rt.cancelTask = () => {}
   rt.deleteTask = () => {}
   // 첫 작업(생성)만 상태를 준다 — 게시 작업은 아직 진행 중으로 둔다.
-  rt.getTask = (id) => (id === 'task-1' ? { id, state: genState, checkpoint: {}, result: '' } : { id, state: 'running', checkpoint: {} })
+  let genWorkspaceId = 'ws-1'
+  rt.getTask = (id) => (id === 'task-1'
+    ? { id, state: genState, checkpoint: { workspaceId: genWorkspaceId }, result: '' }
+    : { id, state: 'running', checkpoint: { workspaceId: genWorkspaceId } })
 
   const art = require(resolve('artifacts.js'))
   const onlyArtifact = { id: 'art-1', bytes: 100, format: 'png', sha256: 'abc', width: 512, height: 512 }
@@ -191,13 +256,35 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
   // 생성 작업이 끝난 상태를 알리고(제품이 reconcile 로 확인 단계까지 스스로 간다) 캡션을 기다린다.
   const runOnce = async () => {
     created.length = 0
+    navigations.length = 0
+    pendingNav = null
+    setTab('tab-1', 'about:blank')          // 새 탭에서 시작하는 실제 흐름과 같게 둔다
     genState = 'running'
     const wf = W3.startImagePost(params)
     genState = 'completed'
     rt.taskEvents.emit('changed')
-    await wait(50)
+    // 게시 준비(탭 이동)는 비동기다 — 넉넉히 기다린다(스텁이라 실제로는 즉시 끝난다).
+    await wait(120)
     return W3.listWorkflows().find((x) => x.id === wf.id)
   }
+
+  /** 준비가 느린(로드가 안 끝난) 상태에서 멈춰 세운 뒤, 테스트가 경합을 끼워 넣고 풀어준다. */
+  const runPaused = async () => {
+    created.length = 0
+    navigations.length = 0
+    pendingNav = null
+    setTab('tab-1', 'about:blank', { slow: true })
+    genState = 'running'
+    const wf = W3.startImagePost(params)
+    genState = 'completed'
+    rt.taskEvents.emit('changed')
+    await wait(60)                           // 캡션 → 게시 준비 진입까지
+    return wf
+  }
+  const release = async () => { pendingNav?.(); pendingNav = null; await wait(80) }
+  const cur = (id) => W3.listWorkflows().find((x) => x.id === id)
+  // created[0] 은 생성 작업이다 — 그 뒤에 만들어진 것이 게시 작업이다(0건이어야 할 때가 많다).
+  const publishTasks = () => created.slice(1)
 
   // ① 선승인 있음 + 후보 1개 + 캡션 성공 → 확인 클릭 없이 게시가 시작된다
   W3.grantAutoPublish({ platform: 'instagram', accounts: ['me'], maxPosts: 2, minutes: 30 })
@@ -222,6 +309,139 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
   t('철회 뒤에는 캡션이 나와도 게시가 시작되지 않는다(부정 대조)',
     c?.stage === 'review' && !c?.taskIds?.publish, JSON.stringify({ stage: c?.stage, ids: c?.taskIds }))
   t('철회 뒤에도 캡션 자체는 채워져 사용자가 승인할 수 있다', c?.caption === '정상 캡션2', String(c?.caption))
+
+  // ===== 게시 단계 탭 전환 — 앱이 옮기는가, 그리고 옮기는 도중의 경합에서 게시가 0 또는 1 인가 =====
+  //
+  // 예전에는 "인스타그램이 아니면 이동하세요" 라는 **지시문만** 주고 탭은 그대로 뒀다. 그래서 작업의
+  // 체크포인트가 생성 사이트(about:blank)로 잡혀 재바인딩 가드에 걸렸고, 실모델 R-SNS 가 모델을 한 번도
+  // 부르지 못한 채 waiting-user 로 멈췄다(2회 재현). 여기서 지키는 것은 그 회귀와, 이동이 비동기가 되며
+  // 새로 생긴 경합(취소·철회·기한 만료·중복 승인·탭 소멸·리다이렉트)에서 **게시가 두 번 나가지 않는 것**이다.
+  const freshGrant = () => W3.grantAutoPublish({ platform: 'instagram', accounts: ['me'], maxPosts: 2, minutes: 30 })
+
+  // ④ 양성 — 앱이 탭을 게시 사이트로 옮기고, 그 탭·그 URL 로 작업을 만든다
+  freshGrant()
+  const d = await runOnce()
+  const dPub = publishTasks()[0]
+  t('게시 단계가 탭을 게시 사이트로 실제로 옮긴다(앱이 옮긴다 — 모델 지시문에 의존하지 않는다)',
+    navigations.some((n) => n.tabId === 'tab-1' && n.url === 'https://www.instagram.com/'),
+    JSON.stringify(navigations))
+  t('게시 작업의 탭·체크포인트가 이동한 실제 페이지와 일치한다(about:blank 로 잡히지 않는다)',
+    dPub?.tabId === 'tab-1' && dPub?.tabUrl === 'https://www.instagram.com/',
+    JSON.stringify({ tabId: dPub?.tabId, tabUrl: dPub?.tabUrl }))
+  t('허용 사이트는 게시 호스트 하나로 유지된다(넓히지 않는다)',
+    JSON.stringify(dPub?.allowedHosts) === JSON.stringify(['www.instagram.com']),
+    JSON.stringify(dPub?.allowedHosts))
+  t('정상 경로에서 게시 작업은 정확히 1건', publishTasks().length === 1, String(publishTasks().length))
+  t('정상 경로에서 단계는 publish', d?.stage === 'publish', String(d?.stage))
+
+  // ⑤ 부정 — 이동하는 도중 사용자가 취소하면 게시 작업이 아예 만들어지지 않는다
+  freshGrant()
+  const e0 = await runPaused()
+  const midCancel = publishTasks().length
+  W3.cancelWorkflow(e0.id)
+  await release()
+  t('이동 중 취소하면 게시 작업이 0건이다(게시 0건)',
+    midCancel === 0 && publishTasks().length === 0, JSON.stringify({ midCancel, after: publishTasks().length }))
+  t('이동 중 취소하면 단계가 cancelled 로 남는다', cur(e0.id)?.stage === 'cancelled', String(cur(e0.id)?.stage))
+
+  // ⑥ 부정 — 이동하는 도중 선승인을 철회하면 게시하지 않고 건수를 돌려준다
+  freshGrant()
+  const f0 = await runPaused()
+  const usedDuring = W3.getAutoPublishGrant()?.used
+  W3.revokeAutoPublish()
+  await release()
+  t('이동 중 선승인을 철회하면 게시 작업이 0건이다', publishTasks().length === 0, String(publishTasks().length))
+  t('이동 중 철회되면 실패로 남고 사유가 보인다',
+    cur(f0.id)?.stage === 'failed' && (cur(f0.id)?.error ?? '').includes('게시는 진행되지 않았습니다'),
+    JSON.stringify({ stage: cur(f0.id)?.stage, error: cur(f0.id)?.error }))
+  t('이동 중 철회로 중단하면 선승인 건수를 돌려준다',
+    usedDuring === 1 && W3.getAutoPublishGrant()?.used === 0,
+    JSON.stringify({ usedDuring, after: W3.getAutoPublishGrant()?.used }))
+
+  // ⑦ 부정 — 이동하는 도중 기한이 지나면 게시하지 않는다
+  freshGrant()
+  const g0 = await runPaused()
+  W3.getAutoPublishGrant().expiresAt = Date.now() - 1000
+  await release()
+  t('이동 중 선승인 기한이 지나면 게시 작업이 0건이다',
+    publishTasks().length === 0 && cur(g0.id)?.stage === 'failed',
+    JSON.stringify({ n: publishTasks().length, stage: cur(g0.id)?.stage }))
+
+  // ⑧ 부정 — 이동하는 도중 사용자가 승인 버튼을 또 눌러도 두 번 게시되지 않는다
+  freshGrant()
+  const h0 = await runPaused()
+  const dup = W3.approveAndPublish(h0.id, '또 승인')
+  await release()
+  t('이동 중 중복 승인은 거부된다', dup?.ok === false, JSON.stringify(dup))
+  t('이동 중 중복 승인이 와도 게시 작업은 1건뿐이다', publishTasks().length === 1, String(publishTasks().length))
+
+  // ⑨ 부정 — 다른 호스트로 넘어가면(로그인 리다이렉트 등) 게시하지 않는다. 허용 목록을 넓혀 통과시키지 않는다.
+  freshGrant()
+  created.length = 0; navigations.length = 0; pendingNav = null
+  setTab('tab-1', 'about:blank', { landsAt: 'https://login.example.com/oauth' })
+  genState = 'running'
+  const i0 = W3.startImagePost(params)
+  genState = 'completed'
+  rt.taskEvents.emit('changed')
+  await wait(150)
+  t('게시 사이트가 아닌 곳에 도착하면 게시 작업을 만들지 않는다',
+    publishTasks().length === 0 && cur(i0.id)?.stage === 'failed'
+    && (cur(i0.id)?.error ?? '').includes('login.example.com'),
+    JSON.stringify({ n: publishTasks().length, stage: cur(i0.id)?.stage, err: cur(i0.id)?.error }))
+
+  // ⑩ 탭이 닫힌 경우 — 같은 워크스페이스에 다시 열어 잇는다(로그인 세션 유지). 모르면 진행하지 않는다.
+  freshGrant()
+  created.length = 0; navigations.length = 0; pendingNav = null
+  setTab('tab-1', 'about:blank')
+  genState = 'running'
+  // 탭을 다시 여는 경로는 창을 알아야 한다 — 실제 흐름에서는 항상 창이 있다.
+  const paramsWin = { ...params, windowId: 'win-1' }
+  const j0 = W3.startImagePost(paramsWin)
+  tabState.get('tab-1').gone = true          // 생성이 끝난 뒤 사용자가 그 탭을 닫았다
+  genState = 'completed'
+  rt.taskEvents.emit('changed')
+  await wait(150)
+  const jPub = publishTasks()[0]
+  t('게시 탭이 닫혔으면 같은 워크스페이스에 다시 열어 잇는다',
+    navigations.some((n) => n.created && n.url === 'https://www.instagram.com/') && jPub?.tabId === 'tab-new',
+    JSON.stringify({ navigations, tabId: jPub?.tabId }))
+
+  freshGrant()
+  created.length = 0; navigations.length = 0; pendingNav = null
+  setTab('tab-1', 'about:blank')
+  genWorkspaceId = '(없음)'                   // 어느 세션이었는지 알 수 없다
+  genState = 'running'
+  const k0 = W3.startImagePost(paramsWin)
+  tabState.get('tab-1').gone = true
+  genState = 'completed'
+  rt.taskEvents.emit('changed')
+  await wait(150)
+  t('어느 세션이었는지 모르면 다른 세션에 열어 게시하지 않는다(부정 대조)',
+    publishTasks().length === 0 && cur(k0.id)?.stage === 'failed',
+    JSON.stringify({ n: publishTasks().length, stage: cur(k0.id)?.stage, err: cur(k0.id)?.error }))
+  genWorkspaceId = 'ws-1'
+}
+
+// ===== 재시작 경합 — 탭을 옮기는 도중 앱이 꺼졌다면, 다시 켜도 저절로 게시되지 않는다 =====
+{
+  const file = path.join(root, 'ai-social-workflows.json')
+  const wfRaw = {
+    id: 'wf-restart', stage: 'publish', taskIds: { generate: 'task-1' },  // 게시 작업이 없다 = 준비 중이었다
+    artifactId: 'art-1', caption: '캡션',
+    params: { service: 'genspark', platform: 'instagram', prompt: '고양이', mode: 'publish', account: 'me', tabId: 'tab-1', windowId: null },
+    createdAt: Date.now(), updatedAt: Date.now(),
+  }
+  fs.writeFileSync(file, JSON.stringify({ version: 1, workflows: [wfRaw], grant: null }))
+  for (const k of Object.keys(require.cache)) {
+    if (k.includes(path.join('dist', 'main', 'features', 'ai'))) delete require.cache[k]
+  }
+  const W4 = require(path.join(REPO, 'app/dist/main/features/ai/social-workflow.js'))
+  const revived = W4.listWorkflows().find((x) => x.id === 'wf-restart')
+  t('탭을 옮기는 도중 꺼졌던 작업은 재시작해도 저절로 게시되지 않는다',
+    revived?.stage === 'failed' && !revived?.taskIds?.publish,
+    JSON.stringify({ stage: revived?.stage, ids: revived?.taskIds }))
+  t('재시작 뒤 사용자에게 "게시되지 않았다" 고 분명히 알린다',
+    (revived?.error ?? '').includes('게시는 진행되지 않았습니다'), String(revived?.error))
 }
 
 const summary = `\n합계 PASS ${pass} / FAIL ${fail}`

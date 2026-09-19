@@ -38,10 +38,22 @@ interface SocialWorkflow {
   captionError?: string
   artifactAmbiguous?: boolean
   autoPublished?: boolean
-  receipt?: { url?: string; evidence?: string; at: number }
+  receipt?: { url?: string; evidence?: string; status?: ReceiptStatus; at: number }
+  captionPending?: boolean
+  captionUserEdited?: boolean
+  publishUncertain?: boolean
+  verifyTaskId?: string
+  recovery?: WorkflowRecovery
   error?: string
   createdAt: number
   updatedAt: number
+}
+type PublishResolution = 'verify' | 'published' | 'not-published'
+interface WorkflowRecovery {
+  kind: 'caption-interrupted' | 'caption-failed' | 'publish-uncertain' | 'publish-storage-failed'
+  stoppedAt: string
+  nextAction: string
+  at: number
 }
 interface AutoPublishGrantView {
   id: string; createdAt: number
@@ -82,16 +94,92 @@ function fmtWhen(ts: number): string {
   if (h < 24) return `${h}시간 전`
   try { return new Date(ts).toLocaleDateString() } catch { return '' }
 }
-// 완료 근거 문구에 "미확인" 계열이 섞여 있으면 성공(✅)으로 칠하지 않는다 — task-runtime 의
-// exhausted/publishPending 과 같은 원칙(끝났다 ≠ 성공했다).
-function evidenceUnresolved(evidence?: string): boolean {
+/**
+ * 영수증이 말하는 결론의 종류(main 의 `ReceiptStatus` 미러링).
+ *
+ * ⚠ 예전에는 이 판단을 `evidence` **문장에 정규식**을 걸어 내렸다("미확인" 이 있으면 경고).
+ *   그런데 그 문장에는 **실제 글에서 읽어 온 발췌가 그대로** 들어간다 — 사용자의 캡션에 "미확인"
+ *   이라는 낱말이 있으면 **확인된 게시가 경고로** 보이고, 반대로 확인되지 않은 결론의 문구가 조금만
+ *   달라지면 **확인 안 된 것이 ✅ 로** 보인다. 이제 판정은 판정을 내린 자리에서 값으로 온다.
+ */
+type ReceiptStatus = 'verified' | 'user-confirmed' | 'draft' | 'unverified'
+
+/** status 가 없는 **옛 영수증**만 문장으로 물러서서 판단한다(새 영수증에는 쓰이지 않는다). */
+function legacyEvidenceUnresolved(evidence?: string): boolean {
   return !!evidence && /미확인|확인되지\s*않|확인하지\s*못/.test(evidence)
+}
+function receiptStatusOf(r?: { evidence?: string; status?: ReceiptStatus }): ReceiptStatus | 'legacy-unverified' | 'legacy-ok' | null {
+  if (!r) return null
+  if (r.status) return r.status
+  return legacyEvidenceUnresolved(r.evidence) ? 'legacy-unverified' : 'legacy-ok'
+}
+const RECEIPT_MARK: Record<string, { icon: string; label: string }> = {
+  verified: { icon: '✅', label: '' },
+  'user-confirmed': { icon: '✅', label: '사용자 확인 — ' },
+  draft: { icon: '📝', label: '' },
+  unverified: { icon: '⚠', label: '확인 필요 — ' },
+  'legacy-unverified': { icon: '⚠', label: '확인 필요 — ' },
+  'legacy-ok': { icon: '✅', label: '' },
+}
+
+/**
+ * 확인 단계의 계정 편집 한 줄. 계정은 **게시 전에는 아무 곳에도 나가지 않는** 표시·대조용 값이라
+ * 여기서 고쳐도 안전하다. 실제 허용 여부는 main(`setWorkflowAccount`)이 판정하고, 여기서는
+ * 그 결과(성공/거부 사유/선승인 범위)를 사용자 말로 옮긴다.
+ */
+function AccountRow({ w, onSaveAccount }: {
+  w: SocialWorkflow
+  onSaveAccount: (account: string) => Promise<{ ok: boolean; error?: string; autoPublish?: string; handleShaped?: boolean }>
+}) {
+  const saved = w.params.account ?? ''
+  const [draft, setDraft] = useState(saved)
+  const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  // 다른 창에서 계정이 바뀌면 따라간다 — 단, 사용자가 지금 고치는 중이면 덮어쓰지 않는다.
+  const lastSaved = useRef(saved)
+  useEffect(() => {
+    if (lastSaved.current !== saved) { lastSaved.current = saved; setDraft(saved) }
+  }, [saved])
+
+  const dirty = draft.trim().replace(/^@+/, '') !== saved
+  async function save(): Promise<void> {
+    setBusy(true)
+    try {
+      const r = await onSaveAccount(draft)
+      if (!r.ok) { setNote({ kind: 'err', text: r.error || '계정을 바꾸지 못했습니다.' }); return }
+      const bits: string[] = ['계정을 바꿨습니다 — 이미지와 캡션은 그대로입니다.']
+      if (r.handleShaped === false) bits.push('아이디 형태가 아니라 게시 여부 자동 확인은 "모름" 으로만 끝납니다(@ 없이 아이디를 넣어 주세요).')
+      // 계정을 손으로 고친 작업은 선승인이 있어도 **자동으로 나가지 않는다**(main 이 강제).
+      // 범위 밖이라서든, 고쳤기 때문이든 — 사용자에게는 "게시 전에 한 번 더 확인한다" 가 중요하다.
+      if (r.autoPublish === 'not-covered') bits.push('이 계정은 자동 게시 선승인 범위 밖입니다 — 게시 전에 확인을 받습니다.')
+      else if (r.autoPublish === 'covered') bits.push('계정을 직접 고친 작업이라, 선승인이 있어도 게시 전에 한 번 확인을 받습니다.')
+      setNote({ kind: 'ok', text: bits.join(' ') })
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="ai-social-account">
+      <label className="ai-hint" htmlFor={`acct-${w.id}`}>올릴 계정</label>
+      <div className="ai-social-account-row">
+        <input id={`acct-${w.id}`} className="ai-input ai-social-account-input" value={draft}
+          placeholder="계정 아이디 (@ 없이)" spellCheck={false} disabled={busy}
+          onChange={(e) => { setDraft(e.target.value); setNote(null) }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && dirty && !busy) void save() }} />
+        <button className="ai-mini-btn ai-social-account-save" disabled={!dirty || busy}
+          onClick={() => void save()}
+          title="계정만 바꿉니다 — 만든 이미지와 캡션은 그대로 유지됩니다">💾 계정 저장</button>
+      </div>
+      {note && <div className={note.kind === 'err' ? 'ai-handoff-note ai-err' : 'ai-hint'}>{note.text}</div>}
+      {!note && !saved && <div className="ai-hint">계정을 넣어 두면 게시 뒤 "정말 내 계정에 올라갔는지" 를 자동으로 확인할 수 있습니다.</div>}
+    </div>
+  )
 }
 
 // ===== 카드(뷰1의 진행 중 워크플로 1개) =====
 function SocialCard({
   w, candidates, previewData, captionDraft,
   onChooseCandidate, onCaptionChange, onApprove, onCancel, onDelete, onRetry,
+  onRetryCaption, onSaveCaption, onSaveAccount, onResolvePublish,
 }: {
   w: SocialWorkflow
   candidates: Array<{ meta: ArtifactMeta; dataUrl: string | null }> | undefined
@@ -103,9 +191,14 @@ function SocialCard({
   onCancel: () => void
   onDelete: () => void
   onRetry: () => void
+  onRetryCaption: () => void
+  onSaveCaption: (caption: string) => void
+  onSaveAccount: (account: string) => Promise<{ ok: boolean; error?: string; autoPublish?: string; handleShaped?: boolean }>
+  onResolvePublish: (choice: PublishResolution) => void
 }) {
   const terminal = w.stage === 'done' || w.stage === 'failed' || w.stage === 'cancelled'
-  const unresolved = evidenceUnresolved(w.receipt?.evidence)
+  const rStatus = receiptStatusOf(w.receipt)
+  const unresolved = rStatus === 'unverified' || rStatus === 'legacy-unverified'
   return (
     <div className={`ai-social-card ${w.stage === 'done' ? (unresolved ? 'warn' : 'ok') : w.stage === 'failed' ? 'warn' : ''}`}>
       <div className="ai-task-head">
@@ -124,6 +217,14 @@ function SocialCard({
           <span className={`ai-social-step ${stepClass(w.stage, 'generate')}`}>생성</span>
           <span className={`ai-social-step ${stepClass(w.stage, 'review')}`}>확인</span>
           <span className={`ai-social-step ${stepClass(w.stage, 'publish')}`}>게시</span>
+        </div>
+      )}
+
+      {/* 중단 후 복구 안내 — 어디서 멈췄는지 + 다음에 무엇을 하면 되는지. 새 작업을 만들지 않고 이어간다. */}
+      {w.recovery && !terminal && (
+        <div className="ai-social-recovery">
+          <div className="ai-social-recovery-head">⏸ 중단된 지점: {w.recovery.stoppedAt}</div>
+          <div className="ai-hint">{w.recovery.nextAction}</div>
         </div>
       )}
 
@@ -158,14 +259,28 @@ function SocialCard({
               {w.artifactPreview.width ?? '?'}×{w.artifactPreview.height ?? '?'} · {formatBytes(w.artifactPreview.bytes)} · {w.artifactPreview.format}
             </div>
           )}
+          {/* 계정 고치기 — 빠뜨렸거나 잘못 넣었을 때 이미지·캡션을 버리고 처음부터 다시 만들지 않아도 된다.
+              게시 전(확인 단계)에서만 보인다. 게시가 나갔거나 나갔는지 모르는 동안에는 잠긴다(main 이 강제). */}
+          <AccountRow w={w} onSaveAccount={onSaveAccount} />
           <textarea className="ai-input" rows={3} value={captionDraft} placeholder="캡션"
             onChange={(e) => onCaptionChange(e.target.value)} />
           {/* 캡션 생성이 실패하면 프롬프트를 캡션으로 대신 올리지 않는다 — 사유를 보이고 기다린다. */}
           {w.captionError
             ? <div className="ai-handoff-note ai-err">{w.captionError}</div>
-            : w.artifactAmbiguous
-              ? <div className="ai-hint">이미지 후보가 여럿이라 확인이 필요합니다 — 자동 게시하지 않습니다.</div>
-              : <div className="ai-hint">이 단계에서 멈춥니다 — 아래 버튼을 눌러야 다음으로 넘어갑니다.</div>}
+            : w.captionPending
+              ? <div className="ai-hint">캡션을 쓰는 중…</div>
+              : w.artifactAmbiguous
+                ? <div className="ai-hint">이미지 후보가 여럿이라 확인이 필요합니다 — 자동 게시하지 않습니다.</div>
+                : <div className="ai-hint">이 단계에서 멈춥니다 — 아래 버튼을 눌러야 다음으로 넘어갑니다.</div>}
+          {/* 캡션이 중단·실패했을 때: 같은 보관 이미지를 그대로 두고 다시 만들거나 직접 써서 저장한다. */}
+          {(w.captionError || w.recovery?.kind === 'caption-interrupted') && (
+            <div className="ai-task-actions">
+              <button className="ai-mini-btn" onClick={onRetryCaption} disabled={!!w.captionPending}
+                title="같은 이미지로 캡션만 다시 만듭니다">↻ 캡션 다시 만들기</button>
+              <button className="ai-mini-btn" onClick={() => onSaveCaption(captionDraft)} disabled={!captionDraft.trim()}
+                title="지금 입력한 캡션을 저장합니다(늦게 도착한 자동 초안이 덮어쓰지 않습니다)">💾 이 캡션 사용</button>
+            </div>
+          )}
           <button className="ai-send ai-social-cta" onClick={() => onApprove(captionDraft)} disabled={!captionDraft.trim()}>
             {w.params.mode === 'publish' ? '📤 이대로 게시' : '▶ 이대로 진행'}
           </button>
@@ -173,13 +288,38 @@ function SocialCard({
       )}
 
       {w.stage === 'publish' && (
-        <div className="ai-hint">{w.autoPublished ? '선승인 범위 안이라 확인 없이 게시하는 중…' : '게시하는 중…'}</div>
+        w.publishUncertain ? (
+          <div className="ai-social-recovery warn">
+            {/* 되돌릴 수 없는 결정이므로 "그냥 이어가기"를 주지 않는다 — 먼저 확인하거나 사용자가 결론을 준다. */}
+              {/* 저장된 산출물 미리보기 — 무엇이 올라갔을 수 있는지를 사용자가 눈으로 확인한다. */}
+            {previewData ? <div className="ai-social-preview"><img src={previewData} alt="게시하려던 이미지" /></div> : null}
+            {w.caption ? <div className="ai-social-preview-meta" title={w.caption}>캡션: {w.caption}</div> : null}
+            <div className="ai-hint">확인 없이 이어가면 같은 글이 두 번 올라갈 수 있습니다.</div>
+            <div className="ai-task-actions">
+              <button className="ai-mini-btn" onClick={() => onResolvePublish('verify')} disabled={!!w.verifyTaskId}
+                title="새 글을 올리지 않고 읽기만 해서 이미 게시됐는지 확인합니다">
+                {w.verifyTaskId ? '🔎 확인하는 중…' : '🔎 게시 여부 확인 (읽기 전용)'}
+              </button>
+              <button className="ai-mini-btn" onClick={() => onResolvePublish('published')}
+                title="직접 확인했고 이미 올라가 있습니다">✅ 이미 게시됨</button>
+              <button className="ai-mini-btn" onClick={() => onResolvePublish('not-published')}
+                title="직접 확인했고 올라가지 않았습니다 — 이어서 진행합니다">▶ 게시 안 됨 · 이어가기</button>
+            </div>
+          </div>
+        ) : (
+          <div className="ai-hint">{w.autoPublished ? '선승인 범위 안이라 확인 없이 게시하는 중…' : '게시하는 중…'}</div>
+        )
       )}
 
       {w.stage === 'done' && (
         <div className="ai-social-receipt">
           {w.receipt?.url && <div><a href={w.receipt.url} target="_blank" rel="noreferrer">{w.receipt.url}</a></div>}
-          {w.receipt?.evidence && <div>{unresolved ? '⚠ 확인 필요 — ' : '✅ '}{w.receipt.evidence}</div>}
+          {w.receipt?.evidence && (
+            <div className="ai-social-receipt-status" data-status={rStatus ?? ''}>
+              {(RECEIPT_MARK[rStatus ?? 'legacy-ok'] ?? RECEIPT_MARK['legacy-ok'])!.icon}{' '}
+              {(RECEIPT_MARK[rStatus ?? 'legacy-ok'] ?? RECEIPT_MARK['legacy-ok'])!.label}{w.receipt.evidence}
+            </div>
+          )}
           {w.receipt?.at ? <div className="ai-hint">{fmtWhen(w.receipt.at)}</div> : null}
         </div>
       )}
@@ -326,6 +466,16 @@ export function AiSocialPanel({
   const retryWorkflow = (w: SocialWorkflow) => {
     void window.browserAPI.ai.socialStart(w.params).then((nw) => { if (nw) void window.browserAPI.ai.socialDelete(w.id) })
   }
+  // 중단 후 복구 — 셋 다 **새 작업을 만들지 않는다**(같은 워크플로·같은 보관 이미지를 그대로 이어간다).
+  const retryCaption = (id: string) => { void window.browserAPI.ai.socialRetryCaption(id).then(applyResult) }
+  const saveCaption = (id: string, caption: string) => { void window.browserAPI.ai.socialSetCaption(id, caption).then(applyResult) }
+  // 계정 고치기는 결과를 **그 카드 안에서** 보여 준다(패널 상단 오류 줄로 밀어내지 않는다) —
+  // 방금 누른 자리에서 왜 안 됐는지 읽혀야 사용자가 다음 행동을 고른다.
+  const saveAccount = (id: string, account: string) => window.browserAPI.ai.socialSetAccount(id, account)
+  const resolvePublish = (id: string, choice: PublishResolution) => {
+    void window.browserAPI.ai.socialResolvePublish(id, choice).then(applyResult)
+  }
+  const applyResult = (r: { ok: boolean; error?: string }) => { if (!r?.ok && r?.error) setGenError(r.error) }
 
   // ===== 뷰2: 관심 블로그 댓글·좋아요 =====
   const [myBlogUrl, setMyBlogUrl] = useState('')
@@ -443,6 +593,10 @@ export function AiSocialPanel({
                   onCancel={() => cancelWorkflow(w.id)}
                   onDelete={() => deleteWorkflow(w.id)}
                   onRetry={() => retryWorkflow(w)}
+                  onRetryCaption={() => retryCaption(w.id)}
+                  onSaveCaption={(caption) => saveCaption(w.id, caption)}
+                  onSaveAccount={(account) => saveAccount(w.id, account)}
+                  onResolvePublish={(choice) => resolvePublish(w.id, choice)}
                 />
               ))}
             </div>
@@ -470,8 +624,12 @@ export function AiSocialPanel({
               ))}
             </div>
 
-            <label className="ai-write-label">계정 표시 이름 (선택)</label>
-            <input className="ai-input" value={genAccount} placeholder="예: 내 인스타 계정" onChange={(e) => setGenAccount(e.target.value)} />
+            <label className="ai-write-label">계정 아이디 (선택)</label>
+            <input className="ai-input" value={genAccount} placeholder="예: my_account (@ 없이)" onChange={(e) => setGenAccount(e.target.value)} />
+            <div className="ai-hint">
+              게시 뒤 "정말 올라갔는지" 를 화면에서 확인할 때 <b>이 아이디의 글인지</b> 대조합니다.
+              비워 두면 같은 문구의 남의 글·지난 글과 구분할 수 없어, 확인 결과를 직접 선택해야 합니다.
+            </div>
 
             <label className="ai-write-label">캡션 톤 (선택)</label>
             <div className="ai-chips">

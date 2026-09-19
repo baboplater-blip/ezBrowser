@@ -1,0 +1,27 @@
+{
+  "at": "2026-09-19T05:33:03.923Z",
+  "results": [
+    {
+      "id": "R-BLOG",
+      "name": "블로그 참여(생산 IPC 경로)",
+      "status": "SKIP",
+      "detail": "--only 로 이번 실행에서 제외(이미 통과한 시나리오를 다시 돌리지 않음)"
+    },
+    {
+      "id": "R-SNS",
+      "name": "이미지 생성→게시 — 생산 워크플로 그대로(실제 claude CLI 플래너, 실사이트 격리)",
+      "status": "PASS",
+      "detail": "게시탭=https://www.instagram.com/(호스트일치=true) 게시단계모델호출=7(>0이어야) · stage=done · 산출물sha256=34e9e6be10a7… 업로드sha256=34e9e6be10a7… 바이트일치=true · 캡션비어있지않음=true 해시태그포함=true caption=\"창문 틈으로 햇살이 먼저 들어와 아침을 깨우는 곳. 새소리 말고는 아무 소리도 없는, 딱 그만큼의 고요가 필요한 날이 있어요 🌿\r\n\r\n#tes\" · 게시건수=1(1이어야) · 실제경유호스트=www.instagram.com(=www.instagram.com여야) · 범위밖호스트=[](없어야) · autoPublished=true 수동승인=false · steps=5(한도25, 생산기본값) calls=7 ms=94089",
+      "steps": 5,
+      "llmCalls": 7,
+      "ms": 94089,
+      "retried": false
+    },
+    {
+      "id": "R-CLEAN",
+      "name": "실행 후 사용자 실제 Downloads 폴더에 새 파일 없음",
+      "status": "PASS",
+      "detail": "무오염 확인(C:\\Users\\molma\\Downloads)"
+    }
+  ]
+}

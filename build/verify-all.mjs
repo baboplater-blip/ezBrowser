@@ -97,6 +97,46 @@ function steps(outRoot) {
       timeoutMs: 2 * 60000, desc: '자동 게시 선승인 판정·배선 33종(양성 대조 포함, 공개 API 경로 실행)',
     },
     {
+      // 실제 앱 + 실제 UI 클릭 → IPC. 확인 단계에서 계정을 고칠 수 있는가(이미지·캡션을 지키면서),
+      // 그리고 **고치면 안 되는 상태에서 거부되는가**. 계정은 "이 글이 내 글인가" 를 가르는 판정
+      // 축이라, 게시 뒤에 바뀌면 남의 글을 내 글로 세거나 중복 게시로 이어진다.
+      // 영수증 ✅/⚠ 가 **글 본문 낱말**이 아니라 구조화된 상태값으로 갈리는지도 같은 화면에서 본다.
+      id: 'social-account', kind: 'harness', modes: ['full'],
+      script: 'verify-social-account-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'results.json'),
+      timeoutMs: 12 * 60000, desc: '확인 단계 계정 편집·영수증 상태 표시 SA1~SA8(재시작 보존 포함)',
+    },
+    {
+      // 순수 함수(자식 프로세스로 시간대 4곳에서 각각 실행) — 게시 여부 판정의 **시각 축**이
+      // 기계의 시간대에 좌우되지 않는가. 오프셋 없는 `<time datetime>` 을 Date.parse 로 읽으면
+      // 같은 글이 PC 마다 "새 글"/"지난 글" 로 갈리고, 그 결과는 **중복 게시**나 **안 올라간 글의
+      // 완료 처리**다. 옛 방식이 실제로 시간대마다 달랐다는 근거(T1)도 매 실행 함께 찍는다.
+      id: 'post-time', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-post-time.mjs', outArg: false,
+      result: (o) => path.join(o, '..', 'post-time', 'results.json'),
+      timeoutMs: 2 * 60000, desc: '게시 시각 판정 시간대 독립성 34종(시간대 4곳 교차 대조·주입소스 드리프트 포함)',
+    },
+    {
+      // 순수 함수 — 저장이 실패했는데도 **되돌릴 수 없는 게시**가 나가는 것을 막는 경계, 그리고
+      // "모델이 게시됐다고 말한 것"과 "런타임이 화면에서 실제로 본 것"을 가르는 근거 판정.
+      // 이 둘이 조용히 느슨해지면 ①상황을 설명할 기록 없이 글이 올라가거나 ②안 올라간 글이
+      // '완료'로 닫힌다 — 둘 다 사용자가 나중에야 알게 되는 종류의 손실이다.
+      id: 'persistence-boundary', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-persistence-boundary.mjs', outArg: true,
+      result: (o) => path.join(o, 'persistence-boundary', 'persistence-boundary-results.json'),
+      timeoutMs: 2 * 60000, desc: '저장 확정 경계(직렬화·쓰기·rename 실패 주입)와 게시 확인 근거 판정',
+    },
+    {
+      // 위 판정이 **실제 DOM 에서 나온 근거**로도 같은 결론을 내는가. 순수 판정만 초록이면
+      // "화면에서 무엇을 읽어 오는가" 가 조용히 틀려도 아무도 모른다 — 특히 대부분의 사이트가
+      // 전역 막대에 표시하는 **로그인한 내 계정**이 작성자로 새면, 남의 글이 내 게시 증거가 된다.
+      // 앱을 띄워 진짜 브라우저 DOM 위에서 확인한다(로컬 픽스처 · 외부 접속 0).
+      id: 'publish-evidence', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-publish-evidence-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'publish-evidence', 'publish-evidence-results.json'),
+      timeoutMs: 6 * 60000, desc: '게시 확인 근거를 실제 DOM 에서 읽어 판정(계정·게시시각·전역라벨 배제)',
+    },
+    {
       // 순수 함수 — 앱 없이 즉시 끝난다. 작업 격리 경계(남의 산출물 업로드 금지)와 HTML 위장 거부는
       // 깨져도 다른 검사가 전부 초록이라, 여기서 자주 보지 않으면 조용히 새어 나간다.
       id: 'artifacts', kind: 'harness', modes: ['quick', 'full'],
@@ -111,6 +151,14 @@ function steps(outRoot) {
       script: 'verify-agent-gate.mjs', outArg: true,
       result: (o) => path.join(o, 'agent-gate', 'agent-gate-results.json'),
       timeoutMs: 3 * 60000, desc: '에이전트 안전 판정(돈·삭제 확인 / 발행 오탐 0) R1~R8',
+    },
+    {
+      // 자연어 지시 → 생산 워크플로 라우팅 판정. 순수 함수라 앱을 안 띄우고 1초 안에 끝난다.
+      // 여기가 느슨해지면 질문·금지·인용문에서 게시/댓글 작업 폼이 만들어지므로 quick 에 둔다.
+      id: 'intent-routing', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-intent-routing.mjs', outArg: true,
+      result: (o) => path.join(o, 'intent-routing', 'results.json'),
+      timeoutMs: 3 * 60000, desc: '자연어 → 워크플로 의도 해석(긍정/질문·금지·인용 거부) I1~I8',
     },
     {
       id: 'ai-providers', kind: 'harness', modes: ['quick', 'full'],
@@ -174,8 +222,25 @@ function steps(outRoot) {
       timeoutMs: 16 * 60000, desc: '영속 작업: 구간 분할·일시정지·이어가기·복원·예산·중복쓰기 T1~T15',
     },
     {
+      // 생성→캡션→게시 워크플로가 **프로세스 재시작을 넘기는가**. 강제종료 뒤 다시 띄워
+      // ①생성 기준선이 살아남아 광고가 아니라 생성물을 집는가 ②캡션 중단이 안내·재시도로 이어지는가
+      // ③게시 여부가 불확실할 때 중복 게시 없이 멈추는가. 앱을 두 번씩 띄우므로 full 에만 둔다.
+      id: 'recovery', kind: 'harness', modes: ['full'],
+      script: 'verify-recovery-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'recovery', 'recovery-results.json'),
+      timeoutMs: 16 * 60000, desc: '중단 후 복구: 기준선 영속·캡션 재시도·게시 불확실 R1~R3',
+    },
+    {
       // 작업 UI 가 화면에서 실제로 동작하는가. IPC 로는 통과하지만 화면에선 버튼이 없거나 전환이 안 되는
       // 결함이 그 사이에 숨는다(기능 하네스 32종이 전부 초록인 채 제품이 못 쓸 상태였던 전례).
+      // 자연어 한 줄이 화면을 거쳐 **생산 레시피**(참여 가드 표식이 실린 지시문)로 이어지는지.
+      // intent-routing 은 해석만 본다 — "해석은 맞는데 화면에서 아무 일도 안 난다"는 여기서만 잡힌다.
+      id: 'intent-ui', kind: 'harness', modes: ['full'],
+      script: 'verify-intent-ui-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'intent-ui', 'intent-ui-results.json'),
+      timeoutMs: 10 * 60000, desc: '자연어 → 확인 카드 → 생산 워크플로 실제 연결 IU1~IU5',
+    },
+    {
       id: 'task-ui', kind: 'harness', modes: ['full'],
       script: 'verify-task-ui-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'task-ui', 'task-ui-results.json'),

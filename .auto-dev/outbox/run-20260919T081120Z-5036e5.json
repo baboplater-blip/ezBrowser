@@ -1,0 +1,184 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T081120Z-5036e5",
+  "recorded_at": "2026-09-19T09:04:46Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T081120Z-5036e5",
+    "project_id": "browser-build-36466a626d",
+    "status": "unclear",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "whole_task.all_requested_work_complete=true 인데 남은 필수 작업/차단이 3건 선언됨 — 전체 완료로 인정하지 않는다: rc.12 설치파일의 설치→부팅→제거 검증 — 이 PC 에서 사용자 실설치본 5 프로세스가 가동 중이라 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(다른 PC/VM 필요).",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "e7ff92c7-e1bd-4dee-8885-e9cb18188f95",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "같은 사이트·같은 캡션이어도 **남의 계정 글**은 게시 근거가 되지 않는다. 프로필 링크 등 추정으로 읽은 경우 '모름'(uncertain)으로 남기고 읽은 값을 사유에 보여 주며, data-author 같은 명시 표기면 확정 거부한다 — 어느 쪽도 완료로 닫지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "내 계정 글이라도 **이번 게시 시도보다 오래된 글**(30일 전)은 확정 거부된다. 미래 시각(예약 게시) 역시 완료 근거가 아니다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "내 계정이 방금 올린 글은 근거로 인정되어 완료 확정되고, 영수증에 계정과 시각이 남는다 — 실제 앱 흐름에서 '@ez_test_account 계정의 글(방금)에서 이 캡션을 직접 확인했습니다'",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "화면 구조를 글 단위로 잡을 수 없으면 '아니다'가 아니라 **'모른다'**로 남아 사람이 확인한다(단정하면 사용자가 차단을 풀어 중복 게시한다)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "사이트 전역 막대의 **로그인한 내 계정 표기**, 캡션 속 **@멘션**, **댓글 작성자**가 글쓴이로 새지 않는다. 내 글에 남을 멘션하고 댓글이 달려 있어도 작성자는 내 계정으로 읽힌다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "게시 여부 확인 작업이 **도는 도중 강제 종료**돼도, 재시작 뒤 '확인하는 중…'에서 굳지 않고 확인을 다시 실행할 수 있다. 읽기 전용이므로 서버 게시는 전혀 늘지 않는다(3→3→3)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "ai-tasks.json / ai-social-workflows.json 저장이 막힌 상태로 게시를 승인하면 **서버 게시가 한 건도 나가지 않고**(증가 0), 재시작 전·후 모두 남은 게시 작업을 시작·재개로 우회할 수 없다. 저장을 되돌린 뒤 명시 재시도하면 **정확히 1건**만 ",
+        "behavior_truncated": true
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "차단을 기록하는 저장 자체가 실패해도 우회할 수 없다 — 게시 작업은 **태어날 때부터 차단**되어 만들어지고, 디스크에 적힌 queued 게시 작업 역시 차단된 상태이며 start·resume 두 경로 모두 거부된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "차단이 무조건적이지 않다 — 빗장을 풀면 같은 작업이 정상 시작되고, 빗장 없이 만든 작업은 디스크에서도 막혀 있지 않다(양성 대조)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "검사가 실제로 무언가를 잡는다 — 계정·게시시각을 보지 않는 옛 3필드 판정 복제본에 같은 근거를 먹이면 통과해 버리고, 실제 판정은 거부한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "기존 동작에 회귀가 없다 — 마감 게이트와 실제로 내보낸 바이너리의 스모크가 모두 통과한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "rc.12 설치파일의 설치→부팅→제거 검증 — 이 PC 에서 사용자 실설치본 5 프로세스가 가동 중이라 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(다른 PC/VM 필요).",
+        "코드 서명 인증서(.pfx) 미제공 — rc.12 미서명(SmartScreen 경고). 사용자 제공 사항.",
+        "실제 인스타그램·유튜브·틱톡 실계정 검증 — 실계정 게시는 사용자 승인 사항이라 자율 범위 밖. 이번 검증은 전부 로컬 픽스처 + 각본 LLM."
+      ],
+      "optional_next": [
+        "이미 만들어진 워크플로의 계정을 나중에 채우는 경로(현재는 새 작업 생성 시에만 입력 가능 — 리뷰 M5)",
+        "작성자 표기가 캡션 위에 없는 레이아웃 대응(현재는 '모름'으로 남는다)",
+        "타임존 없는 datetime 의 신뢰도 처리(현재는 파싱해 쓰되 미래 경계로만 방어)"
+      ],
+      "korean_line": "남은 작업: (차단) rc.12 설치파일의 설치→부팅→제거 검증 — 이 PC 에서 사용자 실설치본 5 프로세스가 가동 중이라 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(다른 PC/VM 필요)., (차단) 코드 서명 인증서(.pfx) 미제공 — rc.12 미서명(SmartScreen 경고). 사용자 제공 사항., (차단) 실제 인스타그램·유튜브·틱톡 실계정 검증 — 실계정 게시는 사용자 승인 사항이라 자율 범위 밖. 이번 검증은 전부 로컬 픽스처 + 각본 LLM.; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T081120Z-5036e5"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 3205.5,
+        "context_chars": 10855,
+        "total_tokens": 2266157,
+        "cache_read_tokens": 147984872
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9188,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 470,
+          "output": 225422,
+          "cache_read": 102809948,
+          "cache_creation": 966265
+        },
+        "claude-sonnet-5": {
+          "input": 232,
+          "output": 183587,
+          "cache_read": 45174924,
+          "cache_creation": 880971
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\persistence-evidence-20260919\\run-20260919T081120Z-5036e5-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\persistence-evidence-20260919\\run-20260919T081120Z-5036e5-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "완료했습니다. 요청하신 필수 항목을 전부 닫았고, 구조화 완료 기록도 남겼습니다.\n\n## 고친 것\n\n**① 게시 확인이 \"누가·언제 올린 글인지\"까지 봅니다.** 기존 판정은 *같은 사이트 / 같은 캡션 / 이번 확인 이후에 봤는가* 셋뿐이라, 같은 해시태그를 쓴 **남의 글**이나 재시도 전에 올렸던 **지난 글**이 그대로 완료 근거가 됐습니다. 이제 글 영역 안에서 **작성자 계정**과 **글 자체의 게시 시각**을 함께 읽고, 읽지 못하면 완료로 닫지 않고 사람에게 넘깁니다.\n\n**② \"아니다\"와 \"모른다\"를 나눴습니다.** 읽지 못한 것을 \"아니다\"로 단정하면 사용자가 차단을 풀어 같은 글을 또 올립니다. 그래서 `uncertain`을 두고, 추정으로 읽은 값의 불일치는 단정하지 않습니다.\n\n**③ 작성자는 글 영역 안, 그리고 캡션보다 위에서만 읽습니다.** 전역 막대의 로그인 표기·캡션 속 `@멘션`·댓글 작성자가 전부 배제됩니다.\n\n**④ 게시 작업은 태어날 때부터 잠겨 있습니다.** 이전 구조는 *막는 행위 자체가 저장에 의존*해서, 저장이 막힌 바로 그 순간 차단도 기록되지 않았습니다. 이제 저장이 한 번도 성공하지 않아도 디스크의 모든 판본이 잠긴 상태입니다.\n\n부수로, 유튜브는 올리는 곳(`studio.`)과 보이는 곳(`www.`)이 달라 **확인이 구조적으로 불가능**했던 것과, 저장 실패 안내가 **존재하지 않는 파일명**을 가리키던 것을 고쳤습니다.\n\n## 검증 — 49 PASS / 0 FAIL / 0 SKIP\n\n- `verify-persistence-boundary` **27** — P1~P6은 한 줄도 안 건드렸고(중복 검사 없음), B그룹을 신설해 **디스크에 적힌 `queued` 게시 작업도 잠겨 있음**을 파일을 직접 읽어 확인했습니다(빗장 없는 작업은 정상 시작 — 음성 대조).\n- `verify-publish-evidence-cdp` **8**(신규) — 실제 브라우저 DOM에서 wrong-author·old-post·fresh-positive·ambiguous 네 축 + 전역 nav 유출 0.\n- `verify-recovery-cdp` **14** — R3-VER-INT(확인 중 실제 강제 종료 → 재확인 가능, 쓰기 0)·저장 실패 주입 2종(게시 증가 0 → 복구 후 **정확히 1건**).\n- `npm run verify` **15/15 · 54s** · 패키징 후 스모크 **16/16** · typecheck 3/3.\n\n**검출력도 확인했습니다**: 계정·시각을 안 보는 옛 판정 복제본에 같은 근거를 먹이면 통과해 버립니다(E-NEG·V-NEG).\n\n## 정직하게 남기는 것\n\n- **적대적 리뷰가 높음 2건을 잡아 되돌렸습니다.** 추정으로 읽은 작성자의 불일치를 \"확정\"으로 말하던 것 — 오독 시 사용자를 **중복 게시로 미는** 경로였습니다. 그리고 예약 게시(미래 시각)가 완료 근거가 되던 것. 이 수정으로 V8·E-WRONG-AUTHOR의 기대값을 출처별로 갈랐는데, **느슨하게 한 것이 아니라** 조건을 하나 더 붙인 것입니다(근거 불인정은 그대로).\n- **저장 실패 시나리오의 \"우회 불가\" 축은 공허 통과였습니다** — 물러나면서 작업을 즉시 지워 시도할 대상이 없었습니다. 그 축의 실질 증명은 B1·B2·B4와 R3(실제 잔존 작업 거부)가 합니다.\n- 작업자 두 명 다 \"전부 PASS\"라고 했지만 최신 결과 파일엔 신규 3종이 `SKIP`이었습니다(따로 돌려 파일이 덮어써짐). 보고 대신 **한 번의 실행으로 전 범위**를 직접 재실행했습니다.\n\n## 산출물\n\n`dist\\ezBrowser-0.2.0-rc.12-win-x64.exe` · 121,920,416 B · sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · `--publish never`(GitHub 최신 릴리스 조회 결과 여전히 `0.1.0`). 소스 17:52 → dist 17:58:31 → asar 17:",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T081120Z-5036e5\\stream.jsonl",
+    "error": null
+  }
+}

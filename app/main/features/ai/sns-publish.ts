@@ -28,6 +28,20 @@ export const SNS_OPEN_URL: Record<SnsPlatform, string> = {
   tiktok: 'https://www.tiktok.com/upload',
 }
 
+/**
+ * **게시 여부를 확인할** 주소 — 올린 글이 실제로 **보이는** 곳이다. 올리는 곳과 다를 수 있다.
+ *
+ * 왜 따로 두는가 (2026-09-19, 리뷰가 잡았다): 유튜브는 올리는 곳이 `studio.youtube.com` 인데
+ * 올라간 영상은 `www.youtube.com` 에 있다. 확인 작업이 studio 만 허용받으면 **공개 페이지로 갈
+ * 수단 자체가 없고**, 호스트 대조도 studio 만 인정한다 — 사용자는 "게시 여부 확인" 을 눌러도
+ * 언제나 "확인하지 못했습니다" 를 받는다(기능이 구조적으로 성립하지 않는다).
+ */
+export const SNS_VERIFY_URL: Record<SnsPlatform, string> = {
+  instagram: 'https://www.instagram.com/',
+  youtube: 'https://www.youtube.com/',
+  tiktok: 'https://www.tiktok.com/',
+}
+
 export const SNS_LABEL: Record<SnsPlatform, string> = { instagram: '인스타그램', youtube: '유튜브', tiktok: '틱톡' }
 
 // 플랫폼별 게시 완료 신호 — 게시 클릭 뒤 화면에 **새로** 나타나야 하는 문구(한/영). URL 변화도 함께 본다.
