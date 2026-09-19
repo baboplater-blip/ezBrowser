@@ -96,14 +96,14 @@
 
 ### 최신 실행
 
-**`npm run verify` — 16/16 PASS · 59s** (2026-09-19 09:41)
+**`npm run verify` — 16/16 PASS · 56s** (2026-09-19 09:52)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
-| typecheck | ✅ PASS | 5s | 종료코드 0 |
+| typecheck | ✅ PASS | 4s | 종료코드 0 |
 | build | ✅ PASS | 6s | 종료코드 0 |
 | package | ✅ PASS | 7s | 종료코드 0 |
-| smoke | ✅ PASS | 13s | PASS 16 |
+| smoke | ✅ PASS | 12s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
 | editor-text | ✅ PASS | 0s | PASS 5 |
 | engage-ledger | ✅ PASS | 0s | 종료코드 0 |
@@ -115,10 +115,11 @@
 | agent-gate | ✅ PASS | 0s | PASS 8 |
 | intent-routing | ✅ PASS | 0s | PASS 8 |
 | ai-providers | ✅ PASS | 0s | PASS 4 |
-| ai-connect | ✅ PASS | 9s | PASS 9 |
+| ai-connect | ✅ PASS | 8s | PASS 9 |
 
 ### 최근 10회
 
+- 2026-09-19 09:52 · `quick` · **16/16 PASS** · 56s
 - 2026-09-19 09:41 · `quick` · **16/16 PASS** · 59s
 - 2026-09-19 08:54 · `quick` · **15/15 PASS** · 54s
 - 2026-09-19 08:47 · `quick` · **15/15 PASS** · 53s
@@ -128,7 +129,6 @@
 - 2026-09-19 07:04 · `quick` · **13/13 PASS** · 1m 36s
 - 2026-09-19 06:43 · `quick` · **13/13 PASS** · 50s
 - 2026-09-19 06:42 · `quick` · **13/13 PASS** · 48s
-- 2026-09-19 06:08 · `quick` · **13/13 PASS** · 1m 31s
 
 <!-- verify-all:end -->
 

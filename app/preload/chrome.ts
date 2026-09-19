@@ -722,7 +722,16 @@ interface AiSocialWorkflow {
   artifactAmbiguous?: boolean
   /** 자동 게시 선승인으로 진행됐는가. */
   autoPublished?: boolean
-  receipt?: { url?: string; evidence?: string; at: number }
+  /**
+   * ⚠ `status` 를 빠뜨리지 말 것. 화면의 ✅/⚠ 는 이 값으로 갈린다 — 없으면 소비자가
+   * `evidence` 문장을 보고 판정하게 되고, 그 문장에는 **글에서 읽어 온 발췌**가 들어 있어
+   * "미확인" 같은 낱말 하나로 판정이 뒤집힌다(2026-09-19 에 실제로 고친 결함이다).
+   */
+  receipt?: {
+    url?: string; evidence?: string
+    status?: 'verified' | 'user-confirmed' | 'draft' | 'unverified'
+    at: number
+  }
   /** 캡션 초안이 아직 진행 중(앱이 꺼지면 이 값이 남아 '중단'을 알아낸다). */
   captionPending?: boolean
   /** 사용자가 캡션을 직접 손봤다 — 늦게 도착한 모델 응답이 덮어쓰지 않는다. */

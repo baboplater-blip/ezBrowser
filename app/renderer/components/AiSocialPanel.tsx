@@ -113,7 +113,15 @@ function receiptStatusOf(r?: { evidence?: string; status?: ReceiptStatus }): Rec
   if (r.status) return r.status
   return legacyEvidenceUnresolved(r.evidence) ? 'legacy-unverified' : 'legacy-ok'
 }
-const RECEIPT_MARK: Record<string, { icon: string; label: string }> = {
+/**
+ * ⚠ 키를 **유니온으로 못 박는다.** 느슨한 `Record<string, …>` 이면 나중에 상태값이 하나 늘었을 때
+ *   대응 표시를 빠뜨려도 컴파일이 통과하고, 그때 아래 폴백이 **✅(성공) 쪽으로 조용히 새는**
+ *   fail-open 이 된다 — 저장소 복원(`reviveWorkflow`)은 모르는 값을 경고 쪽으로 보내는데
+ *   화면만 반대 방향으로 새면 이번에 고친 "표시가 판정을 뒤집는" 문제가 그대로 재발한다.
+ */
+/** ✅ 로 보여도 되는 상태. 여기 없으면 전부 경고로 본다(모르는 값 포함). */
+const RECEIPT_OK: ReadonlySet<string> = new Set(['verified', 'user-confirmed', 'draft', 'legacy-ok'])
+const RECEIPT_MARK: Record<ReceiptStatus | 'legacy-unverified' | 'legacy-ok', { icon: string; label: string }> = {
   verified: { icon: '✅', label: '' },
   'user-confirmed': { icon: '✅', label: '사용자 확인 — ' },
   draft: { icon: '📝', label: '' },
@@ -135,10 +143,18 @@ function AccountRow({ w, onSaveAccount }: {
   const [draft, setDraft] = useState(saved)
   const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
-  // 다른 창에서 계정이 바뀌면 따라간다 — 단, 사용자가 지금 고치는 중이면 덮어쓰지 않는다.
+  // 다른 창에서 계정이 바뀌면 따라간다 — 단, **사용자가 지금 고치는 중이면 덮어쓰지 않는다.**
+  // ⚠ 이 보호는 ref 로 읽어야 한다. 저장 브로드캐스트(`ai:social-changed`)가 늦게 도착하거나
+  //   다른 창에서 같은 작업의 계정을 저장하면 `saved` 가 바뀌는데, 그때 조건 없이 setDraft 하면
+  //   **사용자가 입력 중이던 값이 오류도 없이 조용히 사라진다.**
   const lastSaved = useRef(saved)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
   useEffect(() => {
-    if (lastSaved.current !== saved) { lastSaved.current = saved; setDraft(saved) }
+    if (lastSaved.current === saved) return
+    const wasEditing = draftRef.current.trim().replace(/^@+/, '') !== lastSaved.current
+    lastSaved.current = saved
+    if (!wasEditing) setDraft(saved)   // 고치는 중이 아닐 때만 바깥 값으로 맞춘다
   }, [saved])
 
   const dirty = draft.trim().replace(/^@+/, '') !== saved
@@ -198,7 +214,9 @@ function SocialCard({
 }) {
   const terminal = w.stage === 'done' || w.stage === 'failed' || w.stage === 'cancelled'
   const rStatus = receiptStatusOf(w.receipt)
-  const unresolved = rStatus === 'unverified' || rStatus === 'legacy-unverified'
+  // 영수증이 있을 때만 판단하고, **아는 성공값이 아니면 경고**로 본다(아이콘 폴백과 같은 방향).
+  // 영수증 자체가 없으면 예전처럼 중립으로 둔다 — 없는 것을 경고로 바꾸는 것은 이번 범위가 아니다.
+  const unresolved = !!w.receipt && !RECEIPT_OK.has(rStatus ?? '')
   return (
     <div className={`ai-social-card ${w.stage === 'done' ? (unresolved ? 'warn' : 'ok') : w.stage === 'failed' ? 'warn' : ''}`}>
       <div className="ai-task-head">
@@ -316,8 +334,10 @@ function SocialCard({
           {w.receipt?.url && <div><a href={w.receipt.url} target="_blank" rel="noreferrer">{w.receipt.url}</a></div>}
           {w.receipt?.evidence && (
             <div className="ai-social-receipt-status" data-status={rStatus ?? ''}>
-              {(RECEIPT_MARK[rStatus ?? 'legacy-ok'] ?? RECEIPT_MARK['legacy-ok'])!.icon}{' '}
-              {(RECEIPT_MARK[rStatus ?? 'legacy-ok'] ?? RECEIPT_MARK['legacy-ok'])!.label}{w.receipt.evidence}
+              {/* 모르는 값은 **경고 쪽**으로 떨어뜨린다(fail-closed) — 확인 안 된 것을 ✅ 로 보이는 것이
+                  반대 경우보다 훨씬 나쁘다. 저장소 복원의 방향과 같다. */}
+              {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).icon}{' '}
+              {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).label}{w.receipt.evidence}
             </div>
           )}
           {w.receipt?.at ? <div className="ai-hint">{fmtWhen(w.receipt.at)}</div> : null}
