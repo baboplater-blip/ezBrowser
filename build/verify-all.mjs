@@ -150,6 +150,16 @@ function steps(outRoot) {
       timeoutMs: 2 * 60000, desc: '저장 확정 경계(직렬화·쓰기·rename 실패 주입)와 게시 확인 근거 판정',
     },
     {
+      // 순수 함수 — 되돌릴 수 없는 **댓글·좋아요** 의 내구성 경계. 장부를 클릭 **전에** 디스크에
+      // 확정하지 못하면 중단 한 번으로 같은 글에 두 번 달리고(좋아요는 다시 누르면 취소된다),
+      // 한도 카운터가 0 으로 되돌아간다. 둘 다 사용자가 나중에야 알게 되는 손실이라 quick 에 둔다.
+      // (2026-09-19: 여기서 정상 한도 파일이 매 부팅마다 '손상'으로 격리되던 결함도 함께 잡았다.)
+      id: 'engage-durability', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-engage-durability.mjs', outArg: true,
+      result: (o) => path.join(o, 'engage-durability', 'engage-durability-results.json'),
+      timeoutMs: 2 * 60000, desc: '댓글·좋아요 장부/한도의 내구성 경계와 재시작 보존 6종',
+    },
+    {
       // 위 판정이 **실제 DOM 에서 나온 근거**로도 같은 결론을 내는가. 순수 판정만 초록이면
       // "화면에서 무엇을 읽어 오는가" 가 조용히 틀려도 아무도 모른다 — 특히 대부분의 사이트가
       // 전역 막대에 표시하는 **로그인한 내 계정**이 작성자로 새면, 남의 글이 내 게시 증거가 된다.
@@ -252,6 +262,17 @@ function steps(outRoot) {
       script: 'verify-recovery-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'recovery', 'recovery-results.json'),
       timeoutMs: 16 * 60000, desc: '중단 후 복구: 기준선 영속·캡션 재시도·게시 불확실 R1~R3',
+    },
+    {
+      // 네트워크·제공자 오류와 사람 인계를 **실제 앱**으로. recovery(위)가 게시 워크플로의 재시작을
+      // 본다면, 여기는 **영속 작업 런타임의 재시도 정책과 대기 사유**를 본다.
+      // 지키는 것 둘: ①되돌릴 수 없는 것을 이미 했으면 자동 재시도하지 않고 사람에게 넘긴다
+      // ②왜 멈췄는지(로그인·CAPTCHA·승인 대기)가 재시작을 넘어 남고, 이어가기가 승인이 되지 않는다.
+      // 양성 대조(읽기 전용·미커밋은 그대로 재시도)를 함께 둬 "재시도를 통째로 꺼서" 통과하는 것을 막는다.
+      id: 'interruption-recovery', kind: 'harness', modes: ['full'],
+      script: 'verify-interruption-recovery-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'interruption-recovery', 'interruption-recovery-results.json'),
+      timeoutMs: 20 * 60000, desc: '중단 복구: 재시도 정책·불확실 보존·대기 사유 IR1~IR6B',
     },
     {
       // 작업 UI 가 화면에서 실제로 동작하는가. IPC 로는 통과하지만 화면에선 버튼이 없거나 전환이 안 되는

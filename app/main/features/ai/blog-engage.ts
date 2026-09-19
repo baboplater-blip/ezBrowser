@@ -7,6 +7,7 @@
 // 이 파일은 외부 사이트에 접속하지 않는다 — 문자열 생성과 로컬 장부 조회/기록만 한다.
 // 실제 조작(검색·클릭·읽기·댓글 작성)은 에이전트 루프(agent.ts)가 buildBlogEngageTask 의 작업 지시문을 보고 수행한다.
 
+import { app } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { buildEngageMark, NO_PUBLISH_MARK, type EngageGuard } from './agent-gate'
 import { createJsonStore, loadJsonObject } from './json-store'
@@ -73,7 +74,13 @@ const store = createJsonStore({
   snapshot: () => ({ version: 1, entries: all() }),
 })
 
+let quitHooked = false
+
 export function initEngageLedger(): void {
+  // 정상 종료 시 디바운스 대기 중이던 장부·한도를 동기 flush 한다.
+  // 예전에는 flushEngageLedger 가 **어디서도 불리지 않아**(before-quit 훅조차 없었다) 종료 직전
+  // 300ms 안에 기록한 댓글·좋아요가 통째로 사라졌다 — 다음 실행이 같은 글에 또 단다.
+  if (!quitHooked) { quitHooked = true; try { app.on('before-quit', flushEngageLedger) } catch { /* ignore */ } }
   if (cache !== null) return
   // 파일을 통째로 못 읽으면 loadJsonObject 가 고유 이름 백업을 남기고 null 을 준다(빈 상태로 시작).
   const raw = loadJsonObject(FILE_NAME, '인게이지 장부', 'entries')
@@ -103,6 +110,28 @@ export function flushEngageLedger(): void {
   quotaStore.flush()
 }
 
+/**
+ * 되돌릴 수 없는 외부 쓰기(댓글·좋아요) **직전의 내구성 경계**.
+ * `social-workflow.persistPublishBoundary` 와 같은 모양·같은 이유다.
+ *
+ * 왜 필요한가 (2026-09-19 실측): `recordEngagement`/`engageQuotaRecord` 는 디바운스(300ms)만 걸어
+ * 두었다. 즉 **클릭이 나가는 순간 장부는 아직 디스크에 없다**. 그 창 안에서 앱이 죽으면(크래시·
+ * 강제 종료·정전) 재시작한 제품은 그 글을 "아직 안 건드렸다" 고 보고 **같은 글에 댓글을 또 단다**.
+ * 좋아요는 더 나쁘다 — 다시 누르면 **취소**된다.
+ *
+ * 그래서 기록 직후 여기서 **동기로** 디스크에 확정하고, 확정되지 않으면 호출자가 클릭을 하지 않는다.
+ * "했는지 모르는 채로 남기느니 안 한다" 가 이 경계의 규칙이다.
+ *
+ * @returns 두 저장소가 **모두** 확정됐을 때만 ok. 아니면 막힌 파일 이름을 사람이 읽을 수 있게 돌려준다.
+ */
+export function persistEngageBoundary(): { ok: boolean; failed: string[] } {
+  const failed: string[] = []
+  // 첫 실패에서 멈추지 않는다 — 어느 쪽이 막혔는지 정확히 말할 수 있어야 한다.
+  if (!store.flush()) failed.push(`인게이지 장부(${FILE_NAME})`)
+  if (!quotaStore.flush()) failed.push(`행동 한도(${QUOTA_FILE})`)
+  return { ok: failed.length === 0, failed }
+}
+
 // ===== 한도·간격 카운터 (작업 단위, 영속) =====
 //
 // 왜 별도 저장이 필요한가: 장부(ledger)는 (글, 계정, 행동) 으로만 갈린다 — "이 작업에서 몇 번 했나"
@@ -127,7 +156,9 @@ const quotaStore = createJsonStore({
 function quotaMap(): Map<string, QuotaRec> {
   if (quota) return quota
   const m = new Map<string, QuotaRec>()
-  const raw = loadJsonObject(QUOTA_FILE, '인게이지 한도', 'records')
+  // 'object' — 이 저장소의 records 는 배열이 아니라 **guardId → 카운터** 객체 맵이다.
+  // 이걸 배열로 요구하던 시절엔 정상 파일이 매 부팅마다 손상으로 격리돼 한도가 0 으로 돌아갔다.
+  const raw = loadJsonObject(QUOTA_FILE, '인게이지 한도', 'records', 'object')
   const recs = raw && raw.records && typeof raw.records === 'object' && !Array.isArray(raw.records)
     ? raw.records as Record<string, unknown>
     : {}

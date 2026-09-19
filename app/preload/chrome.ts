@@ -680,6 +680,8 @@ interface PersistentTask {
    */
   readSightings?: Array<{ url: string; host: string; needle: string; snippet: string; at: number }>
   waitReason?: string
+  /** 무엇을 기다리다 멈췄는가. 재시작을 넘어 보존된다(없으면 알 수 없음). 메인이 채워 보낸다 — 여기선 타입만 넓힌다. */
+  waitCause?: 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
   retry?: PersistentTaskRetry
   readOnly: boolean
   incognito: boolean
@@ -851,6 +853,8 @@ interface PersistentTaskSummary {
   startedAt: number
   endedAt?: number
   waitReason?: string
+  /** 무엇을 기다리다 멈췄는가. 재시작을 넘어 보존된다(없으면 알 수 없음). 메인이 채워 보낸다 — 여기선 타입만 넓힌다. */
+  waitCause?: 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
   retry?: PersistentTaskRetry
   llmCalls: number
   maxLlmCalls: number

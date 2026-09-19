@@ -97,6 +97,23 @@ export type TaskState =
 
 export type RetryKind = 'network' | 'rate-limit' | 'cli-dead' | 'tab-gone' | 'login' | 'model' | 'unknown'
 
+/**
+ * 사람을 기다리는 이유. **재시작을 넘어 보존된다**(PersistentTask.waitCause).
+ *
+ *  - `confirm`  되돌릴 수 없는/위험한 동작의 승인을 기다렸다(결제·삭제·전송 등)
+ *  - `login`    사이트 로그인 또는 제공자 인증이 필요하다 — 사람이 직접 해야 한다
+ *  - `captcha`  사람 확인(CAPTCHA) — 사람이 직접 풀어야 한다
+ *  - `ask`      에이전트가 정보를 물었다(일반 질문)
+ *  - `ledger`   발행을 눌렀는데 완료 근거가 없다 — 중복 게시 위험
+ *  - `user-fix` 탭이 사라지는 등 사람만 풀 수 있는 상황
+ */
+export type WaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
+
+const WAIT_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ask', 'ledger', 'user-fix'])
+
+/** 사람이 **직접 조치**해야 풀리는 사유 — 재시작 뒤에도 그 사실을 문구로 유지한다. */
+const HUMAN_ACTION_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ledger', 'user-fix'])
+
 export interface TaskBudget {
   maxSteps: number
   maxDurationMs: number
@@ -135,6 +152,19 @@ export interface PersistentTask {
    */
   readSightings?: ReadSighting[]
   waitReason?: string
+  /**
+   * **무엇을 기다리다 멈췄는가.** `TaskRuntime.waitKind` 와 달리 이것은 디스크에 남는다.
+   *
+   * 왜 (2026-09-19 실측): 재시작하면 `waiting-user` 가 `interrupted` 로 정리되는데, 예전에는 그때
+   * `waitReason` 을 "재시작으로 중단됐습니다 — 이어서 진행할 수 있습니다." 로 **덮어썼다**.
+   * 그래서 "🔐 로그인이 필요합니다" 로 멈춘 작업도, "결제하기 — 확인이 필요합니다" 로 멈춘 작업도
+   * 재시작 뒤에는 똑같이 무해한 문구와 평범한 이어가기 버튼으로만 보였다. 사용자는 왜 멈췄는지
+   * 알 수 없고, 돈을 쓰려다 멈춘 작업이 아무 일 없던 것처럼 읽힌다.
+   *
+   * ⚠ 이 값이 이어가기를 **자동 승인**으로 만들지는 않는다. 재시작 뒤 이어가기는 언제나 새 구간을
+   *   시작하고, 위험 동작이면 에이전트 가드가 **다시** 확인을 요구한다(아래 initTaskRuntime 참고).
+   */
+  waitCause?: WaitCause
   // 사용자가 기다림을 풀려면 가야 할 곳(예: 로그인 계정 설정). 외피가 버튼으로 띄운다.
   waitActionUrl?: string
   waitActionLabel?: string
@@ -158,6 +188,8 @@ export interface TaskSummary {
   stepsUsed: number; maxSteps: number; segment: number
   elapsedMs: number; startedAt: number; endedAt?: number
   waitReason?: string; waitActionUrl?: string; waitActionLabel?: string; retry?: PersistentTask['retry']
+  /** 무엇을 기다리다 멈췄는가(재시작을 넘어 보존). 외피가 사유별 안내·버튼 문구를 고르는 데 쓴다. */
+  waitCause?: WaitCause
   resumeBlockedReason?: string
   llmCalls: number; maxLlmCalls: number
   result?: string; resultFiles: string[]; needsVerify: boolean
@@ -355,6 +387,10 @@ function reviveTask(raw: unknown): PersistentTask | null {
     ...(typeof o.verifyEvidence === 'string' ? { verifyEvidence: o.verifyEvidence } : {}),
     ...(sanitizeSightings(o.readSightings)),
     ...(typeof o.waitReason === 'string' ? { waitReason: o.waitReason } : {}),
+    ...(typeof o.waitActionUrl === 'string' && o.waitActionUrl.startsWith('browser://')
+      ? { waitActionUrl: o.waitActionUrl.slice(0, 300) } : {}),
+    ...(typeof o.waitActionLabel === 'string' ? { waitActionLabel: o.waitActionLabel.slice(0, 40) } : {}),
+    ...(WAIT_CAUSES.has(o.waitCause as WaitCause) ? { waitCause: o.waitCause as WaitCause } : {}),
     ...(typeof o.resumeBlockedReason === 'string' && o.resumeBlockedReason
       ? { resumeBlockedReason: o.resumeBlockedReason.slice(0, 300) } : {}),
     readOnly: o.readOnly === true,
@@ -391,9 +427,31 @@ export function initTaskRuntime(): void {
     // 이어가기 가능한 interrupted 로 정리하고, **자동으로 되살리지 않는다**(T7·T8).
     // 특히 waiting-user 를 running 으로 되돌리면 재시작 한 번이 확인 없는 승인이 된다.
     if (task.state === 'running' || task.state === 'retrying' || task.state === 'waiting-user') {
+      const wasWaiting = task.state === 'waiting-user'
       task.state = 'interrupted'
-      task.waitReason = '재시작으로 중단됐습니다 — 이어서 진행할 수 있습니다.'
       delete task.retry
+      if (wasWaiting && task.waitCause) {
+        // ⚠ **사유를 덮어쓰지 않는다.** 예전에는 여기서 waitReason 을 일반 문구로 갈아치워,
+        //   "🔐 로그인이 필요합니다" 로 멈춘 작업도 "결제하기 — 확인이 필요합니다" 로 멈춘 작업도
+        //   재시작 뒤에는 똑같이 무해해 보이는 한 줄이 됐다. 왜 멈췄는지 모르는 채로 이어가기를
+        //   누르게 만드는 화면이었다. 원래 사유·갈 곳(waitActionUrl)을 그대로 두고 꼬리만 붙인다.
+        const base = str(task.waitReason, '사람의 처리를 기다리던 중이었습니다.')
+        task.waitReason = `${base} (재시작으로 중단됨)`
+        // 사람이 직접 조치해야 풀리는 사유는 그 사실을 한 번 더 말해 준다 — 이어가기가 곧
+        // 승인이 아니라는 것도 함께(아래 beginRun 은 언제나 **새 구간**을 시작하고, 위험 동작이면
+        // 에이전트 가드가 다시 확인을 요구한다. 즉 이어가기는 자동 승인 경로가 아니다).
+        if (HUMAN_ACTION_CAUSES.has(task.waitCause)) {
+          task.waitReason += task.waitCause === 'confirm'
+            ? ' 이어가도 자동으로 승인되지 않습니다 — 다시 확인을 요청합니다.'
+            : ' 직접 처리한 뒤 이어가세요.'
+        }
+      } else {
+        // 기다리고 있지 않았거나(running·retrying) 사유를 모르는 옛 저장본 — 예전 문구 그대로.
+        task.waitReason = '재시작으로 중단됐습니다 — 이어서 진행할 수 있습니다.'
+        delete task.waitCause
+        delete task.waitActionUrl
+        delete task.waitActionLabel
+      }
     }
     cache.set(task.id, task)
     kept++
@@ -444,6 +502,7 @@ function summaryOf(t: PersistentTask): TaskSummary {
     ...(t.waitReason !== undefined ? { waitReason: t.waitReason } : {}),
     ...(t.waitActionUrl !== undefined ? { waitActionUrl: t.waitActionUrl } : {}),
     ...(t.waitActionLabel !== undefined ? { waitActionLabel: t.waitActionLabel } : {}),
+    ...(t.waitCause !== undefined ? { waitCause: t.waitCause } : {}),
     ...(t.retry !== undefined ? { retry: t.retry } : {}),
     ...(t.resumeBlockedReason !== undefined ? { resumeBlockedReason: t.resumeBlockedReason } : {}),
     llmCalls: t.usage.llmCalls,
@@ -512,6 +571,8 @@ function setState(task: PersistentTask, next: TaskState, waitReason?: string): v
     delete task.waitReason
     delete task.waitActionUrl
     delete task.waitActionLabel
+    // 다시 달리기 시작했다 = 그 기다림은 끝났다. 사유를 남겨 두면 다음 중단 때 **옛 사유**가 보인다.
+    delete task.waitCause
     delete task.retry   // 표시용 기록만 지운다. 연속 실패 카운터는 runtime 에 있다(위 주석 참고).
     // ⚠ waitKind 는 여기서 지우지 않는다. 일시정지와 확인 요청이 겹친 뒤 재개하면 "무엇을 기다렸는지"가
     //   사라져, 에이전트는 확인을 기다리는데 응답을 보낼 상대를 잃는 교착이 된다.
@@ -521,10 +582,31 @@ function setState(task: PersistentTask, next: TaskState, waitReason?: string): v
   if (isTerminal(next)) {
     task.endedAt = Date.now()
     rt.waitKind = null
+    delete task.waitCause
   }
   task.updatedAt = Date.now()
   markDirty(task)
   emitChanged()
+}
+
+/**
+ * 사람을 기다리는 상태로 들어가는 **단일 통로**. 휘발 `waitKind`(응답을 누구에게 보낼지)와
+ * 영속 `waitCause`(무엇을 기다렸는지)를 **함께** 세운다.
+ *
+ * 둘을 따로 두던 시절엔 재시작 뒤 사유가 통째로 사라졌다 — 사유가 휘발 쪽에만 있었기 때문이다.
+ */
+function setWaiting(
+  task: PersistentTask,
+  waitKind: NonNullable<TaskRuntime['waitKind']>,
+  cause: WaitCause,
+  reason: string,
+): void {
+  const rt = runtimeOf(task.id)
+  // waitKind 는 setState **전에** 정한다 — 'changed' 를 받은 쪽이 곧바로 confirmTask 를 불러도
+  // 기다리는 상대가 이미 지정돼 있어야 응답이 엉뚱한 곳으로 가지 않는다.
+  rt.waitKind = waitKind
+  task.waitCause = cause
+  setState(task, 'waiting-user', reason)
 }
 
 /**
@@ -780,6 +862,18 @@ function recordExternalWrite(task: PersistentTask, label: string): void {
   }
   task.updatedAt = Date.now()
   markDirty(task)
+  // **내구성 경계** — 이 기록은 발행 클릭이 나가기 전에 디스크에 있어야 한다.
+  // agent.ts 는 'action' 이벤트를 **클릭 직전에** 동기로 내보내므로, 여기서 flush 하면
+  // 클릭보다 먼저 확정된다. 예전에는 디바운스(400ms)뿐이라, 그 창 안에서 앱이 죽으면
+  // 재시작한 제품은 "누른 적 없다" 고 보고 이어가기가 같은 글을 또 올릴 수 있었다.
+  // (social-workflow 의 게시 경로에는 persistPublishBoundary 가 있었지만, 사용자가 직접 낸
+  //  일반 에이전트 작업의 발행 클릭에는 아무 경계도 없었다.)
+  if (!task.incognito && !flushTasks()) {
+    // 확정 실패를 조용히 넘기지 않는다. 메모리 원장은 남아 있어 **이 프로세스 안에서는** 보호되지만,
+    // 재시작을 넘지 못한다는 사실을 로그로 남긴다(사용자 흐름은 막지 않는다 — 이 시점에서 클릭을
+    // 되돌릴 수단이 없고, 막는 흉내만 내면 오히려 상태가 어긋난다).
+    console.warn(`[task-runtime] 외부 쓰기 원장을 디스크에 확정하지 못했습니다: ${trimmed}`)
+  }
 }
 
 /** 결과 파일 누적(중복 제거). 보고서·다운로드 경로는 완료 근거로도 쓰인다. */
@@ -830,7 +924,12 @@ export function classifyRetry(message: string): RetryKind {
   // 제공자 인증 실패도, 사이트 로그인 만료도 결국 사람이 처리해야 한다 → 같은 'login' 으로 묶고
   // 대기 문구만 아래 waitMessageFor 에서 갈라 쓴다.
   if (/인증에 실패|api key|unauthorized|401|403|로그인(이)? (필요|만료)|sign in|log ?in required|session expired/.test(m)) return 'login'
-  if (/econnrefused|enotfound|etimedout|socket hang up|fetch failed|network|연결하지 못|시간 초과|timeout/.test(m)) return 'network'
+  // ⚠ 한국어 문구는 **제품이 실제로 내보내는 것**을 그대로 적는다. 2026-09-19 실측: 제공자 계층이
+  //    내는 `로컬 Ollama 서버에 연결할 수 없습니다…` 와 `로컬 Ollama 서버 연결 실패…` 가
+  //    `연결하지 못` 하나만 보던 이 분기를 빠져나가 **unknown(재시도 1회)** 으로 떨어졌다.
+  //    네트워크 사다리(2·8·30초 3회)를 타야 할 일시적 연결 실패가 10초 한 번 만에 포기됐다는 뜻이다.
+  //    (`CLI 를 찾을 수 없습니다` 같은 "찾을 수 없" 문구는 여기 걸리지 않는다 — 어휘가 다르다.)
+  if (/econnrefused|enotfound|etimedout|socket hang up|fetch failed|network|연결하지 못|연결할 수 없|연결 실패|시간 초과|timeout/.test(m)) return 'network'
   if (/모델을 찾을 수 없|없는 모델|not found|이해하지 못|model/.test(m)) return 'model'
   return 'unknown'
 }
@@ -965,18 +1064,19 @@ function onSegmentEvent(task: PersistentTask, evt: AgentEvent, box: { outcome: S
     // waitKind 는 setState **전에** 정한다 — 'changed' 를 받은 쪽이 곧바로 confirmTask 를 불러도
     // 기다리는 대상이 이미 지정돼 있어야 응답이 엉뚱한 곳으로 가지 않는다.
     case 'confirm': {
-      rt.waitKind = 'agent-confirm'
-      setState(task, 'waiting-user', `확인이 필요합니다: ${str(evt.label, '되돌릴 수 없는 동작')}`)
+      setWaiting(task, 'agent-confirm', 'confirm', `확인이 필요합니다: ${str(evt.label, '되돌릴 수 없는 동작')}`)
       return
     }
     case 'ask': {
-      rt.waitKind = 'agent-ask'
       // 로그인/CAPTCHA 로 넘어온 대기는 사유를 눈에 띄게 구분한다 — 사용자가 "내가 브라우저에서 직접
       // 해야 하는 일" 임을 바로 알아야 한다(그냥 질문과 성격이 다르다).
       const isChallenge = evt.challenge === 'login' || evt.challenge === 'captcha'
       const prefix = evt.challenge === 'captcha' ? '🧩 사람 확인이 필요합니다 — '
         : evt.challenge === 'login' ? '🔐 로그인이 필요합니다 — ' : ''
-      setState(task, 'waiting-user', prefix + str(evt.message, isChallenge ? '직접 처리한 뒤 이어가기를 눌러 주세요.' : '추가 정보가 필요합니다.'))
+      // 사유를 **영속**으로 남긴다 — 재시작 뒤에도 "로그인/사람 확인이 필요했다" 가 유지돼야 한다.
+      const cause: WaitCause = evt.challenge === 'captcha' ? 'captcha' : evt.challenge === 'login' ? 'login' : 'ask'
+      setWaiting(task, 'agent-ask', cause,
+        prefix + str(evt.message, isChallenge ? '직접 처리한 뒤 이어가기를 눌러 주세요.' : '추가 정보가 필요합니다.'))
       // 사용자가 가야 할 곳이 분명하면(저장된 계정 등록·허용) 버튼으로 띄울 수 있게 함께 싣는다.
       // browser:// 내부 페이지만 허용 — 페이지가 만든 문자열이 외피 버튼으로 흘러들지 않게 한다.
       if (typeof evt.actionUrl === 'string' && evt.actionUrl.startsWith('browser://')) {
@@ -1205,8 +1305,7 @@ async function runLoop(id: string): Promise<void> {
       // 2. 외부 쓰기 원장 — 발행을 눌렀는데 완료 근거가 없으면 **다시 시도하지 않고** 사용자에게 묻는다.
       const pending = pendingExternalWrite(task)
       if (pending) {
-        rt.waitKind = 'ledger'
-        setState(task, 'waiting-user',
+        setWaiting(task, 'ledger', 'ledger',
           `발행이 됐는지 확실하지 않습니다 — 확인해 주세요. (마지막 동작: ${pending.label})`
           + ' 이미 올라갔다면 중단하시고, 아직이라면 계속을 눌러 주세요.')
         break
@@ -1215,8 +1314,7 @@ async function runLoop(id: string): Promise<void> {
       // 3. 탭 재바인딩
       const bind = resolveTaskTab(task)
       if (bind.tabId === null) {
-        rt.waitKind = 'user-fix'
-        setState(task, 'waiting-user', bind.reason)
+        setWaiting(task, 'user-fix', 'user-fix', bind.reason)
         break
       }
 
@@ -1312,10 +1410,23 @@ async function runLoop(id: string): Promise<void> {
       const kind = classifyRetry(detail)
       if (BACKOFF_MS[kind].length === 0) {
         // 사람만 풀 수 있는 원인(탭 닫힘·로그인) — 재시도로 태우지 않고 기다린다.
-        // 두 경우 모두 'user-fix' 로 둔다: 조치를 마친 사용자가 confirmTask(id, true) 로 이어갈 수 있어야 한다
-        // (waitKind 가 null 이면 startTask 는 waiting-user 를 거부해 되살릴 방법이 없는 막다른 길이 된다).
-        rt.waitKind = 'user-fix'
-        setState(live, 'waiting-user', waitMessageFor(kind, detail))
+        // 두 경우 모두 waitKind 는 'user-fix' 로 둔다: 조치를 마친 사용자가 confirmTask(id, true) 로
+        // 이어갈 수 있어야 한다(waitKind 가 null 이면 startTask 는 waiting-user 를 거부해
+        // 되살릴 방법이 없는 막다른 길이 된다). 다만 **사유**는 둘을 구분해 영속한다 —
+        // 재시작 뒤 사용자가 "로그인하라는 거였나, 탭이 닫힌 거였나" 를 알아야 한다.
+        setWaiting(live, 'user-fix', kind === 'login' ? 'login' : 'user-fix', waitMessageFor(kind, detail))
+        break
+      }
+      // ⚠ **미확인 외부 쓰기가 있으면 자동 재시도하지 않는다.** 발행·댓글을 이미 눌렀는데 그 결과를
+      //   못 본 채 오류가 났다면, 서버에는 이미 반영됐을 수 있다(응답만 유실). 그 상태에서 자동으로
+      //   다시 돌리면 같은 글을 두 번 올릴 위험을 기계가 떠안는다 — 그건 사람의 결정이어야 한다.
+      //   (구간 시작의 원장 관문이 결국 잡기는 했지만, 그전까지 상태가 "재시도 중" 으로 표시돼
+      //    사용자에게 **진행 중인 것처럼** 보였고 backoff 도 헛되이 태웠다.)
+      const uncertain = pendingExternalWrite(live)
+      if (uncertain) {
+        setWaiting(live, 'ledger', 'ledger',
+          `오류로 중단됐는데(${detail.slice(0, 120)}) 발행이 됐는지 확실하지 않습니다 — 확인해 주세요.`
+          + ` (마지막 동작: ${uncertain.label}) 이미 올라갔다면 중단하시고, 아직이라면 계속을 눌러 주세요.`)
         break
       }
       if (!scheduleRetry(live, kind, detail)) break

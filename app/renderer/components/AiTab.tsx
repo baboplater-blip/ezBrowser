@@ -87,14 +87,29 @@ type TaskState =
   | 'queued' | 'running' | 'paused' | 'waiting-user' | 'retrying'
   | 'interrupted' | 'needs-verify' | 'completed' | 'failed' | 'cancelled'
 interface TaskRetryInfo { kind: string; attempt: number; nextAt: number; detail: string }
+// 무엇을 기다리다 멈췄는가 — 재시작(interrupted)을 넘어 보존된다. 없으면(옛 저장본) 일반 문구로 폴백한다.
+type TaskWaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
 interface TaskSummary {
   id: string; instruction: string; state: TaskState; mode: 'normal' | 'long'
   stepsUsed: number; maxSteps: number; segment: number
   elapsedMs: number; startedAt: number; endedAt?: number
-  waitReason?: string; waitActionUrl?: string; waitActionLabel?: string; retry?: TaskRetryInfo
+  waitReason?: string; waitActionUrl?: string; waitActionLabel?: string; waitCause?: TaskWaitCause; retry?: TaskRetryInfo
   llmCalls: number; maxLlmCalls: number
   result?: string; resultFiles: string[]; needsVerify: boolean
 }
+// 대기 사유별 안내 — 재시작으로 중단(interrupted)됐을 때 "왜 멈췄는지"를 무해한 일반 문구 뒤에
+// 숨기지 않기 위한 사유별 문구. 승인 대기 중이던 결제·삭제 같은 위험 동작을 사람이 놓치지 않게 한다.
+const WAIT_CAUSE_INFO: Record<TaskWaitCause, { icon: string; title: string; hint?: string }> = {
+  confirm: { icon: '⏸️', title: '승인이 필요했던 동작에서 멈췄습니다', hint: '이어가면 자동 승인되지 않습니다 — 다시 확인을 요청합니다.' },
+  login: { icon: '🔐', title: '로그인이 필요합니다', hint: '브라우저에서 직접 로그인한 뒤 이어가세요.' },
+  captcha: { icon: '🧩', title: '사람 확인이 필요합니다', hint: '직접 처리한 뒤 이어가세요.' },
+  ledger: { icon: '⚠', title: '게시 여부가 확인되지 않았습니다', hint: '이미 올라갔다면 이어가지 말고 중단하세요.' },
+  ask: { icon: '❓', title: '답변을 기다리다 멈췄습니다' },
+  'user-fix': { icon: '🔧', title: '직접 처리가 필요합니다' },
+}
+// 이 사유들은 사람이 브라우저 안에서 직접 뭔가를 해야 풀린다 — '이어가기' 버튼 문구를 그렇게 바꿔
+// 눌러도 자동으로 아무 일도 재승인되지 않는다는 것을 알린다('ask' 는 답변만 하면 되므로 제외).
+const NEEDS_MANUAL_ACTION: ReadonlySet<TaskWaitCause> = new Set(['confirm', 'login', 'captcha', 'ledger', 'user-fix'])
 type TaskPending = { kind: 'confirm'; label: string } | { kind: 'ask'; message: string }
 const TASK_STATE_LABEL: Record<TaskState, { icon: string; label: string; tone?: 'ok' | 'warn' | 'muted' }> = {
   queued: { icon: '🕐', label: '대기 중', tone: 'muted' },
@@ -287,9 +302,22 @@ function TaskCard({
           🔄 {RETRY_KIND_LABEL[t.retry.kind] ?? t.retry.kind} · {t.retry.attempt}번째 재시도{retryLabel ? ` · ${retryLabel}` : ''}
         </div>
       )}
-      {/* 단계 소진 등으로 이어가지 못한 것이지 실패가 아니다 — ✅ 로 오인시키지 않고 '미완료'로 정직하게. */}
+      {/* 단계 소진 등으로 이어가지 못한 것이지 실패가 아니다 — ✅ 로 오인시키지 않고 '미완료'로 정직하게.
+          waitCause 가 있으면(재시작 전 승인·로그인·CAPTCHA 대기 중이었다면) 그 사유를 그대로 보여준다 —
+          "재시작으로 중단됐습니다"라는 무해한 문구 뒤에 결제 승인 대기 같은 상태를 숨기지 않기 위해서다.
+          waitCause 가 없는 옛 저장본은 기존 일반 문구 그대로(회귀 없음). */}
       {t.state === 'interrupted' && (
-        <div className="ai-task-note warn">완료하지 못했습니다 — 이어갈 수 있습니다.</div>
+        t.waitCause ? (
+          <div className="ai-task-note warn">
+            <div><b>{WAIT_CAUSE_INFO[t.waitCause].icon} {WAIT_CAUSE_INFO[t.waitCause].title}</b></div>
+            {t.waitReason && <div>{t.waitReason}</div>}
+            {WAIT_CAUSE_INFO[t.waitCause].hint && (
+              <div className="ai-task-evidence dim">{WAIT_CAUSE_INFO[t.waitCause].hint}</div>
+            )}
+          </div>
+        ) : (
+          <div className="ai-task-note warn">완료하지 못했습니다 — 이어갈 수 있습니다.</div>
+        )
       )}
       {/* 모델이 done 을 냈어도 근거(완료 문구·결과 파일 등)가 확인되기 전에는 완료로 표시하지 않는다. */}
       {t.state === 'needs-verify' && (
@@ -298,8 +326,9 @@ function TaskCard({
           {evidence ? <div className="ai-task-evidence">{evidence}</div> : <div className="ai-task-evidence dim">근거를 불러오는 중…</div>}
         </div>
       )}
-      {/* 사용자가 기다림을 풀려면 가야 할 곳(예: 로그인 계정 등록·허용) — 사유만 주고 끝내지 않는다. */}
-      {t.state === 'waiting-user' && t.waitActionUrl && (
+      {/* 사용자가 기다림을 풀려면 가야 할 곳(예: 로그인 계정 등록·허용) — 사유만 주고 끝내지 않는다.
+          재시작으로 waiting-user → interrupted 가 돼도 이 버튼이 사라지면 갈 곳을 잃으므로 함께 보인다. */}
+      {(t.state === 'waiting-user' || t.state === 'interrupted') && t.waitActionUrl && (
         <div className="ai-task-note warn">
           <button className="ai-mini-btn" onClick={() => {
             const u = t.waitActionUrl
@@ -366,7 +395,15 @@ function TaskCard({
       <div className="ai-task-actions">
         {t.state === 'running' && <button className="ai-mini-btn" onClick={onPause} title="일시정지">⏸ 일시정지</button>}
         {t.state === 'paused' && <button className="ai-mini-btn active" onClick={onResume} title="재개">▶ 재개</button>}
-        {t.state === 'interrupted' && <button className="ai-mini-btn active" onClick={onResume} title="이어가기">▶ 이어가기</button>}
+        {/* login·captcha·user-fix·confirm·ledger 는 사람이 브라우저에서 직접 처리해야 풀린다 —
+            버튼을 없애지 않되(명시적으로는 계속 이어갈 수 있어야 한다) 문구로 그 사실을 알린다. */}
+        {t.state === 'interrupted' && (
+          t.waitCause && NEEDS_MANUAL_ACTION.has(t.waitCause) ? (
+            <button className="ai-mini-btn active" onClick={onResume} title="직접 처리를 마친 뒤 누르세요">▶ 처리했습니다 — 이어가기</button>
+          ) : (
+            <button className="ai-mini-btn active" onClick={onResume} title="이어가기">▶ 이어가기</button>
+          )
+        )}
         {t.state === 'needs-verify' && <button className="ai-mini-btn active" onClick={onAccept} title="완료를 확인하고 승인">✅ 결과 승인</button>}
         {cancellable && <button className="ai-mini-btn" onClick={onCancel} title="중단">⏹ 중단</button>}
         {canRerun && terminal && <button className="ai-mini-btn" onClick={onRerun} title="같은 작업 다시 실행">↻ 다시</button>}

@@ -26,7 +26,7 @@ import { detectChallenge, challengeKey, type ChallengeVerdict } from './challeng
 import { attemptAutoLogin, hasAutoLoginAccountFor } from './auto-login'
 import { hostAllowed as frameHostAllowed } from './frames'
 import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, parseVerifyProbeMark, verifyHostMatches, type RiskVerdict, type CompletionSignal } from './agent-gate'
-import { normalizeTargetUrl, alreadyDid, recordEngagement, engageQuotaCheck, engageQuotaRecord } from './blog-engage'
+import { normalizeTargetUrl, alreadyDid, recordEngagement, engageQuotaCheck, engageQuotaRecord, persistEngageBoundary } from './blog-engage'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
 // 판단은 두 경로: 지원 제공자/모델이면 네이티브 tool-use(구조화 함수 호출, 더 안정적),
@@ -1436,6 +1436,17 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
           // 통과 — 실행 직전에 기록한다. 클릭 뒤에 적으면 실패·중단 시 기록이 빠져 다음에 또 단다.
           recordEngagement({ key: targetKey, account, action: kind, note: label.slice(0, 120) })
           engageQuotaRecord(engageGuard, kind)
+          // ⑥ **내구성 경계** — 기록을 디스크에 확정하기 전에는 클릭하지 않는다.
+          //    기록은 디바운스(300ms)라, 예전에는 클릭이 나가는 순간 장부가 아직 메모리에만 있었다.
+          //    그 창 안에서 앱이 죽으면 재시작한 제품은 "안 건드렸다" 고 보고 같은 글에 또 단다
+          //    (좋아요는 다시 누르면 **취소**된다). 확정하지 못하면 차라리 하지 않는다.
+          const durable = persistEngageBoundary()
+          if (!durable.ok) {
+            const why = `기록을 저장하지 못해 실행하지 않았습니다(${durable.failed.join(', ')}). 같은 글에 두 번 남기지 않기 위한 조치입니다.`
+            emit({ type: 'result', ok: false, label, detail: why })
+            pendingPrefix = `${why} 저장 공간·권한 문제일 수 있습니다. 이 글은 건너뛰고, 계속 실패하면 지금까지 처리한 내용을 note 로 정리한 뒤 done 으로 마치세요.`
+            continue
+          }
         }
       }
 

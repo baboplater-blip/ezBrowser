@@ -3,8 +3,8 @@
   "project_id": null,
   "task_id": "social-workflows-20260918",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 160,
-  "updated_at": "2026-09-19T13:29:08Z",
+  "revision": 171,
+  "updated_at": "2026-09-19T14:34:40Z",
   "columns": [
     "대기",
     "진행",
@@ -961,20 +961,21 @@
     {
       "id": "run:run-20260919T121840Z-b597cd",
       "title": "Claude 실행 — User says continue development after rc.13. Bounded usable feature: turn existin",
-      "column": "진행",
+      "column": "완료",
       "owner": "Claude 팀장(lead)",
       "model": "opus",
-      "step": "세션 실행 중",
-      "evidence": null,
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260919T121840Z-b597cd)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 9건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
       "blocker": null,
       "detail": "User says continue development after rc.13. Bounded usable feature: turn existing draft-only image workflow into explicitly user-confirmed publication WITHOUT regenerating image/caption. Inspect draft lifecycle first (review and completed draft receipt). Provide clear Korean/English UI showing destination/account/caption and final explicit publish confirmation; opening/changing mode/cancelling must NEVER publish. One-time explicit confirmation binds current workflow revision/account/platform/artifact hash/caption, no reused grants or autoPublish upon mode toggle/restart. Support existing review draft and completed draft safely, prohibit active publish/uncertain/already actually published, preserve old receipt/history accurately. Reuse existing publish gate, persistence barrier and resume protections. Validate missing account/expired or missing artifact/invalid revision gracefully without losing draft. Do not silently broaden grants, skip critical gate or invent authorization. New action needs actionId/rebind support if global action introduced; internal card control use existing conventions. ko/en together. Scope files social-workflow task model relevant IPC/preload AiSocialPanel/locales and focused harness/docs; preserve others edits. Ownership clear if delegate. Implement real UI-click to trusted IPC isolated tests: no regeneration same image hash and caption, cancel no side effects, missing account rejected, confirm exactly one fixture post, double-click/replay at most one",
       "tags": [
         "run",
-        "resume"
+        "success",
+        "4403.9s"
       ],
       "required": true,
       "run_id": "run-20260919T121840Z-b597cd",
-      "updated_at": "2026-09-19T12:18:40Z"
+      "updated_at": "2026-09-19T13:32:04Z"
     },
     {
       "id": "draft-promotion-design",
@@ -1080,6 +1081,114 @@
       "required": true,
       "run_id": null,
       "updated_at": "2026-09-19T13:29:08Z"
+    },
+    {
+      "id": "run:run-20260919T133659Z-c6f72a",
+      "title": "Claude 실행 — User requests continued development. Bounded next round: durable automation inte",
+      "column": "진행",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "세션 실행 중",
+      "evidence": null,
+      "blocker": null,
+      "detail": "User requests continued development. Bounded next round: durable automation interrupted by network/provider errors and login/human handoff. First reproduce concrete defects; no speculative refactors/features or tests that only mirror code. Current task-runtime scheduleRetry retries any classified network failure and initTaskRuntime changes waiting-user to interrupted with generic reason. Inspect checkpoint/side effect ledger and agent boundaries before conclusions. Highest priority: server commits publish/comment/like then response lost, model timeout after side effect, retry across segment/restart. Must not repeat non-idempotent action; maintain code-enforced uncertainty and readable recovery rather than model-only memory. Read-only transient failures must still recover (positive control), bounded backoff/cancel/pause respected; do not just disable retries wholesale. Retain original login/CAPTCHA/critical wait cause across restart with correct actionable UI, explicit human continuation, never automatic credentials/security approval. Work only confirmed issues in task-runtime agent/checkpoint existing engage/social workflow and related UI/types/IPC/tests, preserve prior changes. Reuse real-app isolated HTTPS fault server to count externally observed side effects, actual UI resume. Required scoped evidence: read failure then recovery; cancel during retry no resurrection; server committed but lost response extra writes zero; safe uncommitted retry positive; restart uncertain re",
+      "tags": [
+        "run",
+        "resume"
+      ],
+      "required": true,
+      "run_id": "run-20260919T133659Z-c6f72a",
+      "updated_at": "2026-09-19T13:36:59Z"
+    },
+    {
+      "id": "ir-20260919-engage-durability",
+      "title": "인게이지 장부 내구성 경계 — 댓글·좋아요 중복 방지",
+      "column": "완료",
+      "owner": "팀장(opus)",
+      "model": null,
+      "step": "recordEngagement/engageQuotaRecord 가 디바운스만 걸어 클릭 순간 디스크에 없던 것을 persistEngageBoundary 동기 경계로 교체. before-quit 훅도 없던 것 연결.",
+      "evidence": "순수 Node 프로브: 수정 전 클릭 직후 디스크 장부 없음 → 수정 후 ok:true + 장부·한도 즉시 존재",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T13:52:08Z"
+    },
+    {
+      "id": "ir-20260919-wait-cause",
+      "title": "재시작이 지우던 대기 사유(로그인·CAPTCHA·승인) 보존",
+      "column": "완료",
+      "owner": "팀장(opus) + UI 작업자(sonnet)",
+      "model": null,
+      "step": "waitCause 영속 + setWaiting 단일통로 + initTaskRuntime 보존 + UI 사유별 안내/버튼",
+      "evidence": "IR6A/IR6B PASS(강제종료 후 login·confirm 보존, 재확인 요구, 결제 실행 0). 수정 전 빌드는 세 작업이 같은 한 줄",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T14:34:40Z"
+    },
+    {
+      "id": "ir-20260919-retry-gate",
+      "title": "미확인 외부쓰기가 있으면 자동 재시도하지 않는다",
+      "column": "완료",
+      "owner": "팀장(opus)",
+      "model": null,
+      "step": "runLoop 오류분기 원장 관문 + classifyRetry 연결실패 문구 보강",
+      "evidence": "IR3 PASS(waiting-user/ledger, 서버 게시 정확히 1) · IR1/IR4 PASS(network 분류·자동 회복) · IR2 PASS(취소 후 추가 요청 0)",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T14:34:40Z"
+    },
+    {
+      "id": "ir-20260919-quota-quarantine",
+      "title": "정상 한도 파일이 매 부팅 '손상'으로 격리되던 결함",
+      "column": "완료",
+      "owner": "팀장(opus) — 하네스 작업자 발견",
+      "model": null,
+      "step": "loadJsonObject 가 최상위 키를 배열로만 받아 객체 맵인 ai-engage-quota.json 을 매번 격리. kind:'array'|'object' 인자 추가로 수정.",
+      "evidence": "재현: 정상 파일 → null + .corrupt-*.bak 생성. 수정 후 제품 경로 2회차 부팅에서 comment=3 보존, 4번째 댓글 차단, 손상본 0",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T13:58:09Z"
+    },
+    {
+      "id": "ir-20260919-publish-label",
+      "title": "한 단어 발행 버튼이 발행으로 분류되지 않던 결함",
+      "column": "완료",
+      "owner": "팀장(opus)",
+      "model": null,
+      "step": "PUBLISH_RE 의 끝 고정 갈래가 제품 라벨 모양(클릭 \"공유\")과 어긋나 무력. isPublishAction 이 따옴표 안 이름도 좁게 대조하도록 수정.",
+      "evidence": "음성 대조: 옛 판정으로 R9 → 미탐 5건(클릭 \"공유\"·\"Share\"·\"Post\" 등) 오탐 0. 수정 후 24/24(양성8 부정16), verify-agent-gate 9/9",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T14:13:25Z"
+    },
+    {
+      "id": "ir-20260919-package",
+      "title": "rc.15 패키징·게이트 마감",
+      "column": "완료",
+      "owner": null,
+      "model": null,
+      "step": "npm run verify 18/18(57s) → NSIS rc.15(--publish never) → 그 산출물로 스모크 16/16",
+      "evidence": "121,937,250 B · sha256 9dc636ab… · GitHub 릴리스 무변경",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-19T14:34:40Z"
     }
   ],
   "summary": {
@@ -1087,18 +1196,17 @@
     "remaining_required": [],
     "blockers": [],
     "optional_next": [
-      "코드 서명(.pfx) 적용 후 재빌드 — 인증서는 사용자만 제공 가능(상시 제약, 이월)",
-      "rc.13 설치파일의 설치→부팅→제거 검증 — 사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED, 우회하지 않았다(다른 PC/VM 필요, 이월)",
-      "실제 인스타그램·블로그·Genspark/ChatGPT 실화면 검증 — 실계정·크레딧 필요(이번 검증은 전부 로컬 픽스처, 이월)",
-      "초안까지만 → 게시까지 모드 변경 — 계정과 같은 부류의 불편이나 되돌릴 수 없는 게시 권한을 여는 일이라 사용자 결정 사항으로 남김"
+      "실제 구독 모델로 승격 e2e 1회(이번은 결정론 확보를 위해 가짜 LLM 각본)",
+      "확인 화면에 이미지 미리보기 썸네일 추가(현재는 형식·크기·sha256 앞 12자)",
+      "승격 실패가 탭 이동 실패로 끝난 확인 단계 초안의 단계 처리 재검토(현재 기존 게시 경로와 동일)"
     ],
     "note": null,
     "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
   },
   "source": {
     "kind": "run-start",
-    "run_id": "run-20260919T121840Z-b597cd",
-    "at": "2026-09-19T12:18:40Z"
+    "run_id": "run-20260919T133659Z-c6f72a",
+    "at": "2026-09-19T13:36:59Z"
   },
   "warnings": []
 }

@@ -41,3 +41,6 @@ logs/
 설치파일/
 resources/brand/
 *.tmp
+
+# 결함 재현용 "수정 전" 빌드 스냅샷(임시) — 커밋 대상 아님
+dist-before-*/

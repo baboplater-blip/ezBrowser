@@ -242,6 +242,39 @@ function level(action, observation, ctx) {
     `미탐 ${missed.length}건${missed.length ? `(${missed[0]})` : ''} · 오탐 ${wrong.length}건${wrong.length ? `(${wrong[0]})` : ''}`)
 }
 
+// ===========================================================================
+// R9 — 발행성 클릭 판정이 **제품이 실제로 만드는 라벨 모양**에서 동작하는가
+//
+// 왜 (2026-09-19 실측): `PUBLISH_RE` 의 끝 고정 갈래(`공유$`·`share$`)는 "버튼 이름이 바로 그 단어일 때"
+// 를 노린 것인데, 실제 라벨은 `describeAction` 이 만드는 `클릭 "공유"` 라 **뒤에 닫는 따옴표가 붙는다**.
+// 그래서 그 갈래들은 **어떤 라벨과도 매치되지 않았다** — `공유`·`Share` 처럼 이름이 한 단어인 발행
+// 버튼이 ①원장에 안 적히고(중복 게시 보호 없음) ②임시저장·발행금지 모드의 하드블록을 그냥 지나갔다.
+//
+// 부정 사례가 절반을 넘는 이유: 이 판정을 넓히면 **초안 모드가 정상 클릭까지 막는다**.
+// 특히 `업로드`/`Upload` 는 파일 선택 창을 여는 버튼일 때가 많아 일부러 제외했다.
+// ===========================================================================
+{
+  const publishish = [
+    '클릭 "공유"', '클릭 "Share"', '화면 클릭 "공유"', '클릭 "Post"',
+    '클릭 "공유하기"', '클릭 "게시"', '클릭 "발행"', '클릭 " 공유 "',
+  ]
+  const notPublish = [
+    // 파일 선택 창을 여는 버튼 — 발행으로 보면 초안 모드가 첨부조차 못 한다
+    '클릭 "업로드"', '클릭 "Upload"',
+    // 명사·메뉴·예약·미리보기 (실사이트에서 실제로 걸렸던 오탐)
+    '클릭 "게시물"', '클릭 "새로운 게시물 만들기"', '클릭 "게시 예약"', '클릭 "공유 정책"',
+    '클릭 "다음"', '클릭 "취소"', '클릭 "미리보기"', '클릭 "공유 대상 선택"',
+    // 사용자가 **입력**하거나 고른 값이 따옴표에 담기는 라벨 — 발행이 아니다
+    '입력 "공유" → "검색칸"', '입력 "Share" → "본문"', '드롭다운 선택 "범위" → "공유"',
+    '호버 "공유"', '클릭 [3]', '화면 클릭 50%,50%',
+  ]
+  const missed = publishish.filter((l) => !gate.isPublishAction(l))
+  const wrong = notPublish.filter((l) => gate.isPublishAction(l))
+  check('R9', '제품이 만드는 라벨 모양에서 발행성 클릭만 골라낸다', missed.length === 0 && wrong.length === 0,
+    `미탐 ${missed.length}건${missed.length ? `(${missed[0]})` : ''} · 오탐 ${wrong.length}건${wrong.length ? `(${wrong[0]})` : ''}`
+    + ` · 양성 ${publishish.length} / 부정 ${notPublish.length}`)
+}
+
 fs.mkdirSync(args.out, { recursive: true })
 fs.writeFileSync(path.join(args.out, 'agent-gate-results.json'), JSON.stringify(results, null, 2))
 console.log('\n===== verify-agent-gate 결과 =====')

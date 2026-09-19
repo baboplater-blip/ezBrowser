@@ -120,8 +120,31 @@ export function isNoPublishTask(task: string): boolean {
   return String(task ?? '').includes(NO_PUBLISH_MARK)
 }
 
+/**
+ * 이 클릭이 **발행성**인가(원장 기록 · 발행 금지 하드블록 · 중복 게시 가드가 모두 이걸 본다).
+ *
+ * ⚠ 왜 두 번 보는가 (2026-09-19 실측): `PUBLISH_RE` 에는 `공유$`·`upload$`·`share$` 처럼 **끝을 고정한**
+ *   갈래가 있다. 그 의도는 "버튼 이름이 **바로 그 단어**일 때만"(`공유 정책` 같은 것에 걸리지 않게)이다.
+ *   그런데 실제 라벨은 `describeAction` 이 만드는 **`클릭 "공유"`** 모양이라 **뒤에 닫는 따옴표가 붙는다** —
+ *   끝 고정 갈래는 **어떤 라벨과도 매치될 수 없었다.** 결과로 `공유`·`업로드`·`Share` 처럼 이름이
+ *   딱 한 단어인 버튼은 ① 원장에 안 적히고(중복 게시 보호 없음) ② **임시저장·입력만 모드의
+ *   하드블록을 그냥 지나갔다**(초안만 만들어야 하는 작업이 실제로 게시될 수 있었다).
+ *
+ *   그래서 라벨 전체로 한 번 보고, **클릭 라벨이면 따옴표 안의 이름만 떼어** 아래 목록과 대조한다.
+ *   `type`·`select` 처럼 사용자가 친 값이 따옴표에 담기는 라벨은 이 경로를 타지 않는다 —
+ *   "공유" 라고 **입력**한 것이 발행으로 오인되면 안 되기 때문이다.
+ *
+ * ⚠ `업로드`/`Upload` 단독은 **일부러 넣지 않았다.** 유튜브 스튜디오처럼 그 버튼이 파일 선택 창을
+ *   여는 사이트가 많아서, 발행성으로 보면 **초안(발행 금지) 모드가 파일 첨부조차 못 하게** 된다.
+ *   (그래서 `PUBLISH_RE` 의 `upload$` 갈래는 클릭 라벨에 대해 여전히 닿지 않는다 — 알면서 둔다.)
+ */
+const PUBLISH_NAME_RE = /^(공유|공유하기|발행|발행하기|share|publish|post)$/i
+
 export function isPublishAction(label: string): boolean {
-  return PUBLISH_RE.test(label ?? '')
+  const s = String(label ?? '')
+  if (PUBLISH_RE.test(s)) return true
+  const named = /^\s*(?:클릭|화면 클릭)\s+"([^"]*)"/.exec(s)
+  return named ? PUBLISH_NAME_RE.test((named[1] ?? '').trim()) : false
 }
 
 export function looksPublished(pageText: string): boolean {

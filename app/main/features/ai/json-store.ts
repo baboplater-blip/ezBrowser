@@ -123,11 +123,21 @@ function pruneStaleTmp(file: string): void {
  * 저장 파일을 읽어 최상위 객체를 돌려준다.
  *
  * - 파일이 없으면 `null`(백업도 로그도 없다 — 첫 실행의 정상 상태다)
- * - 읽기·파싱 실패 또는 모양이 다르면(`primaryKey` 가 배열이 아니면) **고유 이름 백업 후** `null`.
+ * - 읽기·파싱 실패 또는 모양이 다르면 **고유 이름 백업 후** `null`.
  *   그냥 빈 상태로 시작하면 다음 저장이 손상 파일을 영구히 덮어써 복구가 불가능해진다.
+ *
+ * `kind` 는 `primaryKey` 가 **무엇으로 저장되는지**다.
+ *
+ * ⚠ 왜 이 인자가 생겼나 (2026-09-19 실측): 예전에는 `primaryKey` 가 **배열일 것을 무조건 요구**했다.
+ *   그런데 인게이지 한도 저장소(`ai-engage-quota.json`)는 `records` 를 **객체 맵**으로 쓴다
+ *   (`{ guardId: {comment, like, lastAt} }`). 그래서 **완전히 정상인 파일이 매 부팅마다 "손상"으로
+ *   판정돼 `.corrupt-*.bak` 으로 격리되고 카운터가 0 으로 되돌아갔다** — 크래시가 아니라 **정상
+ *   종료 후 재시작**에서도 그랬다. "이 작업에서 N건까지" 라는 상한이 재시작을 한 번도 넘기지 못했고,
+ *   덤으로 userData 에 손상본 파일이 계속 쌓였다.
+ *   기본값을 `'array'` 로 둬 다른 저장소의 검출 강도는 그대로 유지한다(느슨하게 풀지 않는다).
  */
 export function loadJsonObject(
-  fileName: string, label: string, primaryKey: string,
+  fileName: string, label: string, primaryKey: string, kind: 'array' | 'object' = 'array',
 ): Record<string, unknown> | null {
   let file: string
   try { file = userDataFile(fileName) } catch { return null }
@@ -160,8 +170,12 @@ export function loadJsonObject(
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return giveUp('최상위가 객체가 아님')
   }
-  if (!Array.isArray((parsed as Record<string, unknown>)[primaryKey])) {
-    return giveUp(`'${primaryKey}' 목록이 없음`)
+  const primary = (parsed as Record<string, unknown>)[primaryKey]
+  const shapeOk = kind === 'array'
+    ? Array.isArray(primary)
+    : !!primary && typeof primary === 'object' && !Array.isArray(primary)
+  if (!shapeOk) {
+    return giveUp(kind === 'array' ? `'${primaryKey}' 목록이 없음` : `'${primaryKey}' 항목이 없음`)
   }
   return parsed as Record<string, unknown>
 }
