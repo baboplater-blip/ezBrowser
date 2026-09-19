@@ -3,8 +3,8 @@
   "project_id": null,
   "task_id": "social-workflows-20260918",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 148,
-  "updated_at": "2026-09-19T09:46:30Z",
+  "revision": 149,
+  "updated_at": "2026-09-19T09:57:40Z",
   "columns": [
     "대기",
     "진행",
@@ -948,14 +948,14 @@
       "column": "완료",
       "owner": null,
       "model": null,
-      "step": "3건 구현+검증 완료 · verify 16/16 · social-account 26/26 · post-time 34/34 · auto-publish 53 · rc.13 패키징",
+      "step": "검토 3건 반영 + 재시작 보존 검사 추가 · social-account 27/27 · verify 16/16 · rc.13 재빌드",
       "evidence": ".auto-dev/evening-2000-20260919-final.md",
       "blocker": null,
       "detail": null,
       "tags": [],
       "required": true,
       "run_id": null,
-      "updated_at": "2026-09-19T09:46:30Z"
+      "updated_at": "2026-09-19T09:57:40Z"
     }
   ],
   "summary": {
@@ -975,7 +975,7 @@
   },
   "source": {
     "kind": "cli",
-    "at": "2026-09-19T09:46:30Z"
+    "at": "2026-09-19T09:57:40Z"
   },
   "warnings": []
 }

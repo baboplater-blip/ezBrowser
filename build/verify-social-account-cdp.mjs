@@ -646,13 +646,28 @@ async function main() {
           sa1After?.params?.account === 'new_account_sa1', `재시작 후 계정=${JSON.stringify(sa1After?.params?.account)}`)
         check('SA6-SA2', 'SA2 에서 바꾼 계정(right_account)이 정상 종료 후 재기동에도 남아 있다',
           sa2After?.params?.account === 'right_account', `재시작 후 계정=${JSON.stringify(sa2After?.params?.account)}`)
+
+        // ── SA6-EDITFLAG: "손으로 고쳤다" 는 사실이 재시작을 넘겨 남아야 한다.
+        //
+        // 왜 이것을 따로 보는가: 계정을 손으로 고친 작업은 자동 게시 선승인이 있어도 게시 전에
+        // 확인을 받는다(autoPublishVerdict 의 accountEditedAt 가드). 그 가드가 **메모리에만**
+        // 있으면 앱을 껐다 켜는 것만으로 차단이 풀려, 사용자가 "게시해도 좋다" 를 누른 적 없는
+        // 글이 나간다. 저장소 복원(reviveWorkflow)이 이 값을 떨어뜨리지 않는지 확인한다.
+        const editedAt1 = sa1After?.accountEditedAt
+        const editedAt2 = sa2After?.accountEditedAt
+        check('SA6-EDITFLAG', '계정을 손으로 고친 표시가 재시작 후에도 남아 자동 게시 차단이 유지된다',
+          typeof editedAt1 === 'number' && editedAt1 > 0 && typeof editedAt2 === 'number' && editedAt2 > 0,
+          `재시작 후 accountEditedAt: SA1=${JSON.stringify(editedAt1)} · SA2=${JSON.stringify(editedAt2)}`
+          + ' (둘 다 0보다 큰 숫자여야 — 없으면 재부팅만으로 자동 게시 차단이 풀린다)')
       } catch (e) {
         fail('SA6-SA1', '재시작 보존(SA1)', e.message)
         fail('SA6-SA2', '재시작 보존(SA2)', e.message)
+        fail('SA6-EDITFLAG', '계정 편집 표시 재시작 보존', e.message)
       }
     } else {
       skip('SA6-SA1', '재시작 보존(SA1)', '--only 로 제외됨')
       skip('SA6-SA2', '재시작 보존(SA2)', '--only 로 제외됨')
+      skip('SA6-EDITFLAG', '계정 편집 표시 재시작 보존', '--only 로 제외됨')
     }
   } finally {
     try { shell?.close() } catch { /* ignore */ }
