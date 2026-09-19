@@ -1,0 +1,121 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T092257Z-384114",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T09:59:56Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "확인(review) 단계에서 계정을 UI 입력+저장 클릭으로 고칠 수 있다",
+      "check": "verify-social-account-cdp SA1·SA2 (실제 DOM 클릭→IPC): 빈 계정→new_account_sa1, wrong_account→right_account",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "계정만 바뀌고 만든 이미지·캡션은 그대로 남는다",
+      "check": "SA1-PRESERVE 변경 전후 대조: artifactId art-sa1→art-sa1, sha256 동일, 캡션 문자열 동일",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "게시 여부가 확인되지 않은 동안에는 계정을 못 바꾼다",
+      "check": "SA3-UI(화면)·SA3-REJECT(신뢰 IPC 직접 호출) 둘 다 거부, 화면에 사유 표시, 계정 locked_account 불변",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "옛 영수증(지난 게시 근거)이 새 계정의 근거로 재사용되지 않는다",
+      "check": "SA4-RECEIPT: 편집 후 receipt=undefined",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "옛 자동게시 선승인이 조용히 넓어지지 않는다",
+      "check": "SA5-SCOPE·SA5-GRANT-UNCHANGED: autoPublish=not-covered, grant.accounts 여전히 [\"account_a\"]",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "계정을 손으로 고친 작업은 선승인 범위 안이어도 자동 게시되지 않는다",
+      "check": "verify-auto-publish 2종 + 음성 대조(가드 제거 시 정확히 2건 FAIL {\"ok\":true} 확인 후 복구)",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "positive",
+      "behavior": "계정 변경과 편집 표시가 재시작 후에도 유지된다",
+      "check": "SA6-SA1·SA6-SA2·SA6-EDITFLAG(정상 종료 후 재기동): 계정 유지 2건 + accountEditedAt 실제 타임스탬프 유지. 음성 대조로 복원 제거 시 undefined 확인",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "positive",
+      "behavior": "시간대가 명시된 게시 시각은 어느 기계에서나 같은 절대 시각으로 읽힌다",
+      "check": "verify-post-time T2(시간대 4곳 교차): +09:00/+0900/Z/z/공백구분/-07:00 전부 동일 epoch",
+      "result": "pass"
+    },
+    {
+      "id": "c9",
+      "kind": "negative",
+      "behavior": "시간대가 없거나 로캘 의존인 시각 표기는 확정하지 않고 모름으로 남긴다",
+      "check": "verify-post-time T3·T8: 오프셋없음·날짜만·09/19/2026·잘못된달력·범위밖오프셋 13종 전부 0, 판정은 uncertain+사유",
+      "result": "pass"
+    },
+    {
+      "id": "c10",
+      "kind": "negative",
+      "behavior": "오래된 글·미래 글 판정이 기계 시간대에 좌우되지 않는다",
+      "check": "verify-post-time T4·T6·T7: 4곳에서 old=확정거부·future=모름 동일. 옛 방식은 같은 값이 4곳에서 최대 21시간 차이(T1)",
+      "result": "pass"
+    },
+    {
+      "id": "c11",
+      "kind": "negative",
+      "behavior": "글 본문의 낱말이 영수증 완료 표시를 뒤집지 못한다",
+      "check": "SA7·SA8-UNVERIFIED-EXPLICIT(실제 렌더 DOM): evidence에 \"미확인\" 있어도 verified→✅ / 없어도 unverified→⚠",
+      "result": "pass"
+    },
+    {
+      "id": "c12",
+      "kind": "positive",
+      "behavior": "status 없는 옛 영수증은 예전 문장 판단으로 물러서 하위호환을 지킨다",
+      "check": "SA8-LEGACY-COMPAT: data-status=legacy-unverified, ⚠ 유지",
+      "result": "pass"
+    },
+    {
+      "id": "c13",
+      "kind": "positive",
+      "behavior": "이번 변경이 기존 동작을 깨지 않았다",
+      "check": "npm run verify 16/16 54s · smoke 16/16 · recovery 14/14 · sns-publish 7/7 · publish-evidence 8/8",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": true,
+    "remaining_required": [],
+    "blockers": [],
+    "optional_next": [
+      "코드 서명(.pfx) 적용 후 재빌드 — 인증서는 사용자만 제공 가능(상시 제약, 이월)",
+      "rc.13 설치파일의 설치→부팅→제거 검증 — 사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED, 우회하지 않았다(다른 PC/VM 필요, 이월)",
+      "실제 인스타그램·블로그·Genspark/ChatGPT 실화면 검증 — 실계정·크레딧 필요(이번 검증은 전부 로컬 픽스처, 이월)",
+      "초안까지만 → 게시까지 모드 변경 — 계정과 같은 부류의 불편이나 되돌릴 수 없는 게시 권한을 여는 일이라 사용자 결정 사항으로 남김"
+    ],
+    "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+  },
+  "verification": {
+    "command": "npm run verify",
+    "passed": 16,
+    "failed": null,
+    "reran_only_failed": false
+  },
+  "notes": "설치파일 dist/ezBrowser-0.2.0-rc.13-win-x64.exe · 121,924,032 B · sha256 56520209b107068058bd41f1fac2821bfba8564b059aef466d7fe83846eeed98 · 2026-09-19 18:52 · --publish never(GitHub 최신 릴리스 여전히 0.1.0). 상세 .auto-dev/evening-2000-20260919-final.md"
+}
