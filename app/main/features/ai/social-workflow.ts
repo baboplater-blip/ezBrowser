@@ -1618,6 +1618,10 @@ async function preparePublishTab(
   // 그대로 믿고 loadURL 하면 무관한 복원 탭을 게시 사이트로 끌고 가고, 그 탭이 다른 워크스페이스면
   // **로그인한 계정이 조용히 바뀐 채로 게시**된다. 그래서 복원 안정 키로 먼저 그 탭을 확정하고,
   // 키가 없는 옛 기록만 raw id 를 쓰되 **워크스페이스가 같은지** 확인한다(다르면 새 탭을 연다).
+  //
+  // 시크릿 경계는 여기서 따로 검사하지 않는다 — 시크릿 창의 탭은 워크스페이스 id 자체가
+  // `incognito-ws-<windowId>` 로 발급돼(tab-service) 일반 워크스페이스 id 와 겹칠 수 없기 때문이다.
+  // ⚠ 그 발급 규칙이 바뀌면 이 자리가 조용히 뚫린다(2026-09-20 리뷰에서 지적된 암묵적 의존).
   let tabId = ''
   if (cp?.tabKey) {
     const found = findTabByRestoreKey(cp.tabKey)

@@ -509,7 +509,15 @@ function TaskCard({
         {/* login·captcha·user-fix·confirm·ledger 는 사람이 브라우저에서 직접 처리해야 풀린다 —
             버튼을 없애지 않되(명시적으로는 계속 이어갈 수 있어야 한다) 문구로 그 사실을 알린다. */}
         {t.state === 'interrupted' && (
-          t.waitCause && NEEDS_MANUAL_ACTION.has(t.waitCause) ? (
+          /* 'tab-target' 은 위 선택 패널이 정상 출구다. 그래도 버튼을 없애지는 않는다 —
+             원래 탭이 다시 준비된 경우(느려서 못 깨웠던 탭 등)에는 그대로 이어갈 수 있어서다.
+             다만 "처리했습니다" 라는 문구는 오해를 부르므로 조건을 문구에 그대로 적는다. */
+          t.waitCause === 'tab-target' ? (
+            <button className="ai-mini-btn" onClick={onResume}
+              title="원래 탭이 다시 열려 있을 때만 이어집니다 — 아니면 위에서 대상 탭을 고르세요">
+              ▶ 그대로 이어가기
+            </button>
+          ) : t.waitCause && NEEDS_MANUAL_ACTION.has(t.waitCause) ? (
             <button className="ai-mini-btn active" onClick={onResume} title="직접 처리를 마친 뒤 누르세요">▶ 처리했습니다 — 이어가기</button>
           ) : (
             <button className="ai-mini-btn active" onClick={onResume} title="이어가기">▶ 이어가기</button>

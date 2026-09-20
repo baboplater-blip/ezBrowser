@@ -403,6 +403,17 @@ function steps(outRoot) {
       timeoutMs: 12 * 60000, desc: '강제 kill 후 탭·그룹·분할·스크롤 복원',
     },
     {
+      // 다중 창 크래시 복원 + 내구 작업의 정확한 탭 재바인딩(run-20260920T042617Z-732aef).
+      // 창·탭 id 가 재시작마다 새로 발급되는데도 내구 작업이 restoreKey 로 "바로 그 탭" 만
+      // 조작하는가(호스트 스캔으로 다른 창의 같은 URL 탭을 잘못 집지 않는가) — 발행·결제 작업이면
+      // 사고로 이어지는 부류다. 창을 2개 띄우고 강제종료를 반복하므로 앱을 4번(본 시나리오 2회 +
+      // 음성 대조 2회) 띄운다.
+      id: 'window-tabs', kind: 'harness', modes: ['full'],
+      script: 'verify-window-tabs-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'window-tabs', 'results.json'),
+      timeoutMs: 20 * 60000, desc: '다중 창 크래시 복원 + 내구 작업 탭 재바인딩 W1~W10',
+    },
+    {
       id: 'dl-matrix', kind: 'harness', modes: ['full'],
       script: 'dl-matrix.mjs', outArg: true, result: (o) => path.join(o, 'dl-matrix', 'dl-matrix-results.json'),
       timeoutMs: 20 * 60000, desc: '게이트 5 다운로드 11시나리오',

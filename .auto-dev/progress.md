@@ -328,3 +328,26 @@ sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · `--
 - [2026-09-19T14:37:07Z] run-20260919T133659Z-c6f72a 종료 status=success (이번 실행(run-20260919T133659Z-c6f72a)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
 - [2026-09-20T03:37:57Z] run-20260920T033757Z-3c993e 시작 (model=opus, task=Continue user-authorized development. Fix confirmed observed missing second tab after crash from interruption-recovery r)
 - [2026-09-20T04:15:16Z] [intervention] 재현 하네스 작업자가 도는 중에 내가 app/dist 와 dist/win-unpacked 를 재빌드해, 작업자가 '고치기 전' 을 재현할 수 없게 만들었다. 작업자가 그 사실을 정직하게 보고했고 첫 실행 결과가 남아 있어 데이터는 잃지 않았다. 재현 실행이 끝날 때까지 산출물을 건드리지 말았어야 했다.
+- [2026-09-20T04:18:55Z] run-20260920T033757Z-3c993e 종료 status=success (이번 실행(run-20260920T033757Z-3c993e)의 구조화 완료 기록: pass (합격 기준 14건 전건 통과, 부정 사례 7건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-20T04:26:17Z] run-20260920T042617Z-732aef 시작 (model=opus, task=Continue authorized ezBrowser development after rc16. Bounded integration: multi-window crash restoration and durable au)
+- [2026-09-20T04:47:39Z] run-20260920T042617Z-732aef 종료 status=unclear (verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로))
+- [2026-09-20T04:48:03Z] run-20260920T044803Z-f0f99e 시작 (model=opus, task=Previous run ended unclear with pending_background while IPC/UI and harness workers unfinished. Resume SAME authorized s)## run-20260920T044803Z-f0f99e — 다중 창 복원 + 내구 작업 탭 재바인딩 마감 (2026-09-20)
+
+앞 실행(run-20260920T042617Z-732aef)이 **배선까지만 하고 작업자 미완**으로 끝났다. 같은 범위를
+이어받아 끝냈다 — 새 작업자에게 같은 일을 다시 시키지 않고, 남은 조각(대상 선택 UI·검증 하네스)만
+채웠다.
+
+- **팀장 직접**: 외피 대상 선택 패널(`TaskTargetPicker`, 카드 안 인라인 — 떠 있는 팝오버 금지),
+  `preparePublishTab` 의 같은 결함 수정(+순수 Node 재현 4종 신설), `setTaskTarget` 이 아무 대기에나
+  먹히던 구멍 차단, `resolveTaskTab` async 화로 생긴 **취소·일시정지 경합** 차단(코드 리뷰가 잡음).
+- **작업자 1(하네스)**: `verify-window-tabs-cdp.mjs` + 픽스처 서버 신규, `verify:full` 등록.
+  같은 URL 탭을 구분하려고 서버가 로드마다 `loadId` 를 발급하고 하네스가 실제 값을 읽어 대조한다.
+- **작업자 2(코드 리뷰)**: High 1(취소 경합) · Medium 1(버튼 문구) · Low 1(암묵적 시크릿 경계 의존)
+  → High·Medium 은 고쳤고 Low 는 주석으로 남겼다.
+- **검증**: `npm run verify` **19/19**(스모크 16/16) · `window-tabs` **10/10**(음성 대조 포함) ·
+  `verify-auto-publish` **58/58** · typecheck 3/3. rc.17 NSIS 생성.
+- **미이행 선언**: T9(`verify-task-runtime-cdp.mjs`) 강화는 하지 않았다 — 그 조건의 내용은 W4·W5 가
+  실제 재시작으로 더 엄격히 검증하지만, 파일 단위 약속은 지키지 못했다.
+
+
+- [2026-09-20T06:07:30Z] [intervention] 직전 실행이 배선만 하고 작업자 미완으로 끝나 같은 범위를 이어받았다. 같은 일을 재배정하지 않고 남은 조각(외피 대상선택 UI·게시탭 수정·검증 하네스)만 채웠다. 작업자가 돌리는 동안 dist 를 재빌드하지 않도록 빌드 시점을 알려 조율했고(직전 라운드의 재빌드 사고 반복 방지), 작업자가 제품 결함으로 본 W1 FAIL 은 하네스 기대값 문제임을 진단해 전달했다. 코드 리뷰가 잡은 취소 경합은 내가 직접 고쳤다.

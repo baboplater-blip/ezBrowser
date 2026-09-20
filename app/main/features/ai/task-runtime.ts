@@ -802,13 +802,16 @@ type TabBinding =
  *  "영원히 걸리지 않게" 두는 안전망일 뿐이라 15초로 넉넉히 잡았다(느린 사이트도 대개 그 안에 뜬다). */
 const WAKE_TIMEOUT_MS = 15_000
 
-async function wakeTabIfSleeping(tabId: string): Promise<boolean> {
+async function wakeTabIfSleeping(tabId: string, abort?: () => boolean): Promise<boolean> {
   const t = getTab(tabId)
   if (!t) return false
   if (!t.discarded) return true
   if (!undiscardTab(tabId)) return false
   const deadline = Date.now() + WAKE_TIMEOUT_MS
   for (;;) {
+    // 사용자가 그 사이 중단·일시정지했으면 더 기다리지 않는다(15초를 헛되이 붙들지 않게).
+    // 부작용 차단 자체는 runLoop 의 관문이 하고, 여기서는 그 대기를 빨리 끊는 것이 목적이다.
+    if (abort?.()) return false
     const wc = getWebContentsByTabId(tabId)
     if (!wc || wc.isDestroyed()) return false
     if (!wc.isLoading() && /^https?:/i.test(wc.getURL())) return true
@@ -911,7 +914,7 @@ async function resolveTaskTab(task: PersistentTask): Promise<TabBinding> {
     // 복원된 탭은 대개 슬립(about:blank) 상태다 — 그대로 usableTab() 을 들이대면 "쓸 수 없다" 로
     // 오판한다. 여기서 직접 깨우고 로드를 기다린다.
     if (getTab(tabId)?.discarded) {
-      const awake = await wakeTabIfSleeping(tabId)
+      const awake = await wakeTabIfSleeping(tabId, () => getTask(task.id)?.state !== 'running')
       if (!awake) {
         return {
           tabId: null, needsTarget: true,
@@ -1461,6 +1464,14 @@ async function runLoop(id: string): Promise<void> {
 
       // 3. 탭 재바인딩
       const bind = await resolveTaskTab(task)
+
+      // ⚠ 재바인딩은 **기다릴 수 있다**(잠든 복원 탭을 깨우느라 최대 15초). 그 사이 사용자가 누른
+      //    중단·일시정지가 여기서 유실되면, 멈추라고 해 놓고 12단계짜리 구간이 그대로 실행된다 —
+      //    이 시점엔 아직 reqId 가 없어 cancelAgentTask 로도 못 막는다. 그래서 **부작용 직전 관문**을
+      //    여기 하나 더 둔다(resolveTaskTab 이 동기였을 때는 이 창이 없었다).
+      const afterBind = getTask(id)
+      if (!afterBind || afterBind.state !== 'running') break
+
       if (bind.tabId === null) {
         // 대상을 다시 찾지 못한 것(needsTarget)과, 찾을 대상 자체가 없는 것(창이 없음 등)을
         // 같은 'user-fix' 로 뭉치지 않는다 — 전자는 외피가 대상 선택 패널을 띄워야 한다.
