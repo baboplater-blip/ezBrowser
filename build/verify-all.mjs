@@ -414,6 +414,16 @@ function steps(outRoot) {
       timeoutMs: 20 * 60000, desc: '다중 창 크래시 복원 + 내구 작업 탭 재바인딩 W1~W10',
     },
     {
+      // 위 window-tabs 는 같은 기능을 **메인 IPC**(ptaskTargets/ptaskSetTarget)로 검증한다. 그 경로가
+      // 통과해도 카드에 버튼이 안 뜨거나 후보가 안 그려지면 사용자는 아무것도 못 한다(이 저장소에서
+      // "IPC 는 되는데 화면이 안 바뀌는" 결함이 실제로 있었다). 그래서 이쪽은 **실제 DOM 클릭만**으로
+      // 대상 선택 → 이어가기를 구동하고, 무엇이 실행됐는지는 픽스처 서버 카운터로만 판정한다.
+      id: 'task-target-ui', kind: 'harness', modes: ['full'],
+      script: 'verify-task-target-ui-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'task-target-ui', 'task-target-ui-results.json'),
+      timeoutMs: 15 * 60000, desc: '대상 탭 재선택 UI(실제 DOM 클릭) TG1~TG7',
+    },
+    {
       id: 'dl-matrix', kind: 'harness', modes: ['full'],
       script: 'dl-matrix.mjs', outArg: true, result: (o) => path.join(o, 'dl-matrix', 'dl-matrix-results.json'),
       timeoutMs: 20 * 60000, desc: '게이트 5 다운로드 11시나리오',
