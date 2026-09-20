@@ -1,0 +1,86 @@
+[
+  {
+    "kind": "positive",
+    "behavior": "탭 두 개를 서로 다른 로컬 주소로 열고 1.5초 뒤 강제 종료한 뒤 다시 켜면 두 탭이 그대로 돌아온다",
+    "check": "verify-session-durability-cdp SD1 (격리 프로필·taskkill /PID /T /F). 고치기 전: preKillCurrent.exists=false(세션 파일 자체가 없음), restoredUrls=[browser://newtab]. 고친 뒤: preKillCurrent.tabUrls=[p?n=1,p?n=2], restoredUrls 동일",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "제목이 300ms 마다 바뀌는 페이지가 열려 있어도 탭 목록 저장이 무한정 미뤄지지 않는다",
+    "check": "verify-session-durability-cdp SD2. 측정 지연 845ms(한도 3000ms). 고치기 전에는 12초 동안 끝내 저장되지 않음(measuredLatencyMs=null)",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "복원한 직후 다시 강제 종료해도 탭이 남아 있다",
+    "check": "verify-session-durability-cdp SD3(강제 종료 2회). 고치기 전에는 두 번째 종료 후 browser://newtab 만 남았다",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "last-stable 쓰기가 실패하면 옛 복구 자료를 지우지 않는다",
+    "check": "verify-session-durability-cdp SD4 — last-stable.json.tmp 자리에 디렉터리를 놓아 쓰기 실패 주입. survivingSource=current.json(탭 2개) → 재기동 복원됨. 고치기 전에는 '(없음 — 유실)'",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "세션 파일의 항목 하나가 손상돼도 나머지 유효한 탭은 복원되고 원본은 증거로 남는다",
+    "check": "verify-session-durability-cdp SD5 — 가운데 항목만 {url:42}. finalUrls=[p?n=1,p?n=3], originalCurrentStillPresent=true. 고치기 전에는 유효한 두 탭까지 전부 사라졌다",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "사용자가 직접 닫은 탭은 크래시 복원으로 되살아나지 않는다",
+    "check": "verify-session-durability-cdp SD7(부정 대조). finalUrls 에 p?n=1 만, p?n=2 없음",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "세션 스냅샷에 비밀번호가 적히지 않는다",
+    "check": "verify-session-durability-cdp SD8 — current.json 바이트를 원문·base64·pageState 디코드까지 직접 검색. secretFoundOnDisk=false. 대조군인 일반 텍스트 칸은 plainTextFoundOnDisk=true 로 찾힌다(검사가 실제로 폼 상태를 본다는 증거)",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "시크릿 창 탭은 디스크에도 복원에도 없다",
+    "check": "verify-session-durability-cdp SD9 — incogTabOpened=true(실제로 열렸음까지 확인), incogUrlOnDisk=false, 복원 결과에 없음",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "정상 종료 뒤 재기동하면 탭이 복원되고 last-stable 이 기록되며 current.json 은 정리된다",
+    "check": "verify-session-durability-cdp SD6 + session-restore-cdp. 두 탭 복원, last-stable 존재, current 없음",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "탭 그룹·분할 화면·스크롤 위치·폼 입력·lazy 복원이 크래시 뒤에도 그대로다",
+    "check": "session-restore-cdp 18/18 — 탭 개수·URL·활성탭·그룹 id/색/멤버·분할 DOM+geometry·스크롤 4000·폼 값",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "복원 직후에도 디스크에 복구 가능한 자료가 남아 있다",
+    "check": "session-restore-cdp 신규 판정(복원 직후·종료 전 측정, 탭 URL 포함 여부까지). 8개 URL 전부 포함. 예전 판정은 정상 종료 뒤에 측정돼 무엇을 넣어도 통과하던 빈 검사였다",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "잡음성 변경이 구조 변경의 저장 기한을 뒤로 밀지 못하고, 그렇다고 매 이벤트마다 저장하지도 않는다",
+    "check": "verify-session-schema SS1~SS4·SS13~SS15(순수 로직·가상 시계). 제목 변동 80회에도 기한 1000ms 유지. 음성 대조: 옛 동작을 컴파일 산출물에 되돌리면 9000ms 로 밀리며 SS1·SS3 FAIL",
+    "result": "pass"
+  },
+  {
+    "kind": "negative",
+    "behavior": "복원이 여는 스킴이 넓어지지 않는다(javascript:·file:·data: 거부)",
+    "check": "verify-session-schema SS8. https 와 browser 만 통과. 음성 대조: 검증을 제거하면 SS5·SS8·SS9 가 FAIL",
+    "result": "pass"
+  },
+  {
+    "kind": "positive",
+    "behavior": "기존 기능 전반에 회귀가 없다",
+    "check": "npm run verify 완전 실행 19/19 · 1분 8초(status.md 자동 기록) + 패키징 산출물로 스모크 16/16",
+    "result": "pass"
+  }
+]
