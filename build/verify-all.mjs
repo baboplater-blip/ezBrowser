@@ -384,6 +384,20 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',
     },
     {
+      // 순수 로직(앱 없이 1초 미만) — 저장 기한 계산과 스냅샷 모양 검증.
+      // "강제 종료 뒤 탭이 사라진다" 의 두 원인이 모두 여기에 있어 마감 게이트에서도 매번 돈다.
+      id: 'session-schema', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-session-schema.mjs', outArg: true,
+      result: (o) => path.join(o, 'session-schema', 'results.json'),
+      timeoutMs: 2 * 60000, desc: '세션 저장 기한·스냅샷 모양 검증 SS1~SS12',
+    },
+    {
+      id: 'session-durability', kind: 'harness', modes: ['full'],
+      script: 'verify-session-durability-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'session-durability', 'results.json'),
+      timeoutMs: 15 * 60000, desc: '크래시·재크래시·저장 실패 시 세션 보존 SD1~SD9',
+    },
+    {
       id: 'session-restore', kind: 'harness', modes: ['full'],
       script: 'session-restore-cdp.mjs', outArg: true, result: (o) => path.join(o, 'session-restore', 'restore-results.json'),
       timeoutMs: 12 * 60000, desc: '강제 kill 후 탭·그룹·분할·스크롤 복원',

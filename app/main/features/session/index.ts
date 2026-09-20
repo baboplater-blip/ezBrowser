@@ -6,6 +6,8 @@ import {
   restoreWorkspaceLayout, registerRestoredGroups,
   type SessionWindowSnap,
 } from '../../tabs/tab-service'
+import { SaveDeadlines } from './save-deadlines'
+import { sanitizeSnapshotShape } from './snapshot-schema'
 import { createBrowserWindow, getAllWindows, windowEvents } from '../../windows/window-service'
 import { getActiveWorkspaceId, getWorkspace } from '../workspace'
 import { forEachInstalledSession } from '../../session-bootstrap'
@@ -35,28 +37,63 @@ function buildSnapshot(): SessionSnapshot {
   return { version: SCHEMA_VERSION, savedAt: Date.now(), windows: collectSession() }
 }
 
-function writeSnapshot(target: string, snap: SessionSnapshot): void {
+/**
+ * 스냅샷을 원자적으로 교체한다. **성공 여부를 돌려준다** — 호출측이 "새 복구 자료가 확실히 디스크에
+ * 놓였을 때만 옛 복구 자료를 지운다" 는 순서를 지킬 수 있어야 하기 때문이다.
+ * (예전에는 쓰기 실패를 경고만 하고 삼켰고, 그 뒤 `before-quit` 이 current.json 을 지워
+ *  실패한 쓰기와 함께 세션이 통째로 사라질 수 있었다.)
+ */
+function writeSnapshot(target: string, snap: SessionSnapshot): boolean {
+  const tmp = `${target}.tmp`
   try {
     mkdirSync(sessionsDir(), { recursive: true })
-    const tmp = `${target}.tmp`
     writeFileSync(tmp, JSON.stringify(snap))
     renameSync(tmp, target) // 원자적 교체 (sync)
+    return true
   } catch (err) {
     console.warn('[session] write failed', target, err)
+    // 반쯤 쓰인 tmp 가 남으면 다음 쓰기의 rename 을 방해할 수 있다 — 치운다(원본은 건드리지 않는다).
+    try { if (existsSync(tmp)) unlinkSync(tmp) } catch { /* best-effort */ }
+    return false
+  }
+}
+
+/**
+ * 읽을 수 없는 스냅샷을 **지우지 않고 옆으로 치운다**. 이름을 고정해(타임스탬프 없이) 부팅마다
+ * 손상본이 쌓이는 것을 막으면서도 원본 증거는 남긴다. 조용히 덮어쓰지 않는다 — 항상 로그를 남긴다.
+ */
+function preserveCorrupt(target: string, reason: string): void {
+  const kept = `${target}.corrupt`
+  try {
+    try { if (existsSync(kept)) unlinkSync(kept) } catch { /* best-effort */ }
+    renameSync(target, kept)
+    console.warn(`[session] 손상된 스냅샷을 보존했습니다: ${kept} (${reason})`)
+  } catch (err) {
+    console.warn('[session] 손상 스냅샷 보존 실패', target, err)
   }
 }
 
 function readSnapshot(target: string): SessionSnapshot | null {
+  if (!existsSync(target)) return null
+  let parsed: unknown
   try {
-    if (!existsSync(target)) return null
-    const raw = readFileSync(target, 'utf-8')
-    const parsed = JSON.parse(raw) as SessionSnapshot
-    if (!parsed || parsed.version !== SCHEMA_VERSION || !Array.isArray(parsed.windows)) return null
-    return parsed
+    parsed = JSON.parse(readFileSync(target, 'utf-8'))
   } catch (err) {
-    console.warn('[session] read failed', target, err)
+    // 깨진 JSON(정전 중 반쯤 쓰인 파일 등) — 증거를 남기고 다른 스냅샷으로 넘어간다.
+    preserveCorrupt(target, `JSON 파싱 실패: ${(err as Error).message}`)
     return null
   }
+  const shape = sanitizeSnapshotShape(parsed, SCHEMA_VERSION)
+  if (!shape.ok) {
+    if (shape.corrupt) preserveCorrupt(target, shape.reason)
+    else console.warn(`[session] 스냅샷을 쓸 수 없습니다(${shape.reason}) — 무시: ${target}`)
+    return null
+  }
+  const { savedAt, windows, droppedTabs, droppedWindows } = shape.snapshot
+  if (droppedTabs > 0 || droppedWindows > 0) {
+    console.warn(`[session] 손상된 항목을 건너뜁니다 (탭 ${droppedTabs}개 · 창 ${droppedWindows}개): ${target}`)
+  }
+  return { version: SCHEMA_VERSION, savedAt, windows }
 }
 
 function safeUnlink(target: string): void {
@@ -70,16 +107,50 @@ let forceTimer: NodeJS.Timeout | null = null
 let restoring = false
 let quitting = false
 
+// 기한 계산은 save-deadlines.ts 의 순수 로직에 맡긴다(단독 시험 가능).
+const deadlines = new SaveDeadlines()
+
+function armSaveTimer(): void {
+  const due = deadlines.nextDueAt()
+  if (due === null) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(runScheduledSave, Math.max(0, due - Date.now()))
+}
+
+function runScheduledSave(): void {
+  saveTimer = null
+  const now = Date.now()
+  // 구조 변경 때문에 뜨는 저장인가? (뒤따르는 "가라앉은 뒤의 저장" 을 붙일지 정한다)
+  const provisional = deadlines.isStructuralDue(now)
+  // 지금 도래한 기한만 소비한다 — 아직 오지 않은 "가라앉은 뒤의 저장" 은 그대로 둔다.
+  deadlines.consumeDue(now)
+  if (restoring || quitting) { deadlines.clear(); return }
+  writeSnapshot(currentPath(), buildSnapshot())
+  // 구조 변경으로 일찍 뜬 스냅샷은 탭 목록은 지키지만 스크롤·폼(pageState)이 아직 낡아 있을 수 있다
+  // (Chromium 이 그 값을 내비게이션 항목에 반영하는 데 몇 초가 걸린다).
+  // 그래서 **그 경우에만** 활동이 잦아든 뒤 한 번 더 뜬다 → 활동 묶음당 최대 두 번, 그 뒤엔 조용하다.
+  if (provisional) deadlines.ensureSoft(now, SAVE_DEBOUNCE_MS)
+  armSaveTimer()
+}
+
+function clearScheduledSave(): void {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  deadlines.clear()
+}
+
+/** 잡음성 변경(제목·파비콘·창 크기) — 마지막 것만 유효한 일반 디바운스. */
 function scheduleSave(delay: number = SAVE_DEBOUNCE_MS): void {
   if (restoring || quitting) return // 종료 절차 중 탭 종료가 'list' 를 발화해 빈 스냅샷을 다시 쓰지 않도록
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    saveTimer = null
-    writeSnapshot(currentPath(), buildSnapshot())
-  }, delay)
+  deadlines.markSoft(Date.now(), delay)
+  armSaveTimer()
 }
-// 구조 변경·내비게이션: 짧은 디바운스로 즉시 반영
-function scheduleSaveSoon(): void { scheduleSave(SAVE_SOON_MS) }
+
+/** 구조 변경·내비게이션 — 한 번 잡힌 기한은 어떤 후속 이벤트로도 미뤄지지 않는다. */
+function scheduleSaveSoon(): void {
+  if (restoring || quitting) return
+  deadlines.markStructural(Date.now(), SAVE_SOON_MS)
+  armSaveTimer()
+}
 
 export function initSessionTracking(): void {
   tabEvents.on('list', scheduleSaveSoon)        // 탭 추가/삭제/이동/핀 — 손실 시 가장 치명적
@@ -104,18 +175,25 @@ export function initSessionTracking(): void {
 
   // 정상 종료: last-stable 동기 기록 + current 제거(다음 부팅 시 깨끗한 종료로 인식)
   app.on('before-quit', () => {
-    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+    clearScheduledSave()
     if (forceTimer) { clearInterval(forceTimer); forceTimer = null }
     quitting = true
     try {
       const snap = buildSnapshot()
+      // 정상 종료의 핵심은 순서다: **새 복구 자료를 확실히 쓴 뒤에만** 옛 복구 자료를 지운다.
+      // 디스크가 가득 찼거나 경로가 막혀 쓰기가 실패했는데 current.json 을 지워 버리면
+      // 그 순간 복구 가능한 세션이 하나도 남지 않는다.
+      let durable = false
       if (snap.windows.length > 0) {
-        writeSnapshot(lastStablePath(), snap)
+        durable = writeSnapshot(lastStablePath(), snap)
       } else {
+        // 창이 이미 다 닫힌 뒤라면 마지막으로 저장된 current 를 정본으로 승격한다.
         const cur = readSnapshot(currentPath())
-        if (cur && cur.windows.length > 0) writeSnapshot(lastStablePath(), cur)
+        if (cur && cur.windows.length > 0) durable = writeSnapshot(lastStablePath(), cur)
+        else durable = true // 보존할 세션 자체가 없다 — 지워도 잃을 것이 없다
       }
-      safeUnlink(currentPath())
+      if (durable) safeUnlink(currentPath())
+      else console.warn('[session] last-stable 기록 실패 — current.json 을 남겨 복구 가능하게 둡니다')
       // 쿠키·로컬스토리지 디스크 flush — SIGKILL 외 정상 종료 시 최근 세션 데이터 유실 방지
       forEachInstalledSession((ses) => {
         try { ses.flushStorageData() } catch { /* best-effort */ }
@@ -129,17 +207,32 @@ export function initSessionTracking(): void {
 
 // ===== 복원 =====
 
+/**
+ * 복원을 마친 직후 **디스크에 복구 가능한 자료가 남아 있는지** 보장한다.
+ * 복원한 탭들은 아직 URL 을 커밋하지 않아 첫 라이브 저장이 1초쯤 뒤에야 일어난다.
+ * 그 사이에 다시 크래시가 나도 같은 세션을 한 번 더 복원할 수 있어야 한다.
+ */
+function keepCurrentAsRecovery(snap: SessionSnapshot, why: string): void {
+  if (existsSync(currentPath()) || existsSync(lastStablePath())) return // 이미 복구 자료가 있다
+  if (snap.windows.length === 0) return
+  if (writeSnapshot(currentPath(), snap)) console.warn(`[session] 복구 자료 재기록 (${why})`)
+}
+
 async function restoreSnapshot(snap: SessionSnapshot): Promise<boolean> {
   if (snap.windows.length === 0) return false
   restoring = true
+  let restoredTabs = 0
   try {
     const activeWsId = getActiveWorkspaceId()
     for (const w of snap.windows) {
       const ctx = createBrowserWindow()
       try { if (w.bounds) ctx.win.setBounds(w.bounds) } catch { /* invalid bounds */ }
 
-      // 탭 그룹 먼저 등록 — 탭 생성 시 groupId 매칭
-      if (Array.isArray(w.groups) && w.groups.length > 0) registerRestoredGroups(ctx.id, w.groups)
+      // 탭 그룹 먼저 등록 — 탭 생성 시 groupId 매칭. 그룹 메타가 이상해도 탭 복원은 계속한다.
+      if (Array.isArray(w.groups) && w.groups.length > 0) {
+        try { registerRestoredGroups(ctx.id, w.groups) }
+        catch (err) { console.warn('[session] 탭 그룹 복원 실패 — 탭만 복원합니다', err) }
+      }
 
       // 즉시 로드 대상: 활성 탭 + 핀 + 마지막 EAGER_TAIL 개
       const eager = new Set<number>()
@@ -152,35 +245,53 @@ async function restoreSnapshot(snap: SessionSnapshot): Promise<boolean> {
       // 분할 레이아웃 복원용: (원본 워크스페이스 id, 저장 index) → 새 tabId
       const idMap = new Map<string, string>()
       w.tabs.forEach((t, i) => {
-        // 존재하지 않는 워크스페이스면 활성 워크스페이스로 폴백
-        const wsId = getWorkspace(t.workspaceId) ? t.workspaceId : activeWsId
-        const isEager = eager.has(i)
-        const created = createTab({
-          windowId: ctx.id,
-          url: t.url,
-          workspaceId: wsId,
-          background: true,
-          restoreDiscarded: !isEager,
-          restoreTitle: t.title,
-          restoreHistory: t.history,
-          restoreHistoryIndex: t.historyIndex,
-          groupId: t.groupId,
-        })
-        if (firstCreatedId === null) firstCreatedId = created.id
-        idMap.set(`${t.workspaceId}::${t.index}`, created.id)
-        if (t.pinned) pinTab(created.id, true)
-        if (t.active) activeTabId = created.id
+        // 탭 하나가 복원에 실패해도 그 뒤의 멀쩡한 탭들까지 잃지 않는다.
+        try {
+          // 존재하지 않는 워크스페이스면 활성 워크스페이스로 폴백
+          const wsId = getWorkspace(t.workspaceId) ? t.workspaceId : activeWsId
+          const isEager = eager.has(i)
+          const created = createTab({
+            windowId: ctx.id,
+            url: t.url,
+            workspaceId: wsId,
+            background: true,
+            restoreDiscarded: !isEager,
+            restoreTitle: t.title,
+            restoreHistory: t.history,
+            restoreHistoryIndex: t.historyIndex,
+            groupId: t.groupId,
+          })
+          restoredTabs += 1
+          if (firstCreatedId === null) firstCreatedId = created.id
+          idMap.set(`${t.workspaceId}::${t.index}`, created.id)
+          if (t.pinned) pinTab(created.id, true)
+          if (t.active) activeTabId = created.id
+        } catch (err) {
+          console.warn(`[session] 탭 복원 실패 — 건너뜁니다 (${t.url})`, err)
+        }
       })
+      if (firstCreatedId === null) {
+        // 그 창의 탭을 하나도 되살리지 못했다 — 빈 껍데기를 보여 주지 않도록 새 탭 하나를 연다.
+        // (창 자체는 이미 만들어졌으므로 호출측이 또 하나 만들게 두면 빈 창이 둘이 된다.)
+        try { createTab({ windowId: ctx.id }) }
+        catch (err) { console.warn('[session] 빈 복원 창에 새 탭 생성 실패', err) }
+      }
       if (activeTabId) activateTab(activeTabId)
       else if (firstCreatedId) activateTab(firstCreatedId)
 
       // 분할 화면 레이아웃 복원 (활성 워크스페이스면 즉시 반영)
       if (Array.isArray(w.layouts)) {
         for (const ls of w.layouts) {
-          restoreWorkspaceLayout(ctx.id, ls, (wsId, tabIndex) => idMap.get(`${wsId}::${tabIndex}`) ?? null)
+          try {
+            restoreWorkspaceLayout(ctx.id, ls, (wsId, tabIndex) => idMap.get(`${wsId}::${tabIndex}`) ?? null)
+          } catch (err) {
+            console.warn('[session] 분할 레이아웃 복원 실패 — 단일 pane 으로 둡니다', err)
+          }
         }
       }
     }
+    if (restoredTabs === 0) console.warn('[session] 스냅샷에서 되살린 탭이 없습니다 — 빈 창으로 시작합니다')
+    // 창을 만들었으면 true — 호출측이 기본 창을 또 만들지 않게 하는 신호다.
     return true
   } finally {
     restoring = false
@@ -205,12 +316,16 @@ export async function maybeRestoreSession(): Promise<boolean> {
     const snap = (current && lastStable)
       ? ((current.savedAt ?? 0) >= (lastStable.savedAt ?? 0) ? current : lastStable)
       : (current ?? lastStable)
-    // 복원이 끝난 뒤에 current 제거 — 복원 도중 재크래시 시 다음 부팅에서 다시 감지되도록
     if (snap && snap.windows.length > 0) {
       const ok = await restoreSnapshot(snap)
-      safeUnlink(currentPath())
+      // 복원했다고 해서 current.json 을 지우지 않는다.
+      // 지우면 "복원 직후 다시 크래시" 구간(첫 라이브 저장 전)에 디스크에 복구 자료가 **하나도** 없다.
+      // 남겨 두면 최악의 경우에도 같은 스냅샷으로 한 번 더 복원할 수 있고,
+      // 곧 도착하는 라이브 저장이 같은 파일을 최신 상태로 덮어쓰며, 정상 종료가 지운다.
+      keepCurrentAsRecovery(snap, '복원 직후 재크래시 대비')
       return ok
     }
+    // 복원할 내용이 없다 — 남은 빈/무효 마커만 정리한다.
     safeUnlink(currentPath())
     return false
   }
@@ -235,12 +350,14 @@ export async function maybeRestoreSession(): Promise<boolean> {
       message: '브라우저가 비정상 종료된 것 같습니다.',
       detail: `직전 세션의 탭 ${tabCount}개를 복원하시겠습니까?`,
     })
-    // 복원을 마친 뒤에 current 제거 — 복원 도중 재크래시해도 다음 부팅에서 다시 복원 가능하도록.
     if (result.response === 0) {
       const ok = await restoreSnapshot(current)
-      safeUnlink(currentPath())
+      // last-session 모드와 같은 이유로 current 를 남긴다 — 복원 직후 재크래시에도 한 번 더 복원 가능.
+      // 라이브 저장이 곧 덮어쓰고, 정상 종료가 지운다.
+      keepCurrentAsRecovery(current, '복원 직후 재크래시 대비')
       return ok
     }
+    // 사용자가 "새 탭으로 시작" 을 골랐다 — 명시적 결정이므로 마커를 지운다(다시 묻지 않는다).
     safeUnlink(currentPath())
     return false
   }

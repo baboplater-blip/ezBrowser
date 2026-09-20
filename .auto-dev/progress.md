@@ -325,3 +325,6 @@ sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · `--
 - [2026-09-19T12:18:40Z] run-20260919T121840Z-b597cd 시작 (model=opus, task=User says continue development after rc.13. Bounded usable feature: turn existing draft-only image workflow into explici)
 - [2026-09-19T13:32:04Z] run-20260919T121840Z-b597cd 종료 status=success (이번 실행(run-20260919T121840Z-b597cd)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 9건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
 - [2026-09-19T13:36:59Z] run-20260919T133659Z-c6f72a 시작 (model=opus, task=User requests continued development. Bounded next round: durable automation interrupted by network/provider errors and l)
+- [2026-09-19T14:37:07Z] run-20260919T133659Z-c6f72a 종료 status=success (이번 실행(run-20260919T133659Z-c6f72a)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예)
+- [2026-09-20T03:37:57Z] run-20260920T033757Z-3c993e 시작 (model=opus, task=Continue user-authorized development. Fix confirmed observed missing second tab after crash from interruption-recovery r)
+- [2026-09-20T04:15:16Z] [intervention] 재현 하네스 작업자가 도는 중에 내가 app/dist 와 dist/win-unpacked 를 재빌드해, 작업자가 '고치기 전' 을 재현할 수 없게 만들었다. 작업자가 그 사실을 정직하게 보고했고 첫 실행 결과가 남아 있어 데이터는 잃지 않았다. 재현 실행이 끝날 때까지 산출물을 건드리지 말았어야 했다.

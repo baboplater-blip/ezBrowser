@@ -263,13 +263,26 @@
         "total_tokens": 2382915,
         "cache_read_tokens": 182314198
       }
+    },
+    {
+      "run_id": "run-20260919T133659Z-c6f72a",
+      "status": "success",
+      "at": "2026-09-19T14:37:07Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 3607.8,
+        "context_chars": 11951,
+        "total_tokens": 2098999,
+        "cache_read_tokens": 146914777
+      }
     }
   ],
   "progress_markers": [],
   "cumulative": {
-    "elapsed_seconds": 44765.6,
-    "total_tokens": 27864359,
-    "cache_read_tokens": 1662611112
+    "elapsed_seconds": 48373.4,
+    "total_tokens": 29963358,
+    "cache_read_tokens": 1809525889
   },
   "budget": {
     "max_total_tokens": null,

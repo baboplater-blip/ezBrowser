@@ -429,6 +429,7 @@ async function phase1(args, probe) {
     console.log(`[phase1] input value set → ${expectedInputValue}`)
 
     // 스크롤/폼 변경이 Chromium 내부 히스토리 상태에 반영될 시간
+    const interactionAt = Date.now()
     await sleep(2000)
 
     // 트리거 탭(T7) — tabEvents 'list' 를 발생시켜 scheduleSaveSoon(1s 디바운스) 유발.
@@ -439,16 +440,28 @@ async function phase1(args, probe) {
 
     // sessions/current.json 이 T7 생성 이후(즉 scroll/form 설정 이후)의 상태로 flush 됐는지
     // 파일을 직접 폴링해 확인 — 디바운스 타이밍을 추측하지 않고 결정적으로 기다린다.
+    //
+    // ⚠ 2026-09-20: 조건에 **savedAt 하한**을 넣었다. 예전에는 "탭 목록에 T7 과 scroll 이 있는가" 만
+    //   봤는데, 그건 제품이 **언제** 그 스냅샷을 떴는지를 전혀 제약하지 못한다.
+    //   스크롤 위치·폼 값은 메인 프로세스에 이벤트를 내지 않고, Chromium 이 그 값을
+    //   내비게이션 항목(pageState)에 반영하는 데도 몇 초가 걸린다. 그래서 탭 목록만 맞는
+    //   **이른 스냅샷**은 pageState 가 아직 낡아 있다(실측: 상호작용 +3초 스냅샷은 scrollY=0,
+    //   +7초 스냅샷은 scrollY=4000 — 같은 빌드에서).
+    //   예전에는 저장이 활동 5초 뒤 **한 번만** 일어나 이 조건이 우연히 충족됐을 뿐이고,
+    //   저장이 더 자주 일어나게 되자 그 우연이 깨졌다. 이제 의도를 조건에 직접 적는다:
+    //   **상호작용이 가라앉은 뒤에 떠진 스냅샷**을 기다린다.
+    const SETTLE_MS = 7000 // 제품의 정착 저장(활동 후 5초) + 여유
     const curPath = currentSessionPath(args.profileDir)
     const flushed = await pollUntil(() => {
       const snap = readJsonSafe(curPath)
       if (!snap || !Array.isArray(snap.windows)) return null
+      if (!(typeof snap.savedAt === 'number' && snap.savedAt >= interactionAt + SETTLE_MS)) return null
       const win = snap.windows.find((w) => w.windowId === windowId)
       if (!win) return null
       const hasT7 = win.tabs.some((t) => t.url === probe.plainUrl(7))
       const hasScroll = win.tabs.some((t) => t.url === probe.scrollUrl)
       return (hasT7 && hasScroll) ? snap : null
-    }, { timeoutMs: 25_000, intervalMs: 500, label: 'sessions/current.json 에 T7+scroll 탭 flush' })
+    }, { timeoutMs: 40_000, intervalMs: 500, label: 'sessions/current.json 에 정착 후 스냅샷(T7+scroll) flush' })
     const flushedWin = flushed.windows.find((w) => w.windowId === windowId)
     const flushedScrollTab = flushedWin.tabs.find((t) => t.url === probe.scrollUrl)
     const pageStateLen = flushedScrollTab?.history?.find((h) => h.url === probe.scrollUrl)?.pageState?.length ?? 0
@@ -537,6 +550,7 @@ async function phase2(args, probe, setup) {
   }
   const { child } = launchApp(args.exe, args.out, args.port, args.profileDir, 'phase2')
   const openSessions = []
+  let recoveryAfterRestore = null
 
   try {
     const chromeSession = await connectShellSessionReady(args.port, {
@@ -564,6 +578,13 @@ async function phase2(args, probe, setup) {
       tabsActual = await callApi(chromeSession, 'tabs.list', [windowId]).catch(() => [])
       record('탭 개수', 'FAIL', expected.tabCount, tabsActual.length, err.message)
     }
+
+    // 복원이 끝난 **바로 그 순간** 디스크에 복구 자료가 남아 있는지 본다.
+    // 2026-09-20 이전에는 maybeRestoreSession 이 복원 직후 current.json 을 지웠고,
+    // 그래서 "복원 직후 다시 크래시" 구간에는 디스크에 복구 자료가 하나도 없었다(세션 통째 손실).
+    // ⚠ 이 측정은 반드시 정상 종료 **전에** 해야 한다 — 종료 후에 보면 before-quit 이 지운 뒤라
+    //   무엇을 확인하든 항상 "없음" 이 나온다(예전 판정이 실제로 그랬다).
+    recoveryAfterRestore = readJsonSafe(currentSessionPath(args.profileDir))
 
     if (tabsActual.length > 0) {
       console.log('[phase2] DIAG tabsActual:', JSON.stringify(tabsActual.map((t) => ({
@@ -654,7 +675,7 @@ async function phase2(args, probe, setup) {
     const shellHtmlLen = await evaluate(chromeSession, `document.body ? document.body.innerHTML.length : 0`).catch(() => 0)
     record('외피 흰 화면 아님', shellHtmlLen > 200 ? 'PASS' : 'FAIL', '> 200 chars', shellHtmlLen)
 
-    return { windowId, tabsActual, groupsActual }
+    return { windowId, tabsActual, groupsActual, recoveryAfterRestore }
   } finally {
     for (const s of openSessions) s.close()
     await gracefulThenForceKill(child, args.port, args.out)
@@ -700,12 +721,30 @@ async function main() {
       false, setup.lastStableExistsAfterKill, 'true 면 graceful(before-quit) 경로가 어딘가에서 실행됐다는 뜻 — 강제 kill 이 진짜 크래시가 아니었을 가능성')
     record('current.json 존재(kill 직후, 다음 부팅의 복원 소스)', setup.currentExistsAfterKill ? 'PASS' : 'FAIL', true, setup.currentExistsAfterKill)
 
-    await phase2(args, probe, setup)
+    const p2 = await phase2(args, probe, setup)
 
-    // 복원 후 current.json 이 정리(safeUnlink)됐는지 — maybeRestoreSession 이 정상적으로
-    // "current 소비 후 삭제" 경로를 탔다는 증거.
-    const currentAfterRestore = fs.existsSync(currentSessionPath(args.profileDir))
-    record('복원 후 current.json 정리됨', !currentAfterRestore ? 'PASS' : 'FAIL', false, currentAfterRestore)
+    // 복원 직후(정상 종료 전)에 디스크에 복구 자료가 남아 있어야 한다 — 그 자리에서 다시 크래시해도
+    // 같은 세션을 한 번 더 복원할 수 있어야 하기 때문이다.
+    // "파일이 있다" 만 보면 빈 파일로도 통과하므로 **복원한 탭 URL 을 실제로 담고 있는지**까지 본다.
+    const rec = p2?.recoveryAfterRestore ?? null
+    const recUrls = rec && Array.isArray(rec.windows)
+      ? rec.windows.flatMap((w) => (w.tabs ?? []).map((t) => t.url))
+      : []
+    const missing = (setup.expected?.urls ?? []).filter((u) => !recUrls.includes(u))
+    record('복원 직후 복구 자료가 디스크에 남아 있다(재크래시 대비)',
+      rec && missing.length === 0 ? 'PASS' : 'FAIL',
+      `${(setup.expected?.urls ?? []).length}개 URL 전부`,
+      rec ? `${recUrls.length}개 (빠진 것: ${missing.length})` : 'current.json 없음',
+      missing.slice(0, 3).join(' | '))
+
+    // 정상 종료(before-quit)가 끝난 뒤에는 current.json 이 정리돼 있어야 한다 —
+    // 다음 부팅이 "지난 세션 복원" 을 다시 묻지 않는 근거.
+    const currentAfterQuit = fs.existsSync(currentSessionPath(args.profileDir))
+    const lastStableAfterQuit = fs.existsSync(lastStableSessionPath(args.profileDir))
+    record('정상 종료 후 current.json 정리 + last-stable 기록',
+      (!currentAfterQuit && lastStableAfterQuit) ? 'PASS' : 'FAIL',
+      'current 없음 + last-stable 있음',
+      `current=${currentAfterQuit} last-stable=${lastStableAfterQuit}`)
 
     // stdout 로그 스캔 (did-fail-load / preload-error)
     for (const tag of ['phase1', 'phase2']) {

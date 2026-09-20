@@ -43,6 +43,10 @@ interface TabRecord {
   // 슬립/세션복원 전 내비게이션 히스토리(뒤로·앞으로 + 스크롤·폼 상태) — 깨우거나 복원할 때 재생
   discardedHistory?: NavigationEntrySnap[]
   discardedIndex?: number
+  // 로드를 요청했지만 아직 커밋되지 않은 URL. webContents.getURL() 은 첫 커밋 전까지 빈 문자열이라,
+  // 그 사이에 세션 스냅샷을 뜨면 **갓 만든 탭이 통째로 빠진다**(크래시 시 그 탭이 사라진다).
+  // 커밋 후에는 getURL() 이 항상 우선하므로 이 값은 그 공백 구간에서만 쓰인다.
+  pendingUrl?: string
 }
 
 // ===== 내비게이션 히스토리 스냅샷 (뒤로/앞으로 + 스크롤 + 폼 상태) =====
@@ -422,6 +426,8 @@ export function createTab(opts: {
     partition,
     pinned: false, index,
     createdAt: Date.now(), lastActiveAt: Date.now(), discarded: false,
+    // 커밋 전 공백 구간에도 세션 스냅샷이 이 탭을 놓치지 않도록 요청한 URL 을 들고 있는다.
+    pendingUrl: initialUrl,
   }
   if (opts.groupId && groups.has(opts.groupId)) tab.groupId = opts.groupId
   tabs.set(id, tab)
@@ -1107,7 +1113,8 @@ export interface SessionTabSnap {
 
 export interface SessionWindowSnap {
   windowId: string
-  bounds: Electron.Rectangle
+  // 디스크에서 읽은 스냅샷은 손상돼 있을 수 있다 — 검증을 통과하지 못한 bounds 는 빠진 채로 들어온다.
+  bounds?: Electron.Rectangle
   activeTabId: string | null
   tabs: SessionTabSnap[]
   // 워크스페이스별 분할 화면 레이아웃 (없으면 단일 pane)
@@ -1123,7 +1130,8 @@ export function collectSession(): SessionWindowSnap[] {
     if (t.view.webContents.isDestroyed()) continue
     if (t.partition.startsWith('incognito')) continue
     const wc = t.view.webContents
-    const url = t.discarded ? (t.discardedUrl ?? '') : wc.getURL()
+    // 아직 커밋되지 않은 탭은 getURL() 이 비어 있다 — 요청한 URL 로 메워 새 탭이 스냅샷에서 빠지지 않게 한다.
+    const url = t.discarded ? (t.discardedUrl ?? '') : (wc.getURL() || t.pendingUrl || '')
     if (!url || /^about:blank$/i.test(url)) continue
     if (!/^https?:|^browser:/i.test(url)) continue
     let snap = byWindow.get(t.windowId)

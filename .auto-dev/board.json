@@ -3,8 +3,8 @@
   "project_id": null,
   "task_id": "social-workflows-20260918",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 171,
-  "updated_at": "2026-09-19T14:34:40Z",
+  "revision": 176,
+  "updated_at": "2026-09-20T04:15:16Z",
   "columns": [
     "대기",
     "진행",
@@ -1085,20 +1085,21 @@
     {
       "id": "run:run-20260919T133659Z-c6f72a",
       "title": "Claude 실행 — User requests continued development. Bounded next round: durable automation inte",
-      "column": "진행",
+      "column": "완료",
       "owner": "Claude 팀장(lead)",
       "model": "opus",
-      "step": "세션 실행 중",
-      "evidence": null,
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260919T133659Z-c6f72a)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
       "blocker": null,
       "detail": "User requests continued development. Bounded next round: durable automation interrupted by network/provider errors and login/human handoff. First reproduce concrete defects; no speculative refactors/features or tests that only mirror code. Current task-runtime scheduleRetry retries any classified network failure and initTaskRuntime changes waiting-user to interrupted with generic reason. Inspect checkpoint/side effect ledger and agent boundaries before conclusions. Highest priority: server commits publish/comment/like then response lost, model timeout after side effect, retry across segment/restart. Must not repeat non-idempotent action; maintain code-enforced uncertainty and readable recovery rather than model-only memory. Read-only transient failures must still recover (positive control), bounded backoff/cancel/pause respected; do not just disable retries wholesale. Retain original login/CAPTCHA/critical wait cause across restart with correct actionable UI, explicit human continuation, never automatic credentials/security approval. Work only confirmed issues in task-runtime agent/checkpoint existing engage/social workflow and related UI/types/IPC/tests, preserve prior changes. Reuse real-app isolated HTTPS fault server to count externally observed side effects, actual UI resume. Required scoped evidence: read failure then recovery; cancel during retry no resurrection; server committed but lost response extra writes zero; safe uncommitted retry positive; restart uncertain re",
       "tags": [
         "run",
-        "resume"
+        "success",
+        "3607.8s"
       ],
       "required": true,
       "run_id": "run-20260919T133659Z-c6f72a",
-      "updated_at": "2026-09-19T13:36:59Z"
+      "updated_at": "2026-09-19T14:37:07Z"
     },
     {
       "id": "ir-20260919-engage-durability",
@@ -1189,6 +1190,39 @@
       "required": true,
       "run_id": null,
       "updated_at": "2026-09-19T14:34:40Z"
+    },
+    {
+      "id": "run:run-20260920T033757Z-3c993e",
+      "title": "Claude 실행 — Continue user-authorized development. Fix confirmed observed missing second tab",
+      "column": "진행",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "세션 실행 중",
+      "evidence": null,
+      "blocker": null,
+      "detail": "Continue user-authorized development. Fix confirmed observed missing second tab after crash from interruption-recovery round. Actual source app/main/features/session/index.ts (NOT app/main/session). Apply .agents/skills/tab-restore-session/SKILL.md principles but current source wins on schemas/paths. Main inspected: scheduleSave clears sooner timer on every update -> structural save can be postponed; writeSnapshot swallows failure yet before-quit unlinks current; maybeRestoreSession deletes current after restore without durable replacement -> second crash can lose recovered newer tabs. Reproduce actual original bug using isolated app/tabs and local pages first, root cause may differ, report exact pre/post snapshot evidence. Bounded ownership session/index.ts tabs/tab-service.ts startup wiring only as needed, focused build/session-restore-cdp harness and docs/locales; preserve all existing edits and AGENTS. Implement minimal transactional save/restore that preserves last recoverable snapshot on failure and repeated crash, bounded structural-save latency amid title/favicon churn without every-event IO. Validate on-disk shapes conservatively; malformed entry cannot abort all valid tabs or erase original evidence; no silent rewriting corrupted files. Preserve startup newtab/urls/last-session semantics, workspace/groups/pins/active tab/lazy restore, incognito exclusion and no password/form secrets. No new partition, no security weakening. Actual app tests: two+ tabs with distinct",
+      "tags": [
+        "run",
+        "resume"
+      ],
+      "required": true,
+      "run_id": "run-20260920T033757Z-3c993e",
+      "updated_at": "2026-09-20T03:37:57Z"
+    },
+    {
+      "id": "session-durability-20260920",
+      "title": "session-durability-20260920",
+      "column": "완료",
+      "owner": null,
+      "model": null,
+      "step": "크래시 뒤 탭 유실 5원인 수정 + 검증 하네스 2종 신설",
+      "evidence": "재현(고치기 전) SD1~SD5 FAIL → 고친 뒤 9/9 PASS · session-restore 18/18 · session-schema 15/15 · npm run verify 19/19 · 스모크 16/16 · rc.16 sha256 758b9493",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-20T04:15:16Z"
     }
   ],
   "summary": {
@@ -1196,17 +1230,17 @@
     "remaining_required": [],
     "blockers": [],
     "optional_next": [
-      "실제 구독 모델로 승격 e2e 1회(이번은 결정론 확보를 위해 가짜 LLM 각본)",
-      "확인 화면에 이미지 미리보기 썸네일 추가(현재는 형식·크기·sha256 앞 12자)",
-      "승격 실패가 탭 이동 실패로 끝난 확인 단계 초안의 단계 처리 재검토(현재 기존 게시 경로와 동일)"
+      "세션/탭 복원 하위계통 관찰: 강제 종료 뒤 두 번째 탭이 last-session 복원으로 살아나지 않는 경우(하네스가 실측). task-runtime 결함이 아니라 session/index.ts·tab-service.ts 영역이라 이번 범위에서 손대지 않았다",
+      "engageGuard 없이 도는 일반 에이전트 작업의 댓글·좋아요는 여전히 장부 보호 밖(참여 레시피로 만든 작업만 보호)",
+      "PUBLISH_RE 의 upload$ 갈래는 클릭 라벨에 대해 여전히 닿지 않는다 — 초안 모드의 파일 첨부를 막지 않기 위해 알면서 뒀다",
+      "체크포인트(구간 진행요약)는 여전히 디바운스 — 크래시 시 그 구간의 읽기를 다시 한다(비가역은 원장이 막으므로 손실은 시간뿐)"
     ],
     "note": null,
     "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
   },
   "source": {
-    "kind": "run-start",
-    "run_id": "run-20260919T133659Z-c6f72a",
-    "at": "2026-09-19T13:36:59Z"
+    "kind": "cli",
+    "at": "2026-09-20T04:15:16Z"
   },
   "warnings": []
 }

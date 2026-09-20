@@ -1,9 +1,9 @@
 {
   "schema": "auto-dev/board-server@1",
-  "pid": 10976,
+  "pid": 15888,
   "url": "http://127.0.0.1:8793/",
   "host": "127.0.0.1",
   "port": 8793,
-  "started_at": "2026-09-19T13:36:49Z",
+  "started_at": "2026-09-20T03:37:47Z",
   "state_dir": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev"
 }
