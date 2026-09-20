@@ -173,9 +173,21 @@
       "run_id": "run-20260919T133659Z-c6f72a",
       "status": "success",
       "at": "2026-09-19T14:37:07Z"
+    },
+    {
+      "session_id": "0d32e55d-a635-439b-b0ff-5b2c62c1c965",
+      "run_id": "run-20260920T033757Z-3c993e",
+      "status": "success",
+      "at": "2026-09-20T04:18:55Z"
+    },
+    {
+      "session_id": "00a8ff68-fbbf-493d-b057-a352dbb98410",
+      "run_id": "run-20260920T042617Z-732aef",
+      "status": "unclear",
+      "at": "2026-09-20T04:47:39Z"
     }
   ],
-  "last_run_id": "run-20260920T033757Z-3c993e",
+  "last_run_id": "run-20260920T044803Z-f0f99e",
   "baseline": {
     "user_quality": null,
     "interventions": null,

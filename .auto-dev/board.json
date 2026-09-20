@@ -3,8 +3,8 @@
   "project_id": null,
   "task_id": "social-workflows-20260918",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 177,
-  "updated_at": "2026-09-20T04:18:28Z",
+  "revision": 188,
+  "updated_at": "2026-09-20T06:15:13Z",
   "columns": [
     "대기",
     "진행",
@@ -1194,20 +1194,21 @@
     {
       "id": "run:run-20260920T033757Z-3c993e",
       "title": "Claude 실행 — Continue user-authorized development. Fix confirmed observed missing second tab",
-      "column": "진행",
+      "column": "완료",
       "owner": "Claude 팀장(lead)",
       "model": "opus",
-      "step": "세션 실행 중",
-      "evidence": null,
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260920T033757Z-3c993e)의 구조화 완료 기록: pass (합격 기준 14건 전건 통과, 부정 사례 7건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
       "blocker": null,
       "detail": "Continue user-authorized development. Fix confirmed observed missing second tab after crash from interruption-recovery round. Actual source app/main/features/session/index.ts (NOT app/main/session). Apply .agents/skills/tab-restore-session/SKILL.md principles but current source wins on schemas/paths. Main inspected: scheduleSave clears sooner timer on every update -> structural save can be postponed; writeSnapshot swallows failure yet before-quit unlinks current; maybeRestoreSession deletes current after restore without durable replacement -> second crash can lose recovered newer tabs. Reproduce actual original bug using isolated app/tabs and local pages first, root cause may differ, report exact pre/post snapshot evidence. Bounded ownership session/index.ts tabs/tab-service.ts startup wiring only as needed, focused build/session-restore-cdp harness and docs/locales; preserve all existing edits and AGENTS. Implement minimal transactional save/restore that preserves last recoverable snapshot on failure and repeated crash, bounded structural-save latency amid title/favicon churn without every-event IO. Validate on-disk shapes conservatively; malformed entry cannot abort all valid tabs or erase original evidence; no silent rewriting corrupted files. Preserve startup newtab/urls/last-session semantics, workspace/groups/pins/active tab/lazy restore, incognito exclusion and no password/form secrets. No new partition, no security weakening. Actual app tests: two+ tabs with distinct",
       "tags": [
         "run",
-        "resume"
+        "success",
+        "2458.1s"
       ],
       "required": true,
       "run_id": "run-20260920T033757Z-3c993e",
-      "updated_at": "2026-09-20T03:37:57Z"
+      "updated_at": "2026-09-20T04:18:56Z"
     },
     {
       "id": "session-durability-20260920",
@@ -1223,25 +1224,78 @@
       "required": true,
       "run_id": null,
       "updated_at": "2026-09-20T04:15:16Z"
+    },
+    {
+      "id": "run:run-20260920T042617Z-732aef",
+      "title": "Claude 실행 — Continue authorized ezBrowser development after rc16. Bounded integration: multi",
+      "column": "진행",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "종료 status=unclear",
+      "evidence": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로)",
+      "blocker": null,
+      "detail": "Continue authorized ezBrowser development after rc16. Bounded integration: multi-window crash restoration and durable automation rebinding to correct restored tab. Inspect actual code first and reproduce. resolveTaskTab in task-runtime uses persisted windowId then same URL first or same-host active tab. Restore creates new window/tab ids; old task can become unusable or wrong same-site tab can be picked. Need stable restoration identity or explicit verified mapping from snapshot to new runtime ids, preserving workspace/partition/privacy and exact original tab identity. Do not blindly scan all windows by hostname. For ambiguous/closed/nonrestored tab require explicit user target selection with clear reason, no guessed action; allowed same-tab redirects still work. Preserve login/critical/uncertain external-write gates. No auto-resume just because browser starts. Provide usable recovery UI if original target unavailable; bind only actual chosen tab within permitted workspace/incognito and permissions; distinguish selecting tab vs approving dangerous action. Keep scope session/index.ts tabs/window integration task-runtime related types IPC/preload AiTab focused tests and docs. Preserve prior edits. Use tab-restore-session skill/current source, no new partitions or security weakening. Required actual-app isolated tests: two windows with distinct tabs/pins/active tabs crash then correct restored windows; durable paused task originally second window user clicks resume and reaches e",
+      "tags": [
+        "run",
+        "unclear",
+        "1282.1s"
+      ],
+      "required": true,
+      "run_id": "run-20260920T042617Z-732aef",
+      "updated_at": "2026-09-20T04:47:39Z"
+    },
+    {
+      "id": "task-tab-recovery-20260920",
+      "title": "크래시 복원 다중 창 + 내구 작업의 정확한 탭 재바인딩",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "claude-opus-5",
+      "step": "복원 안정키 재바인딩 + 대상 선택 UI + 게시 탭 확정 마감 · 검증 하네스 신설",
+      "evidence": "window-tabs 10/10(음성대조 포함) · npm run verify 19/19(스모크 16/16) · verify-auto-publish 58/58 · typecheck 3/3 · rc.17 NSIS 121,944,684B sha256 7b7aeee0",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-20T06:07:29Z"
+    },
+    {
+      "id": "run:run-20260920T044803Z-f0f99e",
+      "title": "Claude 실행 — Previous run ended unclear with pending_background while IPC/UI and harness work",
+      "column": "진행",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "세션 실행 중",
+      "evidence": null,
+      "blocker": null,
+      "detail": "Previous run ended unclear with pending_background while IPC/UI and harness workers unfinished. Resume SAME authorized scope to actual completion. First reconcile existing worker state/results, do not duplicate edits/workers. restoreKey plumbing reportedly main typecheck passed, criteria W1-W10/T9 already fixed; finish target selection UI/IPC and actual-app multiwindow task rebinding tests. Main rejects intermediate waiting report as completion. Wait for own workers, integrate, fix failures, final npm verify, actual rc17 NSIS and packaged smoke, valid completion record before exiting. Maintain original scope/constraints; no new unrelated feature or paid/live external action. social-workflow preparePublishTab stale tab-id risk is related to target recovery: inspect whether restored durable task flow can still publish to wrong tab; fix only if necessary to satisfy original exact-target criterion, otherwise clearly document with reproduction not vague claim. Original required criteria remain mandatory. Report file .auto-dev/task-tab-recovery-20260920-final.md, board/efficiency. Return consolidated final receipt only after implementation tests packaging; if genuinely blocked provide precise blocker and safe checkpoint, never success for pending workers.",
+      "tags": [
+        "run",
+        "resume"
+      ],
+      "required": true,
+      "run_id": "run-20260920T044803Z-f0f99e",
+      "updated_at": "2026-09-20T04:48:03Z"
     }
   ],
   "summary": {
-    "all_requested_work_complete": true,
+    "all_requested_work_complete": false,
     "remaining_required": [],
-    "blockers": [],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가)",
+      "rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요)"
+    ],
     "optional_next": [
-      "스크롤·폼은 마지막 상호작용 약 5초 뒤·30초 주기에 저장된다 — 그 사이 강제 종료 시 탭은 전부 돌아오지만 스크롤은 조금 전 것일 수 있다(이전에는 같은 구간에서 탭 자체가 사라졌다)",
-      "다중 창을 동시에 띄운 상태의 크래시 복원은 시나리오에 없다(단일 창 기준)",
-      "rc.16 설치파일의 설치→부팅→제거는 시험하지 않았다 — 이 PC 에 사용자 실설치본이 등록돼 있어 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(설치 흐름 실증의 정본은 rc.2)",
-      "코드 서명 인증서(.pfx) 미제공 — rc.16 미서명(SmartScreen 경고)"
+      "대상 선택 UI 를 화면 클릭으로 훑는 DOM 검사(이번엔 메인 IPC 경로로만 검증)",
+      "verify:full 전체 완주(이번엔 quick 19단계 + 영향 범위 하네스만)"
     ],
     "note": null,
-    "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가), (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요); 전체 요청 완료: 아니오"
   },
   "source": {
     "kind": "completion-record",
-    "run_id": "run-20260920T033757Z-3c993e",
-    "at": "2026-09-20T04:18:28Z"
+    "run_id": "run-20260920T044803Z-f0f99e",
+    "at": "2026-09-20T06:15:13Z"
   },
   "warnings": []
 }
