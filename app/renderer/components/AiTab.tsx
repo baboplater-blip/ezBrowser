@@ -88,7 +88,9 @@ type TaskState =
   | 'interrupted' | 'needs-verify' | 'completed' | 'failed' | 'cancelled'
 interface TaskRetryInfo { kind: string; attempt: number; nextAt: number; detail: string }
 // 무엇을 기다리다 멈췄는가 — 재시작(interrupted)을 넘어 보존된다. 없으면(옛 저장본) 일반 문구로 폴백한다.
-type TaskWaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
+// 'tab-target' = 재시작 뒤 **원래 그 탭**을 다시 찾지 못했다. 예전에는 같은 사이트의 아무 탭에나
+// 붙었는데(엉뚱한 글·다른 계정 세션에 작용할 수 있었다) 이제는 사람이 직접 고르게 한다.
+type TaskWaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix' | 'tab-target'
 interface TaskSummary {
   id: string; instruction: string; state: TaskState; mode: 'normal' | 'long'
   stepsUsed: number; maxSteps: number; segment: number
@@ -106,10 +108,14 @@ const WAIT_CAUSE_INFO: Record<TaskWaitCause, { icon: string; title: string; hint
   ledger: { icon: '⚠', title: '게시 여부가 확인되지 않았습니다', hint: '이미 올라갔다면 이어가지 말고 중단하세요.' },
   ask: { icon: '❓', title: '답변을 기다리다 멈췄습니다' },
   'user-fix': { icon: '🔧', title: '직접 처리가 필요합니다' },
+  'tab-target': {
+    icon: '🎯', title: '작업하던 탭을 찾지 못했습니다',
+    hint: '어느 탭에서 이어갈지 직접 골라 주세요 — 비슷한 탭을 대신 추측하지 않습니다.',
+  },
 }
 // 이 사유들은 사람이 브라우저 안에서 직접 뭔가를 해야 풀린다 — '이어가기' 버튼 문구를 그렇게 바꿔
 // 눌러도 자동으로 아무 일도 재승인되지 않는다는 것을 알린다('ask' 는 답변만 하면 되므로 제외).
-const NEEDS_MANUAL_ACTION: ReadonlySet<TaskWaitCause> = new Set(['confirm', 'login', 'captcha', 'ledger', 'user-fix'])
+const NEEDS_MANUAL_ACTION: ReadonlySet<TaskWaitCause> = new Set(['confirm', 'login', 'captcha', 'ledger', 'user-fix', 'tab-target'])
 type TaskPending = { kind: 'confirm'; label: string } | { kind: 'ask'; message: string }
 const TASK_STATE_LABEL: Record<TaskState, { icon: string; label: string; tone?: 'ok' | 'warn' | 'muted' }> = {
   queued: { icon: '🕐', label: '대기 중', tone: 'muted' },
@@ -255,6 +261,104 @@ function relTime(ts: number): string {
   try { return new Date(ts).toLocaleDateString() } catch { return '' }
 }
 
+// ===== 대상 탭 다시 고르기 (waitCause 'tab-target') =====
+// 백엔드(task-runtime.ts 의 TaskTargetList)를 이 파일이 쓰는 모양만 로컬 미러링 — 이 파일의 관례.
+interface TaskTargetCandidate {
+  tabId: string; title: string; url: string
+  windowId: string; windowLabel: string; active: boolean; sameUrl: boolean
+}
+interface TaskTargetList {
+  ok: boolean; reason: string
+  expected: { url: string | null; windowLabel: string | null; workspaceName: string | null }
+  tabs: TaskTargetCandidate[]
+}
+
+/**
+ * "어느 탭에서 이어갈지" 를 사람이 고르는 좁은 폭(280px) 인라인 패널.
+ *
+ * 절대 떠 있는 팝오버로 만들지 않는다(사이드바 도크 규칙 — 콘텐츠 뷰를 가린다). 카드 안에서
+ * 펼쳐지고, 후보 목록은 **메인이 정본**이다. 여기서 고른 tabId 는 메인이 다시 검증하므로
+ * 이 컴포넌트가 잘못된 id 를 보내도 통과하지 못한다.
+ *
+ * 고르는 것은 **실행도 승인도 아니다** — 고르면 '미완료' 로 돌아갈 뿐이고, 이어가기는 따로 눌러야 한다.
+ */
+function TaskTargetPicker({ taskId }: { taskId: string }) {
+  const [open, setOpen] = useState(false)
+  const [list, setList] = useState<TaskTargetList | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async (): Promise<void> => {
+    setBusy(true); setError(null)
+    try {
+      const res = await window.browserAPI.ai.ptaskTargets(taskId)
+      setList(res as TaskTargetList | null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally { setBusy(false) }
+  }
+
+  const choose = async (tabId: string): Promise<void> => {
+    setBusy(true); setError(null)
+    try {
+      const res = await window.browserAPI.ai.ptaskSetTarget(taskId, tabId)
+      if (res?.ok) { setOpen(false); return }
+      // 고르는 사이에 그 탭이 닫혔을 수 있다 — 사유를 보이고 목록을 새로 받는다.
+      setError(res?.error || '대상을 설정하지 못했습니다.')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally { setBusy(false) }
+  }
+
+  if (!open) {
+    return (
+      <div className="ai-task-note warn">
+        <button className="ai-mini-btn active ai-target-open"
+          onClick={() => { setOpen(true); void load() }}>🎯 대상 탭 선택</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="ai-target-picker">
+      <div className="ai-target-head">
+        <b>어느 탭에서 이어갈까요?</b>
+        <div className="ai-history-head-actions">
+          <button className="ai-mini-btn ai-target-refresh" onClick={() => void load()} disabled={busy}>↻</button>
+          <button className="ai-mini-btn" onClick={() => setOpen(false)}>닫기</button>
+        </div>
+      </div>
+      {list?.expected?.url && (
+        <div className="ai-target-expected dim">
+          원래 대상: {list.expected.url}
+          {list.expected.windowLabel ? ` · ${list.expected.windowLabel}` : ''}
+          {list.expected.workspaceName ? ` · ${list.expected.workspaceName}` : ''}
+        </div>
+      )}
+      {list?.reason && <div className="ai-target-expected dim">{list.reason}</div>}
+      {error && <div className="ai-task-note warn">{error}</div>}
+      {busy && !list && <div className="ai-target-expected dim">불러오는 중…</div>}
+      {list && list.tabs.length === 0 && (
+        <div className="ai-target-expected dim">
+          고를 수 있는 탭이 없습니다 — 작업하던 페이지를 연 뒤 ↻ 로 다시 불러오세요.
+          {/* 여기서 하네스든 UI든 탭을 대신 열어 주지 않는다 — 사람이 연 탭만 대상이 된다. */}
+        </div>
+      )}
+      {list?.tabs.map((c) => (
+        <button key={c.tabId} className="ai-target-item ai-target-pick" data-tab-id={c.tabId}
+          disabled={busy} onClick={() => void choose(c.tabId)}>
+          <span className="ai-target-title">{c.title || c.url}</span>
+          <span className="ai-target-sub dim">
+            {hostOf(c.url)} · {c.windowLabel}
+            {c.sameUrl ? ' · 같은 페이지' : ''}{c.active ? ' · 현재 탭' : ''}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // 영속 작업 카드 — 목록(showPtasks 전체 보기)과 인라인 "진행 중" 영역이 이 한 컴포넌트를 함께 쓴다.
 // SKILL 의 "한 뷰 = 한 목적" 을 지키려고 별도 상세 화면을 두지 않았다 — 카드 자체가 이미 상태·진척·
 // 대기 이유·버튼을 전부 담고 있어, 드릴다운 없이도 필요한 조작을 이 자리에서 끝낼 수 있다.
@@ -336,6 +440,11 @@ function TaskCard({
           }}>{t.waitActionLabel ?? '설정 열기'}</button>
         </div>
       )}
+      {/* 대상 탭을 다시 찾지 못해 멈춘 경우 — 승인/거부가 아니라 **어느 탭인지**를 골라야 풀린다.
+          (confirmTask 로는 이 대기가 풀리지 않는다 — 메인의 유일한 출구가 setTaskTarget 이다.) */}
+      {(t.state === 'waiting-user' || t.state === 'interrupted') && t.waitCause === 'tab-target' && (
+        <TaskTargetPicker taskId={t.id} />
+      )}
       {(t.state === 'failed' || t.state === 'cancelled') && t.result && (
         <div className="ai-task-note warn">{t.result}</div>
       )}
@@ -376,7 +485,9 @@ function TaskCard({
           </div>
         </div>
       )}
-      {!pending && t.state === 'waiting-user' && (
+      {/* 'tab-target' 은 승인·답변으로 풀리지 않는다 — 위 대상 선택 패널이 유일한 출구라
+          여기서 승인/거부 버튼을 보여 주면 눌러도 아무 일이 없어 사용자를 헷갈리게 한다. */}
+      {!pending && t.state === 'waiting-user' && t.waitCause !== 'tab-target' && (
         <div className="ai-confirm">
           <div className="ai-confirm-msg">❓ {t.waitReason ?? '확인이 필요합니다.'}</div>
           <div className="ai-confirm-btns">

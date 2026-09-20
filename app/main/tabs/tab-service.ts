@@ -1,6 +1,7 @@
 import { WebContentsView, app } from 'electron'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import { DEFAULT_SESSION, NEW_TAB_URL } from '../../shared/constants'
 import { IPC } from '../../shared/ipc-channels'
 import type { TabSummary, TabGroup, TabGroupColor } from '../../shared/types'
@@ -27,6 +28,16 @@ export function onTabActivated(cb: (id: string) => void): void { onTabActivatedH
 
 interface TabRecord {
   id: string
+  /**
+   * **복원을 넘어 살아남는 탭의 정체성.**
+   *
+   * `id`(`tab-N`)는 프로세스마다 1부터 다시 세므로 크래시 복원 뒤의 `tab-3` 은 종료 전의 `tab-3`
+   * 과 아무 관계가 없다. 그래서 내구 자동화 작업은 예전에 "창 id + URL 호스트" 로 대상을 다시
+   * 찾았고, 같은 사이트 탭이 여러 개면 **엉뚱한 탭**을 집을 수 있었다(발행·결제면 사고다).
+   * 이 키는 세션 스냅샷에 함께 저장돼 복원 시 그대로 되살아나므로, "사용자가 보기에 바로 그 탭"
+   * 을 기계가 확정할 수 있는 유일한 값이다.
+   */
+  restoreKey: string
   windowId: string
   workspaceId: string
   view: WebContentsView
@@ -371,6 +382,8 @@ export function createTab(opts: {
   restoreHistoryIndex?: number
   // 세션 복원용: 소속 탭 그룹
   groupId?: string
+  /** 세션 복원 전용: 종료 전 그 탭이 쓰던 안정 키를 그대로 물려준다(없으면 새로 발급). */
+  restoreKey?: string
 }): TabSummary {
   const ctx = getWindow(opts.windowId)
   if (!ctx) throw new Error(`window ${opts.windowId} not found`)
@@ -379,6 +392,9 @@ export function createTab(opts: {
 
   counter += 1
   const id = `tab-${counter}`
+  const restoreKey = (typeof opts.restoreKey === 'string' && opts.restoreKey.trim())
+    ? opts.restoreKey.trim().slice(0, 100)
+    : `tk-${randomUUID()}`
   const initialUrl = opts.url ?? NEW_TAB_URL
   const preloadName = initialUrl.startsWith('browser:') ? 'internal.js' : 'content.js'
   // 시크릿 창은 전역 워크스페이스와 무관한 고정 워크스페이스에 속한다 — 메인 창 워크스페이스 전환/삭제에
@@ -422,7 +438,7 @@ export function createTab(opts: {
   const index = existingInWorkspace.length
 
   const tab: TabRecord = {
-    id, windowId: opts.windowId, workspaceId, view,
+    id, restoreKey, windowId: opts.windowId, workspaceId, view,
     partition,
     pinned: false, index,
     createdAt: Date.now(), lastActiveAt: Date.now(), discarded: false,
@@ -830,6 +846,25 @@ export function getAllTabs(): TabSummary[] {
   return Array.from(tabs.values()).map(summary)
 }
 
+/** 이 탭의 복원 안정 키. 탭이 없으면 null. */
+export function getTabRestoreKey(tabId: string): string | null {
+  return tabs.get(tabId)?.restoreKey ?? null
+}
+
+/**
+ * 안정 키로 지금 살아 있는 탭을 찾는다 — **복원을 건너 같은 탭을 가리키는 유일한 방법**이다.
+ * 못 찾으면 null 을 돌려줄 뿐, 비슷한 탭을 대신 찾아 주지 않는다(그 추측이 바로 사고의 원인이었다).
+ */
+export function findTabByRestoreKey(key: string): { id: string; windowId: string; workspaceId: string } | null {
+  if (!key) return null
+  for (const t of tabs.values()) {
+    if (t.restoreKey !== key) continue
+    if (t.view.webContents.isDestroyed()) return null
+    return { id: t.id, windowId: t.windowId, workspaceId: t.workspaceId }
+  }
+  return null
+}
+
 export function getWebContentsByTabId(tabId: string): Electron.WebContents | null {
   return tabs.get(tabId)?.view.webContents ?? null
 }
@@ -1099,6 +1134,11 @@ export function getTotalTabCount(): number {
 // ===== 세션 스냅샷 (저장/복원용) =====
 
 export interface SessionTabSnap {
+  /**
+   * 복원을 넘어 유지되는 탭 정체성(`TabRecord.restoreKey`). 옛 스냅샷에는 없다 — 그때는
+   * 복원된 탭이 새 키를 받고, 그 탭에 매여 있던 작업은 추측하지 않고 사용자에게 대상을 묻는다.
+   */
+  restoreKey?: string
   url: string
   title: string
   pinned: boolean
@@ -1113,6 +1153,8 @@ export interface SessionTabSnap {
 
 export interface SessionWindowSnap {
   windowId: string
+  /** 복원을 넘어 유지되는 창 정체성(`BrowserWindowContext.restoreKey`). 옛 스냅샷에는 없다. */
+  restoreKey?: string
   // 디스크에서 읽은 스냅샷은 손상돼 있을 수 있다 — 검증을 통과하지 못한 bounds 는 빠진 채로 들어온다.
   bounds?: Electron.Rectangle
   activeTabId: string | null
@@ -1140,6 +1182,7 @@ export function collectSession(): SessionWindowSnap[] {
       if (!ctx) continue
       snap = {
         windowId: t.windowId,
+        restoreKey: ctx.restoreKey,
         bounds: ctx.win.getBounds(),
         activeTabId: getActiveTabId(t.windowId),
         tabs: [],
@@ -1162,6 +1205,7 @@ export function collectSession(): SessionWindowSnap[] {
       if (cap) { history = cap.entries; historyIndex = cap.index }
     }
     snap.tabs.push({
+      restoreKey: t.restoreKey,
       url,
       title,
       pinned: t.pinned,

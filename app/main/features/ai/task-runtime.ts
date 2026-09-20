@@ -7,8 +7,15 @@ import {
 } from './agent'
 import { isPublishAction, normalizeAccountName, normalizeVerifyText, type ReadSighting } from './agent-gate'
 import {
-  getTab, getTabPartition, getWebContentsByTabId, listTabs, listTabsInWorkspace,
+  getTab, getAllTabs, getTabPartition, getWebContentsByTabId, getTabRestoreKey, findTabByRestoreKey,
+  undiscardTab, listTabs, listTabsInWorkspace,
 } from '../../tabs/tab-service'
+// 창 쪽 복원 안정 키 — tab-service.ts 와 동일 계열의 다른 작업자가 병행 작성 중인 API.
+// 아직 반영 전이면 이 import 부터 tsc 오류가 나는데, 그건 window-service.ts 쪽 문제다.
+import {
+  getAllWindows, getWindow, getWindowRestoreKey, findWindowByRestoreKey,
+} from '../../windows/window-service'
+import { getWorkspace, getActiveWorkspaceId } from '../workspace'
 import { createJsonStore, loadJsonObject } from './json-store'
 import { writeDownloadMd, safeFileName } from './conversations'
 
@@ -106,13 +113,15 @@ export type RetryKind = 'network' | 'rate-limit' | 'cli-dead' | 'tab-gone' | 'lo
  *  - `ask`      에이전트가 정보를 물었다(일반 질문)
  *  - `ledger`   발행을 눌렀는데 완료 근거가 없다 — 중복 게시 위험
  *  - `user-fix` 탭이 사라지는 등 사람만 풀 수 있는 상황
+ *  - `tab-target` 복원 안정 키로 원래 탭을 다시 찾지 못했다 — 사람이 **어느 탭에서 이어갈지** 직접
+ *    골라야 한다(호스트로 후보를 추측해 엉뚱한 탭에 붙는 사고를 피하려고 자동으로 찾지 않는다).
  */
-export type WaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
+export type WaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix' | 'tab-target'
 
-const WAIT_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ask', 'ledger', 'user-fix'])
+const WAIT_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ask', 'ledger', 'user-fix', 'tab-target'])
 
 /** 사람이 **직접 조치**해야 풀리는 사유 — 재시작 뒤에도 그 사실을 문구로 유지한다. */
-const HUMAN_ACTION_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ledger', 'user-fix'])
+const HUMAN_ACTION_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ledger', 'user-fix', 'tab-target'])
 
 export interface TaskBudget {
   maxSteps: number
@@ -131,6 +140,14 @@ export interface TaskCheckpoint {
   tabUrl: string | null
   workspaceId: string | null
   windowId: string | null
+  /**
+   * 대상 탭의 **복원 안정 키**(tab-service 의 restoreKey). 재시작 뒤 `windowId`/탭 id 는 프로세스마다
+   * 다시 발급되므로 호스트로 후보를 추측하지 않고 이 키로 정확히 그 탭을 다시 찾는다.
+   * 옛 저장본(이 필드가 생기기 전)은 null — 그 경우엔 세션 안 마지막 탭으로만 완화 시도한다.
+   */
+  tabKey: string | null
+  /** 그 탭이 있던 창의 복원 안정 키(window-service 의 restoreKey). */
+  windowKey: string | null
   savedAt: number
 }
 
@@ -210,8 +227,10 @@ interface TaskRuntime {
   /**
    * 무엇을 기다리는가 — confirmTask/answerTask 가 올바른 상대에게 응답을 보내야 한다.
    * 'user-fix' = 사람만 풀 수 있는 것(탭 열기·로그인)을 처리한 뒤 계속하는 경우.
+   * 'tab-target' = 대상 탭을 다시 찾지 못해 사람이 골라야 한다 — confirmTask 로는 풀리지 않고
+   * **setTaskTarget** 이 직접 state 를 'interrupted' 로 옮긴다(default 분기가 조용히 무시한다).
    */
-  waitKind: 'agent-confirm' | 'agent-ask' | 'ledger' | 'user-fix' | null
+  waitKind: 'agent-confirm' | 'agent-ask' | 'ledger' | 'user-fix' | 'tab-target' | null
   /** 구간 루프가 도는 중인가(중복 루프 방지). */
   loopActive: boolean
   /** 실행 시간 누적 시작 시각(0 = 누적 중지). */
@@ -361,6 +380,9 @@ function reviveTask(raw: unknown): PersistentTask | null {
     tabUrl: typeof rawCp.tabUrl === 'string' ? rawCp.tabUrl : null,
     workspaceId: typeof rawCp.workspaceId === 'string' ? rawCp.workspaceId : null,
     windowId: typeof rawCp.windowId === 'string' ? rawCp.windowId : null,
+    // 하위호환: 이 필드가 생기기 전에 저장된 작업은 null — reviveTask 는 절대 throw 하지 않는다.
+    tabKey: typeof rawCp.tabKey === 'string' && rawCp.tabKey ? rawCp.tabKey : null,
+    windowKey: typeof rawCp.windowKey === 'string' && rawCp.windowKey ? rawCp.windowKey : null,
     savedAt: num(rawCp.savedAt),
   }
 
@@ -657,13 +679,14 @@ export function createTask(args: {
     allowedHosts: strList(b.allowedHosts, 200),
   }
 
-  // 시작 탭은 "id" 가 아니라 **URL + 워크스페이스**로 기억한다. 재시작 뒤 옛 탭 id 는 다른 탭을
-  // 가리킬 수 있어서다(T9). id 는 이 세션 동안만 runtime.lastTabId 로 들고 간다.
+  // 시작 탭은 "id" 가 아니라 **URL + 워크스페이스 + 복원 안정 키**로 기억한다. 재시작 뒤 옛 탭 id 는
+  // 다른 탭을 가리킬 수 있어서다(T9). id 는 이 세션 동안만 runtime.lastTabId 로 들고 간다.
   const tabId = str(args.tabId)
   const tab = tabId ? getTab(tabId) : null
   const wc = tabId ? getWebContentsByTabId(tabId) : null
   const tabUrl = wc && !wc.isDestroyed() ? wc.getURL() : (tab?.url ?? '')
   const now = Date.now()
+  const resolvedWindowId = args.windowId ?? tab?.windowId ?? null
 
   const task: PersistentTask = {
     id: randomUUID(),
@@ -676,14 +699,16 @@ export function createTask(args: {
       progressSummary: '', doneSubtasks: [],
       tabUrl: tabUrl || null,
       workspaceId: tab?.workspaceId ?? null,
-      windowId: args.windowId ?? tab?.windowId ?? null,
+      windowId: resolvedWindowId,
+      tabKey: tabId ? getTabRestoreKey(tabId) : null,
+      windowKey: resolvedWindowId ? getWindowRestoreKey(resolvedWindowId) : null,
       savedAt: now,
     },
     usage: { input: 0, cacheRead: 0, cacheCreate: 0, output: 0, llmCalls: 0 },
     resultFiles: [],
     readOnly: args.readOnly === true,
     incognito: args.incognito === true,
-    ownerWindowId: args.windowId ?? tab?.windowId ?? null,
+    ownerWindowId: resolvedWindowId,
     externalWrites: [],
     createdAt: now, updatedAt: now, startedAt: now,
     elapsedMs: 0,
@@ -769,64 +794,183 @@ function sameHost(a: string | null, b: string): boolean {
   try { return new URL(a).hostname.toLowerCase() === new URL(b).hostname.toLowerCase() } catch { return false }
 }
 
-type TabBinding = { tabId: string; note: string | null } | { tabId: null; reason: string }
+type TabBinding =
+  | { tabId: string; note: string | null }
+  | { tabId: null; reason: string; needsTarget: boolean }
+
+/** 잠든(about:blank) 탭을 깨우고 로드를 기다린다. 판단으로 정한 상한 — 사람이 손대는 값이 아니라
+ *  "영원히 걸리지 않게" 두는 안전망일 뿐이라 15초로 넉넉히 잡았다(느린 사이트도 대개 그 안에 뜬다). */
+const WAKE_TIMEOUT_MS = 15_000
+
+async function wakeTabIfSleeping(tabId: string): Promise<boolean> {
+  const t = getTab(tabId)
+  if (!t) return false
+  if (!t.discarded) return true
+  if (!undiscardTab(tabId)) return false
+  const deadline = Date.now() + WAKE_TIMEOUT_MS
+  for (;;) {
+    const wc = getWebContentsByTabId(tabId)
+    if (!wc || wc.isDestroyed()) return false
+    if (!wc.isLoading() && /^https?:/i.test(wc.getURL())) return true
+    if (Date.now() >= deadline) return false
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
+}
+
+/**
+ * 지금 이 탭을 기준으로 체크포인트의 복원 안정 키(tabKey/windowKey)와 windowId/workspaceId 를
+ * 최신화한다. 재바인딩으로 대상 탭이 바뀌었으면(같은 사이트의 다른 탭 등) 다음 재시작도 그 탭을
+ * 정확히 다시 찾아야 하므로, 매 저장 시점마다 "지금 실제로 조작한 탭" 기준으로 동기화한다.
+ * @returns 무엇이든 바뀌었는가(저장 트리거 판단용).
+ */
+function syncCheckpointKeys(cp: TaskCheckpoint, tabId: string): boolean {
+  const tab = getTab(tabId)
+  if (!tab) return false
+  let changed = false
+  const tabKey = getTabRestoreKey(tabId)
+  const windowKey = getWindowRestoreKey(tab.windowId)
+  if (tabKey && tabKey !== cp.tabKey) { cp.tabKey = tabKey; changed = true }
+  if (windowKey && windowKey !== cp.windowKey) { cp.windowKey = windowKey; changed = true }
+  if (tab.windowId !== cp.windowId) { cp.windowId = tab.windowId; changed = true }
+  if (tab.workspaceId && tab.workspaceId !== cp.workspaceId) { cp.workspaceId = tab.workspaceId; changed = true }
+  return changed
+}
+
+/**
+ * 지금 그 창을 가리키는 실제 windowId 를 구한다. `windowKey` 가 있으면 **그것으로만** 찾는다 —
+ * 재시작 뒤 창 id 는 프로세스마다 1부터 다시 세므로, 키가 있는데도 못 찾았다면 그 창이 진짜로
+ * 없어진 것이다. 우연히 같은 이름의 다른 창을 잘못 집지 않도록 여기서 포기한다(옛 raw id 로
+ * 폴백하지 않는다). 키가 없는 옛 기록만 raw id 를 그대로 시도한다(같은 세션 안에서는 유효할 수 있다).
+ */
+function resolveCurrentWindowId(cp: TaskCheckpoint, ownerWindowId: string | null): string | null {
+  if (cp.windowKey) {
+    const win = findWindowByRestoreKey(cp.windowKey)
+    return win ? win.id : null
+  }
+  const rawId = cp.windowId ?? ownerWindowId
+  return rawId && getWindow(rawId) ? rawId : null
+}
+
+/** 사람이 구분할 수 있는 창 이름 — 창 목록 순서 기준 "창 N" (제목이 있으면 덧붙인다). */
+function windowLabelOf(windowId: string): string {
+  const list = getAllWindows()
+  const idx = list.findIndex((w) => w.id === windowId)
+  if (idx < 0) return '알 수 없는 창'
+  const label = `창 ${idx + 1}`
+  try {
+    const title = list[idx]?.win.getTitle()
+    return title ? `${label} · ${title}` : label
+  } catch { return label }
+}
+
+/** allowedHosts 가 비어 있으면 전체 허용, 아니면 정확히 그 호스트이거나 그 서브도메인만. */
+function hostInAllowList(url: string, allowedHosts: string[]): boolean {
+  if (allowedHosts.length === 0) return true
+  try {
+    const h = new URL(url).hostname.toLowerCase()
+    return allowedHosts.some((allowed) => h === allowed || h.endsWith(`.${allowed}`))
+  } catch { return false }
+}
 
 /**
  * 이 작업이 조작할 탭을 지금 다시 찾는다.
  *
- * 개인정보 경계를 **양방향으로** 지킨다: 일반 작업은 시크릿 탭으로 넘어가지 않고, 시크릿 작업도
- * 일반(영속 세션) 탭으로 내려오지 않는다. 어느 쪽이든 넘어가면 사용자가 분리해 둔 흔적이 섞인다.
- * 워크스페이스도 마찬가지로 넘지 않는다 — 찾지 못하면 조용히 남의 탭을 쓰는 대신 사용자에게 묻는다.
+ * **추측하지 않는다.** 예전에는 창 안의 탭들을 호스트로 훑어 후보를 골랐는데, 그러면 같은 사이트의
+ * 다른 탭(다른 계정 세션·다른 글)을 엉뚱하게 집을 수 있었다(발행·결제면 사고다). 이제는 `checkpoint.tabKey`
+ * (복원 안정 키)로 **정확히 그 탭**을 다시 찾거나, 그마저 안 되면 사람이 직접 고르게 한다
+ * (`needsTarget: true` → 'tab-target' 대기 → `listTaskTargets`/`setTaskTarget`).
+ *
+ * 개인정보 경계는 **양방향으로** 지킨다: 일반 작업은 시크릿 탭으로 넘어가지 않고, 시크릿 작업도
+ * 일반(영속 세션) 탭으로 내려오지 않는다. 워크스페이스도 넘지 않는다 — 찾지 못하면 사용자에게 묻는다.
  */
-function resolveTaskTab(task: PersistentTask): TabBinding {
-  const windowId = task.checkpoint.windowId ?? task.ownerWindowId
-  if (!windowId) return { tabId: null, reason: '작업할 창을 찾을 수 없습니다 — 창에서 다시 시작해 주세요.' }
+async function resolveTaskTab(task: PersistentTask): Promise<TabBinding> {
+  const cp = task.checkpoint
 
-  const wsId = task.checkpoint.workspaceId
-  const candidates = (wsId ? listTabsInWorkspace(windowId, wsId) : listTabs(windowId))
-    .filter((t) => isIncognitoTab(t.id) === task.incognito && usableTab(t.id))
-
-  if (candidates.length === 0) {
-    return { tabId: null, reason: '작업할 탭을 열어주세요 — 작업하던 페이지가 닫혔습니다.' }
-  }
-
-  // ① 체크포인트의 URL 과 같은 페이지. 이 세션에서 쓰던 탭이 그중에 있으면 그것을 우선한다
-  //    (같은 호스트 탭이 여러 개일 때 사용자가 고른 탭을 유지하려고).
-  const onTarget = candidates.filter((t) => sameTarget(task.checkpoint.tabUrl, currentUrlOf(t.id)))
-  if (onTarget.length > 0) {
-    const rt = runtimeOf(task.id)
-    const preferred = onTarget.find((t) => t.id === rt.lastTabId) ?? onTarget[0]
-    if (preferred) return { tabId: preferred.id, note: null }
-  }
-
-  // ② 같은 호스트의 탭. 사이트 안에서 리다이렉트(세션 갱신·로그인 후 복귀)된 경우를 흡수한다.
-  if (task.checkpoint.tabUrl) {
-    const sameSite = candidates.filter((t) => sameHost(task.checkpoint.tabUrl, currentUrlOf(t.id)))
-    const pick = sameSite.find((t) => t.id === runtimeOf(task.id).lastTabId) ?? sameSite.find((t) => t.active) ?? sameSite[0]
-    if (pick) {
-      return { tabId: pick.id, note: `같은 사이트의 다른 페이지에서 재개: 이전 ${task.checkpoint.tabUrl} → 현재 ${currentUrlOf(pick.id)}` }
-    }
-    // ③ 작업하던 페이지가 아예 없다. **페이지를 바꾸는 작업이면 조용히 다른 사이트에 붙이지 않는다** —
-    //    예전에는 활성 탭으로 그냥 재바인딩해, "결제하기를 눌러라" 작업이 무관한 페이지에서 예산을
-    //    전부 태우거나 최악엔 엉뚱한 대상에 작용할 수 있었다(하네스 실측). 읽기 전용은 부작용이
-    //    없으니 재바인딩을 허용하고, 그 외에는 사용자에게 묻는다.
-    if (!task.readOnly) {
+  // ① 복원 안정 키로 정확히 그 탭을 찾는다 — 호스트로 다른 탭을 훑지 않는다.
+  if (cp.tabKey) {
+    const found = findTabByRestoreKey(cp.tabKey)
+    if (!found) {
       return {
-        tabId: null,
-        reason: `작업하던 페이지(${task.checkpoint.tabUrl})가 열려 있지 않습니다 — 그 페이지를 다시 열고 이어가 주세요.`
-          + ' (다른 페이지에서 그대로 진행하면 엉뚱한 대상에 작업할 수 있어 멈췄습니다.)',
+        tabId: null, needsTarget: true,
+        reason: '작업하던 탭을 찾을 수 없습니다 — 창이 아직 복원되지 않았거나 탭이 닫혔습니다. 대상 탭을 다시 선택해 주세요.',
       }
     }
+    if (isIncognitoTab(found.id) !== task.incognito) {
+      return {
+        tabId: null, needsTarget: true,
+        reason: '작업하던 탭을 찾았지만 시크릿 여부가 달라 사용할 수 없습니다. 대상 탭을 다시 선택해 주세요.',
+      }
+    }
+    if (cp.workspaceId && found.workspaceId !== cp.workspaceId) {
+      return {
+        tabId: null, needsTarget: true,
+        reason: '작업하던 탭을 찾았지만 다른 워크스페이스로 옮겨져 있습니다. 대상 탭을 다시 선택해 주세요.',
+      }
+    }
+    const tabId = found.id
+    // 복원된 탭은 대개 슬립(about:blank) 상태다 — 그대로 usableTab() 을 들이대면 "쓸 수 없다" 로
+    // 오판한다. 여기서 직접 깨우고 로드를 기다린다.
+    if (getTab(tabId)?.discarded) {
+      const awake = await wakeTabIfSleeping(tabId)
+      if (!awake) {
+        return {
+          tabId: null, needsTarget: true,
+          reason: '작업하던 탭을 깨우지 못했습니다(15초 넘게 로드되지 않았습니다). 대상 탭을 다시 선택해 주세요.',
+        }
+      }
+    }
+    const currentUrl = currentUrlOf(tabId)
+    // 체크포인트에 애초에 추적할 URL 이 없었다면(대상이 방금 확정된 경우 등) 그대로 그 탭을 쓴다.
+    if (!cp.tabUrl || sameTarget(cp.tabUrl, currentUrl)) return { tabId, note: null }
+    if (sameHost(cp.tabUrl, currentUrl)) {
+      return { tabId, note: `같은 사이트의 다른 페이지에서 재개: 이전 ${cp.tabUrl} → 현재 ${currentUrl}` }
+    }
+    // 호스트까지 다르면 읽기 전용만 진행을 허용한다(부작용이 없으니). 그 외엔 엉뚱한 대상 보호.
+    if (task.readOnly) {
+      return { tabId, note: `다른 페이지에서 재개: 이전 ${cp.tabUrl} → 현재 ${currentUrl}` }
+    }
+    return {
+      tabId: null, needsTarget: true,
+      reason: `작업하던 페이지(${cp.tabUrl})가 열려 있지 않습니다 — 그 페이지를 다시 열고 이어가거나, 대상 탭을 다시 선택해 주세요.`
+        + ' (다른 페이지에서 그대로 진행하면 엉뚱한 대상에 작업할 수 있어 멈췄습니다.)',
+    }
   }
 
-  // ④ 읽기 전용이거나 체크포인트 URL 이 없는 첫 구간 — 활성 탭에서 진행하고 그 사실을 요약에 남긴다.
+  // ② 키가 없는 옛 기록(이 필드가 생기기 전에 저장된 작업). 이 세션 안에서 쓰던 탭이 아직 살아
+  //    있고 경계·URL 조건을 만족하면 그것을 쓴다 — **호스트 스캔은 하지 않는다.**
+  if (cp.tabUrl) {
+    const lastId = runtimeOf(task.id).lastTabId
+    if (lastId && usableTab(lastId) && isIncognitoTab(lastId) === task.incognito) {
+      const lastTab = getTab(lastId)
+      if (!cp.workspaceId || lastTab?.workspaceId === cp.workspaceId) {
+        const currentUrl = currentUrlOf(lastId)
+        if (sameTarget(cp.tabUrl, currentUrl)) return { tabId: lastId, note: null }
+        if (sameHost(cp.tabUrl, currentUrl)) {
+          return { tabId: lastId, note: `같은 사이트의 다른 페이지에서 재개: 이전 ${cp.tabUrl} → 현재 ${currentUrl}` }
+        }
+      }
+    }
+    return {
+      tabId: null, needsTarget: true,
+      reason: `작업하던 페이지(${cp.tabUrl})를 찾을 수 없습니다 — 대상 탭을 다시 선택해 주세요.`,
+    }
+  }
+
+  // ③ 처음부터 대상이 없던 작업(트리거·일정으로 만들어진 첫 구간 등) — 기록된 창의 활성 탭에서
+  //    시작하고, 그 탭의 키를 지금 바로 체크포인트에 새겨 다음부터는 ①번 경로로 정확히 되찾게 한다.
+  const windowId = resolveCurrentWindowId(cp, task.ownerWindowId)
+  if (!windowId) {
+    return { tabId: null, needsTarget: true, reason: '작업할 창을 찾을 수 없습니다 — 창에서 다시 시작해 주세요.' }
+  }
+  const wsId = cp.workspaceId
+  const candidates = (wsId ? listTabsInWorkspace(windowId, wsId) : listTabs(windowId))
+    .filter((t) => isIncognitoTab(t.id) === task.incognito && usableTab(t.id))
   const active = candidates.find((t) => t.active) ?? candidates[0]
-  if (!active) return { tabId: null, reason: '작업할 탭을 열어주세요 — 작업하던 페이지가 닫혔습니다.' }
-  const url = currentUrlOf(active.id)
-  const note = task.checkpoint.tabUrl
-    ? `다른 페이지에서 재개: 이전 ${task.checkpoint.tabUrl} → 현재 ${url}`
-    : null
-  return { tabId: active.id, note }
+  if (!active) {
+    return { tabId: null, needsTarget: true, reason: '작업할 탭을 열어주세요 — 작업하던 페이지가 닫혔습니다.' }
+  }
+  if (syncCheckpointKeys(cp, active.id)) { task.updatedAt = Date.now(); markDirty(task) }
+  return { tabId: active.id, note: null }
 }
 
 // ===== 예산·원장 =====
@@ -1186,6 +1330,8 @@ function saveCheckpoint(task: PersistentTask, args: {
   tabUrl?: string
   note?: string | null
   bumpSegment?: boolean
+  /** 이 저장이 어느 탭을 기준으로 이뤄졌는가 — 넘기면 복원 안정 키(tabKey/windowKey)도 함께 갱신한다. */
+  tabId?: string
 }): void {
   const cp = task.checkpoint
   cp.stepsUsed = Math.max(cp.stepsUsed, Math.max(0, Math.round(args.stepsUsed)))
@@ -1204,6 +1350,8 @@ function saveCheckpoint(task: PersistentTask, args: {
   }
 
   if (args.tabUrl) cp.tabUrl = args.tabUrl
+  // 재바인딩으로 실제 조작 대상이 달라졌을 수 있다 — 이번에 실제로 쓴 탭 기준으로 키를 다시 맞춘다.
+  if (args.tabId) syncCheckpointKeys(cp, args.tabId)
   cp.savedAt = Date.now()
 
   task.updatedAt = cp.savedAt
@@ -1312,9 +1460,16 @@ async function runLoop(id: string): Promise<void> {
       }
 
       // 3. 탭 재바인딩
-      const bind = resolveTaskTab(task)
+      const bind = await resolveTaskTab(task)
       if (bind.tabId === null) {
-        setWaiting(task, 'user-fix', 'user-fix', bind.reason)
+        // 대상을 다시 찾지 못한 것(needsTarget)과, 찾을 대상 자체가 없는 것(창이 없음 등)을
+        // 같은 'user-fix' 로 뭉치지 않는다 — 전자는 외피가 대상 선택 패널을 띄워야 한다.
+        setWaiting(
+          task,
+          bind.needsTarget ? 'tab-target' : 'user-fix',
+          bind.needsTarget ? 'tab-target' : 'user-fix',
+          bind.reason,
+        )
         break
       }
 
@@ -1328,7 +1483,7 @@ async function runLoop(id: string): Promise<void> {
       const stepBudget = Math.max(1, Math.min(SEGMENT_STEPS, remaining, remainingCalls))
 
       // 재바인딩으로 페이지가 달라졌으면 그 사실을 모델이 보는 진행요약에 먼저 남긴다.
-      if (bind.note) saveCheckpoint(task, { stepsUsed: stepsBefore, note: bind.note, tabUrl: currentUrlOf(bind.tabId) })
+      if (bind.note) saveCheckpoint(task, { stepsUsed: stepsBefore, note: bind.note, tabUrl: currentUrlOf(bind.tabId), tabId: bind.tabId })
 
       // 4. 구간 실행
       const { outcome, trace } = await runSegment(task, bind.tabId, stepBudget)
@@ -1349,6 +1504,7 @@ async function runLoop(id: string): Promise<void> {
         saveCheckpoint(live, {
           stepsUsed: observedSteps,
           tabUrl: currentUrlOf(bind.tabId),
+          tabId: bind.tabId,
           bumpSegment: true,
         })
         live.result = str(outcome.message, '완료')
@@ -1377,6 +1533,7 @@ async function runLoop(id: string): Promise<void> {
           ...(ex?.progressSummary ? { progressSummary: ex.progressSummary } : {}),
           ...(ex?.doneSubtasks ? { doneSubtasks: ex.doneSubtasks } : {}),
           tabUrl: ex?.tabUrl || currentUrlOf(bind.tabId),
+          tabId: bind.tabId,
           bumpSegment: true,
         })
         // 단계 소진은 성공이 아니다 — done 으로 승격하지 않고 다음 구간을 잇는다(T3).
@@ -1396,7 +1553,7 @@ async function runLoop(id: string): Promise<void> {
       }
 
       if (outcome.kind === 'cancelled') {
-        saveCheckpoint(live, { stepsUsed: observedSteps, tabUrl: currentUrlOf(bind.tabId) })
+        saveCheckpoint(live, { stepsUsed: observedSteps, tabUrl: currentUrlOf(bind.tabId), tabId: bind.tabId })
         if (!isTerminal(live.state)) setState(live, 'cancelled')
         break
       }
@@ -1405,7 +1562,7 @@ async function runLoop(id: string): Promise<void> {
       const detail = outcome.kind === 'error'
         ? str(outcome.message, '알 수 없는 오류')
         : '구간이 결과를 남기지 않고 끝났습니다.'
-      saveCheckpoint(live, { stepsUsed: observedSteps, tabUrl: currentUrlOf(bind.tabId) })
+      saveCheckpoint(live, { stepsUsed: observedSteps, tabUrl: currentUrlOf(bind.tabId), tabId: bind.tabId })
 
       const kind = classifyRetry(detail)
       if (BACKOFF_MS[kind].length === 0) {
@@ -1606,4 +1763,139 @@ export function acceptTaskResult(id: string): void {
   task.verifyEvidence = '사용자가 결과를 확인했습니다.'
   confirmExternalWrites(task)
   setState(task, 'completed')
+}
+
+// ===== 대상 탭 재선택 (waitCause 'tab-target') =====
+
+export interface TaskTargetCandidate {
+  tabId: string
+  title: string
+  url: string
+  windowId: string
+  windowLabel: string
+  active: boolean
+  /** 체크포인트가 기억하던 원래 대상과 같은 페이지인가 — 목록 맨 위로 정렬해 눈에 띄게 한다. */
+  sameUrl: boolean
+}
+
+export interface TaskTargetList {
+  ok: boolean
+  reason: string
+  expected: { url: string | null; windowLabel: string | null; workspaceName: string | null }
+  tabs: TaskTargetCandidate[]
+}
+
+const EMPTY_TARGET_LIST: TaskTargetList = {
+  ok: false, reason: '작업을 찾을 수 없습니다.',
+  expected: { url: null, windowLabel: null, workspaceName: null }, tabs: [],
+}
+
+/**
+ * 이 작업이 다시 붙을 수 있는 탭 후보를 고른다. **메인이 정본** — 렌더러가 이 목록에서 고른 tabId 만
+ * `setTaskTarget` 이 다시 검증해 받아들인다(렌더러가 임의 tabId 를 지어내도 통과하지 못한다).
+ */
+export function listTaskTargets(id: string): TaskTargetList {
+  const task = getTask(id)
+  if (!task) return EMPTY_TARGET_LIST
+
+  const cp = task.checkpoint
+  let wsId = cp.workspaceId
+  let reason = ''
+  if (wsId && !getWorkspace(wsId)) {
+    // 원래 워크스페이스가 사라졌다 — 활성 워크스페이스로 완화하되 그 사실을 숨기지 않는다.
+    // 시크릿 작업은 전역 워크스페이스 개념이 없으므로 완화하지 않고 그냥 워크스페이스 제한을 푼다.
+    reason = '원래 워크스페이스가 사라져 활성 워크스페이스에서 대신 찾았습니다. '
+    wsId = task.incognito ? null : getActiveWorkspaceId()
+  }
+
+  const allowedHosts = task.budget.allowedHosts
+  const expectedUrl = cp.tabUrl
+
+  const candidates = getAllTabs()
+    .filter((t) => isIncognitoTab(t.id) === task.incognito)
+    .filter((t) => (wsId ? t.workspaceId === wsId : true))
+    .filter((t) => /^https?:/i.test(t.url))   // 잠든 탭도 원본 URL 이 보존돼 있으면 포함(summary() 가 채워 줌)
+    .filter((t) => hostInAllowList(t.url, allowedHosts))
+    .map((t) => ({
+      t,
+      sameUrl: !!expectedUrl && sameTarget(expectedUrl, t.url),
+      hostMatch: !!expectedUrl && sameHost(expectedUrl, t.url),
+    }))
+    .sort((a, b) => {
+      const rank = (x: { sameUrl: boolean; hostMatch: boolean }): number => (x.sameUrl ? 0 : x.hostMatch ? 1 : 2)
+      return rank(a) - rank(b)
+    })
+
+  const expectedWindowId = resolveCurrentWindowId(cp, task.ownerWindowId)
+
+  return {
+    ok: true,
+    reason,
+    expected: {
+      url: expectedUrl ?? null,
+      windowLabel: expectedWindowId ? windowLabelOf(expectedWindowId) : null,
+      workspaceName: wsId ? (getWorkspace(wsId)?.name ?? null) : null,
+    },
+    tabs: candidates.map(({ t, sameUrl }) => ({
+      tabId: t.id, title: t.title, url: t.url, windowId: t.windowId,
+      windowLabel: windowLabelOf(t.windowId), active: t.active, sameUrl,
+    })),
+  }
+}
+
+/**
+ * 사용자가 대상 탭을 직접 고른다. **이것은 승인 관문이 아니다** — "어디서 이어갈지" 만 정할 뿐,
+ * 위험 동작 확인(waitCause 'confirm')·발행 불확실 원장('ledger')은 이 함수가 손대지 않는다.
+ * 다음 구간이 시작되면 그 관문들이 **다시** 걸린다(에이전트 가드는 매 동작마다 독립적으로 판정한다).
+ */
+export function setTaskTarget(id: string, tabId: string): { ok: boolean; error?: string } {
+  const task = getTask(id)
+  if (!task) return { ok: false, error: '작업을 찾을 수 없습니다.' }
+  if (task.state !== 'waiting-user' && task.state !== 'interrupted') {
+    return { ok: false, error: `지금 상태(${task.state})에서는 대상을 선택할 수 없습니다.` }
+  }
+
+  // **대상 선택은 'tab-target' 대기의 출구일 뿐이다.** 이 문을 열어 두면 결제 승인(`agent-confirm`)이나
+  // 발행 불확실(`ledger`)을 기다리던 작업에서도 이 함수가 불릴 수 있고, 그러면 ① 기다리던 쪽(에이전트)
+  // 이 영영 응답을 못 받아 구간이 멈추고 ② `waitCause` 가 지워져 "무엇을 기다리다 멈췄는지" 라는
+  // 사용자 신호까지 사라진다. 재시작 뒤에는 runtime 이 비어 있으므로 저장된 `waitCause` 로도 본다.
+  const rtNow = runtimeOf(id)
+  if (task.waitCause !== 'tab-target' && rtNow.waitKind !== 'tab-target') {
+    return { ok: false, error: '지금은 대상 탭을 고를 수 없습니다 — 다른 확인을 기다리는 중입니다.' }
+  }
+
+  const chosen = String(tabId ?? '').trim()
+  if (!chosen) return { ok: false, error: '탭을 선택해 주세요.' }
+
+  // 목록에 실제로 있는 후보인지 먼저 확인한다(렌더러가 준 tabId 를 그대로 믿지 않는다).
+  const list = listTaskTargets(id)
+  if (!list.tabs.some((t) => t.tabId === chosen)) {
+    return { ok: false, error: '유효하지 않은 대상입니다 — 목록을 다시 불러와 주세요.' }
+  }
+  // 목록 생성 이후 그 탭이 닫혔거나 경계가 바뀌었을 수 있다 — 실행 직전에 한 번 더 검증한다.
+  if (isIncognitoTab(chosen) !== task.incognito) {
+    return { ok: false, error: '시크릿 경계가 달라 선택할 수 없습니다.' }
+  }
+  const tabSummary = getTab(chosen)
+  if (!tabSummary) return { ok: false, error: '그 탭이 방금 닫혔습니다 — 목록을 다시 불러와 주세요.' }
+
+  const cp = task.checkpoint
+  cp.tabUrl = tabSummary.url || cp.tabUrl
+  if (tabSummary.workspaceId) cp.workspaceId = tabSummary.workspaceId
+  syncCheckpointKeys(cp, chosen)
+
+  const rt = runtimeOf(id)
+  rt.lastTabId = chosen
+  rt.waitKind = null   // 'user-fix' 경로(confirmTask)로는 이 대기를 풀 수 없다 — 이 함수가 유일한 출구다.
+
+  delete task.waitActionUrl
+  delete task.waitActionLabel
+  // setState 는 next==='running' 일 때만 waitCause 를 지운다 — 'interrupted' 로 갈 때는 그대로
+  // 남기므로(재시작 뒤 "왜 멈췄는지" 문구를 보존하기 위한 설계, initTaskRuntime 참고) 여기서 직접 지운다.
+  // 대상을 골랐다는 것 자체가 'tab-target' 사유가 끝났다는 뜻이다.
+  delete task.waitCause
+  // ⚠ 여기서 승인 관문을 통과시키지 않는다 — resumeBlockedReason 은 그대로 둔다.
+  //   (게시 여부 확인 등 다른 이유로 이어가기가 막혀 있었다면, 대상만 바뀌었을 뿐 그 차단은 유효하다.)
+  setState(task, 'interrupted', '대상 탭을 선택했습니다 — 이어가기를 누르면 그 탭에서 계속합니다.')
+  return { ok: true }
 }

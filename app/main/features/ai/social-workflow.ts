@@ -22,7 +22,8 @@ import {
   type ArtifactMeta,
 } from './artifacts'
 import { createJsonStore, loadJsonObject } from './json-store'
-import { createTab, getWebContentsByTabId } from '../../tabs/tab-service'
+import { createTab, getTab, getWebContentsByTabId, findTabByRestoreKey } from '../../tabs/tab-service'
+import { findWindowByRestoreKey } from '../../windows/window-service'
 import { hostAllowed } from './frames'
 
 /**
@@ -1610,14 +1611,32 @@ function abortPublishPrep(wf: ImagePostWorkflow, reason: string, onAbort?: (reas
 async function preparePublishTab(
   wf: ImagePostWorkflow, genTaskId: string, openUrl: string,
 ): Promise<{ tabId: string } | { error: string }> {
-  let tabId = wf.params.tabId
-  let wc = getWebContentsByTabId(tabId)
+  const cp = getTask(genTaskId)?.checkpoint ?? null
+  const workspaceId = cp?.workspaceId ?? null
+
+  // ⚠ 재시작을 넘으면 탭 id(`tab-N`)는 프로세스마다 다시 발급돼 **다른 탭**을 가리킨다. 그 id 를
+  // 그대로 믿고 loadURL 하면 무관한 복원 탭을 게시 사이트로 끌고 가고, 그 탭이 다른 워크스페이스면
+  // **로그인한 계정이 조용히 바뀐 채로 게시**된다. 그래서 복원 안정 키로 먼저 그 탭을 확정하고,
+  // 키가 없는 옛 기록만 raw id 를 쓰되 **워크스페이스가 같은지** 확인한다(다르면 새 탭을 연다).
+  let tabId = ''
+  if (cp?.tabKey) {
+    const found = findTabByRestoreKey(cp.tabKey)
+    if (found && (!workspaceId || found.workspaceId === workspaceId)) tabId = found.id
+  } else {
+    const raw = wf.params.tabId
+    const rawTab = raw ? getTab(raw) : null
+    if (rawTab && (!workspaceId || rawTab.workspaceId === workspaceId)) tabId = raw
+  }
+
+  let wc = tabId ? getWebContentsByTabId(tabId) : null
 
   if (!wc || wc.isDestroyed()) {
-    // 그 탭이 닫혔다. 같은 창·**같은 워크스페이스**에 새 탭을 연다 — 워크스페이스가 곧 세션이라
-    // 다른 워크스페이스에 열면 로그인한 계정이 조용히 바뀐다. 워크스페이스를 모르면 진행하지 않는다.
-    const windowId = wf.params.windowId
-    const workspaceId = getTask(genTaskId)?.checkpoint.workspaceId ?? null
+    // 그 탭이 닫혔(거나 재시작으로 더 이상 그 탭이 아니)다. 같은 창·**같은 워크스페이스**에 새 탭을
+    // 연다 — 워크스페이스가 곧 세션이라 다른 워크스페이스에 열면 로그인한 계정이 조용히 바뀐다.
+    // 워크스페이스를 모르면 진행하지 않는다.
+    // 창 id 도 재시작을 넘으면 다른 창을 가리킨다 — 키가 있으면 키로 그 창을 되찾는다(계정 경계는
+    // 워크스페이스가 정하므로 창이 달라도 사고는 아니지만, 사용자가 보기에 엉뚱한 창에 탭이 열린다).
+    const windowId = (cp?.windowKey ? findWindowByRestoreKey(cp.windowKey)?.id : null) ?? wf.params.windowId
     if (!windowId || !workspaceId) {
       return { error: '게시할 탭이 닫혔고 같은 세션의 탭을 다시 열 수 없습니다 — 게시할 창에서 다시 시작해 주세요.' }
     }

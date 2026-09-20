@@ -225,7 +225,9 @@ async function restoreSnapshot(snap: SessionSnapshot): Promise<boolean> {
   try {
     const activeWsId = getActiveWorkspaceId()
     for (const w of snap.windows) {
-      const ctx = createBrowserWindow()
+      // 창의 정체성을 그대로 물려준다 — 이 창에 매여 있던 내구 작업이 재시작 뒤에도 **바로 이 창**을
+      // 찾을 수 있어야 한다(창 id 는 프로세스마다 다시 세므로 id 로는 구분되지 않는다).
+      const ctx = createBrowserWindow({ restoreKey: w.restoreKey })
       try { if (w.bounds) ctx.win.setBounds(w.bounds) } catch { /* invalid bounds */ }
 
       // 탭 그룹 먼저 등록 — 탭 생성 시 groupId 매칭. 그룹 메타가 이상해도 탭 복원은 계속한다.
@@ -260,6 +262,9 @@ async function restoreSnapshot(snap: SessionSnapshot): Promise<boolean> {
             restoreHistory: t.history,
             restoreHistoryIndex: t.historyIndex,
             groupId: t.groupId,
+            // 탭의 정체성을 그대로 물려준다(위 창과 같은 이유). 옛 스냅샷이면 undefined 라
+            // 새 키가 발급되고, 그 탭에 매여 있던 작업은 추측 대신 사용자에게 대상을 묻는다.
+            restoreKey: t.restoreKey,
           })
           restoredTabs += 1
           if (firstCreatedId === null) firstCreatedId = created.id

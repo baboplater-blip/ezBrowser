@@ -1,5 +1,6 @@
 import { BaseWindow, WebContentsView, webContents, app, session } from 'electron'
 import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { CHROME_HEIGHT, INTERNAL_URL_PREFIXES, incognitoPartition } from '../../shared/constants'
 import { getSetting } from '../storage/settings'
@@ -14,6 +15,15 @@ export interface ShellInsets {
 
 export interface BrowserWindowContext {
   id: string
+  /**
+   * **복원을 넘어 살아남는 창의 정체성.**
+   *
+   * `id`(`win-N`)는 프로세스마다 1부터 다시 세는 카운터라, 크래시 복원 뒤에는 같은 `win-2` 가
+   * **다른 창**을 가리킬 수 있다. 그 위에 내구 작업을 붙여 두면 재시작 뒤 엉뚱한 창의 탭을
+   * 조작하게 된다. 그래서 창마다 재사용되지 않는 키를 하나 두고, 세션 스냅샷에 함께 저장해
+   * 복원 시 **같은 키로 되살린다**. 이 값으로 찾은 창은 언제나 사용자가 보기에 "그 창" 이다.
+   */
+  restoreKey: string
   win: BaseWindow
   chrome: WebContentsView
   chromeHeight: number
@@ -82,11 +92,16 @@ export function setMagnetHandler(fn: (url: string) => void): void { magnetHandle
 
 export interface CreateWindowOptions {
   incognito?: boolean
+  /** 세션 복원 전용: 종료 전 그 창이 쓰던 안정 키를 그대로 물려준다(없으면 새로 발급). */
+  restoreKey?: string
 }
 
 export function createBrowserWindow(opts?: CreateWindowOptions): BrowserWindowContext {
   counter += 1
   const id = `win-${counter}`
+  const restoreKey = (typeof opts?.restoreKey === 'string' && opts.restoreKey.trim())
+    ? opts.restoreKey.trim().slice(0, 100)
+    : `wk-${randomUUID()}`
   const incognito = opts?.incognito === true
   let incognitoPart: string | undefined
   if (incognito) {
@@ -155,7 +170,7 @@ export function createBrowserWindow(opts?: CreateWindowOptions): BrowserWindowCo
   chrome.webContents.loadURL(chromeUrl)
 
   const ctx: BrowserWindowContext = {
-    id, win, chrome, chromeHeight: CHROME_HEIGHT,
+    id, restoreKey, win, chrome, chromeHeight: CHROME_HEIGHT,
     insets: { top: CHROME_HEIGHT, right: 0, bottom: 0, left: 0 },
     incognito, incognitoPartition: incognitoPart,
   }
@@ -184,6 +199,21 @@ export function createBrowserWindow(opts?: CreateWindowOptions): BrowserWindowCo
 
 export function getWindow(id: string): BrowserWindowContext | undefined {
   return windows.get(id)
+}
+
+/** 이 창의 복원 안정 키. 창이 없으면 null. */
+export function getWindowRestoreKey(id: string): string | null {
+  return windows.get(id)?.restoreKey ?? null
+}
+
+/**
+ * 안정 키로 지금 살아 있는 창을 찾는다. 복원 뒤에도 같은 창을 가리키는 **유일한** 방법이다
+ * (창 id 는 프로세스마다 다시 세므로 id 로 찾으면 다른 창을 집을 수 있다).
+ */
+export function findWindowByRestoreKey(key: string): BrowserWindowContext | null {
+  if (!key) return null
+  for (const ctx of windows.values()) if (ctx.restoreKey === key) return ctx
+  return null
 }
 
 export function getAllWindows(): BrowserWindowContext[] {

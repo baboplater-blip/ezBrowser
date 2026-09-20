@@ -175,8 +175,14 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
   // 취소·철회·중복 승인에도 게시 작업이 0건으로 남는가.
   const tabs = require(resolve('../../tabs/tab-service.js'))
   const navigations = []      // 우리 코드가 실제로 부른 loadURL 기록
-  const tabState = new Map()  // tabId -> { url, gone, slow }
-  const setTab = (id, url, extra = {}) => { tabState.set(id, { url, gone: false, slow: false, ...extra }); return id }
+  // tabId -> { url, gone, slow, workspaceId, key }
+  // key = 복원 안정 키(tab-service 의 restoreKey). 재시작을 넘어 **바로 그 탭**을 가리키는 값이라
+  // 게시 준비가 옛 탭 id 대신 이것으로 대상을 확정한다(2026-09-20).
+  const tabState = new Map()
+  const setTab = (id, url, extra = {}) => {
+    tabState.set(id, { url, gone: false, slow: false, workspaceId: 'ws-1', key: `tk-${id}`, ...extra })
+    return id
+  }
   let pendingNav = null       // slow 탭의 로드 완료를 테스트가 직접 풀어준다
   const fakeWc = (id) => {
     const st = tabState.get(id)
@@ -198,6 +204,18 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
     }
   }
   tabs.getWebContentsByTabId = (id) => fakeWc(id)
+  tabs.getTab = (id) => {
+    const st = tabState.get(id)
+    return st && !st.gone ? { id, url: st.url, workspaceId: st.workspaceId } : undefined
+  }
+  tabs.findTabByRestoreKey = (key) => {
+    for (const [id, st] of tabState) {
+      if (st.key === key && !st.gone) return { id, windowId: 'win-1', workspaceId: st.workspaceId }
+    }
+    return null
+  }
+  const wins = require(resolve('../../windows/window-service.js'))
+  wins.findWindowByRestoreKey = () => null     // 창 키는 이 검사의 관심사가 아니다(탭 대상만 본다)
   tabs.createTab = (o) => {
     if (o.workspaceId === '(없음)') throw new Error('워크스페이스 없음')
     const id = 'tab-new'
@@ -229,9 +247,12 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
   rt.deleteTask = () => {}
   // 첫 작업(생성)만 상태를 준다 — 게시 작업은 아직 진행 중으로 둔다.
   let genWorkspaceId = 'ws-1'
+  // 생성 작업의 체크포인트가 기억하는 **대상 탭의 복원 안정 키**. 게시 준비는 옛 탭 id 가 아니라
+  // 이 키로 대상을 되찾는다 — 재시작 뒤 같은 id 가 다른 탭을 가리키기 때문이다.
+  let genTabKey = 'tk-tab-1'
   rt.getTask = (id) => (id === 'task-1'
-    ? { id, state: genState, checkpoint: { workspaceId: genWorkspaceId }, result: '' }
-    : { id, state: 'running', checkpoint: { workspaceId: genWorkspaceId } })
+    ? { id, state: genState, checkpoint: { workspaceId: genWorkspaceId, tabKey: genTabKey, windowKey: null }, result: '' }
+    : { id, state: 'running', checkpoint: { workspaceId: genWorkspaceId, tabKey: genTabKey, windowKey: null } })
 
   const art = require(resolve('artifacts.js'))
   const onlyArtifact = { id: 'art-1', bytes: 100, format: 'png', sha256: 'abc', width: 512, height: 512 }
@@ -420,6 +441,78 @@ t('선승인이 없으면 기본은 확인 후 게시', (() => {
     publishTasks().length === 0 && cur(k0.id)?.stage === 'failed',
     JSON.stringify({ n: publishTasks().length, stage: cur(k0.id)?.stage, err: cur(k0.id)?.error }))
   genWorkspaceId = 'ws-1'
+
+  // ===== 재시작 뒤 "그 탭 id" 는 다른 탭이다 (2026-09-20) =====
+  //
+  // 탭 id(`tab-N`)는 프로세스마다 1부터 다시 발급된다. 그래서 저장된 워크플로의 `params.tabId` 를
+  // 그대로 믿고 `loadURL` 하면 **무관한 복원 탭을 게시 사이트로 끌고 간다**. 그 탭이 다른
+  // 워크스페이스면 로그인한 계정이 조용히 바뀐 채로 게시된다. 여기서 그 상황을 그대로 재현한다.
+  const runPublish = async (p) => {
+    freshGrant()
+    created.length = 0; navigations.length = 0; pendingNav = null
+    genState = 'running'
+    const wf = W3.startImagePost(p)
+    genState = 'completed'
+    rt.taskEvents.emit('changed')
+    await wait(150)
+    return wf
+  }
+  const navOf = (id) => navigations.filter((n) => n.tabId === id && !n.created)
+
+  {
+    // 재시작을 흉내 낸다: 원래 탭(키 tk-orig)은 사라졌고, 같은 이름의 `tab-1` 은 **다른 사람의 탭**
+    // (다른 워크스페이스 = 다른 로그인 세션)이 돼 있다.
+    tabState.clear()
+    setTab('tab-1', 'https://mail.example/inbox', { workspaceId: 'ws-2', key: 'tk-restored-other' })
+    genTabKey = 'tk-orig'
+    const wf = await runPublish({ ...params, windowId: 'win-1', tabId: 'tab-1' })
+    t('재시작 뒤 그 id 가 다른 탭이면 그 탭을 게시 사이트로 끌고 가지 않는다(하이재킹 방지)',
+      navOf('tab-1').length === 0,
+      JSON.stringify({ navigations, wf: cur(wf.id)?.stage }))
+    t('대신 원래 세션(워크스페이스)에 새 탭을 열어 잇는다',
+      navigations.some((n) => n.created && n.url === 'https://www.instagram.com/')
+      && publishTasks()[0]?.tabId === 'tab-new',
+      JSON.stringify({ navigations, tabId: publishTasks()[0]?.tabId }))
+  }
+
+  {
+    // 양성 대조 — 키로 찾은 탭이 저장된 id 와 **다른 id** 여도 그 탭에서 잇는다("전부 막혀서" 통과가 아님).
+    tabState.clear()
+    setTab('tab-1', 'https://mail.example/inbox', { workspaceId: 'ws-1', key: 'tk-restored-other' })
+    setTab('tab-7', 'about:blank', { workspaceId: 'ws-1', key: 'tk-orig' })
+    genTabKey = 'tk-orig'
+    await runPublish({ ...params, windowId: 'win-1', tabId: 'tab-1' })
+    t('복원 안정 키로 찾은 바로 그 탭에서 잇는다(id 가 달라져도)',
+      navOf('tab-7').length === 1 && navOf('tab-1').length === 0 && publishTasks()[0]?.tabId === 'tab-7',
+      JSON.stringify({ navigations, tabId: publishTasks()[0]?.tabId }))
+  }
+
+  {
+    // 하위호환 — 키가 없던 옛 기록. 같은 세션 안이라면(워크스페이스 일치) 예전처럼 그 탭을 그대로 쓴다.
+    tabState.clear()
+    setTab('tab-1', 'about:blank', { workspaceId: 'ws-1' })
+    genTabKey = null
+    await runPublish({ ...params, windowId: 'win-1', tabId: 'tab-1' })
+    t('키 없는 옛 기록도 같은 세션이면 그 탭에서 그대로 잇는다(회귀 없음)',
+      navOf('tab-1').length === 1 && publishTasks()[0]?.tabId === 'tab-1',
+      JSON.stringify({ navigations, tabId: publishTasks()[0]?.tabId }))
+  }
+
+  {
+    // 하위호환의 부정 대조 — 키가 없는데 그 id 가 **다른 세션**의 탭이면 쓰지 않는다.
+    tabState.clear()
+    setTab('tab-1', 'https://mail.example/inbox', { workspaceId: 'ws-2' })
+    genTabKey = null
+    await runPublish({ ...params, windowId: 'win-1', tabId: 'tab-1' })
+    t('키가 없어도 다른 세션의 탭이면 게시에 쓰지 않는다',
+      navOf('tab-1').length === 0 && publishTasks()[0]?.tabId === 'tab-new',
+      JSON.stringify({ navigations, tabId: publishTasks()[0]?.tabId }))
+  }
+
+  // 뒷정리 — 이 블록이 바꾼 전역 상태를 원래대로(뒤 시나리오가 있어도 영향받지 않게).
+  genTabKey = 'tk-tab-1'
+  tabState.clear()
+  setTab('tab-1', 'about:blank')
 }
 
 // ===== 재시작 경합 — 탭을 옮기는 도중 앱이 꺼졌다면, 다시 켜도 저절로 게시되지 않는다 =====

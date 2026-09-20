@@ -459,6 +459,9 @@ export const IPC = {
     ptaskConfirm: 'ai:ptask-confirm',
     ptaskAnswer: 'ai:ptask-answer',
     ptaskAccept: 'ai:ptask-accept',
+    // 대상 탭을 다시 찾지 못했을 때(waitCause 'tab-target') 사용자가 직접 고르는 경로.
+    ptaskTargets: 'ai:ptask-targets',
+    ptaskSetTarget: 'ai:ptask-set-target',
     ptaskChanged: 'ai:ptask-changed',
     ptaskEvent: 'ai:ptask-event',
     scheduleResume: 'ai:schedule-resume',

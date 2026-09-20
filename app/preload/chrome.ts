@@ -615,6 +615,11 @@ const api = {
       ipcRenderer.invoke(IPC.ai.ptaskConfirm, { id, approved }),
     ptaskAnswer: (id: string, answer: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.ai.ptaskAnswer, { id, answer }),
+    // 대상 탭을 다시 찾지 못했을 때(waitCause 'tab-target') 사용자가 직접 고른다.
+    // ptaskTargets 는 후보 목록(메인이 정본), ptaskSetTarget 은 그중 하나를 골라 확정한다.
+    ptaskTargets: (id: string): Promise<PersistentTaskTargetList> => ipcRenderer.invoke(IPC.ai.ptaskTargets, { id }),
+    ptaskSetTarget: (id: string, tabId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ai.ptaskSetTarget, { id, tabId }),
     onPtaskChanged: (cb: (list: PersistentTaskSummary[]) => void) => on(IPC.ai.ptaskChanged, cb),
     onPtaskEvent: (cb: (evt: { taskId: string; type: string; [k: string]: unknown }) => void) =>
       on(IPC.ai.ptaskEvent, cb),
@@ -652,6 +657,9 @@ interface PersistentTaskCheckpoint {
   tabUrl: string | null
   workspaceId: string | null
   windowId: string | null
+  /** 대상 탭의 복원 안정 키(재시작을 넘어 정확히 그 탭을 다시 찾는 데 쓴다). 옛 저장본은 null. */
+  tabKey: string | null
+  windowKey: string | null
   savedAt: number
 }
 
@@ -681,7 +689,7 @@ interface PersistentTask {
   readSightings?: Array<{ url: string; host: string; needle: string; snippet: string; at: number }>
   waitReason?: string
   /** 무엇을 기다리다 멈췄는가. 재시작을 넘어 보존된다(없으면 알 수 없음). 메인이 채워 보낸다 — 여기선 타입만 넓힌다. */
-  waitCause?: 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
+  waitCause?: 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix' | 'tab-target'
   retry?: PersistentTaskRetry
   readOnly: boolean
   incognito: boolean
@@ -854,13 +862,31 @@ interface PersistentTaskSummary {
   endedAt?: number
   waitReason?: string
   /** 무엇을 기다리다 멈췄는가. 재시작을 넘어 보존된다(없으면 알 수 없음). 메인이 채워 보낸다 — 여기선 타입만 넓힌다. */
-  waitCause?: 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix'
+  waitCause?: 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'user-fix' | 'tab-target'
   retry?: PersistentTaskRetry
   llmCalls: number
   maxLlmCalls: number
   result?: string
   resultFiles: string[]
   needsVerify: boolean
+}
+
+/** setTaskTarget 이 받아들일 후보 하나 — listTaskTargets 가 내놓은 것만 유효하다(메인이 재검증). */
+interface PersistentTaskTargetCandidate {
+  tabId: string
+  title: string
+  url: string
+  windowId: string
+  windowLabel: string
+  active: boolean
+  sameUrl: boolean
+}
+
+interface PersistentTaskTargetList {
+  ok: boolean
+  reason: string
+  expected: { url: string | null; windowLabel: string | null; workspaceName: string | null }
+  tabs: PersistentTaskTargetCandidate[]
 }
 
 contextBridge.exposeInMainWorld('browserAPI', api)

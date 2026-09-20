@@ -2237,6 +2237,20 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 .ai-task-note.ok { color: var(--color-success); }
 .ai-task-evidence { font-size: 11px; color: var(--color-text-secondary); background: var(--color-bg-base); border: 1px solid var(--color-border-subtle); border-radius: 6px; padding: 6px 8px; margin-top: 4px; white-space: pre-wrap; }
 .ai-task-evidence.dim { opacity: 0.7; }
+/* 대상 탭 다시 고르기 — 카드 안에서 펼쳐지는 인라인 패널(떠 있는 팝오버 금지: 콘텐츠 뷰를 가린다). */
+.ai-target-picker { margin-top: 6px; border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 6px; background: var(--color-bg-base); display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.ai-target-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; }
+.ai-target-expected { font-size: 11px; color: var(--color-text-secondary); word-break: break-all; }
+.ai-target-expected.dim { opacity: 0.75; }
+.ai-target-item {
+  display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%;
+  border: 1px solid var(--color-border-subtle); border-radius: 6px; padding: 5px 7px;
+  background: var(--color-bg-elevated); color: var(--color-text-primary); cursor: pointer; font: inherit;
+}
+.ai-target-item:hover:not(:disabled) { border-color: var(--color-accent); }
+.ai-target-item:disabled { opacity: 0.55; cursor: default; }
+.ai-target-title { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-target-sub { font-size: 10px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-task-trace { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; max-height: 110px; overflow-y: auto; }
 .ai-task-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .ai-ctx-toggle { display: flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--color-text-muted); margin-bottom: 6px; cursor: pointer; }

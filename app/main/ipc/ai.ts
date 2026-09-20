@@ -57,7 +57,8 @@ import {
 import {
   taskEvents, listTasks, getTask, createTask, startTask, pauseTask, resumeTask,
   cancelTask, deleteTask, confirmTask, answerTask, acceptTaskResult,
-  type PersistentTask, type TaskSummary, type TaskBudget,
+  listTaskTargets, setTaskTarget,
+  type PersistentTask, type TaskSummary, type TaskBudget, type TaskTargetList,
 } from '../features/ai/task-runtime'
 import { getAllWindows, getWindow, broadcastToInternalPages } from '../windows/window-service'
 
@@ -918,6 +919,17 @@ function registerPersistentTaskIpc(): void {
   mutate(IPC.ai.ptaskAccept, (task) => acceptTaskResult(task.id))
   mutate(IPC.ai.ptaskConfirm, (task, _e, args) => confirmTask(task.id, !!args.approved))
   mutate(IPC.ai.ptaskAnswer, (task, _e, args) => answerTask(task.id, String(args.answer ?? '')))
+  mutate(IPC.ai.ptaskSetTarget, (task, _e, args) => setTaskTarget(task.id, String(args.tabId ?? '')))
+
+  // 대상 탭 후보 목록 — 다른 조회 채널(ptaskGet 등)과 같은 원칙으로 소유권 검사 없이 신뢰 창이면 허용.
+  // (렌더러가 준 tabId 를 그대로 믿지 않는 실제 검증은 위 ptaskSetTarget → setTaskTarget 안에서 한다.)
+  const emptyTargetList = (reason: string): TaskTargetList => (
+    { ok: false, reason, expected: { url: null, windowLabel: null, workspaceName: null }, tabs: [] }
+  )
+  ipcMain.handle(IPC.ai.ptaskTargets, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return emptyTargetList('권한 없음')
+    return typeof args?.id === 'string' && args.id ? listTaskTargets(args.id) : emptyTargetList('작업을 찾을 수 없습니다.')
+  })
 
   taskEvents.on('changed', (list: TaskSummary[]) => {
     for (const ctx of getAllWindows()) {

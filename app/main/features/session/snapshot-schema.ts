@@ -42,6 +42,8 @@ function sanitizeTab(raw: unknown, fallbackIndex: number): SessionTabSnap | null
     ? t.historyIndex
     : undefined
   return {
+    // 복원 안정 키 — 없으면(옛 스냅샷) undefined 로 두고 복원이 새 키를 발급한다.
+    restoreKey: typeof t.restoreKey === 'string' && t.restoreKey ? t.restoreKey : undefined,
     url,
     title: typeof t.title === 'string' && t.title ? t.title : url,
     pinned: t.pinned === true,
@@ -80,6 +82,7 @@ function sanitizeWindow(raw: unknown): { window: SessionWindowSnap | null; dropp
   return {
     window: {
       windowId: typeof w.windowId === 'string' ? w.windowId : '',
+      restoreKey: typeof w.restoreKey === 'string' && w.restoreKey ? w.restoreKey : undefined,
       bounds: sanitizeBounds(w.bounds),
       activeTabId: typeof w.activeTabId === 'string' ? w.activeTabId : null,
       tabs,
