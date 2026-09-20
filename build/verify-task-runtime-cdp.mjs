@@ -685,20 +685,39 @@ async function main() {
       await sleep(3000)
       const hitsGone2 = (await srv.counts()).hits
 
-      // 같은 URL 의 새 탭을 열고 "조치했으니 계속" → 옛 탭 id 가 아니라 URL 로 다시 찾아야 한다.
+      // 같은 URL 의 새 탭을 연다. **예전에는** 앱이 URL 로 비슷한 탭을 찾아 스스로 붙었다 —
+      // 그게 같은 사이트의 다른 글·다른 계정 탭을 집는 사고의 원인이었다(2026-09-20).
+      // 이제는 복원 안정 키로만 찾고, 못 찾으면 **사람이 고를 때까지 붙지 않는다.**
       const tabB = (await newTab(windowId, `${srv.base}/?tag=t9`)).id
       await sleep(2000)
+
+      // (추가 조건 1) "계속" 만으로는 재바인딩되지 않는다 — 새 탭이 눈앞에 있어도 추측하지 않는다.
       await confirmTask(id, true)
-      const rebound = await waitUntil(async () => (await srv.counts()).hits > hitsGone2, 40000)
+      const guessed = await waitUntil(async () => (await srv.counts()).hits > hitsGone2, 12000)
+      const askAgain = await waitTask(id, (t) => t.state === 'waiting-user' || t.state === 'interrupted', 20000)
+      const causeAfterResume = String(askAgain.task?.waitCause ?? '')
+      const hitsAfterGuess = (await srv.counts()).hits
+
+      // (추가 조건 2) 명시 선택하면 그 탭에서 재개된다 — 목록은 메인이 정본이고, 고른 뒤 이어가기는 따로.
+      const targets = await api(`ptaskTargets(${J(id)})`)
+      const pick = (targets?.tabs ?? []).find((x) => x.tabId === tabB)
+      const setRes = pick ? await api(`ptaskSetTarget(${J(id)}, ${J(tabB)})`) : { ok: false, error: '후보 목록에 새 탭이 없다' }
+      if (setRes?.ok) await resumeTask(id)
+      const rebound = setRes?.ok
+        ? await waitUntil(async () => (await srv.counts()).hits > hitsAfterGuess, 40000)
+        : false
       const after = await getTask(id)
 
-      check('T9', '복원 시 옛 탭 id 를 쓰지 않고 같은 워크스페이스의 같은 URL 탭을 찾거나 사용자에게 묻는다(다른 워크스페이스 탭으로 넘어가지 않는다)',
-        askTab.ok && /탭/.test(t9TabGoneReason) && hitsGone2 === hitsWhileGone
-        && otherWsHttpTabs >= 1 && tabB !== tabA && rebound,
+      check('T9', '복원 시 옛 탭 id 를 쓰지 않는다 + 계속만으로는 재바인딩되지 않고, 명시 선택해야 그 탭에서 재개된다',
+        askTab.ok && /탭|페이지/.test(t9TabGoneReason) && hitsGone2 === hitsWhileGone
+        && otherWsHttpTabs >= 1 && tabB !== tabA
+        && !guessed && hitsAfterGuess === hitsGone2       // 추측으로 붙지 않았다
+        && !!pick && setRes?.ok === true && rebound,       // 고른 뒤에는 그 탭에서 이어간다
         `탭 닫은 뒤 상태=${stateOf(askTab.task)} 사유="${t9TabGoneReason.slice(0, 60)}"`
         + ` · 그 사이 클릭 ${hitsWhileGone}→${hitsGone2}(늘면 남의 탭을 조작한 것)`
         + ` · 원래 워크스페이스의 http 탭 ${otherWsHttpTabs}개가 살아 있었는데도 그쪽으로 안 넘어갔다(부정 사례 유효)`
-        + ` · 새 탭(${tabB}) 으로 재바인딩되어 클릭 재개=${rebound} · 최종 상태=${stateOf(after)}`)
+        + ` · [계속만] 추측 재바인딩=${guessed}(false 여야) 클릭 ${hitsGone2}→${hitsAfterGuess} 대기사유=${causeAfterResume || '(없음)'}`
+        + ` · [명시 선택] 후보에 새 탭 있음=${!!pick} 지정=${J(setRes)} 재개=${rebound} · 최종 상태=${stateOf(after)}`)
       await cancelTask(id)
       await jval(`window.browserAPI.workspace.activate(${J(originWs)})`)
       await sleep(1500)

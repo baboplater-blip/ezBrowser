@@ -71,7 +71,7 @@
 | 다중 창 복원·재바인딩 | `verify-window-tabs-cdp`(신규) | **10/10 PASS** (아래 4절) |
 | 게시 탭 재바인딩 | `verify-auto-publish` | **58/58 PASS** (신설 4종 + 기존 54) |
 | 타입 | `tsc --noEmit` main·preload·renderer | **3/3 무오류** |
-| T9 갱신 | `verify-task-runtime-cdp` | **하지 않았다** (5절) |
+| T9 갱신 + 기존 전체 | `verify-task-runtime-cdp` | **15/15 PASS** (T9 는 조건 2개 추가) |
 
 산출물: `dist/ezBrowser-0.2.0-rc.17-win-x64.exe` · 121,944,684 B(116.3 MB) ·
 sha256 `7b7aeee0f8a656532879fe917e1667ef4924f68b23ea9e89d92e28180aab964e` · `--publish never` · **미서명**.
@@ -133,13 +133,9 @@ sha256 `7b7aeee0f8a656532879fe917e1667ef4924f68b23ea9e89d92e28180aab964e` · `--
 
 ## 5. 이번에 확인하지 못한 것 (정직하게)
 
-- **T9 갱신은 하지 않았다.** `verify-task-runtime-cdp.mjs` 는 손대지 않았다(기존 조건 그대로 — 약화
-  없음). `tab-target` 은 **프로세스 재시작 뒤 첫 구간**에서만 나오는데 T9 는 재시작을 하지 않는
-  시나리오라, 자연스럽게 붙이려면 16분짜리 스위트의 구조를 바꿔야 했고 그 재검증 여유가 없었다.
-  그 조건의 **내용**("이어가기만으론 재바인딩 안 됨" / "명시 선택하면 재개")은 **W4·W5 가 실제 크래시
-  재시작으로 더 엄격하게** 검증한다. 다만 파일 단위 약속은 미이행이므로 남은 작업으로 선언한다.
-- **`verify:full`(전체 게이트)은 돌리지 않았다.** 이번에 돌린 것은 `npm run verify`(19/19)와 영향 범위
-  하네스다. `window-tabs` 는 full 모드에 등록해 두고 단독 실행으로 10/10 을 확인했다.
+- **`verify:full`(전체 게이트 37단계)은 돌리지 않았다.** 이번에 돌린 것은 `npm run verify`(19/19)와
+  영향 범위 하네스(`window-tabs` 10/10 · `task-runtime` 15/15 · `auto-publish` 58/58)다.
+  `window-tabs` 는 full 모드에 등록해 두었다.
 - **rc.17 설치파일의 설치→부팅→제거는 검증하지 않았다.** 이 PC 에 사용자 실설치본이 등록돼 있어
   `verify-install` 이 스스로 BLOCKED 된다(무인 설치·제거가 그것을 덮어쓴다). **우회하지 않았다.**
   rc.17 은 `dist/win-unpacked` 직접 실행으로 확인했다(스모크 16/16 · window-tabs 10/10).
