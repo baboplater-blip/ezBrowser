@@ -1,7 +1,7 @@
-import { ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc-channels'
 import { getReport, perfEvents } from '../features/perf'
 import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
+import { handleTrusted } from './trust'
 
 function broadcast(channel: string, payload?: unknown): void {
   for (const ctx of getAllWindows()) {
@@ -13,6 +13,6 @@ function broadcast(channel: string, payload?: unknown): void {
 }
 
 export function registerPerfIpc(): void {
-  ipcMain.handle(IPC.perf.report, () => getReport())
+  handleTrusted(IPC.perf.report, () => getReport())
   perfEvents.on('milestone', (m) => broadcast(IPC.perf.milestone, m))
 }

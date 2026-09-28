@@ -339,6 +339,12 @@ const api = {
   },
 }
 
-contextBridge.exposeInMainWorld('internalAPI', api)
+// 탭이 browser:// 로 열린 뒤 외부 사이트로 이동해도 이 preload 스크립트는 새 문서에서
+// 다시 실행된다(탭 생성 시 preload 선택은 최초 URL 기준 1회뿐 — tab-service.ts 참고).
+// internalAPI 는 북마크·이력·비밀번호 등 민감 API 를 담고 있으므로, 신뢰하는 내부
+// 스킴(현재는 browser: 뿐 — session-bootstrap.ts 의 protocol.handle 과 일치)일 때만 노출한다.
+if (window.location.protocol === 'browser:') {
+  contextBridge.exposeInMainWorld('internalAPI', api)
+}
 
 export type InternalAPI = typeof api

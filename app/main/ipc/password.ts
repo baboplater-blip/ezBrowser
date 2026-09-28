@@ -55,7 +55,10 @@ function isIncognitoSender(e: IpcMainInvokeEvent): boolean {
 }
 
 export function registerPasswordIpc(): void {
-  ipcMain.handle(IPC.password.available, () => isPasswordStorageAvailable())
+  ipcMain.handle(IPC.password.available, (e) => {
+    if (!isTrustedSender(e)) return false
+    return isPasswordStorageAvailable()
+  })
 
   ipcMain.handle(IPC.password.list, (e) => {
     if (!isTrustedSender(e)) return []

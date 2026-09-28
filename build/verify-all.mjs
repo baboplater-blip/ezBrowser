@@ -401,6 +401,13 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: '사용자 입력을 파일에 쓰는 5경로가 잘못된 입력을 거부하는가 G1~G6',
     },
     {
+      id: 'ipc-trust', kind: 'harness', modes: ['full'],
+      script: 'verify-ipc-trust-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'ipc-trust', 'ipc-trust-results.json'),
+      timeoutMs: 8 * 60000,
+      desc: 'IPC 신뢰 경계 — internalAPI 프로토콜 가드(항목1)·판정함수(U1~U4)·가드 회귀(B1~B5)',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',

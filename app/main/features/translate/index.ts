@@ -1,5 +1,6 @@
 import { ipcMain, net, type WebContents } from 'electron'
 import { IPC } from '../../../shared/ipc-channels'
+import { isTrustedSender } from '../../ipc/trust'
 
 interface BatchPayload { texts: string[]; target?: string }
 
@@ -36,7 +37,10 @@ function translateChunk(text: string, target: string): Promise<string> {
 }
 
 export function initTranslate(): void {
-  ipcMain.handle(IPC.translate.batch, async (_e, args: BatchPayload) => {
+  ipcMain.handle(IPC.translate.batch, async (e, args: BatchPayload) => {
+    // 현재 어떤 preload 도 이 채널을 노출하지 않는다(페이지 번역은 콘텐츠 컨텍스트에서 직접 fetch) —
+    // 방어적으로 신뢰된 발신자만 허용한다.
+    if (!isTrustedSender(e)) return args.texts.map(() => '')
     const target = args.target ?? 'ko'
     const joined = args.texts.join(SEP)
     if (joined.length === 0) return [] as string[]
