@@ -51,6 +51,10 @@ const api = {
       ipcRenderer.invoke(IPC.userscript.setEnabled, { id, enabled }),
     onChanged: (cb: (list: UserscriptSummary[]) => void) =>
       on(IPC.userscript.changed, cb),
+    // GM_registerMenuCommand 백엔드 플러밍(item 7) — 아직 어떤 UI 도 소비하지 않는다.
+    menuList: (tabId?: string): Promise<Array<{ id: string; scriptId: string; scriptName: string; label: string; tabId: string }>> =>
+      ipcRenderer.invoke(IPC.userscript.menuList, { tabId }),
+    menuRun: (commandId: string): Promise<boolean> => ipcRenderer.invoke(IPC.userscript.menuRun, { commandId }),
   },
   policy: {
     list: (): Promise<PolicyRuleSummary[]> => ipcRenderer.invoke(IPC.policy.list),

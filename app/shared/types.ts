@@ -187,6 +187,20 @@ export interface TopSite {
 
 export type UserscriptRunAt = 'document-start' | 'document-end' | 'document-idle'
 
+export interface UserscriptResource {
+  name: string
+  url: string
+}
+
+// @resource 캐시 — 저장(설치) 시점에 1회 내려받아 결과를 레코드에 박아 둔다. 주입 시점엔
+// 디스크/네트워크 접근이 전혀 없어야(동기 IPC 로 매 네비게이션마다 호출되므로) 하기 때문.
+export interface UserscriptResourceCacheEntry {
+  mime: string
+  text?: string      // GM_getResourceText — UTF-8 로 디코드 가능했던 경우만
+  dataUrl?: string    // GM_getResourceURL — data: URI (크기 상한 내)
+  error?: string
+}
+
 export interface Userscript {
   id: string
   name: string
@@ -202,6 +216,15 @@ export interface Userscript {
   source: string
   createdAt: number
   updatedAt: number
+  // ===== 묶음 I 확장 =====
+  noframes: boolean
+  connect: string[]              // @connect — GM_xmlhttpRequest 허용 호스트 화이트리스트
+  includePatterns: string[]      // @include — chrome match pattern 또는 /regex/
+  requireUrls: string[]          // @require — https 만 허용
+  requireBundle: string          // 저장 시점에 내려받아 이어붙인 @require 코드(런타임엔 순수 문자열)
+  requireErrors: string[]        // 내려받기 실패한 @require URL (진단용)
+  resources: UserscriptResource[] // @resource name url
+  resourceCache: Record<string, UserscriptResourceCacheEntry>
 }
 
 export interface UserscriptSummary {
@@ -212,6 +235,9 @@ export interface UserscriptSummary {
   enabled: boolean
   match: string[]
   updatedAt: number
+  grant: string[]
+  noframes: boolean
+  requireErrors: string[]
 }
 
 export interface HeaderPair {

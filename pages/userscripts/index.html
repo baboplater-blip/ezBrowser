@@ -63,6 +63,10 @@
         color: var(--muted); font-size: 13px;
       }
       .stub code { background: var(--card); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; }
+      .meta-panel { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; align-items: center; }
+      .chip { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); color: var(--muted); }
+      .chip.warn { color: var(--danger); border-color: var(--danger); }
+      .chip.on { color: var(--accent); border-color: var(--accent); }
     
       /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
       button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
@@ -94,6 +98,7 @@
               <button id="save-btn" class="btn primary">저장</button>
               <button id="delete-btn" class="btn danger">삭제</button>
             </div>
+            <div class="meta-panel" id="meta-panel"></div>
             <textarea id="source-area" spellcheck="false" placeholder="// ==UserScript==&#10;// @name        예시 스크립트&#10;// @match       https://example.com/*&#10;// @description 무엇을 하는지&#10;// @version     1.0&#10;// @grant       none&#10;// ==/UserScript==&#10;&#10;(function() {&#10;  'use strict'&#10;  console.log('Hello from userscript')&#10;})()"></textarea>
           </div>
         </section>
@@ -159,6 +164,25 @@
         })
       }
 
+      const metaPanel = document.getElementById('meta-panel')
+      function renderMeta(full) {
+        if (!full) { metaPanel.innerHTML = ''; return }
+        const grants = (full.grant || [])
+        const isNone = grants.length === 0 || (grants.length === 1 && grants[0] === 'none')
+        const chips = []
+        chips.push('<span class="chip ' + (isNone ? '' : 'on') + '">' + (isNone ? 'GM 없음(메인 월드)' : '격리 월드 · GM ' + grants.length + '개') + '</span>')
+        chips.push('<span class="chip">' + escape(full.runAt || 'document-end') + '</span>')
+        if (full.noframes) chips.push('<span class="chip">noframes</span>')
+        if (full.connect && full.connect.length) chips.push('<span class="chip">@connect ' + full.connect.length + '개</span>')
+        if (full.requireUrls && full.requireUrls.length) {
+          chips.push('<span class="chip">@require ' + full.requireUrls.length + '개</span>')
+        }
+        if (full.requireErrors && full.requireErrors.length) {
+          chips.push('<span class="chip warn" title="' + escape(full.requireErrors.join('\n')) + '">@require 실패 ' + full.requireErrors.length + '개</span>')
+        }
+        metaPanel.innerHTML = chips.join('')
+      }
+
       async function selectScript(id) {
         const full = await window.internalAPI.userscript.get(id)
         if (!full) return
@@ -168,6 +192,7 @@
         sourceArea.value = full.source
         enabledBtn.textContent = full.enabled ? '활성 ✓' : '비활성'
         enabledBtn.classList.toggle('primary', full.enabled)
+        renderMeta(full)
         showEditor()
         renderList()
       }
@@ -179,6 +204,7 @@
         sourceArea.value = STARTER
         enabledBtn.textContent = '활성 ✓'
         enabledBtn.classList.add('primary')
+        renderMeta(null)
         showEditor()
         renderList()
         sourceArea.focus()
@@ -187,9 +213,17 @@
       saveBtn.addEventListener('click', async function() {
         const source = sourceArea.value
         if (!source.trim()) return alert('빈 스크립트는 저장 안 됩니다.')
-        const saved = await window.internalAPI.userscript.save({ id: currentId || undefined, source })
-        currentId = saved.id
-        editorName.textContent = saved.name
+        saveBtn.disabled = true
+        saveBtn.textContent = '저장 중… (@require 확인)'
+        try {
+          const saved = await window.internalAPI.userscript.save({ id: currentId || undefined, source })
+          currentId = saved.id
+          editorName.textContent = saved.name
+          renderMeta(saved)
+        } finally {
+          saveBtn.disabled = false
+          saveBtn.textContent = '저장'
+        }
       })
 
       deleteBtn.addEventListener('click', async function() {
