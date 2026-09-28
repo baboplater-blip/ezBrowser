@@ -807,12 +807,17 @@
       function data() {
         return '<h2>데이터 관리</h2>'
           + '<div class="section">'
-          + '<div class="info-line">설정·키맵·워크스페이스·북마크·이력·유저스크립트·정책·비밀번호·userChrome·매크로·디자인토큰·읽기목록·새탭위젯(메모·할일·바로가기)·AI(대화·기억·에이전트 작업) 을 한 묶음 JSON 으로 백업·복원합니다.</div>'
-          + '<div class="info-line"><b>비밀번호는 safeStorage 암호문 그대로 export</b> — 같은 PC/계정에서만 복호화 가능합니다.</div>'
-          + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
+          + '<div class="info-line">설정·키맵·워크스페이스·북마크·이력·유저스크립트·정책·userChrome·매크로·디자인토큰·읽기목록·새탭위젯(메모·할일·바로가기)·AI(대화·기억·에이전트 작업) 을 한 묶음 JSON 으로 백업·복원합니다.</div>'
+          + '<div class="info-line"><b>비밀번호는 기본적으로 제외됩니다.</b> safeStorage 암호문은 이 PC 에서만 풀 수 있어, 암호 없이 내보내면 어디서도 복원 못 하는 값만 남기 때문입니다. 아래에 백업 암호(최소 6자)를 입력하면 그 암호로 다시 암호화해 다른 PC 에서도 복원 가능한 형태로 함께 담습니다.</div>'
+          + '<div class="ai-key-ctl" style="margin-top:10px;">'
+          +   '<input type="password" id="data-backup-pw" autocomplete="off" placeholder="백업 암호 (선택 — 비밀번호 포함하려면 입력, 최소 6자)" style="min-width:280px;" />'
+          + '</div>'
+          + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'
           +   '<button class="btn primary" id="data-export">📤 모든 데이터 내보내기 (JSON)</button>'
           +   '<button class="btn" id="data-import">📥 가져오기</button>'
           + '</div>'
+          + '<div id="data-import-panel" style="display:none;margin-top:12px;"></div>'
+          + '<div id="data-result" class="info-line" style="margin-top:8px;"></div>'
           + '<div class="info-line" style="margin-top:8px;color:var(--muted);">가져오기 후에는 변경 사항이 완전히 반영되도록 앱을 재시작하는 것을 권장합니다.</div>'
           + '</div>'
           + '<div class="section"><h3>다른 브라우저에서 가져오기</h3>'
@@ -1219,12 +1224,30 @@
         }
       }
 
+      const CODE_ITEM_LABEL = (rel) => {
+        if (rel === 'userChrome.js') return 'userChrome.js (외피에 주입되는 JS)'
+        if (rel === 'macros.json') return '매크로 (자동화 액션 시퀀스)'
+        if (rel.startsWith('userscripts/')) return '유저스크립트 — ' + rel
+        if (rel.startsWith('policies/')) return '사이트 정책 (customJs 포함 가능) — ' + rel
+        return rel
+      }
+
       function bindData() {
         const exportBtn = document.getElementById('data-export')
         const importBtn = document.getElementById('data-import')
+        const panelEl = document.getElementById('data-import-panel')
+        const resultEl = document.getElementById('data-result')
+
         if (exportBtn) {
           exportBtn.addEventListener('click', async () => {
-            const bundle = await window.internalAPI.data.export()
+            resultEl.textContent = ''
+            const pwInput = document.getElementById('data-backup-pw')
+            const backupPassword = pwInput ? pwInput.value.trim() : ''
+            if (backupPassword && backupPassword.length < 6) {
+              resultEl.textContent = '⚠ 백업 암호는 최소 6자 이상이어야 합니다.'
+              return
+            }
+            const bundle = await window.internalAPI.data.export(backupPassword ? { backupPassword } : undefined)
             const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' })
             const a = document.createElement('a')
             const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -1232,29 +1255,92 @@
             a.download = 'browserbuild-data-' + ts + '.json'
             document.body.appendChild(a); a.click(); a.remove()
             setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+            resultEl.textContent = bundle.passwordsEncrypted
+              ? '✓ 내보내기 완료 (비밀번호 포함 — 백업 암호로 재암호화됨)'
+              : '✓ 내보내기 완료 (비밀번호 미포함)'
           })
         }
+
         if (importBtn) {
-          importBtn.addEventListener('click', async () => {
+          importBtn.addEventListener('click', () => {
             const input = document.createElement('input')
             input.type = 'file'
             input.accept = 'application/json,.json'
             input.addEventListener('change', async () => {
               const file = input.files?.[0]
               if (!file) return
+              resultEl.textContent = ''
+              let bundle
               try {
-                const text = await file.text()
-                const bundle = JSON.parse(text)
-                if (!confirm('가져오기를 진행하면 기존 데이터의 일부가 덮어쓰입니다. 계속할까요?\n\n(앱 재시작 권장)')) return
-                const r = await window.internalAPI.data.import(bundle)
-                if (r.ok) {
-                  alert('복원 완료: ' + r.restored + '개 항목' + (r.errors.length ? '\n오류 ' + r.errors.length + '건' : ''))
-                } else {
-                  alert('가져오기 실패\n' + r.errors.join('\n'))
-                }
+                bundle = JSON.parse(await file.text())
               } catch (e) {
-                alert('JSON 파싱 실패: ' + (e && e.message ? e.message : e))
+                resultEl.textContent = '⚠ JSON 파싱 실패: ' + (e && e.message ? e.message : e)
+                return
               }
+              const preview = await window.internalAPI.data.previewCode(bundle)
+              const codeItems = preview.codeItems || []
+              const hasPasswords = !!bundle.passwordsEncrypted
+              const fileCount = bundle.files ? Object.keys(bundle.files).length : 0
+
+              let html = '<div class="section" style="padding:12px 14px;border:1px solid var(--border);border-radius:10px;">'
+              html += '<h3>가져오기 확인</h3>'
+              html += '<div class="info-line">이 백업에는 항목 ' + fileCount + '개가 있습니다. 기존 데이터의 일부가 덮어써집니다.</div>'
+              if (codeItems.length > 0) {
+                html += '<div class="info-line" style="color:var(--danger);"><b>⚠ 실행 코드를 담을 수 있는 항목 ' + codeItems.length + '개</b>가 있습니다 — 신뢰할 수 있는 백업에서만 포함하세요.</div>'
+                html += '<ul style="margin:4px 0 8px 20px;font-size:12px;color:var(--muted);">'
+                for (const rel of codeItems) html += '<li>' + CODE_ITEM_LABEL(rel).replace(/</g, '&lt;') + '</li>'
+                html += '</ul>'
+                html += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">'
+                  + '<input type="checkbox" id="data-import-code" /> <span>코드 포함 항목도 가져오기</span></label>'
+              }
+              if (hasPasswords) {
+                html += '<div class="info-line" style="margin-top:8px;">이 백업에는 비밀번호가 포함돼 있습니다. 내보낼 때 입력한 백업 암호를 입력하세요.</div>'
+                html += '<div class="ai-key-ctl"><input type="password" id="data-import-pw" autocomplete="off" placeholder="백업 암호" style="min-width:220px;" /></div>'
+              }
+              html += '<div style="display:flex;gap:8px;margin-top:10px;">'
+                + '<button class="btn primary" id="data-import-confirm">가져오기 진행</button>'
+                + '<button class="btn" id="data-import-cancel">취소</button>'
+                + '</div></div>'
+              panelEl.innerHTML = html
+              panelEl.style.display = ''
+
+              document.getElementById('data-import-cancel').addEventListener('click', () => {
+                panelEl.style.display = 'none'
+                panelEl.innerHTML = ''
+              })
+              document.getElementById('data-import-confirm').addEventListener('click', async () => {
+                const codeCb = document.getElementById('data-import-code')
+                const pwField = document.getElementById('data-import-pw')
+                const confirmBtn = document.getElementById('data-import-confirm')
+                confirmBtn.disabled = true
+                try {
+                  const r = await window.internalAPI.data.import(bundle, {
+                    includeCode: !!(codeCb && codeCb.checked),
+                    backupPassword: pwField ? pwField.value : undefined,
+                  })
+                  panelEl.style.display = 'none'
+                  panelEl.innerHTML = ''
+                  const pwMsg = {
+                    'not-present': '',
+                    'skipped-no-password': ' · 비밀번호: 암호 미입력으로 건너뜀',
+                    'wrong-password': ' · 비밀번호: 암호가 올바르지 않음',
+                    'invalid-passphrase': ' · 비밀번호: 암호가 너무 짧음',
+                    imported: ' · 비밀번호 ' + r.passwordImported + '개 추가, ' + r.passwordUpdated + '개 갱신',
+                  }[r.passwordStatus] || ''
+                  const codeMsg = r.codeItemsSkipped && r.codeItemsSkipped.length
+                    ? ' · 코드 항목 ' + r.codeItemsSkipped.length + '개 제외됨'
+                    : ''
+                  if (r.ok) {
+                    resultEl.textContent = '✓ 복원 완료: ' + r.restored + '개 항목'
+                      + pwMsg + codeMsg
+                      + (r.errors.length ? ' · 오류 ' + r.errors.length + '건' : '')
+                  } else {
+                    resultEl.textContent = '⚠ 가져오기 실패: ' + r.errors.join(' / ')
+                  }
+                } finally {
+                  confirmBtn.disabled = false
+                }
+              })
             })
             input.click()
           })
