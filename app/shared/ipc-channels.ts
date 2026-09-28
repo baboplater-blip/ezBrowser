@@ -291,6 +291,10 @@ export const IPC = {
     clearOrigin: 'permissions:clear-origin',
     clearAll: 'permissions:clear-all',
     changed: 'permissions:changed',
+    // 사이트가 media/geolocation/notifications/clipboard-read 를 요청했는데 저장된 결정이
+    // 없을 때 — 메인이 이 채널로 외피에 프롬프트를 띄우고, 외피는 promptRespond 로 답한다.
+    promptOpen: 'permissions:prompt-open',
+    promptRespond: 'permissions:prompt-respond',
   },
   readlater: {
     list: 'readlater:list',
