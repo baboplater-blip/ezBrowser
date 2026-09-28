@@ -65,6 +65,8 @@ export interface OmniboxSuggestion {
   url?: string
   icon?: string
   actionId?: string
+  // source === 'tab' 일 때만 채워짐 — 선택 시 새로 로드하지 않고 그 탭으로 전환한다.
+  tabId?: string
   score: number
 }
 

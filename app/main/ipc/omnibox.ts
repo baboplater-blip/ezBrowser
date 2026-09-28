@@ -9,6 +9,7 @@ import {
 import { createTab, listTabs, navigateTab } from '../tabs/tab-service'
 import { searchBookmarks } from '../storage/bookmarks'
 import { searchHistory } from '../storage/history'
+import { getSetting } from '../storage/settings'
 
 interface SuggestEntry { value: OmniboxSuggestion[]; expiresAt: number }
 const cache = new Map<string, SuggestEntry>()
@@ -111,7 +112,9 @@ async function combineSuggestions(query: string, windowId?: string): Promise<Omn
     })
   }
 
-  const bangResult = parseBangAndQuery(q)
+  // bang(!yt 등)은 설정에서 끌 수 있다 — 꺼져 있으면 "!" 로 시작하는 입력도 일반 검색·URL 해석으로 넘어간다.
+  const bangsEnabled = getSetting('search').bangsEnabled
+  const bangResult = bangsEnabled ? parseBangAndQuery(q) : { query: q }
   if (bangResult.bang) {
     out.push({
       id: `bang-${bangResult.bang.trigger}`, source: 'search',
@@ -138,8 +141,9 @@ async function combineSuggestions(query: string, windowId?: string): Promise<Omn
     ).slice(0, 3)
     for (const t of tabs) {
       out.push({
+        // 탭으로 전환 — url 은 표시·매칭용, 실제 선택 시엔 tabId 로 그 탭에 activate 한다(재로드 방지).
         id: `tab-${t.id}`, source: 'tab',
-        text: t.title, detail: t.url, url: t.url, score: 0.6,
+        text: t.title, detail: t.url, url: t.url, tabId: t.id, score: 0.6,
       })
     }
   }
@@ -206,7 +210,7 @@ export function registerOmniboxIpc(): void {
     const direct = normalizeUrl(input)
     let target = direct
     if (!target) {
-      const bang = parseBangAndQuery(input)
+      const bang = getSetting('search').bangsEnabled ? parseBangAndQuery(input) : { query: input }
       if (bang.bang) target = bang.bang.url.replace('{query}', encodeURIComponent(bang.query))
       else {
         const kw = parseEngineKeywordAndQuery(input)

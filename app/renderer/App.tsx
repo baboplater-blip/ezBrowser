@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TabBar } from './components/TabBar'
 import { Toolbar } from './components/Toolbar'
 import { SiteInfo } from './components/SiteInfo'
+import { BookmarkBubble } from './components/BookmarkBubble'
 import { CommandPalette } from './components/CommandPalette'
 import { TabSearch } from './components/TabSearch'
 import { RecentlyClosed } from './components/RecentlyClosed'
@@ -79,9 +80,13 @@ export function App() {
   const [recentClosedOpen, setRecentClosedOpen] = useState(false)
   const [siteInfoOpen, setSiteInfoOpen] = useState(false)
   const [siteInfoAnchor, setSiteInfoAnchor] = useState<{ x: number; y: number }>({ x: 80, y: 72 })
+  const [bookmarkBubbleOpen, setBookmarkBubbleOpen] = useState(false)
+  const [bookmarkBubbleAnchor, setBookmarkBubbleAnchor] = useState<{ x: number; y: number }>({ x: 80, y: 72 })
+  const [bookmarkBubbleUrl, setBookmarkBubbleUrl] = useState('')
   const [sidePanelRequest, setSidePanelRequest] = useState<{ side: 'left' | 'right'; tab: 'ai' | 'bookmarks' | 'history' | 'notes' | 'readlater'; nonce: number } | undefined>(undefined)
   const [findOpen, setFindOpen] = useState(false)
   const [findInitialText, setFindInitialText] = useState('')
+  const [findStepSignal, setFindStepSignal] = useState<{ forward: boolean; nonce: number } | null>(null)
   const [panel, setPanel] = useState<Panel>('none')
   const [downloadsOpen, setDownloadsOpen] = useState<boolean>(() => loadBool(DOWNLOADS_OPEN_KEY, false))
   const [videoOpen, setVideoOpen] = useState<boolean>(false)
@@ -339,6 +344,15 @@ export function App() {
     return off
   }, [])
 
+  // F3/Shift+F3/Ctrl+G — 찾기 바가 닫혀 있으면 여는 것으로, 열려 있으면 다음/이전 매치로 이동.
+  useEffect(() => {
+    const off = window.browserAPI.find.onStep(({ forward }) => {
+      if (!findOpen) { setFindInitialText(''); setFindOpen(true); return }
+      setFindStepSignal({ forward, nonce: Date.now() })
+    })
+    return off
+  }, [findOpen])
+
   const activeDownloads = downloads.filter((d) => d.state === 'active' || d.state === 'paused').length
 
   // 팔레트·찾기바·플라이아웃 패널(userChrome)·기록삭제 모달 등 오버레이가 열리면 chrome view 를
@@ -352,6 +366,7 @@ export function App() {
   useChromeOverlay(windowId, tabSearchOpen)
   useChromeOverlay(windowId, recentClosedOpen)
   useChromeOverlay(windowId, siteInfoOpen)
+  useChromeOverlay(windowId, bookmarkBubbleOpen)
   useChromeOverlay(windowId, findOpen)
   useChromeOverlay(windowId, clearDataOpen)
   useChromeOverlay(windowId, panel === 'userchrome')
@@ -424,6 +439,7 @@ export function App() {
         setClearDataOpen(true)
       } else if (e.key === 'Escape') {
         if (clearDataOpen) setClearDataOpen(false)
+        else if (bookmarkBubbleOpen) setBookmarkBubbleOpen(false)
         else if (siteInfoOpen) setSiteInfoOpen(false)
         else if (recentClosedOpen) setRecentClosedOpen(false)
         else if (tabSearchOpen) setTabSearchOpen(false)
@@ -433,7 +449,7 @@ export function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [paletteOpen, tabSearchOpen, recentClosedOpen, siteInfoOpen, panel, clearDataOpen])
+  }, [paletteOpen, tabSearchOpen, recentClosedOpen, siteInfoOpen, panel, clearDataOpen, bookmarkBubbleOpen])
 
   return (
     <div className="app">
@@ -461,6 +477,9 @@ export function App() {
               onToggleRightPanel={() => setRightPanelOpen((v) => !v)}
               onToggleWorkspaceRail={() => setWorkspaceRailOpen((v) => !v)}
               onOpenSiteInfo={(x, y) => { setSiteInfoAnchor({ x, y }); setSiteInfoOpen(true) }}
+              onOpenBookmarkBubble={(x, y, url) => {
+                setBookmarkBubbleAnchor({ x, y }); setBookmarkBubbleUrl(url); setBookmarkBubbleOpen(true)
+              }}
               onOpenAi={() => {
                 setRightPanelOpen(true)
                 setSidePanelRequest((prev) => ({ side: 'right', tab: 'ai', nonce: (prev?.nonce ?? 0) + 1 }))
@@ -536,6 +555,7 @@ export function App() {
             open={findOpen}
             initialText={findInitialText}
             tabId={activeTab?.id}
+            stepSignal={findStepSignal}
             onClose={() => setFindOpen(false)}
           />
           <UserChromePanel open={panel === 'userchrome'} onClose={() => setPanel('none')} />
@@ -568,6 +588,13 @@ export function App() {
             active={activeTab}
             anchor={siteInfoAnchor}
             onClose={() => setSiteInfoOpen(false)}
+          />
+          <BookmarkBubble
+            windowId={windowId}
+            open={bookmarkBubbleOpen}
+            url={bookmarkBubbleUrl}
+            anchor={bookmarkBubbleAnchor}
+            onClose={() => setBookmarkBubbleOpen(false)}
           />
         </>
       )}

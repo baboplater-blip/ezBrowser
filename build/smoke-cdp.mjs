@@ -456,7 +456,12 @@ async function scenarioS3(ctx) {
 }
 
 async function scenarioS4(ctx) {
-  // 북마크 추가/제거 — bookmarks API + Toolbar DOM(.bookmark-btn.active) 상태 동시 검증.
+  // 북마크 추가/편집 — bookmarks API + Toolbar DOM(.bookmark-btn.active) 상태 동시 검증.
+  //
+  // action.bookmark.add(Ctrl+D)는 더 이상 두 번째 실행에서 삭제하지 않는다(묶음 C — 확인
+  // 없는 오삭제 방지, 삭제는 BookmarkBubble 의 "삭제" 버튼으로만). 그래서 이 시나리오는
+  // ① 두 번 실행해도 여전히 북마크 상태인지(새 동작) ② 실제 삭제(bookmarks.remove, 버블의
+  // 삭제 버튼과 동일 경로)로는 정상 제거되는지를 함께 본다.
   const navTabId = ctx.state.navTabId
   if (!navTabId) throw new Error('S2 의 navTabId 필요 (S2 가 먼저 성공해야 함)')
   const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
@@ -467,11 +472,16 @@ async function scenarioS4(ctx) {
   await callApi(ctx.chromeSession, 'tabs.activate', [navTabId])
   await sleep(200) // 활성 탭 전환이 Toolbar 리렌더에 반영될 시간
 
-  // 시작 상태를 깨끗하게(미북마크)로 정리.
-  const isBookmarked = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
-  if (isBookmarked) {
-    await callApi(ctx.chromeSession, 'actions.run', ['action.bookmark.add', { windowId: ctx.windowId, tabId: navTabId }])
-    await sleep(300)
+  // 시작 상태를 깨끗하게(미북마크)로 정리 — bookmarks.remove 로 직접(예전처럼 두 번째
+  // action.bookmark.add 를 쓰면 더는 지워지지 않는다).
+  const findId = async () => {
+    const tree = await callApi(ctx.chromeSession, 'bookmarks.list', [])
+    return tree.bookmarks.find((b) => b.url === url)?.id ?? null
+  }
+  const staleId = await findId()
+  if (staleId != null) {
+    await callApi(ctx.chromeSession, 'bookmarks.remove', [staleId])
+    await sleep(200)
   }
 
   await callApi(ctx.chromeSession, 'actions.run', ['action.bookmark.add', { windowId: ctx.windowId, tabId: navTabId }])
@@ -479,15 +489,29 @@ async function scenarioS4(ctx) {
   const afterAdd = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
   const domActive = await evaluate(ctx.chromeSession, `!!document.querySelector('.bookmark-btn.active')`)
 
+  // 두 번째 실행(이미 북마크됨) — 더 이상 삭제되지 않아야 한다(오삭제 방지 fix).
   await callApi(ctx.chromeSession, 'actions.run', ['action.bookmark.add', { windowId: ctx.windowId, tabId: navTabId }])
+  await sleep(300)
+  const afterSecondRun = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
+
+  // 실제 삭제는 BookmarkBubble 의 삭제 버튼과 동일한 경로(bookmarks.remove)로만.
+  const id = await findId()
+  if (id == null) throw new Error('추가된 북마크 id 를 찾지 못함')
+  await callApi(ctx.chromeSession, 'bookmarks.remove', [id])
   await sleep(300)
   const afterRemove = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
   const domInactive = await evaluate(ctx.chromeSession, `!document.querySelector('.bookmark-btn.active')`)
 
-  if (!(afterAdd === true && domActive === true && afterRemove === false && domInactive === true)) {
-    throw new Error(`북마크 토글 불일치: afterAdd=${afterAdd} domActive=${domActive} afterRemove=${afterRemove} domInactive=${domInactive}`)
+  // action.bookmark.add 는 편집 말풍선(BookmarkBubble)을 연다 — 여기서는 API 로 직접
+  // remove 해 버블의 "완료/삭제" 버튼을 거치지 않았으므로 말풍선이 열린 채 남는다.
+  // 다음 시나리오(S8 등)의 Escape 가 팔레트 대신 이 말풍선을 닫아버리지 않도록 정리한다.
+  await evaluate(ctx.chromeSession, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`)
+  await sleep(200)
+
+  if (!(afterAdd === true && domActive === true && afterSecondRun === true && afterRemove === false && domInactive === true)) {
+    throw new Error(`북마크 토글 불일치: afterAdd=${afterAdd} domActive=${domActive} afterSecondRun(삭제안됨 기대)=${afterSecondRun} afterRemove=${afterRemove} domInactive=${domInactive}`)
   }
-  return `${url} 북마크 추가(isBookmarked=true, ★ DOM active)→제거(isBookmarked=false, ☆) 확인`
+  return `${url} 북마크 추가(isBookmarked=true, ★ DOM active)→재실행해도 유지→bookmarks.remove 로 제거(isBookmarked=false, ☆) 확인`
 }
 
 // ── S5(다운로드) · S6(동영상 감지+다운로드) 공용 헬퍼 ──────────────────────

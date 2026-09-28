@@ -4,10 +4,11 @@ interface FindBarProps {
   open: boolean
   initialText: string
   tabId: string | undefined
+  stepSignal?: { forward: boolean; nonce: number } | null
   onClose: () => void
 }
 
-export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
+export function FindBar({ open, initialText, tabId, stepSignal, onClose }: FindBarProps) {
   const [text, setText] = useState('')
   const [matchCase, setMatchCase] = useState(false)
   const [result, setResult] = useState<{ active: number; total: number } | null>(null)
@@ -54,6 +55,15 @@ export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
     if (!tabId || !text) return
     void window.browserAPI.find.start(tabId, text, { forward, findNext: true, matchCase })
   }
+
+  // F3/Shift+F3/Ctrl+G — 이미 검색어가 있을 때만 이동(없으면 조용히 무시, 찾기 바를 여는 것만으로 충분).
+  const stepNonceRef = useRef<number>(0)
+  useEffect(() => {
+    if (!stepSignal || stepSignal.nonce === stepNonceRef.current) return
+    stepNonceRef.current = stepSignal.nonce
+    step(stepSignal.forward)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepSignal])
 
   const close = (): void => {
     if (tabId) void window.browserAPI.find.stop(tabId)

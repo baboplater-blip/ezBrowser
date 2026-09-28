@@ -56,7 +56,7 @@ import {
 import { startTabSleepLoop } from './features/tab-sleep'
 import { trackFind } from './features/find'
 import { trackContextMenu } from './features/context-menu'
-import { trackZoom } from './features/page-tools'
+import { trackZoom, trackPageShortcuts } from './features/page-tools'
 import { initSessionTracking, maybeRestoreSession } from './features/session'
 import { initAutoUpdate } from './features/auto-update'
 import {
@@ -196,6 +196,7 @@ if (!app.requestSingleInstanceLock()) {
           trackFind(wc, id)
           trackContextMenu(wc, id)
           trackZoom(wc, id)
+          trackPageShortcuts(wc, id)
           wc.once('did-finish-load', () => recordFirstTabLoaded())
         }
         // 확장에 탭을 알린다 — 등록하지 않으면 chrome.tabs.query 가 늘 빈 배열이다.

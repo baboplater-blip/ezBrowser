@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { TabSummary } from '../../shared/types'
+import type { OmniboxSuggestion, TabSummary } from '../../shared/types'
 import { OmniboxSuggestions } from './OmniboxSuggestions'
 import { useOmniboxSuggestions } from '../hooks/useOmniboxSuggestions'
 import { ExtensionActions } from './ExtensionActions'
@@ -32,6 +32,7 @@ interface Props {
   onToggleWorkspaceRail: () => void
   onOpenSiteInfo: (anchorX: number, anchorY: number) => void
   onOpenAi: () => void
+  onOpenBookmarkBubble: (anchorX: number, anchorY: number, url: string) => void
 }
 
 export function Toolbar({
@@ -40,7 +41,7 @@ export function Toolbar({
   videoCandidateCount, videoOpen, onToggleVideo,
   leftPanelOpen, rightPanelOpen, workspaceRailOpen,
   onToggleLeftPanel, onToggleRightPanel, onToggleWorkspaceRail,
-  onOpenSiteInfo, onOpenAi,
+  onOpenSiteInfo, onOpenAi, onOpenBookmarkBubble,
 }: Props) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
@@ -48,7 +49,10 @@ export function Toolbar({
   const [highlight, setHighlight] = useState(0)
   const [bookmarked, setBookmarked] = useState(false)
   const [readLaterSaved, setReadLaterSaved] = useState(false)
+  const [removedSuggestionIds, setRemovedSuggestionIds] = useState<Set<string>>(new Set())
+  const [zoom, setZoom] = useState<{ level: number; factor: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const bookmarkBtnRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
 
   useEffect(() => {
@@ -71,6 +75,17 @@ export function Toolbar({
     void window.browserAPI.actions.run('action.bookmark.add', { windowId, tabId: active.id })
   }
 
+  // 별 버튼(또는 Ctrl+D)이 실행되면 메인이 이 탭에 대해 편집 말풍선을 열라고 알려온다 —
+  // 좌표는 렌더러만 아는 정보라 여기서 버튼 위치를 다시 재서 넘긴다.
+  useEffect(() => {
+    const off = window.browserAPI.bookmarks.onBubbleOpen(({ tabId }) => {
+      if (!active || tabId !== active.id || !active.url) return
+      const r = bookmarkBtnRef.current?.getBoundingClientRect()
+      onOpenBookmarkBubble(r?.left ?? 0, r?.bottom ?? 0, active.url)
+    })
+    return off
+  }, [active, onOpenBookmarkBubble])
+
   useEffect(() => {
     let cancelled = false
     const url = active?.url
@@ -87,6 +102,24 @@ export function Toolbar({
     void window.browserAPI.actions.run('action.readlater.add', { windowId, tabId: active.id })
   }
 
+  // 탭 전환 시 그 탭의 현재 배율을 읽어온다.
+  useEffect(() => {
+    let cancelled = false
+    const id = active?.id
+    if (!id) { setZoom(null); return }
+    void window.browserAPI.page.zoomGet(id).then((z) => { if (!cancelled) setZoom(z) })
+    return () => { cancelled = true }
+  }, [active?.id])
+
+  // Ctrl+휠·핀치 줌 또는 다른 곳(단축키·메뉴)에서 배율이 바뀌면 배지 실시간 갱신.
+  useEffect(() => {
+    const off = window.browserAPI.page.onZoomChanged(({ tabId, level, factor }) => {
+      if (tabId !== active?.id) return
+      setZoom({ level, factor })
+    })
+    return off
+  }, [active?.id])
+
   useEffect(() => {
     if (!focused) setValue(active?.url ?? '')
   }, [active, focused])
@@ -99,7 +132,11 @@ export function Toolbar({
     return off
   }, [])
 
-  const suggestions = useOmniboxSuggestions(value, windowId, focused && !composing)
+  // 검색어가 바뀌면 이전 검색에서 삭제한 이력 항목 숨김을 초기화한다.
+  useEffect(() => { setRemovedSuggestionIds(new Set()) }, [value])
+
+  const suggestionsRaw = useOmniboxSuggestions(value, windowId, focused && !composing)
+  const suggestions = suggestionsRaw.filter((s) => !removedSuggestionIds.has(s.id))
 
   useEffect(() => { setHighlight(0) }, [suggestions])
 
@@ -111,7 +148,16 @@ export function Toolbar({
     else window.browserAPI.tabs.reload(active.id)
   }
 
-  async function submit(input?: string) {
+  // Ctrl+Enter: 입력이 공백·스킴 없는 한 단어면 www.<입력>.com 으로 완성(크롬 표준 동작).
+  function ctrlEnterUrl(text: string): string | null {
+    const t = text.trim()
+    if (!t || /\s/.test(t) || /^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return null
+    const bare = t.replace(/^www\./i, '')
+    if (!bare) return null
+    return `https://www.${bare}.com`
+  }
+
+  async function submit(input?: string, newTab?: boolean) {
     const text = (input ?? value).trim()
     if (!text) return
     if (text.startsWith('magnet:?') || /\.torrent(\?|$)/i.test(text)) {
@@ -120,39 +166,58 @@ export function Toolbar({
       setValue(''); inputRef.current?.blur()
       return
     }
-    await window.browserAPI.omnibox.navigate(windowId, active?.id, text)
+    // Alt+Enter: 현재 탭을 놔두고 새 탭에 연다 — tabId 를 안 주면 omnibox.navigate 가 새 탭을 만든다.
+    await window.browserAPI.omnibox.navigate(windowId, newTab ? undefined : active?.id, text)
     setValue('')
     inputRef.current?.blur()
+  }
+
+  function selectSuggestion(target: OmniboxSuggestion, newTab: boolean): void {
+    if (target.source === 'tab' && target.tabId) {
+      // "탭으로 전환" — 다시 불러오지 않고 이미 열려 있는 그 탭으로 이동한다.
+      void window.browserAPI.tabs.activate(target.tabId)
+    } else if (target.actionId) {
+      void window.browserAPI.actions.run(target.actionId, { windowId, tabId: active?.id })
+    } else if (target.url) {
+      if (newTab || !active) void window.browserAPI.tabs.create(windowId, target.url)
+      else void window.browserAPI.tabs.navigate(active.id, target.url)
+    }
+    setValue(''); inputRef.current?.blur()
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (composing) return
     if (e.key === 'Enter') {
       e.preventDefault()
-      const target = suggestions[highlight]
-      if (target?.url) {
-        if (target.actionId) {
-          void window.browserAPI.actions.run(target.actionId, { windowId, tabId: active?.id })
-        } else if (active) {
-          void window.browserAPI.tabs.navigate(active.id, target.url)
-        } else {
-          void window.browserAPI.tabs.create(windowId, target.url)
-        }
-        setValue(''); inputRef.current?.blur()
-      } else {
-        void submit()
+      if (e.ctrlKey && !e.altKey) {
+        const url = ctrlEnterUrl(value)
+        if (url) { void submit(url, false); return }
       }
+      const target = suggestions[highlight]
+      if (target?.url || target?.actionId) selectSuggestion(target, e.altKey)
+      else void submit(undefined, e.altKey)
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlight((h) => Math.min(h + 1, suggestions.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setHighlight((h) => Math.max(h - 1, 0))
+    } else if ((e.key === 'Delete' || e.key === 'Del') && e.shiftKey) {
+      // Shift+Delete — 강조된 이력 제안을 방문 기록에서 삭제(크롬 표준 동작).
+      const target = suggestions[highlight]
+      if (target?.source === 'history' && target.url) {
+        e.preventDefault()
+        void window.browserAPI.history.remove({ url: target.url })
+        setRemovedSuggestionIds((prev) => { const next = new Set(prev); next.add(target.id); return next })
+      }
     } else if (e.key === 'Escape') {
       setValue(active?.url ?? '')
       inputRef.current?.blur()
     }
   }
+
+  // 100% 가 아닐 때만 배지 표시 — 기본 배율에서는 크롬처럼 조용히 숨어 있는다.
+  const zoomPercent = zoom && Math.abs(zoom.factor - 1) > 0.001 ? Math.round(zoom.factor * 100) : null
 
   return (
     <div className="toolbar">
@@ -191,6 +256,7 @@ export function Toolbar({
           className="omnibox"
           placeholder="검색하거나 URL · 명령 입력 (예: !yt 검색어)"
           value={value}
+          style={zoomPercent !== null ? { paddingRight: 52 } : undefined}
           onChange={(e) => setValue(e.target.value)}
           onCompositionStart={() => setComposing(true)}
           onCompositionEnd={() => setComposing(false)}
@@ -199,19 +265,22 @@ export function Toolbar({
           onKeyDown={handleKey}
           spellCheck={false}
         />
+        {zoomPercent !== null && (
+          <button
+            className="zoom-badge"
+            aria-label={`배율 ${zoomPercent}% — 클릭해서 100%로`}
+            title={`배율 ${zoomPercent}% — 클릭해서 기본 배율로`}
+            onClick={() => {
+              if (!active) return
+              void window.browserAPI.page.zoomSet(active.id, 0).then((z) => setZoom(z))
+            }}
+          >{zoomPercent}%</button>
+        )}
         {focused && suggestions.length > 0 && (
           <OmniboxSuggestions
             items={suggestions}
             highlight={highlight}
-            onSelect={(item) => {
-              if (item.actionId) {
-                void window.browserAPI.actions.run(item.actionId, { windowId, tabId: active?.id })
-              } else if (item.url) {
-                if (active) void window.browserAPI.tabs.navigate(active.id, item.url)
-                else void window.browserAPI.tabs.create(windowId, item.url)
-              }
-              setValue(''); inputRef.current?.blur()
-            }}
+            onSelect={(item) => selectSuggestion(item, false)}
           />
         )}
       </div>
@@ -241,9 +310,10 @@ export function Toolbar({
           <Icon name="panel-right" size={16} />
         </button>
         <button
+          ref={bookmarkBtnRef}
           className={`nav-btn bookmark-btn ${bookmarked ? 'active' : ''}`}
-          aria-label={bookmarked ? '북마크 제거' : '북마크 추가'}
-          title={bookmarked ? '북마크 제거 (Ctrl+D)' : '북마크에 추가 (Ctrl+D)'}
+          aria-label={bookmarked ? '북마크 편집' : '북마크 추가'}
+          title={bookmarked ? '북마크 편집 (Ctrl+D)' : '북마크에 추가 (Ctrl+D)'}
           onClick={toggleBookmark}
           disabled={!active}
         >

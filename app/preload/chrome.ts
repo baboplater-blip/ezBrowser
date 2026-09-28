@@ -214,6 +214,7 @@ const api = {
     onResult: (cb: (payload: { tabId: string; requestId: number; activeMatchOrdinal: number; matches: number; finalUpdate: boolean }) => void) =>
       on(IPC.find.result, cb),
     onOpen: (cb: (payload: { initialText?: string }) => void) => on(IPC.find.open, cb),
+    onStep: (cb: (payload: { forward: boolean }) => void) => on(IPC.find.step, cb),
   },
   page: {
     print: (tabId: string): Promise<{ ok: boolean; error?: string }> =>
@@ -224,6 +225,8 @@ const api = {
       ipcRenderer.invoke(IPC.page.zoomGet, { tabId }),
     zoomSet: (tabId: string, delta: -1 | 0 | 1): Promise<{ level: number; factor: number } | null> =>
       ipcRenderer.invoke(IPC.page.zoomSet, { tabId, delta }),
+    onZoomChanged: (cb: (payload: { tabId: string; level: number; factor: number }) => void) =>
+      on(IPC.page.zoomChanged, cb),
   },
   torrent: {
     add: (uri: string): Promise<string | null> =>
@@ -265,6 +268,7 @@ const api = {
     folderRemove: (id: number): Promise<void> =>
       ipcRenderer.invoke(IPC.bookmarks.folderRemove, { id }),
     onChanged: (cb: (tree: BookmarkTree) => void) => on(IPC.bookmarks.changed, cb),
+    onBubbleOpen: (cb: (payload: { tabId: string }) => void) => on(IPC.bookmarks.bubbleOpen, cb),
   },
   history: {
     recent: (limit?: number): Promise<HistoryEntry[]> =>

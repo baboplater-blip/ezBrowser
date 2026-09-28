@@ -132,12 +132,16 @@ export const IPC = {
     stop: 'find:stop',
     result: 'find:result',
     open: 'find:open',
+    // F3/Shift+F3/Ctrl+G — 찾기 바가 열려 있으면 다음/이전 매치로, 닫혀 있으면 여는 것으로 처리.
+    step: 'find:step',
   },
   page: {
     print: 'page:print',
     printToPdf: 'page:print-to-pdf',
     zoomGet: 'page:zoom-get',
     zoomSet: 'page:zoom-set',
+    // Ctrl+휠·핀치 줌 또는 키보드 배율 변경 시 활성 탭의 새 배율을 외피에 알림(배지 표시용).
+    zoomChanged: 'page:zoom-changed',
   },
   translate: {
     batch: 'translate:batch',
@@ -201,6 +205,8 @@ export const IPC = {
     exportHtml: 'bookmarks:export-html',
     importHtml: 'bookmarks:import-html',
     changed: 'bookmarks:changed',
+    // 별 버튼/Ctrl+D 로 북마크를 추가(또는 이미 있으면 그대로 두고) 직후 편집 말풍선을 띄우라는 신호.
+    bubbleOpen: 'bookmarks:bubble-open',
   },
   history: {
     recent: 'history:recent',
