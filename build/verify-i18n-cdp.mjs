@@ -137,6 +137,20 @@ async function main() {
       check('I4', 'browser://settings(en) — 언어 select 현재값이 en(설정 시드가 실제 반영)', selValue === 'en', `select.value="${selValue}"`)
 
       settingsSession.close()
+
+      // I4b~I4d: AI 사이드바(묶음 M2) — 이 검증 머신은 AI 제공자가 미연결이라(하네스 실행 환경
+      // 특성) AiTab 이 항상 셋업 화면(.ai-setup)으로 먼저 뜬다 — 그 화면의 주요 문구·빈 상태가
+      // en 인지를 대조한다(모드 버튼·챗 웰컴은 provider 연결 후에만 보이므로 별도 다루지 않음).
+      await evaluate(shell, `document.querySelector('.ai-btn')?.click()`)
+      await sleep(1500)
+      const setupTitle = await evaluate(shell, `(document.querySelector('.ai-setup-title')?.textContent || '').trim()`)
+      check('I4b', 'AI 사이드바(en) — 셋업 화면 제목이 영어("Connect AI")', setupTitle === 'Connect AI', `title="${setupTitle}"`)
+
+      const costLabel = await evaluate(shell, `(document.querySelector('.ai-provider-cost.cost-subscription')?.textContent || '').trim()`)
+      check('I4c', 'AI 사이드바(en) — 제공자 카드의 비용 라벨이 영어', costLabel === 'Subscription account · No extra charge', `cost="${costLabel}"`)
+
+      const moreSummary = await evaluate(shell, `(document.querySelector('.ai-provider-more summary')?.textContent || '').trim()`)
+      check('I4d', 'AI 사이드바(en) — "준비되지 않은 방법 N개 보기" 접기 요약이 영어', /Show \d+ not-yet-ready option/.test(moreSummary), `summary="${moreSummary}"`)
     } catch (err) {
       check('FATAL-EN', 'en 시드 실행', false, err.message)
     } finally {
@@ -166,6 +180,15 @@ async function main() {
       check('I6', 'browser://settings(vi) — "자동" 옵션 라벨이 베트남어', langAuto === 'Tự động (theo hệ thống)', `auto="${langAuto ?? '(못찾음)'}"`)
 
       settingsSession.close()
+
+      // I6b~I6c: AI 사이드바(묶음 M2) — I4b~I4d 와 같은 이유로 셋업 화면(.ai-setup) 기준 대조.
+      await evaluate(shell, `document.querySelector('.ai-btn')?.click()`)
+      await sleep(1500)
+      const setupTitleVi = await evaluate(shell, `(document.querySelector('.ai-setup-title')?.textContent || '').trim()`)
+      check('I6b', 'AI 사이드바(vi) — 셋업 화면 제목이 베트남어("Kết nối AI")', setupTitleVi === 'Kết nối AI', `title="${setupTitleVi}"`)
+
+      const costLabelVi = await evaluate(shell, `(document.querySelector('.ai-provider-cost.cost-subscription')?.textContent || '').trim()`)
+      check('I6c', 'AI 사이드바(vi) — 제공자 카드의 비용 라벨이 베트남어', costLabelVi === 'Tài khoản đăng ký · Không phí thêm', `cost="${costLabelVi}"`)
     } catch (err) {
       check('FATAL-VI', 'vi 시드 실행', false, err.message)
     } finally {

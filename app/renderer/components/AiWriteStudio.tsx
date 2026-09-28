@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Markdown } from './Markdown'
+import { useI18nT } from '../i18n'
 
 // 블로그 글쓰기 스튜디오 — 주제·옵션 → AI 초안(제목 후보·본문·태그·SEO 요약) → 편집 →
 // 에디터에 넣기(에이전트) 또는 복사/내보내기. 초안 저장·불러오기 + 시리즈 연재 지원.
@@ -9,17 +10,29 @@ interface BlogDraft { titles: string[]; tags: string[]; summary: string; bodyMar
 interface DraftSummary { id: string; title: string; topic: string; seriesId?: string; seriesTitle?: string; part?: number; updatedAt: number }
 interface SeriesPlan { seriesTitle: string; parts: Array<{ title: string; angle: string }> }
 
+// TONES 는 어조 값 자체가 생성 프롬프트로 그대로 전송되는 데이터라 번역 범위 밖(다른 파일의
+// TONE_PRESETS/AGENT_EXAMPLES.task 와 동일 판단). LENGTHS/PLATFORMS 는 v(코드)가 전송되고
+// label 만 화면에 쓰이므로 i18n 함수로 전환.
 const TONES = ['정보전달', '친근', '전문', '후기', '시니어']
-const LENGTHS: Array<{ v: 'short' | 'medium' | 'long'; label: string }> = [
-  { v: 'short', label: '짧게' }, { v: 'medium', label: '보통' }, { v: 'long', label: '길게' },
-]
-const PLATFORMS: Array<{ v: string; label: string }> = [
-  { v: 'naver', label: '네이버 블로그' }, { v: 'tistory', label: '티스토리' },
-  { v: 'wordpress', label: '워드프레스' }, { v: 'generic', label: '일반' },
-  { v: 'instagram', label: '인스타그램 (게시물)' },
-  { v: 'youtube', label: '유튜브 (동영상)' },
-  { v: 'tiktok', label: '틱톡 (동영상)' },
-]
+type TFn = (key: string, fallback?: string, vars?: Record<string, string | number>) => string
+function lengths(tr: TFn): Array<{ v: 'short' | 'medium' | 'long'; label: string }> {
+  return [
+    { v: 'short', label: tr('ai.write.length.short', '짧게') },
+    { v: 'medium', label: tr('ai.write.length.medium', '보통') },
+    { v: 'long', label: tr('ai.write.length.long', '길게') },
+  ]
+}
+function platforms(tr: TFn): Array<{ v: string; label: string }> {
+  return [
+    { v: 'naver', label: tr('ai.write.platform.naver', '네이버 블로그') },
+    { v: 'tistory', label: tr('ai.write.platform.tistory', '티스토리') },
+    { v: 'wordpress', label: tr('ai.write.platform.wordpress', '워드프레스') },
+    { v: 'generic', label: tr('ai.write.platform.generic', '일반') },
+    { v: 'instagram', label: tr('ai.write.platform.instagram', '인스타그램 (게시물)') },
+    { v: 'youtube', label: tr('ai.write.platform.youtube', '유튜브 (동영상)') },
+    { v: 'tiktok', label: tr('ai.write.platform.tiktok', '틱톡 (동영상)') },
+  ]
+}
 
 function newId(): string { try { return crypto.randomUUID() } catch { return `${Date.now()}-${Math.round(Math.random() * 1e9)}` } }
 function downloadText(name: string, text: string): void {
@@ -44,6 +57,7 @@ export function AiWriteStudio({
   onInsertToEditor: (task: string) => void
   preset?: { nonce: number; title: string; body: string } | null
 }) {
+  const tr = useI18nT()
   const [topic, setTopic] = useState('')
   const [tone, setTone] = useState('정보전달')
   const [length, setLength] = useState<'short' | 'medium' | 'long'>('medium')
@@ -110,7 +124,7 @@ export function AiWriteStudio({
     // 새 글 생성 → 새 초안으로 취급(기존 편집본 덮어쓰기 방지). 시리즈 편이면 part/series 유지.
     if (!over?.series) { setCurDraftId(null); setSeriesId(null); setSeriesTitle(''); setCurPart(undefined) }
     void window.browserAPI.ai.blogGenerate({ topic: t, tone, length, platform, keywords: keywords.trim() || undefined, extra: extra.trim() || undefined, ...(over?.series ? { series: over.series } : {}) })
-      .then((res) => { if (res.ok && res.draft) applyDraftResult(res.draft); else setError(res.error || '초안 생성에 실패했습니다.') })
+      .then((res) => { if (res.ok && res.draft) applyDraftResult(res.draft); else setError(res.error || tr('ai.write.generateFailed', '초안 생성에 실패했습니다.')) })
       .catch((e) => setError(String(e)))
       .finally(() => setGenerating(false))
   }
@@ -125,13 +139,13 @@ export function AiWriteStudio({
   }
 
   const saveDraft = () => {
-    if (!body.trim() && !title.trim()) { setNotice('저장할 내용이 없습니다.'); return }
+    if (!body.trim() && !title.trim()) { setNotice(tr('ai.write.nothingToSave', '저장할 내용이 없습니다.')); return }
     const tg = tags.split(',').map((s) => s.trim()).filter(Boolean)
     void window.browserAPI.ai.blogDraftSave({
-      id: curDraftId ?? undefined, topic, title: title.trim() || topic || '제목 없음', bodyMarkdown: body, tags: tg,
+      id: curDraftId ?? undefined, topic, title: title.trim() || topic || tr('ai.write.untitled', '제목 없음'), bodyMarkdown: body, tags: tg,
       summary: draft?.summary ?? '', options: { tone, length, platform, keywords },
       seriesId: seriesId ?? undefined, seriesTitle: seriesTitle || undefined, part: curPart,
-    }).then((r) => { if (r) { setCurDraftId(r.id); setNotice('💾 저장했습니다.') } })
+    }).then((r) => { if (r) { setCurDraftId(r.id); setNotice('💾 ' + tr('ai.write.saved', '저장했습니다.')) } })
   }
   const loadDraft = (id: string) => {
     void window.browserAPI.ai.blogDraftGet(id).then((d) => {
@@ -140,7 +154,7 @@ export function AiWriteStudio({
       if (d.options) { if (d.options.tone) setTone(d.options.tone); if (d.options.length) setLength(d.options.length as 'short' | 'medium' | 'long'); if (d.options.platform) setPlatform(d.options.platform); if (d.options.keywords != null) setKeywords(d.options.keywords) }
       setDraft({ titles: [d.title || ''], tags: d.tags || [], summary: d.summary || '', bodyMarkdown: d.bodyMarkdown || '' })
       setCurDraftId(d.id); setSeriesId(d.seriesId ?? null); setSeriesTitle(d.seriesTitle || ''); setCurPart(d.part)
-      setShowDrafts(false); setPreview(false); setNotice('불러왔습니다.')
+      setShowDrafts(false); setPreview(false); setNotice(tr('ai.write.loaded', '불러왔습니다.'))
     })
   }
   const removeDraft = (id: string, e: React.MouseEvent) => { e.stopPropagation(); void window.browserAPI.ai.blogDraftRemove(id) }
@@ -153,7 +167,7 @@ export function AiWriteStudio({
     void window.browserAPI.ai.blogSeriesPlan({ topic: t, parts: seriesParts, tone, platform, keywords: keywords.trim() || undefined })
       .then((res) => {
         if (res.ok && res.plan) { setSeriesPlan(res.plan); setSeriesId(newId()); setSeriesTitle(res.plan.seriesTitle) }
-        else setError(res.error || '시리즈 기획에 실패했습니다.')
+        else setError(res.error || tr('ai.write.seriesPlanFailed', '시리즈 기획에 실패했습니다.'))
       })
       .catch((e) => setError(String(e)))
       .finally(() => setSeriesGen(false))
@@ -175,13 +189,14 @@ export function AiWriteStudio({
   }, [drafts, seriesId])
 
   // 글 다듬기 — 지시대로 현재 본문을 고쳐 교체(되돌리기 위해 이전 본문 보관).
+  // instr 은 실제로 모델에 보내는 지시문이라 번역 범위 밖 — label(버튼 문구)만 옮긴다.
   const REFINE_PRESETS: Array<{ label: string; instr: string }> = [
-    { label: '더 짧게', instr: '전체를 30% 정도 더 짧고 간결하게 줄여줘. 핵심은 남기고.' },
-    { label: '더 자세히', instr: '설명이 부족한 부분을 더 자세하고 구체적으로 보강해줘.' },
-    { label: '표 추가', instr: '비교·요약할 내용이 있으면 마크다운 표를 하나 추가해줘.' },
-    { label: '도입부 강화', instr: '도입부를 독자의 흥미를 끌도록 더 매력적으로 다시 써줘.' },
-    { label: '더 쉽게', instr: '어려운 용어를 풀어 쓰고, 초보자도 이해하도록 쉽게 바꿔줘.' },
-    { label: 'FAQ 추가', instr: '글 끝에 자주 묻는 질문(FAQ) 2~3개를 추가해줘.' },
+    { label: tr('ai.write.refine.shorter', '더 짧게'), instr: '전체를 30% 정도 더 짧고 간결하게 줄여줘. 핵심은 남기고.' },
+    { label: tr('ai.write.refine.detailed', '더 자세히'), instr: '설명이 부족한 부분을 더 자세하고 구체적으로 보강해줘.' },
+    { label: tr('ai.write.refine.table', '표 추가'), instr: '비교·요약할 내용이 있으면 마크다운 표를 하나 추가해줘.' },
+    { label: tr('ai.write.refine.intro', '도입부 강화'), instr: '도입부를 독자의 흥미를 끌도록 더 매력적으로 다시 써줘.' },
+    { label: tr('ai.write.refine.easier', '더 쉽게'), instr: '어려운 용어를 풀어 쓰고, 초보자도 이해하도록 쉽게 바꿔줘.' },
+    { label: tr('ai.write.refine.faq', 'FAQ 추가'), instr: '글 끝에 자주 묻는 질문(FAQ) 2~3개를 추가해줘.' },
   ]
   const runRefine = (instruction: string) => {
     const instr = instruction.trim()
@@ -190,13 +205,13 @@ export function AiWriteStudio({
     const before = body
     void window.browserAPI.ai.blogRefine({ body, instruction: instr, title: title.trim() || undefined, tone, platform })
       .then((res) => {
-        if (res.ok && res.body) { setPrevBody(before); setBody(res.body); setPreview(false); setRefineInput(''); setNotice('✨ 다듬었습니다.') }
-        else setError(res.error || '다듬기에 실패했습니다.')
+        if (res.ok && res.body) { setPrevBody(before); setBody(res.body); setPreview(false); setRefineInput(''); setNotice('✨ ' + tr('ai.write.refined', '다듬었습니다.')) }
+        else setError(res.error || tr('ai.write.refineFailed', '다듬기에 실패했습니다.'))
       })
       .catch((e) => setError(String(e)))
       .finally(() => setRefining(false))
   }
-  const undoRefine = () => { if (prevBody != null) { setBody(prevBody); setPrevBody(null); setNotice('되돌렸습니다.') } }
+  const undoRefine = () => { if (prevBody != null) { setBody(prevBody); setPrevBody(null); setNotice(tr('ai.write.undone', '되돌렸습니다.')) } }
 
   // 공통 — 에디터 인지 태스크(네이버 SmartEditor ONE 특화)를 메인에서 만들어 에이전트로 넘긴다.
   // autoOpen 이면 글쓰기 페이지가 아닐 때(새 탭 등 내부 페이지 포함) 먼저 네이버 글쓰기 페이지로 이동한다.
@@ -205,12 +220,12 @@ export function AiWriteStudio({
   const handoff = async (mode: 'insert' | 'draft' | 'publish') => {
     if (!body.trim() || handoffBusy) return
     // 자동 열기가 꺼져 있고 지금 내부 페이지(새 탭 등)면 글쓰기 페이지가 없으니 안내.
-    if (!autoOpen && isInternal) { setNotice('블로그 글쓰기 페이지를 먼저 열거나, "글쓰기 페이지 자동 열기"를 켜세요.'); return }
+    if (!autoOpen && isInternal) { setNotice(tr('ai.write.needWritePage', '블로그 글쓰기 페이지를 먼저 열거나, "글쓰기 페이지 자동 열기"를 켜세요.')); return }
     setHandoffBusy(true); setNotice(null)
     try {
       if (isSns) {
         // SNS 게시 레시피 — 첨부 파일(자료 폴더)·캡션·제목. 'insert' 는 SNS 에선 의미가 없어 draft(게시 직전까지)로 취급.
-        if (!snsFile.trim()) { setNotice('첨부할 파일 이름(에이전트 자료 폴더 안)을 입력하세요. 예: photos/cat.jpg'); return }
+        if (!snsFile.trim()) { setNotice(tr('ai.write.needAttachFile', '첨부할 파일 이름(에이전트 자료 폴더 안)을 입력하세요. 예: photos/cat.jpg')); return }
         const sns = await window.browserAPI.ai.snsBuildTask({
           platform: platform as 'instagram' | 'youtube' | 'tiktok', mode: mode === 'publish' ? 'publish' : 'draft',
           file: snsFile.trim(), caption: body, title: title.trim() || undefined, tags: tagArr(), autoOpen,
@@ -220,7 +235,7 @@ export function AiWriteStudio({
           await new Promise((r) => setTimeout(r, 1400))
         }
         onInsertToEditor(sns.task)
-        setNotice(mode === 'publish' ? '에이전트가 첨부·캡션 입력 후 게시합니다. 게시 완료 문구가 뜨면 자동으로 끝납니다.' : '에이전트가 게시 직전까지만 준비합니다(게시 버튼은 누르지 않음).')
+        setNotice(mode === 'publish' ? tr('ai.write.snsPublishNotice', '에이전트가 첨부·캡션 입력 후 게시합니다. 게시 완료 문구가 뜨면 자동으로 끝납니다.') : tr('ai.write.snsDraftNotice', '에이전트가 게시 직전까지만 준비합니다(게시 버튼은 누르지 않음).'))
         return
       }
       const res = await window.browserAPI.ai.blogBuildTask({ platform, mode, title: title.trim(), body, tags: tagArr(), autoOpen })
@@ -231,8 +246,8 @@ export function AiWriteStudio({
         await new Promise((r) => setTimeout(r, 1400))
       }
       onInsertToEditor(res.task)
-      setNotice(mode === 'publish' ? '에이전트가 작성 후 발행합니다(발행 순간 확인).'
-        : mode === 'draft' ? '에이전트가 작성 후 임시저장합니다.' : '에이전트가 입력만 합니다.')
+      setNotice(mode === 'publish' ? tr('ai.write.blogPublishNotice', '에이전트가 작성 후 발행합니다(발행 순간 확인).')
+        : mode === 'draft' ? tr('ai.write.blogDraftNotice', '에이전트가 작성 후 임시저장합니다.') : tr('ai.write.blogInsertNotice', '에이전트가 입력만 합니다.'))
     } catch (e) {
       setError(String(e))
     } finally {
@@ -244,8 +259,8 @@ export function AiWriteStudio({
   if (!providerReady) {
     return (
       <div className="ai-welcome">
-        <div className="ai-welcome-title">✍️ 블로그 글쓰기</div>
-        <div className="ai-welcome-page dim">AI 설정을 먼저 완료하면 주제만 넣어 완성된 블로그 글을 만들 수 있습니다.</div>
+        <div className="ai-welcome-title">✍️ {tr('ai.write.title', '블로그 글쓰기')}</div>
+        <div className="ai-welcome-page dim">{tr('ai.write.needSetup', 'AI 설정을 먼저 완료하면 주제만 넣어 완성된 블로그 글을 만들 수 있습니다.')}</div>
       </div>
     )
   }
@@ -254,23 +269,23 @@ export function AiWriteStudio({
     <div className="ai-body ai-write">
       {/* 상단 도구 — 저장·불러오기·시리즈 */}
       <div className="ai-write-tools">
-        <button className="ai-mini-btn" onClick={saveDraft} disabled={!body.trim() && !title.trim()} title="현재 초안 저장">💾 저장</button>
-        <button className={`ai-mini-btn ${showDrafts ? 'active' : ''}`} onClick={() => { setShowDrafts((s) => !s); setShowSeries(false) }} title="저장한 초안 불러오기">🗂 초안 {drafts.length ? `(${drafts.length})` : ''}</button>
-        <button className={`ai-mini-btn ${showSeries ? 'active' : ''}`} onClick={() => { setShowSeries((s) => !s); setShowDrafts(false) }} title="시리즈 연재 기획">📚 시리즈</button>
-        {curPart ? <span className="ai-write-partbadge">연재 {curPart}편</span> : null}
+        <button className="ai-mini-btn" onClick={saveDraft} disabled={!body.trim() && !title.trim()} title={tr('ai.write.saveDraftTitle', '현재 초안 저장')}>💾 {tr('ai.write.save', '저장')}</button>
+        <button className={`ai-mini-btn ${showDrafts ? 'active' : ''}`} onClick={() => { setShowDrafts((s) => !s); setShowSeries(false) }} title={tr('ai.write.loadDraftTitle', '저장한 초안 불러오기')}>🗂 {tr('ai.write.drafts', '초안')} {drafts.length ? `(${drafts.length})` : ''}</button>
+        <button className={`ai-mini-btn ${showSeries ? 'active' : ''}`} onClick={() => { setShowSeries((s) => !s); setShowDrafts(false) }} title={tr('ai.write.seriesPlanTitle', '시리즈 연재 기획')}>📚 {tr('ai.write.series', '시리즈')}</button>
+        {curPart ? <span className="ai-write-partbadge">{tr('ai.write.partN', '연재 {n}편', { n: curPart })}</span> : null}
       </div>
 
       {/* 초안 목록 */}
       {showDrafts && (
         <div className="ai-write-drafts">
-          {drafts.length === 0 ? <div className="ai-welcome-page dim" style={{ padding: 12, textAlign: 'center' }}>저장된 초안이 없습니다.</div> : (
+          {drafts.length === 0 ? <div className="ai-welcome-page dim" style={{ padding: 12, textAlign: 'center' }}>{tr('ai.write.noDrafts', '저장된 초안이 없습니다.')}</div> : (
             drafts.map((d) => (
               <div key={d.id} className={`ai-write-draftrow ${curDraftId === d.id ? 'current' : ''}`} onClick={() => loadDraft(d.id)}>
                 <div className="ai-write-draftmain">
-                  <div className="ai-write-drafttitle">{d.seriesId ? <span className="ai-write-partbadge sm">{d.part}편</span> : null}{d.title}</div>
+                  <div className="ai-write-drafttitle">{d.seriesId ? <span className="ai-write-partbadge sm">{tr('ai.write.partNsm', '{n}편', { n: d.part ?? 0 })}</span> : null}{d.title}</div>
                   <div className="ai-write-draftsub">{d.seriesTitle ? `📚 ${d.seriesTitle}` : (d.topic || '')}</div>
                 </div>
-                <button className="ai-history-del" onClick={(e) => removeDraft(d.id, e)} title="삭제">×</button>
+                <button className="ai-history-del" onClick={(e) => removeDraft(d.id, e)} title={tr('ai.tab.delete', '삭제')}>×</button>
               </div>
             ))
           )}
@@ -281,22 +296,22 @@ export function AiWriteStudio({
       {showSeries && (
         <div className="ai-write-series">
           <div className="ai-write-serieshead">
-            <span>주제로 시리즈 기획 —</span>
+            <span>{tr('ai.write.seriesPlanHead', '주제로 시리즈 기획 —')}</span>
             <input type="number" min={2} max={12} value={seriesParts} onChange={(e) => setSeriesParts(Math.max(2, Math.min(12, Number(e.target.value) || 3)))} />
-            <span>부작</span>
-            <button className="ai-mini-btn" onClick={planSeries} disabled={!topic.trim() || seriesGen}>{seriesGen ? '기획 중…' : '기획하기'}</button>
+            <span>{tr('ai.write.parts', '부작')}</span>
+            <button className="ai-mini-btn" onClick={planSeries} disabled={!topic.trim() || seriesGen}>{seriesGen ? tr('ai.write.planning', '기획 중…') : tr('ai.write.plan', '기획하기')}</button>
           </div>
-          {!topic.trim() && <div className="ai-write-hint">먼저 아래에 시리즈 주제를 입력하세요.</div>}
+          {!topic.trim() && <div className="ai-write-hint">{tr('ai.write.enterSeriesTopicFirst', '먼저 아래에 시리즈 주제를 입력하세요.')}</div>}
           {seriesPlan && (
             <div className="ai-write-planlist">
               <div className="ai-write-planttl">📚 {seriesPlan.seriesTitle}</div>
               {seriesPlan.parts.map((p, i) => (
                 <div key={i} className="ai-write-planrow">
                   <div className="ai-write-planmain">
-                    <div className="ai-write-plantitle">{i + 1}. {p.title} {savedParts.has(i + 1) ? <span className="ai-write-partbadge sm ok">저장됨</span> : null}</div>
+                    <div className="ai-write-plantitle">{i + 1}. {p.title} {savedParts.has(i + 1) ? <span className="ai-write-partbadge sm ok">{tr('ai.write.savedBadge', '저장됨')}</span> : null}</div>
                     {p.angle && <div className="ai-write-plansub">{p.angle}</div>}
                   </div>
-                  <button className="ai-mini-btn" disabled={generating} onClick={() => writePart(i)} title="이 편 작성">✍️ 작성</button>
+                  <button className="ai-mini-btn" disabled={generating} onClick={() => writePart(i)} title={tr('ai.write.writeThisPartTitle', '이 편 작성')}>✍️ {tr('ai.write.writeThisPart', '작성')}</button>
                 </div>
               ))}
             </div>
@@ -306,25 +321,25 @@ export function AiWriteStudio({
 
       {/* 입력 폼 */}
       <div className="ai-write-form">
-        <label className="ai-write-label">주제 / 무엇에 대한 글인가요?</label>
+        <label className="ai-write-label">{tr('ai.write.topicLabel', '주제 / 무엇에 대한 글인가요?')}</label>
         <textarea className="ai-input ai-write-topic" rows={2} value={topic}
-          placeholder="예: 초보자를 위한 홈트레이닝 시작하는 법"
+          placeholder={tr('ai.write.topicPlaceholder', '예: 초보자를 위한 홈트레이닝 시작하는 법')}
           onChange={(e) => setTopic(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); generate() } }} />
         <div className="ai-write-quickopts">
-          <select value={tone} onChange={(e) => setTone(e.target.value)} title="어조">{TONES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-          <select value={length} onChange={(e) => setLength(e.target.value as 'short' | 'medium' | 'long')} title="분량">{LENGTHS.map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}</select>
-          <select value={platform} onChange={(e) => setPlatform(e.target.value)} title="발행처(SEO 최적화)">{PLATFORMS.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}</select>
-          <button className="ai-mini-btn" onClick={() => setShowOpts((s) => !s)} title="키워드·추가 요청">{showOpts ? '▾ 옵션' : '▸ 옵션'}</button>
+          <select value={tone} onChange={(e) => setTone(e.target.value)} title={tr('ai.write.tone', '어조')}>{TONES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+          <select value={length} onChange={(e) => setLength(e.target.value as 'short' | 'medium' | 'long')} title={tr('ai.write.lengthLabel', '분량')}>{lengths(tr).map((l) => <option key={l.v} value={l.v}>{l.label}</option>)}</select>
+          <select value={platform} onChange={(e) => setPlatform(e.target.value)} title={tr('ai.write.platformSeoTitle', '발행처(SEO 최적화)')}>{platforms(tr).map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}</select>
+          <button className="ai-mini-btn" onClick={() => setShowOpts((s) => !s)} title={tr('ai.write.keywordsExtraTitle', '키워드·추가 요청')}>{showOpts ? '▾ ' + tr('ai.write.options', '옵션') : '▸ ' + tr('ai.write.options', '옵션')}</button>
         </div>
         {showOpts && (
           <div className="ai-write-adv">
-            <input className="ai-input" value={keywords} placeholder="핵심 키워드 (쉼표, 검색 노출용)" onChange={(e) => setKeywords(e.target.value)} />
-            <input className="ai-input" value={extra} placeholder="추가 요청 (예: 3가지 팁 위주로, 표 포함)" onChange={(e) => setExtra(e.target.value)} />
+            <input className="ai-input" value={keywords} placeholder={tr('ai.write.keywordsPlaceholder', '핵심 키워드 (쉼표, 검색 노출용)')} onChange={(e) => setKeywords(e.target.value)} />
+            <input className="ai-input" value={extra} placeholder={tr('ai.write.extraPlaceholder', '추가 요청 (예: 3가지 팁 위주로, 표 포함)')} onChange={(e) => setExtra(e.target.value)} />
           </div>
         )}
         <button className="ai-send ai-write-gen" onClick={() => generate()} disabled={!topic.trim() || generating}>
-          {generating ? '✍️ 생성 중… (수십 초 걸릴 수 있어요)' : draft ? '🔄 다시 생성' : '✨ 글 생성'}
+          {generating ? '✍️ ' + tr('ai.write.generating', '생성 중… (수십 초 걸릴 수 있어요)') : draft ? '🔄 ' + tr('ai.write.regenerate', '다시 생성') : '✨ ' + tr('ai.write.generate', '글 생성')}
         </button>
         {error && <div className="ai-handoff-note ai-err">{error}</div>}
         {notice && <div className="ai-handoff-note">{notice}</div>}
@@ -333,8 +348,8 @@ export function AiWriteStudio({
       {/* 초안 결과 — 편집 가능 */}
       {draft && (
         <div className="ai-write-result">
-          {seriesTitle ? <div className="ai-write-seriesctx">📚 {seriesTitle}{curPart ? ` · ${curPart}편` : ''}</div> : null}
-          <label className="ai-write-label">제목 (후보 중 선택 · 수정 가능)</label>
+          {seriesTitle ? <div className="ai-write-seriesctx">📚 {seriesTitle}{curPart ? ' · ' + tr('ai.write.partNsm', '{n}편', { n: curPart }) : ''}</div> : null}
+          <label className="ai-write-label">{tr('ai.write.titleLabel', '제목 (후보 중 선택 · 수정 가능)')}</label>
           {draft.titles.length > 1 && (
             <div className="ai-write-titles">
               {draft.titles.map((tt, i) => (
@@ -344,10 +359,10 @@ export function AiWriteStudio({
               ))}
             </div>
           )}
-          <input className="ai-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="제목" />
+          <input className="ai-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tr('ai.write.titlePlaceholder', '제목')} />
           <div className="ai-write-bodyhead">
-            <label className="ai-write-label" style={{ margin: 0 }}>본문 {preview ? '(미리보기)' : '(편집)'}</label>
-            <button className="ai-mini-btn" onClick={() => setPreview((p) => !p)}>{preview ? '✎ 편집' : '👁 미리보기'}</button>
+            <label className="ai-write-label" style={{ margin: 0 }}>{tr('ai.write.body', '본문')} {preview ? tr('ai.write.previewParen', '(미리보기)') : tr('ai.write.editParen', '(편집)')}</label>
+            <button className="ai-mini-btn" onClick={() => setPreview((p) => !p)}>{preview ? '✎ ' + tr('ai.write.edit', '편집') : '👁 ' + tr('ai.write.preview', '미리보기')}</button>
           </div>
           {preview
             ? <div className="ai-write-preview"><Markdown text={body} windowId="" /></div>
@@ -356,8 +371,8 @@ export function AiWriteStudio({
           {/* 글 다듬기 — 지시로 본문 부분 개선 */}
           <div className="ai-write-refine">
             <div className="ai-write-refinehead">
-              <span className="ai-write-label" style={{ margin: 0 }}>✨ 글 다듬기</span>
-              {prevBody != null && <button className="ai-mini-btn" onClick={undoRefine} disabled={refining} title="다듬기 전으로 되돌리기">↩ 되돌리기</button>}
+              <span className="ai-write-label" style={{ margin: 0 }}>✨ {tr('ai.write.refineTitle', '글 다듬기')}</span>
+              {prevBody != null && <button className="ai-mini-btn" onClick={undoRefine} disabled={refining} title={tr('ai.write.undoRefineTitle', '다듬기 전으로 되돌리기')}>↩ {tr('ai.write.undo', '되돌리기')}</button>}
             </div>
             <div className="ai-write-refinepresets">
               {REFINE_PRESETS.map((p) => (
@@ -366,41 +381,41 @@ export function AiWriteStudio({
             </div>
             <div className="ai-input-row">
               <input className="ai-input" value={refineInput} disabled={refining}
-                placeholder="어떻게 다듬을까요? (예: 3번째 문단에 예시 추가)"
+                placeholder={tr('ai.write.refineInputPlaceholder', '어떻게 다듬을까요? (예: 3번째 문단에 예시 추가)')}
                 onChange={(e) => setRefineInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runRefine(refineInput) } }} />
-              <button className="ai-send" onClick={() => runRefine(refineInput)} disabled={refining || !refineInput.trim() || !body.trim()} title="다듬기">
+              <button className="ai-send" onClick={() => runRefine(refineInput)} disabled={refining || !refineInput.trim() || !body.trim()} title={tr('ai.write.refineBtn', '다듬기')}>
                 {refining ? '…' : '✨'}
               </button>
             </div>
           </div>
 
-          <label className="ai-write-label">태그 (쉼표)</label>
-          <input className="ai-input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="태그1, 태그2" />
+          <label className="ai-write-label">{tr('ai.write.tagsComma', '태그 (쉼표)')}</label>
+          <input className="ai-input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder={tr('ai.social.tagsPlaceholder', '태그1, 태그2')} />
           {isSns && (
             <>
-              <label className="ai-write-label">첨부 파일 (에이전트 자료 폴더 안 이름)</label>
-              <input className="ai-input" value={snsFile} onChange={(e) => setSnsFile(e.target.value)} placeholder={platform === 'instagram' ? 'photos/cat.jpg' : 'videos/clip.mp4'} title="설정 > AI > 에이전트 자료 폴더 안의 파일만 첨부할 수 있습니다" />
-              <div className="ai-write-seo">{platform === 'youtube' ? '제목은 위 제목 칸, 설명은 본문 칸을 씁니다.' : '본문 칸이 캡션이 됩니다. 태그는 해시태그로 붙습니다.'}</div>
+              <label className="ai-write-label">{tr('ai.write.attachFileLabel', '첨부 파일 (에이전트 자료 폴더 안 이름)')}</label>
+              <input className="ai-input" value={snsFile} onChange={(e) => setSnsFile(e.target.value)} placeholder={platform === 'instagram' ? 'photos/cat.jpg' : 'videos/clip.mp4'} title={tr('ai.tab.agentFilesDirTitle', '설정 > AI > 에이전트 자료 폴더 안의 파일만 첨부할 수 있습니다')} />
+              <div className="ai-write-seo">{platform === 'youtube' ? tr('ai.write.youtubeFieldHint', '제목은 위 제목 칸, 설명은 본문 칸을 씁니다.') : tr('ai.write.snsBodyIsCaptionHint', '본문 칸이 캡션이 됩니다. 태그는 해시태그로 붙습니다.')}</div>
             </>
           )}
-          {draft.summary && <div className="ai-write-seo" title="검색 노출용 요약">🔎 {draft.summary}</div>}
-          <label className="ai-write-autoopen" title="켜면 새 탭 등 글쓰기 화면이 아닐 때 에이전트가 먼저 네이버 글쓰기 페이지를 엽니다(로그인돼 있어야 함).">
+          {draft.summary && <div className="ai-write-seo" title={tr('ai.tab.seoSummaryTitle', '검색 노출용 요약')}>🔎 {draft.summary}</div>}
+          <label className="ai-write-autoopen" title={tr('ai.tab.autoOpenWriteHint', '켜면 새 탭 등 글쓰기 화면이 아닐 때 에이전트가 먼저 네이버 글쓰기 페이지를 엽니다(로그인돼 있어야 함).')}>
             <input type="checkbox" checked={autoOpen} onChange={(e) => setAutoOpen(e.target.checked)} />
-            <span>{isSns ? '게시 페이지 자동 열기' : '글쓰기 페이지 자동 열기'} {platform === 'naver' ? '(네이버)' : ''}</span>
+            <span>{isSns ? tr('ai.write.autoOpenPublishPage', '게시 페이지 자동 열기') : tr('ai.write.autoOpenWritePage', '글쓰기 페이지 자동 열기')} {platform === 'naver' ? tr('ai.write.naverParen', '(네이버)') : ''}</span>
           </label>
           <div className="ai-write-actions">
             <button className="ai-send ai-write-insert" onClick={() => void handoff('publish')} disabled={!canHandoff}
-              title={isSns ? '에이전트가 첨부·캡션 입력 후 게시합니다' : '에이전트가 에디터에 작성하고 발행까지 합니다 (발행 순간 확인 요청)'}>{isSns ? '📤 게시' : '📤 작성하고 발행'}</button>
+              title={isSns ? tr('ai.write.snsPublishBtnTitle', '에이전트가 첨부·캡션 입력 후 게시합니다') : tr('ai.write.blogPublishBtnTitle', '에이전트가 에디터에 작성하고 발행까지 합니다 (발행 순간 확인 요청)')}>{isSns ? '📤 ' + tr('ai.write.publish', '게시') : '📤 ' + tr('ai.write.writeAndPublish', '작성하고 발행')}</button>
             <button className="ai-mini-btn" onClick={() => void handoff('draft')} disabled={!canHandoff}
-              title={isSns ? '게시 직전까지만 준비합니다(게시 버튼은 누르지 않음)' : '에이전트가 작성 후 임시저장까지 합니다 (발행은 안 함)'}>{isSns ? '📝 게시 직전까지' : '📝 임시저장'}</button>
+              title={isSns ? tr('ai.write.snsDraftBtnTitle', '게시 직전까지만 준비합니다(게시 버튼은 누르지 않음)') : tr('ai.write.blogDraftBtnTitle', '에이전트가 작성 후 임시저장까지 합니다 (발행은 안 함)')}>{isSns ? '📝 ' + tr('ai.write.upToBeforePublish', '게시 직전까지') : '📝 ' + tr('ai.write.saveAsDraft', '임시저장')}</button>
             <button className="ai-mini-btn" onClick={() => void handoff('insert')} disabled={!canHandoff}
-              title="에이전트가 입력만 하고 저장·발행은 직접">✍️ 입력만</button>
-            <button className="ai-mini-btn" onClick={saveDraft} disabled={!body.trim() && !title.trim()}>💾 초안저장</button>
-            <button className="ai-mini-btn" onClick={() => { void copyText(fullMarkdown()).then(() => setNotice('복사했습니다.')) }}>복사</button>
+              title={tr('ai.tab.agentInputOnlyTitle', '에이전트가 입력만 하고 저장·발행은 직접')}>✍️ {tr('ai.write.inputOnly', '입력만')}</button>
+            <button className="ai-mini-btn" onClick={saveDraft} disabled={!body.trim() && !title.trim()}>💾 {tr('ai.write.saveDraft', '초안저장')}</button>
+            <button className="ai-mini-btn" onClick={() => { void copyText(fullMarkdown()).then(() => setNotice(tr('ai.write.copied', '복사했습니다.'))) }}>{tr('ai.tab.copy', '복사')}</button>
             <button className="ai-mini-btn" onClick={() => downloadText(`${(title || 'blog').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40)}.md`, fullMarkdown())}>.md</button>
           </div>
-          <div className="ai-write-hint">💡 <b>작성하고 발행</b>은 네이버 SmartEditor 를 인지해 제목·본문·태그를 넣고 발행까지 하며, 되돌리기 어려운 <b>발행 버튼을 누르는 순간 한 번 확인</b>을 요청합니다. <b>임시저장</b>은 발행 없이 저장만 합니다. 네이버는 <b>미리 로그인</b>돼 있어야 합니다.</div>
+          <div className="ai-write-hint">💡 <b>{tr('ai.write.hintBold1', '작성하고 발행')}</b>{tr('ai.write.hint2', '은 네이버 SmartEditor 를 인지해 제목·본문·태그를 넣고 발행까지 하며, 되돌리기 어려운 ')}<b>{tr('ai.write.hintBold2', '발행 버튼을 누르는 순간 한 번 확인')}</b>{tr('ai.write.hint3', '을 요청합니다. ')}<b>{tr('ai.write.hintBold3', '임시저장')}</b>{tr('ai.write.hint4', '은 발행 없이 저장만 합니다. 네이버는 ')}<b>{tr('ai.write.hintBold4', '미리 로그인')}</b>{tr('ai.write.hint5', '돼 있어야 합니다.')}</div>
         </div>
       )}
     </div>

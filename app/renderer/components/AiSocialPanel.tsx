@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+// i18n(묶음 M2) - 번역 함수는 tr 로 부른다. 이 파일은 TaboFolder 류 t 충돌은 없지만
+// AiTab.tsx / TaskCard.tsx 와 이름을 통일해 관례를 지킨다.
+import { useI18nT } from '../i18n'
 
 // AI 소셜 패널 — 두 하위 뷰를 하나로 묶는다.
 // ① 이미지 만들어 올리기: 생성 서비스(Genspark/ChatGPT/직접 URL)로 이미지를 만들고, 캡션을 확인한 뒤
@@ -92,10 +95,25 @@ interface AutoPublishGrantView {
 interface ArtifactMeta { id: string; name: string; format: string; bytes: number; width?: number; height?: number }
 interface EngageLedgerEntry { key: string; account: string; action: 'comment' | 'like'; at: number; note?: string }
 
-const PLATFORM_LABEL: Record<SocialPlatform, string> = { instagram: '인스타그램', youtube: '유튜브', tiktok: '틱톡' }
-const SERVICE_LABEL: Record<SocialService, string> = { genspark: 'Genspark', chatgpt: 'ChatGPT', custom: '직접 입력' }
+// PLATFORM_LABEL/SERVICE_LABEL 은 화면 라벨 - i18n. TONE_PRESETS 는 캡션 생성 프롬프트에
+// 그대로 실리는 값(백엔드로 전송)이라 번역 범위 밖(다른 컴포넌트의 AGENT_EXAMPLES.task 와 동일 판단).
+function platformLabel(tr: TFn, p: SocialPlatform): string {
+  switch (p) {
+    case 'instagram': return tr('ai.social.platform.instagram', '인스타그램')
+    case 'youtube': return tr('ai.social.platform.youtube', '유튜브')
+    case 'tiktok': return tr('ai.social.platform.tiktok', '틱톡')
+  }
+}
+function serviceLabel(tr: TFn, s: SocialService): string {
+  switch (s) {
+    case 'genspark': return 'Genspark'
+    case 'chatgpt': return 'ChatGPT'
+    case 'custom': return tr('ai.social.directInput', '직접 입력')
+  }
+}
 const TONE_PRESETS = ['친근하게', '전문적으로', '짧고 간결하게']
 const STAGE_ORDER: SocialStage[] = ['generate', 'review', 'publish', 'done']
+type TFn = (key: string, fallback?: string, vars?: Record<string, string | number>) => string
 
 function stepClass(stage: SocialStage, step: 'generate' | 'review' | 'publish'): string {
   if (stage === 'failed' || stage === 'cancelled') return ''
@@ -111,13 +129,13 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`
   return `${(n / 1024 / 1024).toFixed(1)}MB`
 }
-function fmtWhen(ts: number): string {
+function fmtWhen(tr: TFn, ts: number): string {
   const diff = Date.now() - ts
   const m = Math.floor(diff / 60000)
-  if (m < 1) return '방금'
-  if (m < 60) return `${m}분 전`
+  if (m < 1) return tr('ai.shared.relTime.now', '방금')
+  if (m < 60) return tr('ai.shared.relTime.minutesAgo', '{m}분 전', { m })
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}시간 전`
+  if (h < 24) return tr('ai.shared.relTime.hoursAgo', '{h}시간 전', { h })
   try { return new Date(ts).toLocaleDateString() } catch { return '' }
 }
 /**
@@ -147,13 +165,15 @@ function receiptStatusOf(r?: { evidence?: string; status?: ReceiptStatus }): Rec
  */
 /** ✅ 로 보여도 되는 상태. 여기 없으면 전부 경고로 본다(모르는 값 포함). */
 const RECEIPT_OK: ReadonlySet<string> = new Set(['verified', 'user-confirmed', 'draft', 'legacy-ok'])
-const RECEIPT_MARK: Record<ReceiptStatus | 'legacy-unverified' | 'legacy-ok', { icon: string; label: string }> = {
-  verified: { icon: '✅', label: '' },
-  'user-confirmed': { icon: '✅', label: '사용자 확인 — ' },
-  draft: { icon: '📝', label: '' },
-  unverified: { icon: '⚠', label: '확인 필요 — ' },
-  'legacy-unverified': { icon: '⚠', label: '확인 필요 — ' },
-  'legacy-ok': { icon: '✅', label: '' },
+function receiptMark(tr: TFn, status: ReceiptStatus | 'legacy-unverified' | 'legacy-ok'): { icon: string; label: string } {
+  switch (status) {
+    case 'verified': return { icon: '✅', label: '' }
+    case 'user-confirmed': return { icon: '✅', label: tr('ai.social.receipt.userConfirmed', '사용자 확인 — ') }
+    case 'draft': return { icon: '📝', label: '' }
+    case 'unverified': return { icon: '⚠', label: tr('ai.social.receipt.needsCheck', '확인 필요 — ') }
+    case 'legacy-unverified': return { icon: '⚠', label: tr('ai.social.receipt.needsCheck', '확인 필요 — ') }
+    case 'legacy-ok': return { icon: '✅', label: '' }
+  }
 }
 
 /**
@@ -185,6 +205,7 @@ function AccountRow({ w, onSaveAccount }: {
   w: SocialWorkflow
   onSaveAccount: (account: string) => Promise<{ ok: boolean; error?: string; autoPublish?: string; handleShaped?: boolean }>
 }) {
+  const tr = useI18nT()
   const saved = w.params.account ?? ''
   const [draft, setDraft] = useState(saved)
   const [note, setNote] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
@@ -208,31 +229,31 @@ function AccountRow({ w, onSaveAccount }: {
     setBusy(true)
     try {
       const r = await onSaveAccount(draft)
-      if (!r.ok) { setNote({ kind: 'err', text: r.error || '계정을 바꾸지 못했습니다.' }); return }
-      const bits: string[] = ['계정을 바꿨습니다 — 이미지와 캡션은 그대로입니다.']
-      if (r.handleShaped === false) bits.push('아이디 형태가 아니라 게시 여부 자동 확인은 "모름" 으로만 끝납니다(@ 없이 아이디를 넣어 주세요).')
+      if (!r.ok) { setNote({ kind: 'err', text: r.error || tr('ai.social.account.changeFailed', '계정을 바꾸지 못했습니다.') }); return }
+      const bits: string[] = [tr('ai.social.account.changed', '계정을 바꿨습니다 — 이미지와 캡션은 그대로입니다.')]
+      if (r.handleShaped === false) bits.push(tr('ai.social.account.notHandleShaped', '아이디 형태가 아니라 게시 여부 자동 확인은 "모름" 으로만 끝납니다(@ 없이 아이디를 넣어 주세요).'))
       // 계정을 손으로 고친 작업은 선승인이 있어도 **자동으로 나가지 않는다**(main 이 강제).
       // 범위 밖이라서든, 고쳤기 때문이든 — 사용자에게는 "게시 전에 한 번 더 확인한다" 가 중요하다.
-      if (r.autoPublish === 'not-covered') bits.push('이 계정은 자동 게시 선승인 범위 밖입니다 — 게시 전에 확인을 받습니다.')
-      else if (r.autoPublish === 'covered') bits.push('계정을 직접 고친 작업이라, 선승인이 있어도 게시 전에 한 번 확인을 받습니다.')
+      if (r.autoPublish === 'not-covered') bits.push(tr('ai.social.account.notCovered', '이 계정은 자동 게시 선승인 범위 밖입니다 — 게시 전에 확인을 받습니다.'))
+      else if (r.autoPublish === 'covered') bits.push(tr('ai.social.account.covered', '계정을 직접 고친 작업이라, 선승인이 있어도 게시 전에 한 번 확인을 받습니다.'))
       setNote({ kind: 'ok', text: bits.join(' ') })
     } finally { setBusy(false) }
   }
 
   return (
     <div className="ai-social-account">
-      <label className="ai-hint" htmlFor={`acct-${w.id}`}>올릴 계정</label>
+      <label className="ai-hint" htmlFor={`acct-${w.id}`}>{tr('ai.social.account.toPost', '올릴 계정')}</label>
       <div className="ai-social-account-row">
         <input id={`acct-${w.id}`} className="ai-input ai-social-account-input" value={draft}
-          placeholder="계정 아이디 (@ 없이)" spellCheck={false} disabled={busy}
+          placeholder={tr('ai.social.account.placeholder', '계정 아이디 (@ 없이)')} spellCheck={false} disabled={busy}
           onChange={(e) => { setDraft(e.target.value); setNote(null) }}
           onKeyDown={(e) => { if (e.key === 'Enter' && dirty && !busy) void save() }} />
         <button className="ai-mini-btn ai-social-account-save" disabled={!dirty || busy}
           onClick={() => void save()}
-          title="계정만 바꿉니다 — 만든 이미지와 캡션은 그대로 유지됩니다">💾 계정 저장</button>
+          title={tr('ai.social.account.saveTitle', '계정만 바꿉니다 — 만든 이미지와 캡션은 그대로 유지됩니다')}>💾 {tr('ai.social.account.save', '계정 저장')}</button>
       </div>
       {note && <div className={note.kind === 'err' ? 'ai-handoff-note ai-err' : 'ai-hint'}>{note.text}</div>}
-      {!note && !saved && <div className="ai-hint">계정을 넣어 두면 게시 뒤 "정말 내 계정에 올라갔는지" 를 자동으로 확인할 수 있습니다.</div>}
+      {!note && !saved && <div className="ai-hint">{tr('ai.social.account.hint', '계정을 넣어 두면 게시 뒤 "정말 내 계정에 올라갔는지" 를 자동으로 확인할 수 있습니다.')}</div>}
     </div>
   )
 }
@@ -247,21 +268,22 @@ function PromotePanel({ plan, busy, onConfirm, onCancel }: {
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const tr = useI18nT()
   return (
     <div className="ai-social-promote-panel" data-testid="social-promote-panel" data-revision={plan.revision}>
       <div className="ai-social-promote-title">
-        ⚠ 정말 게시할까요?<span className="ai-social-en">Publish for real?</span>
+        ⚠ {tr('ai.social.promote.confirmTitle', '정말 게시할까요?')}<span className="ai-social-en">Publish for real?</span>
       </div>
       <div className="ai-social-promote-row">
-        <span className="ai-social-promote-label">목적지 / Destination</span>
+        <span className="ai-social-promote-label">{tr('ai.social.promote.destination', '목적지')} / Destination</span>
         <span data-testid="social-promote-platform">{plan.platformLabel} ({plan.platformLabelEn})</span>
       </div>
       <div className="ai-social-promote-row">
-        <span className="ai-social-promote-label">계정 / Account</span>
+        <span className="ai-social-promote-label">{tr('ai.social.account.label', '계정')} / Account</span>
         <span data-testid="social-promote-account">@{plan.account}</span>
       </div>
       <div className="ai-social-promote-row">
-        <span className="ai-social-promote-label">이미지 / Image</span>
+        <span className="ai-social-promote-label">{tr('ai.social.promote.image', '이미지')} / Image</span>
         <span data-testid="social-promote-hash">
           {plan.artifactFormat} · {formatBytes(plan.artifactBytes)} · sha256 {plan.artifactSha256.slice(0, 12)}…
         </span>
@@ -274,18 +296,18 @@ function PromotePanel({ plan, busy, onConfirm, onCancel }: {
         </div>
       )}
       <div className="ai-hint">
-        이미지와 캡션은 다시 만들지 않습니다 — 위 내용 그대로 올라갑니다.
+        {tr('ai.social.promote.notRegenerated', '이미지와 캡션은 다시 만들지 않습니다 — 위 내용 그대로 올라갑니다.')}
         <span className="ai-social-en">Nothing is regenerated — exactly the image and caption above will be posted.</span>
       </div>
       <div className="ai-handoff-note ai-err">
-        되돌릴 수 없습니다.<span className="ai-social-en">This cannot be undone.</span>
+        {tr('ai.social.cannotUndo', '되돌릴 수 없습니다.')}<span className="ai-social-en">This cannot be undone.</span>
       </div>
       <div className="ai-task-actions">
         <button className="ai-send ai-social-promote-go" data-testid="social-promote-go" onClick={onConfirm} disabled={busy}>
-          {busy ? '게시하는 중…' : (<>게시 확정<span className="ai-social-en">Publish</span></>)}
+          {busy ? tr('ai.social.promote.publishing', '게시하는 중…') : (<>{tr('ai.social.promote.confirm', '게시 확정')}<span className="ai-social-en">Publish</span></>)}
         </button>
         <button className="ai-mini-btn" data-testid="social-promote-cancel" onClick={onCancel} disabled={busy}>
-          취소<span className="ai-social-en">Cancel</span>
+          {tr('ai.tab.cancel', '취소')}<span className="ai-social-en">Cancel</span>
         </button>
       </div>
     </div>
@@ -320,6 +342,7 @@ function SocialCard({
   onPromoteConfirm: () => void
   onPromoteCancel: () => void
 }) {
+  const tr = useI18nT()
   const terminal = w.stage === 'done' || w.stage === 'failed' || w.stage === 'cancelled'
   const rStatus = receiptStatusOf(w.receipt)
   // 영수증이 있을 때만 판단하고, **아는 성공값이 아니면 경고**로 본다(아이콘 폴백과 같은 방향).
@@ -328,29 +351,29 @@ function SocialCard({
   return (
     <div className={`ai-social-card ${w.stage === 'done' ? (unresolved ? 'warn' : 'ok') : w.stage === 'failed' ? 'warn' : ''}`} data-workflow-id={w.id}>
       <div className="ai-task-head">
-        <span className="ai-task-badge">{PLATFORM_LABEL[w.params.platform]}</span>
+        <span className="ai-task-badge">{platformLabel(tr, w.params.platform)}</span>
         <span className="ai-task-instruction" title={w.params.prompt}>{w.params.prompt}</span>
       </div>
       <div className="ai-task-meta">
-        <span>{SERVICE_LABEL[w.params.service]}</span>
-        <span>· {w.params.mode === 'publish' ? '게시까지' : '초안까지만'}</span>
-        {w.promotedAt && <span>· 초안→게시 승격됨 <span className="ai-social-en-inline">promoted</span></span>}
+        <span>{serviceLabel(tr, w.params.service)}</span>
+        <span>· {w.params.mode === 'publish' ? tr('ai.social.toPublish', '게시까지') : tr('ai.social.draftOnly', '초안까지만')}</span>
+        {w.promotedAt && <span>· {tr('ai.social.promotedFromDraft', '초안→게시 승격됨')} <span className="ai-social-en-inline">promoted</span></span>}
       </div>
 
       {w.stage === 'failed' || w.stage === 'cancelled' ? (
-        <span className={`ai-task-badge ${w.stage === 'failed' ? 'warn' : 'muted'}`}>{w.stage === 'failed' ? '실패' : '취소됨'}</span>
+        <span className={`ai-task-badge ${w.stage === 'failed' ? 'warn' : 'muted'}`}>{w.stage === 'failed' ? tr('ai.social.failed', '실패') : tr('ai.social.cancelled', '취소됨')}</span>
       ) : (
         <div className="ai-social-steps">
-          <span className={`ai-social-step ${stepClass(w.stage, 'generate')}`}>생성</span>
-          <span className={`ai-social-step ${stepClass(w.stage, 'review')}`}>확인</span>
-          <span className={`ai-social-step ${stepClass(w.stage, 'publish')}`}>게시</span>
+          <span className={`ai-social-step ${stepClass(w.stage, 'generate')}`}>{tr('ai.social.stepGenerate', '생성')}</span>
+          <span className={`ai-social-step ${stepClass(w.stage, 'review')}`}>{tr('ai.social.stepReview', '확인')}</span>
+          <span className={`ai-social-step ${stepClass(w.stage, 'publish')}`}>{tr('ai.social.stepPublish', '게시')}</span>
         </div>
       )}
 
       {/* 중단 후 복구 안내 — 어디서 멈췄는지 + 다음에 무엇을 하면 되는지. 새 작업을 만들지 않고 이어간다. */}
       {w.recovery && !terminal && (
         <div className="ai-social-recovery">
-          <div className="ai-social-recovery-head">⏸ 중단된 지점: {w.recovery.stoppedAt}</div>
+          <div className="ai-social-recovery-head">⏸ {tr('ai.social.stoppedAt', '중단된 지점: {where}', { where: w.recovery.stoppedAt })}</div>
           <div className="ai-hint">{w.recovery.nextAction}</div>
         </div>
       )}
@@ -358,7 +381,7 @@ function SocialCard({
       {w.stage === 'generate' && (
         !w.artifactId && candidates && candidates.length > 0 ? (
           <>
-            <div className="ai-hint">여러 후보 중 하나를 고르세요.</div>
+            <div className="ai-hint">{tr('ai.social.pickOneOfCandidates', '여러 후보 중 하나를 고르세요.')}</div>
             <div className="ai-social-thumbs">
               {candidates.map((c) => (
                 <button key={c.meta.id} className="ai-social-thumb" onClick={() => onChooseCandidate(c.meta.id)} title={c.meta.name}>
@@ -368,7 +391,7 @@ function SocialCard({
             </div>
           </>
         ) : (
-          <div className="ai-hint">이미지를 만드는 중… (수십 초~수 분 걸릴 수 있어요)</div>
+          <div className="ai-hint">{tr('ai.social.generatingImage', '이미지를 만드는 중… (수십 초~수 분 걸릴 수 있어요)')}</div>
         )
       )}
 
@@ -376,10 +399,10 @@ function SocialCard({
         <>
           <div className="ai-social-preview">
             {previewData === undefined
-              ? <span className="ai-hint">미리보기 불러오는 중…</span>
+              ? <span className="ai-hint">{tr('ai.social.loadingPreview', '미리보기 불러오는 중…')}</span>
               : previewData
-                ? <img src={previewData} alt="생성된 이미지" />
-                : <span className="ai-hint">미리보기를 불러오지 못했습니다.</span>}
+                ? <img src={previewData} alt={tr('ai.social.generatedImageAlt', '생성된 이미지')} />
+                : <span className="ai-hint">{tr('ai.social.previewLoadFailed', '미리보기를 불러오지 못했습니다.')}</span>}
           </div>
           {w.artifactPreview && (
             <div className="ai-social-preview-meta">
@@ -389,27 +412,27 @@ function SocialCard({
           {/* 계정 고치기 — 빠뜨렸거나 잘못 넣었을 때 이미지·캡션을 버리고 처음부터 다시 만들지 않아도 된다.
               게시 전(확인 단계)에서만 보인다. 게시가 나갔거나 나갔는지 모르는 동안에는 잠긴다(main 이 강제). */}
           <AccountRow w={w} onSaveAccount={onSaveAccount} />
-          <textarea className="ai-input" rows={3} value={captionDraft} placeholder="캡션"
+          <textarea className="ai-input" rows={3} value={captionDraft} placeholder={tr('ai.social.caption', '캡션')}
             onChange={(e) => onCaptionChange(e.target.value)} />
           {/* 캡션 생성이 실패하면 프롬프트를 캡션으로 대신 올리지 않는다 — 사유를 보이고 기다린다. */}
           {w.captionError
             ? <div className="ai-handoff-note ai-err">{w.captionError}</div>
             : w.captionPending
-              ? <div className="ai-hint">캡션을 쓰는 중…</div>
+              ? <div className="ai-hint">{tr('ai.social.writingCaption', '캡션을 쓰는 중…')}</div>
               : w.artifactAmbiguous
-                ? <div className="ai-hint">이미지 후보가 여럿이라 확인이 필요합니다 — 자동 게시하지 않습니다.</div>
-                : <div className="ai-hint">이 단계에서 멈춥니다 — 아래 버튼을 눌러야 다음으로 넘어갑니다.</div>}
+                ? <div className="ai-hint">{tr('ai.social.ambiguousCandidates', '이미지 후보가 여럿이라 확인이 필요합니다 — 자동 게시하지 않습니다.')}</div>
+                : <div className="ai-hint">{tr('ai.social.stopsHere', '이 단계에서 멈춥니다 — 아래 버튼을 눌러야 다음으로 넘어갑니다.')}</div>}
           {/* 캡션이 중단·실패했을 때: 같은 보관 이미지를 그대로 두고 다시 만들거나 직접 써서 저장한다. */}
           {(w.captionError || w.recovery?.kind === 'caption-interrupted') && (
             <div className="ai-task-actions">
               <button className="ai-mini-btn" onClick={onRetryCaption} disabled={!!w.captionPending}
-                title="같은 이미지로 캡션만 다시 만듭니다">↻ 캡션 다시 만들기</button>
+                title={tr('ai.social.retryCaptionTitle', '같은 이미지로 캡션만 다시 만듭니다')}>↻ {tr('ai.social.retryCaption', '캡션 다시 만들기')}</button>
               <button className="ai-mini-btn" onClick={() => onSaveCaption(captionDraft)} disabled={!captionDraft.trim()}
-                title="지금 입력한 캡션을 저장합니다(늦게 도착한 자동 초안이 덮어쓰지 않습니다)">💾 이 캡션 사용</button>
+                title={tr('ai.social.useThisCaptionTitle', '지금 입력한 캡션을 저장합니다(늦게 도착한 자동 초안이 덮어쓰지 않습니다)')}>💾 {tr('ai.social.useThisCaption', '이 캡션 사용')}</button>
             </div>
           )}
           <button className="ai-send ai-social-cta" onClick={() => onApprove(captionDraft)} disabled={!captionDraft.trim()}>
-            {w.params.mode === 'publish' ? '📤 이대로 게시' : '▶ 이대로 진행'}
+            {w.params.mode === 'publish' ? '📤 ' + tr('ai.social.publishAsIs', '이대로 게시') : '▶ ' + tr('ai.social.proceedAsIs', '이대로 진행')}
           </button>
         </>
       )}
@@ -419,22 +442,22 @@ function SocialCard({
           <div className="ai-social-recovery warn">
             {/* 되돌릴 수 없는 결정이므로 "그냥 이어가기"를 주지 않는다 — 먼저 확인하거나 사용자가 결론을 준다. */}
               {/* 저장된 산출물 미리보기 — 무엇이 올라갔을 수 있는지를 사용자가 눈으로 확인한다. */}
-            {previewData ? <div className="ai-social-preview"><img src={previewData} alt="게시하려던 이미지" /></div> : null}
-            {w.caption ? <div className="ai-social-preview-meta" title={w.caption}>캡션: {w.caption}</div> : null}
-            <div className="ai-hint">확인 없이 이어가면 같은 글이 두 번 올라갈 수 있습니다.</div>
+            {previewData ? <div className="ai-social-preview"><img src={previewData} alt={tr('ai.social.aboutToPublishAlt', '게시하려던 이미지')} /></div> : null}
+            {w.caption ? <div className="ai-social-preview-meta" title={w.caption}>{tr('ai.social.captionLabel', '캡션:')} {w.caption}</div> : null}
+            <div className="ai-hint">{tr('ai.social.duplicateRisk', '확인 없이 이어가면 같은 글이 두 번 올라갈 수 있습니다.')}</div>
             <div className="ai-task-actions">
               <button className="ai-mini-btn" onClick={() => onResolvePublish('verify')} disabled={!!w.verifyTaskId}
-                title="새 글을 올리지 않고 읽기만 해서 이미 게시됐는지 확인합니다">
-                {w.verifyTaskId ? '🔎 확인하는 중…' : '🔎 게시 여부 확인 (읽기 전용)'}
+                title={tr('ai.social.verifyReadOnlyTitle', '새 글을 올리지 않고 읽기만 해서 이미 게시됐는지 확인합니다')}>
+                {w.verifyTaskId ? '🔎 ' + tr('ai.social.verifying', '확인하는 중…') : '🔎 ' + tr('ai.social.verifyPublished', '게시 여부 확인 (읽기 전용)')}
               </button>
               <button className="ai-mini-btn" onClick={() => onResolvePublish('published')}
-                title="직접 확인했고 이미 올라가 있습니다">✅ 이미 게시됨</button>
+                title={tr('ai.social.alreadyPublishedTitle', '직접 확인했고 이미 올라가 있습니다')}>✅ {tr('ai.social.alreadyPublished', '이미 게시됨')}</button>
               <button className="ai-mini-btn" onClick={() => onResolvePublish('not-published')}
-                title="직접 확인했고 올라가지 않았습니다 — 이어서 진행합니다">▶ 게시 안 됨 · 이어가기</button>
+                title={tr('ai.social.notPublishedTitle', '직접 확인했고 올라가지 않았습니다 — 이어서 진행합니다')}>▶ {tr('ai.social.notPublishedProceed', '게시 안 됨 · 이어가기')}</button>
             </div>
           </div>
         ) : (
-          <div className="ai-hint">{w.autoPublished ? '선승인 범위 안이라 확인 없이 게시하는 중…' : '게시하는 중…'}</div>
+          <div className="ai-hint">{w.autoPublished ? tr('ai.social.autoPublishing', '선승인 범위 안이라 확인 없이 게시하는 중…') : tr('ai.social.publishing', '게시하는 중…')}</div>
         )
       )}
 
@@ -444,12 +467,12 @@ function SocialCard({
              사라지면 보존하지 않은 것과 같다). */}
       {w.priorReceipts && w.priorReceipts.length > 0 && (
         <details className="ai-social-prior">
-          <summary>이전 기록 {w.priorReceipts.length}건 <span className="ai-social-en-inline">Previous records</span></summary>
+          <summary>{tr('ai.social.priorRecordsCount', '이전 기록 {n}건', { n: w.priorReceipts.length })} <span className="ai-social-en-inline">Previous records</span></summary>
           <div className="ai-social-prior-list">
             {w.priorReceipts.map((r, i) => (
               <div key={`${r.at}-${i}`} className="ai-social-prior-item">
                 {/* 시각이 유효할 때만 보여 준다 — 손상된 기록의 0 을 그대로 쓰면 "1970년" 이 뜬다. */}
-                {r.at > 0 && <span className="ai-social-prior-when">{fmtWhen(r.at)}</span>}
+                {r.at > 0 && <span className="ai-social-prior-when">{fmtWhen(tr, r.at)}</span>}
                 {r.evidence && <span className="ai-social-prior-evidence">{r.evidence}</span>}
                 {r.note && <span className="ai-hint">{r.note}</span>}
               </div>
@@ -466,24 +489,24 @@ function SocialCard({
               <div className="ai-social-receipt-status" data-status={rStatus ?? ''}>
                 {/* 모르는 값은 **경고 쪽**으로 떨어뜨린다(fail-closed) — 확인 안 된 것을 ✅ 로 보이는 것이
                     반대 경우보다 훨씬 나쁘다. 저장소 복원의 방향과 같다. */}
-                {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).icon}{' '}
-                {(rStatus && RECEIPT_MARK[rStatus] ? RECEIPT_MARK[rStatus] : RECEIPT_MARK['unverified']).label}{w.receipt.evidence}
+                {(rStatus ? receiptMark(tr, rStatus) : receiptMark(tr, 'unverified')).icon}{' '}
+                {(rStatus ? receiptMark(tr, rStatus) : receiptMark(tr, 'unverified')).label}{w.receipt.evidence}
               </div>
             )}
-            {w.receipt?.at ? <div className="ai-hint">{fmtWhen(w.receipt.at)}</div> : null}
+            {w.receipt?.at ? <div className="ai-hint">{fmtWhen(tr, w.receipt.at)}</div> : null}
           </div>
         </>
       )}
 
-      {w.stage === 'failed' && <div className="ai-task-note warn">{w.error || '실패했습니다.'}</div>}
-      {w.stage === 'cancelled' && <div className="ai-task-note warn">취소되었습니다.</div>}
+      {w.stage === 'failed' && <div className="ai-task-note warn">{w.error || tr('ai.social.failedDot', '실패했습니다.')}</div>}
+      {w.stage === 'cancelled' && <div className="ai-task-note warn">{tr('ai.social.cancelledDot', '취소되었습니다.')}</div>}
 
       {/* 초안 승격("이 초안을 게시하기") — review 의 CTA·done 의 영수증 블록이 위에서 이미 그려진 뒤라,
           여기 한 곳에 두면 두 단계 모두에서 "그 아래" 에 자연히 나타난다. */}
       {canPromote(w) && !promotion && (
         <button className="ai-mini-btn ai-social-promote" onClick={onPromote} disabled={promoteBusy}
-          title="이미지와 캡션을 다시 만들지 않고, 지금 이대로 게시합니다 / Publishes as-is — no image or caption is regenerated">
-          📤 이 초안을 게시하기
+          title={tr('ai.social.publishDraftTitle', '이미지와 캡션을 다시 만들지 않고, 지금 이대로 게시합니다 / Publishes as-is — no image or caption is regenerated')}>
+          📤 {tr('ai.social.publishDraft', '이 초안을 게시하기')}
           <span className="ai-social-en">Publish this draft</span>
         </button>
       )}
@@ -498,10 +521,10 @@ function SocialCard({
 
       <div className="ai-task-actions">
         {(w.stage === 'generate' || w.stage === 'review' || w.stage === 'publish') && (
-          <button className="ai-mini-btn" onClick={onCancel} title="취소">⏹ 취소</button>
+          <button className="ai-mini-btn" onClick={onCancel} title={tr('ai.tab.cancel', '취소')}>⏹ {tr('ai.tab.cancel', '취소')}</button>
         )}
-        {w.stage === 'failed' && <button className="ai-mini-btn" onClick={onRetry} title="같은 설정으로 다시 시도">↻ 다시 시도</button>}
-        {terminal && <button className="ai-history-del" onClick={onDelete} title="목록에서 삭제">×</button>}
+        {w.stage === 'failed' && <button className="ai-mini-btn" onClick={onRetry} title={tr('ai.social.retrySameSettingsTitle', '같은 설정으로 다시 시도')}>↻ {tr('ai.social.retrySameSettings', '다시 시도')}</button>}
+        {terminal && <button className="ai-history-del" onClick={onDelete} title={tr('ai.tab.delete', '삭제')}>×</button>}
       </div>
     </div>
   )
@@ -515,6 +538,7 @@ export function AiSocialPanel({
   isInternal: boolean
   providerReady: boolean
 }) {
+  const tr = useI18nT()
   const [view, setView] = useState<'generate' | 'engage'>('generate')
 
   // ===== 뷰1: 이미지 만들어 올리기 =====
@@ -657,7 +681,7 @@ export function AiSocialPanel({
       if (!r.ok) {
         setPromoteErrors((prev) => ({
           ...prev,
-          [id]: { error: r.error || '게시를 확정하지 못했습니다.', errorEn: r.errorEn || 'Could not confirm the publish.' },
+          [id]: { error: r.error || tr('ai.social.promote.confirmFailed', '게시를 확정하지 못했습니다.'), errorEn: r.errorEn || 'Could not confirm the publish.' },
         }))
       }
     } finally {
@@ -670,7 +694,7 @@ export function AiSocialPanel({
 
   const startGenerate = async () => {
     if (!activeId || genBusy || !prompt.trim()) return
-    if (genService === 'custom' && !customUrl.trim()) { setGenError('직접 입력할 생성 서비스 URL을 입력하세요.'); return }
+    if (genService === 'custom' && !customUrl.trim()) { setGenError(tr('ai.social.enterCustomUrl', '직접 입력할 생성 서비스 URL을 입력하세요.')); return }
     setGenBusy(true); setGenError(null)
     try {
       // 선승인은 **작업을 만들기 전에** 등록한다 — 작업이 선승인보다 먼저 생기면 범위 밖으로 판정돼
@@ -683,7 +707,7 @@ export function AiSocialPanel({
           minutes: autoMinutes,
         })
         setGrantInfo(g)
-        if (!g) { setGenError('자동 게시 선승인을 등록하지 못했습니다 — 확인 후 게시로 진행합니다.'); }
+        if (!g) { setGenError(tr('ai.tab.intent.autoPublishGrantFailed', '자동 게시 선승인을 등록하지 못했습니다 — 확인 후 게시로 진행합니다.')); }
       }
       const params = {
         service: genService,
@@ -698,7 +722,7 @@ export function AiSocialPanel({
         tabId: activeId,
       }
       const w = await window.browserAPI.ai.socialStart(params)
-      if (!w) { setGenError('작업을 시작하지 못했습니다.'); return }
+      if (!w) { setGenError(tr('ai.tab.intent.startFailed', '작업을 시작하지 못했습니다.')); return }
       setPrompt('') // 연속 생성 편의 — 나머지 옵션(서비스·플랫폼·톤 등)은 유지
     } catch (e) {
       setGenError(e instanceof Error ? e.message : String(e))
@@ -749,8 +773,8 @@ export function AiSocialPanel({
 
   const buildEngageTask = async () => {
     if (engageBusy) return
-    if (!myBlogUrl.trim() && !topic.trim()) { setEngageError('블로그 주소 또는 주제 중 하나는 입력하세요.'); return }
-    if (!doComment && !doLike) { setEngageError('댓글·좋아요 중 하나는 선택하세요.'); return }
+    if (!myBlogUrl.trim() && !topic.trim()) { setEngageError(tr('ai.social.needBlogOrTopic', '블로그 주소 또는 주제 중 하나는 입력하세요.')); return }
+    if (!doComment && !doLike) { setEngageError(tr('ai.social.needCommentOrLike', '댓글·좋아요 중 하나는 선택하세요.')); return }
     setEngageBusy(true); setEngageError(null); setEngageNotice(null)
     try {
       // engageBuildTask 의 파라미터 타입(AiEngageParams)에 intervalSeconds 가 아직 반영되지 않았을 수
@@ -791,10 +815,10 @@ export function AiSocialPanel({
       const summary = await window.browserAPI.ai.ptaskCreate({
         instruction: engageBuild.task, tabId: activeId, budget: { allowedHosts: engageBuild.hosts },
       })
-      if (!summary) { setEngageError('작업을 만들지 못했습니다.'); return }
+      if (!summary) { setEngageError(tr('ai.tab.intent.createFailed', '작업을 만들지 못했습니다.')); return }
       const startRes = await window.browserAPI.ai.ptaskStart(summary.id)
-      if (!startRes?.ok) { setEngageError(startRes?.error || '작업을 시작하지 못했습니다.'); return }
-      setEngageNotice('작업을 시작했습니다 — 🤖 에이전트 탭의 📌 작업에서 진행 상황을 볼 수 있습니다.')
+      if (!startRes?.ok) { setEngageError(startRes?.error || tr('ai.tab.intent.startFailed', '작업을 시작하지 못했습니다.')); return }
+      setEngageNotice(tr('ai.social.engageStarted', '작업을 시작했습니다 — 🤖 에이전트 탭의 📌 작업에서 진행 상황을 볼 수 있습니다.'))
       setEngageStep('form'); setEngageBuild(null)
       refreshLedger()
     } catch (e) {
@@ -805,15 +829,15 @@ export function AiSocialPanel({
   }
   const clearLedger = () => {
     if (!ledger || ledger.length === 0) return
-    if (!window.confirm('활동 기록을 모두 지울까요?')) return
+    if (!window.confirm(tr('ai.social.confirmClearLedger', '활동 기록을 모두 지울까요?'))) return
     void window.browserAPI.ai.engageLedgerClear().then(refreshLedger)
   }
 
   if (!providerReady) {
     return (
       <div className="ai-welcome">
-        <div className="ai-welcome-title">🎨 만들어 올리기</div>
-        <div className="ai-welcome-page dim">AI 설정을 먼저 완료하면 이미지 생성·게시와 블로그 참여 자동화를 쓸 수 있습니다.</div>
+        <div className="ai-welcome-title">🎨 {tr('ai.social.title', '만들어 올리기')}</div>
+        <div className="ai-welcome-page dim">{tr('ai.social.needSetup', 'AI 설정을 먼저 완료하면 이미지 생성·게시와 블로그 참여 자동화를 쓸 수 있습니다.')}</div>
       </div>
     )
   }
@@ -821,8 +845,8 @@ export function AiSocialPanel({
   return (
     <div className="ai-body ai-write">
       <div className="ai-social-subtabs">
-        <button className={`ai-social-subtab ${view === 'generate' ? 'active' : ''}`} onClick={() => setView('generate')}>🎨 이미지 만들어 올리기</button>
-        <button className={`ai-social-subtab ${view === 'engage' ? 'active' : ''}`} onClick={() => setView('engage')}>🤝 블로그 참여</button>
+        <button className={`ai-social-subtab ${view === 'generate' ? 'active' : ''}`} onClick={() => setView('generate')}>🎨 {tr('ai.social.subtabGenerate', '이미지 만들어 올리기')}</button>
+        <button className={`ai-social-subtab ${view === 'engage' ? 'active' : ''}`} onClick={() => setView('engage')}>🤝 {tr('ai.social.subtabEngage', '블로그 참여')}</button>
       </div>
 
       {view === 'generate' ? (
@@ -856,81 +880,83 @@ export function AiSocialPanel({
           )}
 
           <div className="ai-social-form">
-            <label className="ai-write-label">생성 서비스</label>
+            <label className="ai-write-label">{tr('ai.tab.genService', '생성 서비스')}</label>
             <div className="ai-chips">
               {(['genspark', 'chatgpt', 'custom'] as const).map((s) => (
-                <button key={s} className={`ai-chip ${genService === s ? 'active' : ''}`} onClick={() => setGenService(s)}>{SERVICE_LABEL[s]}</button>
+                <button key={s} className={`ai-chip ${genService === s ? 'active' : ''}`} onClick={() => setGenService(s)}>{serviceLabel(tr, s)}</button>
               ))}
             </div>
             {genService === 'custom' && (
-              <input className="ai-input" value={customUrl} placeholder="생성 서비스 URL" onChange={(e) => setCustomUrl(e.target.value)} />
+              <input className="ai-input" value={customUrl} placeholder={tr('ai.tab.genServiceUrl', '생성 서비스 URL')} onChange={(e) => setCustomUrl(e.target.value)} />
             )}
 
-            <label className="ai-write-label">프롬프트</label>
-            <textarea className="ai-input" rows={3} value={prompt} placeholder="예: 노을 지는 해변에서 커피 한 잔, 따뜻한 느낌"
+            <label className="ai-write-label">{tr('ai.social.prompt', '프롬프트')}</label>
+            <textarea className="ai-input" rows={3} value={prompt} placeholder={tr('ai.social.promptPlaceholder', '예: 노을 지는 해변에서 커피 한 잔, 따뜻한 느낌')}
               onChange={(e) => setPrompt(e.target.value)} />
 
-            <label className="ai-write-label">게시할 곳</label>
+            <label className="ai-write-label">{tr('ai.tab.whereToPost', '게시할 곳')}</label>
             <div className="ai-chips">
               {(['instagram', 'youtube', 'tiktok'] as const).map((p) => (
-                <button key={p} className={`ai-chip ${genPlatform === p ? 'active' : ''}`} onClick={() => setGenPlatform(p)}>{PLATFORM_LABEL[p]}</button>
+                <button key={p} className={`ai-chip ${genPlatform === p ? 'active' : ''}`} onClick={() => setGenPlatform(p)}>{platformLabel(tr, p)}</button>
               ))}
             </div>
 
-            <label className="ai-write-label">계정 아이디 (선택)</label>
-            <input className="ai-input" value={genAccount} placeholder="예: my_account (@ 없이)" onChange={(e) => setGenAccount(e.target.value)} />
+            <label className="ai-write-label">{tr('ai.social.accountIdOptional', '계정 아이디 (선택)')}</label>
+            <input className="ai-input" value={genAccount} placeholder={tr('ai.social.accountIdPlaceholder', '예: my_account (@ 없이)')} onChange={(e) => setGenAccount(e.target.value)} />
             <div className="ai-hint">
-              게시 뒤 "정말 올라갔는지" 를 화면에서 확인할 때 <b>이 아이디의 글인지</b> 대조합니다.
-              비워 두면 같은 문구의 남의 글·지난 글과 구분할 수 없어, 확인 결과를 직접 선택해야 합니다.
+              {tr('ai.social.accountIdHint1', '게시 뒤 "정말 올라갔는지" 를 화면에서 확인할 때 ')}<b>{tr('ai.social.accountIdHintBold', '이 아이디의 글인지')}</b>{tr('ai.social.accountIdHint2', ' 대조합니다.')}
+              {tr('ai.social.accountIdHint3', '비워 두면 같은 문구의 남의 글·지난 글과 구분할 수 없어, 확인 결과를 직접 선택해야 합니다.')}
             </div>
 
-            <label className="ai-write-label">캡션 톤 (선택)</label>
+            <label className="ai-write-label">{tr('ai.social.captionToneOptional', '캡션 톤 (선택)')}</label>
             <div className="ai-chips">
               {TONE_PRESETS.map((t) => (
                 <button key={t} className={`ai-chip ${tone === t ? 'active' : ''}`} onClick={() => setTone(t)}>{t}</button>
               ))}
             </div>
-            <input className="ai-input" value={tone} placeholder="톤 직접 입력(선택)" onChange={(e) => setTone(e.target.value)} />
+            <input className="ai-input" value={tone} placeholder={tr('ai.social.toneCustomPlaceholder', '톤 직접 입력(선택)')} onChange={(e) => setTone(e.target.value)} />
 
-            <label className="ai-write-label">해시태그 (쉼표)</label>
-            <input className="ai-input" value={tags} placeholder="태그1, 태그2" onChange={(e) => setTags(e.target.value)} />
+            <label className="ai-write-label">{tr('ai.social.hashtags', '해시태그 (쉼표)')}</label>
+            <input className="ai-input" value={tags} placeholder={tr('ai.social.tagsPlaceholder', '태그1, 태그2')} onChange={(e) => setTags(e.target.value)} />
 
-            <label className="ai-write-label">모드</label>
+            <label className="ai-write-label">{tr('ai.social.mode', '모드')}</label>
             <div className="ai-chips">
-              <button className={`ai-chip ${genMode === 'draft' ? 'active' : ''}`} onClick={() => setGenMode('draft')}>초안까지만</button>
-              <button className={`ai-chip ${genMode === 'publish' ? 'active' : ''}`} onClick={() => setGenMode('publish')}>게시까지</button>
+              <button className={`ai-chip ${genMode === 'draft' ? 'active' : ''}`} onClick={() => setGenMode('draft')}>{tr('ai.tab.draftOnly', '초안까지만')}</button>
+              <button className={`ai-chip ${genMode === 'publish' ? 'active' : ''}`} onClick={() => setGenMode('publish')}>{tr('ai.tab.toPublish', '게시까지')}</button>
             </div>
             {genMode === 'publish' && (
               <>
-                <div className="ai-handoff-note ai-err">⚠ 실제 계정에 게시됩니다. 되돌릴 수 없습니다.</div>
+                <div className="ai-handoff-note ai-err">⚠ {tr('ai.tab.publishWarning', '실제 계정에 게시됩니다. 되돌릴 수 없습니다.')}</div>
                 {/*
                   한 번 맡기면 끝까지 — 다만 **사용자가 여기서 직접 켤 때만**. 켜면 이번에 시작하는
                   작업(같은 플랫폼·같은 계정·정한 건수·정한 시간 안)에 한해 캡션 확인 클릭 없이 게시까지 간다.
                   범위 밖·이미지 모호·캡션 실패는 자동으로 넘어가지 않고 그대로 확인 대기로 남는다.
                 */}
-                <label className="ai-write-label">캡션 확인 없이 게시(이번 작업 한정)</label>
+                <label className="ai-write-label">{tr('ai.tab.publishNoConfirm', '캡션 확인 없이 게시(이번 작업 한정)')}</label>
                 <div className="ai-chips">
-                  <button className={`ai-chip ${autoPublish ? '' : 'active'}`} onClick={() => setAutoPublish(false)}>확인 후 게시</button>
-                  <button className={`ai-chip ${autoPublish ? 'active' : ''}`} onClick={() => setAutoPublish(true)}>맡기고 자동 게시</button>
+                  <button className={`ai-chip ${autoPublish ? '' : 'active'}`} onClick={() => setAutoPublish(false)}>{tr('ai.tab.publishAfterConfirm', '확인 후 게시')}</button>
+                  <button className={`ai-chip ${autoPublish ? 'active' : ''}`} onClick={() => setAutoPublish(true)}>{tr('ai.tab.autoPublishEntrust', '맡기고 자동 게시')}</button>
                 </div>
                 {autoPublish && (
                   <>
                     <div className="ai-social-auto-row">
-                      <label className="ai-write-label">최대 건수</label>
+                      <label className="ai-write-label">{tr('ai.tab.maxCount', '최대 건수')}</label>
                       <input className="ai-input ai-input-sm" type="number" min={1} max={50} value={autoMaxPosts}
                         onChange={(e) => setAutoMaxPosts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
-                      <label className="ai-write-label">유효 시간(분)</label>
+                      <label className="ai-write-label">{tr('ai.tab.validMinutes', '유효 시간(분)')}</label>
                       <input className="ai-input ai-input-sm" type="number" min={5} max={1440} value={autoMinutes}
                         onChange={(e) => setAutoMinutes(Math.max(5, Math.min(1440, Number(e.target.value) || 5)))} />
                     </div>
                     <div className="ai-handoff-note ai-err">
-                      ⚠ {PLATFORM_LABEL[genPlatform]} · 계정 “{genAccount.trim() || '(계정 미지정)'}” 로 최대 {autoMaxPosts}건을
-                      {autoMinutes}분 안에 <b>확인 없이 게시</b>합니다. 이미지가 모호하거나 캡션 생성이 실패하면 자동 게시하지 않고 확인을 기다립니다.
+                      {tr('ai.social.autoPublishWarning2', '⚠ {platform} · 계정 "{account}" 로 최대 {max}건을 {minutes}분 안에 ', {
+                        platform: platformLabel(tr, genPlatform), account: genAccount.trim() || tr('ai.tab.accountUnset', '(계정 미지정)'),
+                        max: autoMaxPosts, minutes: autoMinutes,
+                      })}<b>{tr('ai.tab.autoPublishWarningBold', '확인 없이 게시')}</b>{tr('ai.tab.autoPublishWarningTail', '합니다. 이미지가 모호하거나 캡션 생성이 실패하면 자동 게시하지 않고 확인을 기다립니다.')}
                     </div>
                     {grantInfo && !grantInfo.revokedAt && grantInfo.expiresAt > Date.now() && (
                       <div className="ai-hint">
-                        선승인 사용 {grantInfo.used}/{grantInfo.maxPosts}건
-                        <button className="ai-mini-btn" onClick={() => { void window.browserAPI.ai.socialGrantRevoke().then(refreshGrant) }}>선승인 취소</button>
+                        {tr('ai.social.grantUsed', '선승인 사용 {used}/{max}건', { used: grantInfo.used, max: grantInfo.maxPosts })}
+                        <button className="ai-mini-btn" onClick={() => { void window.browserAPI.ai.socialGrantRevoke().then(refreshGrant) }}>{tr('ai.social.revokeGrant', '선승인 취소')}</button>
                       </div>
                     )}
                   </>
@@ -939,9 +965,9 @@ export function AiSocialPanel({
             )}
 
             <button className="ai-send ai-social-cta" onClick={() => void startGenerate()} disabled={!prompt.trim() || genBusy || !activeId}>
-              {genBusy ? '요청 중…' : '✨ 시작'}
+              {genBusy ? tr('ai.social.requesting', '요청 중…') : '✨ ' + tr('ai.social.start', '시작')}
             </button>
-            {!activeId && <div className="ai-hint">활성 탭이 필요합니다.</div>}
+            {!activeId && <div className="ai-hint">{tr('ai.tab.needActiveTab', '활성 탭이 필요합니다.')}</div>}
             {genError && <div className="ai-handoff-note ai-err">{genError}</div>}
           </div>
         </>
@@ -949,88 +975,88 @@ export function AiSocialPanel({
         <div className="ai-social-form">
           {engageStep === 'form' ? (
             <>
-              <label className="ai-write-label">내 블로그 주소 (선택)</label>
+              <label className="ai-write-label">{tr('ai.social.myBlogUrlOptional', '내 블로그 주소 (선택)')}</label>
               <input className="ai-input" value={myBlogUrl} placeholder="https://blog.naver.com/내블로그" onChange={(e) => setMyBlogUrl(e.target.value)} />
-              <label className="ai-write-label">주제 (선택 — 위와 하나는 필요)</label>
-              <input className="ai-input" value={topic} placeholder="예: 홈트레이닝, 캠핑 장비" onChange={(e) => setTopic(e.target.value)} />
-              <label className="ai-write-label">검색 시작 주소 (선택)</label>
-              <input className="ai-input" value={searchUrl} placeholder="비우면 기본 네이버 블로그 검색" onChange={(e) => setSearchUrl(e.target.value)} />
-              <label className="ai-write-label">계정 표시 이름 (선택)</label>
-              <input className="ai-input" value={engageAccount} placeholder="댓글에 쓸 이름(선택)" onChange={(e) => setEngageAccount(e.target.value)} />
+              <label className="ai-write-label">{tr('ai.social.topicOptional', '주제 (선택 — 위와 하나는 필요)')}</label>
+              <input className="ai-input" value={topic} placeholder={tr('ai.tab.topicPlaceholder', '예: 홈트레이닝, 캠핑 장비')} onChange={(e) => setTopic(e.target.value)} />
+              <label className="ai-write-label">{tr('ai.social.searchUrlOptional', '검색 시작 주소 (선택)')}</label>
+              <input className="ai-input" value={searchUrl} placeholder={tr('ai.social.searchUrlPlaceholder', '비우면 기본 네이버 블로그 검색')} onChange={(e) => setSearchUrl(e.target.value)} />
+              <label className="ai-write-label">{tr('ai.social.accountDisplayNameOptional', '계정 표시 이름 (선택)')}</label>
+              <input className="ai-input" value={engageAccount} placeholder={tr('ai.tab.commentNamePlaceholderOpt', '댓글에 쓸 이름(선택)')} onChange={(e) => setEngageAccount(e.target.value)} />
 
-              <label className="ai-write-label">다룰 글 수</label>
+              <label className="ai-write-label">{tr('ai.social.postsToHandle', '다룰 글 수')}</label>
               <input className="ai-input" type="number" min={1} max={20} value={maxPosts}
                 onChange={(e) => setMaxPosts(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} />
 
-              <label className="ai-write-label">무엇을 할지</label>
-              <label className="ai-write-autoopen"><input type="checkbox" checked={doComment} onChange={(e) => setDoComment(e.target.checked)} /><span>댓글</span></label>
-              <label className="ai-write-autoopen"><input type="checkbox" checked={doLike} onChange={(e) => setDoLike(e.target.checked)} /><span>좋아요</span></label>
+              <label className="ai-write-label">{tr('ai.tab.whatToDo', '무엇을 할지')}</label>
+              <label className="ai-write-autoopen"><input type="checkbox" checked={doComment} onChange={(e) => setDoComment(e.target.checked)} /><span>{tr('ai.tab.comment', '댓글')}</span></label>
+              <label className="ai-write-autoopen"><input type="checkbox" checked={doLike} onChange={(e) => setDoLike(e.target.checked)} /><span>{tr('ai.tab.like', '좋아요')}</span></label>
 
-              <label className="ai-write-label">제외할 사이트 (쉼표)</label>
+              <label className="ai-write-label">{tr('ai.tab.excludeHostsComma', '제외할 사이트 (쉼표)')}</label>
               <input className="ai-input" value={excludeHosts} placeholder="example.com, ads.co.kr" onChange={(e) => setExcludeHosts(e.target.value)} />
 
-              <label className="ai-write-label">글 사이 간격(초)</label>
+              <label className="ai-write-label">{tr('ai.tab.intervalSeconds', '글 사이 간격(초)')}</label>
               <input className="ai-input" type="number" min={0} max={600} value={intervalSeconds}
                 onChange={(e) => setIntervalSeconds(Math.max(0, Math.min(600, Number(e.target.value) || 0)))} />
-              <div className="ai-hint">간격이 덜 지난 클릭은 <b>코드가 거부</b>합니다(작업별 카운터를 디스크에 두고 검사 — 중단 후 재개해도 유지).</div>
+              <div className="ai-hint">{tr('ai.social.intervalHint1', '간격이 덜 지난 클릭은 ')}<b>{tr('ai.social.intervalHintBold', '코드가 거부')}</b>{tr('ai.social.intervalHint2', '합니다(작업별 카운터를 디스크에 두고 검사 — 중단 후 재개해도 유지).')}</div>
 
-              <label className="ai-write-label">기한(분) — 0이면 기한 없음</label>
+              <label className="ai-write-label">{tr('ai.social.deadlineMinutes', '기한(분) — 0이면 기한 없음')}</label>
               <input className="ai-input" type="number" min={0} max={1440} value={engageWindowMin}
                 onChange={(e) => setEngageWindowMin(Math.max(0, Math.min(1440, Number(e.target.value) || 0)))} />
-              <div className="ai-hint">이 시간이 지나면 남은 글이 있어도 댓글·좋아요를 더 하지 않습니다.</div>
+              <div className="ai-hint">{tr('ai.social.deadlineHint', '이 시간이 지나면 남은 글이 있어도 댓글·좋아요를 더 하지 않습니다.')}</div>
 
-              <label className="ai-write-label">모드</label>
+              <label className="ai-write-label">{tr('ai.social.mode', '모드')}</label>
               <div className="ai-chips">
-                <button className={`ai-chip ${engageMode === 'draft' ? 'active' : ''}`} onClick={() => setEngageMode('draft')}>초안만</button>
-                <button className={`ai-chip ${engageMode === 'act' ? 'active' : ''}`} onClick={() => setEngageMode('act')}>실제로 달기</button>
+                <button className={`ai-chip ${engageMode === 'draft' ? 'active' : ''}`} onClick={() => setEngageMode('draft')}>{tr('ai.tab.draftOnly2', '초안만')}</button>
+                <button className={`ai-chip ${engageMode === 'act' ? 'active' : ''}`} onClick={() => setEngageMode('act')}>{tr('ai.social.actForRealAttach', '실제로 달기')}</button>
               </div>
-              {engageMode === 'act' && <div className="ai-handoff-note ai-err">⚠ 실제로 댓글/좋아요가 등록됩니다. 되돌릴 수 없습니다.</div>}
-              {isInternal && <div className="ai-hint">현재 새 탭 등 내부 페이지입니다 — 시작하면 검색 시작 주소로 이동합니다.</div>}
+              {engageMode === 'act' && <div className="ai-handoff-note ai-err">⚠ {tr('ai.tab.engageWarning', '실제로 댓글/좋아요가 등록됩니다. 되돌릴 수 없습니다.')}</div>}
+              {isInternal && <div className="ai-hint">{tr('ai.social.internalPageHint', '현재 새 탭 등 내부 페이지입니다 — 시작하면 검색 시작 주소로 이동합니다.')}</div>}
 
               <button className="ai-send ai-social-cta" onClick={() => void buildEngageTask()} disabled={engageBusy}>
-                {engageBusy ? '확인 중…' : '다음: 대상 확인 →'}
+                {engageBusy ? tr('ai.social.checking', '확인 중…') : tr('ai.social.nextConfirmTarget', '다음: 대상 확인 →')}
               </button>
               {engageError && <div className="ai-handoff-note ai-err">{engageError}</div>}
               {engageNotice && <div className="ai-handoff-note">{engageNotice}</div>}
             </>
           ) : engageBuild ? (
             <>
-              <label className="ai-write-label">허용될 사이트 — 필요 없는 곳은 지우세요</label>
+              <label className="ai-write-label">{tr('ai.social.allowedHostsRemove', '허용될 사이트 — 필요 없는 곳은 지우세요')}</label>
               <div className="ai-social-hosts">
-                {engageBuild.hosts.length === 0 && <span className="ai-social-empty">최소 한 곳은 필요합니다.</span>}
+                {engageBuild.hosts.length === 0 && <span className="ai-social-empty">{tr('ai.social.needAtLeastOneHost', '최소 한 곳은 필요합니다.')}</span>}
                 {engageBuild.hosts.map((h) => (
-                  <button key={h} className="ai-chip removable" onClick={() => removeHost(h)} title="제거">{h} ×</button>
+                  <button key={h} className="ai-chip removable" onClick={() => removeHost(h)} title={tr('ai.tab.remove', '제거')}>{h} ×</button>
                 ))}
               </div>
-              <div className="ai-hint">여기 없는 사이트로는 나가지 않습니다.</div>
+              <div className="ai-hint">{tr('ai.social.noHostsOutside', '여기 없는 사이트로는 나가지 않습니다.')}</div>
               <div className="ai-write-actions">
-                <button className="ai-mini-btn" onClick={() => setEngageStep('form')} disabled={engageBusy}>← 수정</button>
+                <button className="ai-mini-btn" onClick={() => setEngageStep('form')} disabled={engageBusy}>← {tr('ai.social.edit2', '수정')}</button>
                 <button className="ai-send ai-social-cta" onClick={() => void startEngage()} disabled={engageBusy || engageBuild.hosts.length === 0 || !activeId}>
-                  {engageBusy ? '시작하는 중…' : '▶ 시작'}
+                  {engageBusy ? tr('ai.social.starting', '시작하는 중…') : '▶ ' + tr('ai.social.start', '시작')}
                 </button>
               </div>
-              {!activeId && <div className="ai-hint">활성 탭이 필요합니다.</div>}
+              {!activeId && <div className="ai-hint">{tr('ai.tab.needActiveTab', '활성 탭이 필요합니다.')}</div>}
               {engageError && <div className="ai-handoff-note ai-err">{engageError}</div>}
             </>
           ) : null}
 
           <div className="ai-history-head" style={{ marginTop: 4 }}>
-            <span>활동 기록</span>
+            <span>{tr('ai.social.activityLog', '활동 기록')}</span>
             <div className="ai-history-head-actions">
-              <button className="ai-mini-btn" onClick={refreshLedger} title="새로고침">↻</button>
-              <button className="ai-mini-btn" onClick={clearLedger} disabled={!ledger || ledger.length === 0}>기록 비우기</button>
+              <button className="ai-mini-btn" onClick={refreshLedger} title={tr('ai.social.refresh', '새로고침')}>↻</button>
+              <button className="ai-mini-btn" onClick={clearLedger} disabled={!ledger || ledger.length === 0}>{tr('ai.social.clearLog', '기록 비우기')}</button>
             </div>
           </div>
           <div className="ai-social-ledger">
             {ledger === null ? (
-              <div className="ai-welcome-page dim" style={{ padding: 8, textAlign: 'center' }}>불러오는 중…</div>
+              <div className="ai-welcome-page dim" style={{ padding: 8, textAlign: 'center' }}>{tr('ai.tab.loading', '불러오는 중…')}</div>
             ) : ledger.length === 0 ? (
-              <div className="ai-welcome-page dim" style={{ padding: 8, textAlign: 'center' }}>아직 활동 기록이 없습니다.</div>
+              <div className="ai-welcome-page dim" style={{ padding: 8, textAlign: 'center' }}>{tr('ai.social.noActivityYet', '아직 활동 기록이 없습니다.')}</div>
             ) : (
               ledger.map((e) => (
                 <div key={`${e.key}-${e.at}`} className="ai-social-ledger-row">
-                  <span className="ai-social-ledger-when">{fmtWhen(e.at)}</span>
-                  <span className="ai-social-ledger-action">{e.action === 'comment' ? '💬 댓글' : '❤️ 좋아요'}</span>
+                  <span className="ai-social-ledger-when">{fmtWhen(tr, e.at)}</span>
+                  <span className="ai-social-ledger-action">{e.action === 'comment' ? '💬 ' + tr('ai.tab.comment', '댓글') : '❤️ ' + tr('ai.tab.like', '좋아요')}</span>
                   <span className="ai-social-ledger-addr" title={e.note ?? e.key}>{e.note ?? e.key}</span>
                 </div>
               ))

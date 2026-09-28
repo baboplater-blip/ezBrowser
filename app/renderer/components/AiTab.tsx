@@ -1,11 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { AiProviderDetection, AiProviderKind, TabSummary } from '../../shared/types'
 import { Markdown } from './Markdown'
+// i18n(묶음 M2) — 번역 함수는 `tr` 로 부른다. `t` 는 이 파일에서 영속 작업(TaskSummary) 순회
+// 변수(`ptasks.map((t) => ...)` 등)로 이미 쓰이고 있어(TaskCard.tsx 와 같은 이유) 충돌을 피한다.
+import { t as tSingle, useI18nT } from '../i18n'
 import {
-  AGENT_EXAMPLES, COMPACT_KEEP, COMPACT_THRESHOLD, COST_LABEL, copyText, downloadText,
+  agentExamples, COMPACT_KEEP, COMPACT_THRESHOLD, costLabel, copyText, downloadText,
   extractCols, fmtDuration, folderHex, FOLDER_EMOJIS, FOLDER_PALETTE, highlightNodes,
   hostOf, looksLikeAgentCommand, newId, parseDataset, relTime, repeatStatusText, rowsToCSV,
-  RUN_STATUS,
+  runStatusInfo,
 } from './ai/ai-shared'
 import type {
   AiConfig, ChatFolder, ChatMessage, ConvSummary, PageInfo, RepeatSummary, RunDetail,
@@ -18,9 +21,10 @@ import { TaskCard } from './ai/TaskCard'
 // 실제로 렌더될 때(첫 클릭) 번들을 받도록 분리(묶음 K — 외피 초기 JS 축소). 로딩 표시는 디자인 토큰만.
 const AiWriteStudio = lazy(() => import('./AiWriteStudio').then((m) => ({ default: m.AiWriteStudio })))
 const AiSocialPanel = lazy(() => import('./AiSocialPanel').then((m) => ({ default: m.AiSocialPanel })))
-const AiLazyFallback = () => <div className="ai-body ai-welcome dim">불러오는 중…</div>
+const AiLazyFallback = () => <div className="ai-body ai-welcome dim">{tSingle('ai.tab.loading', '불러오는 중…')}</div>
 
 export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { windowId: string; active: TabSummary | null; summarizeNonce?: number; writeNonce?: number }) {
+  const tr = useI18nT()
   const [config, setConfig] = useState<AiConfig | null>(null)
   const [detection, setDetection] = useState<AiProviderDetection | null>(null)
   const [detecting, setDetecting] = useState(false)
@@ -199,7 +203,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
       if (r?.ok) { refreshConfig(); setDetection(null); return }
       // 실패해도 무엇이 문제인지·무엇을 하면 되는지 그대로 보여준다(조용한 실패 금지).
       setConnectError({
-        message: r?.diagnosis?.message ?? r?.error ?? '연결하지 못했습니다.',
+        message: r?.diagnosis?.message ?? r?.error ?? tr('ai.tab.connectFailed', '연결하지 못했습니다.'),
         fix: r?.diagnosis?.fix,
       })
       void loadDetection(true)
@@ -251,8 +255,10 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     const off = window.browserAPI.ai.onAgentEvent((p) => {
       if (p.reqId !== agentReqId.current) return
       switch (p.type) {
-        case 'start': push('🎯', `작업 시작: ${String(p.task ?? '')}`); break
-        case 'observe': push(p.vision ? '👁' : '🔍', `관찰 · 스텝 ${String(p.step)} · 요소 ${String(p.elements)}개${p.vision ? ' · 화면 인식' : ''}`, 'muted'); break
+        case 'start': push('🎯', tr('ai.tab.trace.start', '작업 시작: {task}', { task: String(p.task ?? '') })); break
+        case 'observe': push(p.vision ? '👁' : '🔍', p.vision
+          ? tr('ai.tab.trace.observeVision', '관찰 · 스텝 {step} · 요소 {elements}개 · 화면 인식', { step: String(p.step), elements: String(p.elements) })
+          : tr('ai.tab.trace.observe', '관찰 · 스텝 {step} · 요소 {elements}개', { step: String(p.step), elements: String(p.elements) }), 'muted'); break
         case 'thought': if (p.thought) push('💭', String(p.thought)); break
         case 'action': push('⚙️', String(p.label ?? '')); break
         case 'result': push(p.ok ? '✔️' : '✖️', String(p.detail ?? ''), p.ok ? 'ok' : 'warn'); break
@@ -261,36 +267,38 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           if (rows.length) setExtractRows((prev) => [...prev, ...rows])
           break
         }
-        case 'confirm': push('⏸️', `확인 필요: ${String(p.label ?? '')}`, 'warn'); setAwaitingConfirm(String(p.label ?? '이 행동')); break
+        case 'confirm': push('⏸️', tr('ai.tab.trace.confirmNeeded', '확인 필요: {label}', { label: String(p.label ?? '') }), 'warn'); setAwaitingConfirm(String(p.label ?? tr('ai.tab.trace.thisAction', '이 행동'))); break
         // 로그인/CAPTCHA 감지 — "왜 멈췄는지" 를 사용자가 바로 알아야 한다(자동으로 풀지 않는다).
         case 'challenge': push(p.kind === 'captcha' ? '🧩' : '🔐',
-          `${p.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면입니다 — 브라우저에서 직접 처리해 주세요 (근거: ${String(p.evidence ?? '')})`, 'warn'); break
-        case 'ask': push('❓', String(p.message ?? '')); setAwaitingAsk(String(p.message ?? '추가 정보가 필요합니다.')); break
-        case 'answer': push('🗣️', `답변: ${String(p.text ?? '')}`, 'muted'); break
+          p.kind === 'captcha'
+            ? tr('ai.tab.trace.challengeCaptcha', '사람 확인(CAPTCHA) 화면입니다 — 브라우저에서 직접 처리해 주세요 (근거: {evidence})', { evidence: String(p.evidence ?? '') })
+            : tr('ai.tab.trace.challengeLogin', '로그인 화면입니다 — 브라우저에서 직접 처리해 주세요 (근거: {evidence})', { evidence: String(p.evidence ?? '') }), 'warn'); break
+        case 'ask': push('❓', String(p.message ?? '')); setAwaitingAsk(String(p.message ?? tr('ai.tab.trace.needMoreInfo', '추가 정보가 필요합니다.'))); break
+        case 'answer': push('🗣️', tr('ai.tab.trace.answer', '답변: {text}', { text: String(p.text ?? '') }), 'muted'); break
         case 'report': {
           const md = String(p.markdown ?? '')
           if (md.trim()) {
-            setReport({ title: String(p.title ?? '사이트 분석 보고서'), markdown: md, sources: Array.isArray(p.sources) ? (p.sources as string[]) : [] })
+            setReport({ title: String(p.title ?? tr('ai.tab.trace.reportDefaultTitle', '사이트 분석 보고서')), markdown: md, sources: Array.isArray(p.sources) ? (p.sources as string[]) : [] })
             setReportOpen(true)
-            push('📊', `보고서 작성됨 — ${String(p.title ?? '')}`.trim(), 'ok')
+            push('📊', tr('ai.tab.trace.reportWritten', '보고서 작성됨 — {title}', { title: String(p.title ?? '') }).trim(), 'ok')
           }
           break
         }
-        case 'batch-start': push('📋', `대량 처리 시작 — ${String(p.total)}개 행`); break
-        case 'batch-row': push('▶', `행 ${Number(p.index) + 1}/${String(p.total)} 처리`, 'muted'); break
-        case 'batch-row-done': push('✅', `행 ${Number(p.index) + 1} 완료: ${String(p.outcome ?? '')}`.slice(0, 120), 'ok'); break
-        case 'done': push('🏁', String(p.message ?? '완료'), 'ok', typeof p.shot === 'string' ? p.shot : undefined); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
+        case 'batch-start': push('📋', tr('ai.tab.trace.batchStart', '대량 처리 시작 — {total}개 행', { total: String(p.total) })); break
+        case 'batch-row': push('▶', tr('ai.tab.trace.batchRow', '행 {n}/{total} 처리', { n: Number(p.index) + 1, total: String(p.total) }), 'muted'); break
+        case 'batch-row-done': push('✅', tr('ai.tab.trace.batchRowDone', '행 {n} 완료: {outcome}', { n: Number(p.index) + 1, outcome: String(p.outcome ?? '') }).slice(0, 120), 'ok'); break
+        case 'done': push('🏁', String(p.message ?? tr('ai.tab.trace.done', '완료')), 'ok', typeof p.shot === 'string' ? p.shot : undefined); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
         // 단계 예산을 다 썼지만 끝난 게 아니다 — done(✅)과 절대 같은 톤으로 보이면 안 된다(T3 와 동일 원칙).
         case 'exhausted':
-          push('⏳', `단계 ${String(p.stepsUsed ?? '')}까지 진행 — 아직 완료하지 못했습니다`, 'warn')
-          if (p.publishPending) push('⚠️', '발행을 눌렀지만 완료 신호를 확인하지 못했습니다 — 실제로 올라갔는지 확인해 주세요', 'warn')
+          push('⏳', tr('ai.tab.trace.exhausted', '단계 {steps}까지 진행 — 아직 완료하지 못했습니다', { steps: String(p.stepsUsed ?? '') }), 'warn')
+          if (p.publishPending) push('⚠️', tr('ai.tab.trace.publishPending', '발행을 눌렀지만 완료 신호를 확인하지 못했습니다 — 실제로 올라갔는지 확인해 주세요'), 'warn')
           setAgentRunning(false); setAgentPaused(false); agentReqId.current = null
           break
-        case 'error': push('❌', String(p.message ?? '오류'), 'warn'); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
-        case 'cancelled': push('⏹️', '중단됨', 'muted'); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
+        case 'error': push('❌', String(p.message ?? tr('ai.tab.trace.error', '오류')), 'warn'); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
+        case 'cancelled': push('⏹️', tr('ai.tab.trace.cancelled', '중단됨'), 'muted'); setAgentRunning(false); setAgentPaused(false); agentReqId.current = null; break
         // 일시정지/재개는 종료가 아니다 — agentRunning 은 유지하고 스피너 문구만 바꾼다.
-        case 'paused': push('⏸️', '일시정지 — 페이지 조작을 멈췄습니다', 'muted'); setAgentPaused(true); break
-        case 'resumed': push('▶', '재개', 'muted'); setAgentPaused(false); break
+        case 'paused': push('⏸️', tr('ai.tab.trace.paused', '일시정지 — 페이지 조작을 멈췄습니다'), 'muted'); setAgentPaused(true); break
+        case 'resumed': push('▶', tr('ai.tab.trace.resumed', '재개'), 'muted'); setAgentPaused(false); break
         default: break
       }
     })
@@ -419,25 +427,27 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
       const pushTrace = (icon: string, text: string, tone?: TraceItem['tone']) =>
         setPtaskTraces((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), { id: newId(), icon, text, tone }].slice(-60) }))
       switch (p.type) {
-        case 'observe': pushTrace(p.vision ? '👁' : '🔍', `관찰 · 스텝 ${String(p.step)}`, 'muted'); break
+        case 'observe': pushTrace(p.vision ? '👁' : '🔍', tr('ai.tab.trace.observeShort', '관찰 · 스텝 {step}', { step: String(p.step) }), 'muted'); break
         case 'thought': if (p.thought) pushTrace('💭', String(p.thought)); break
         case 'action': pushTrace('⚙️', String(p.label ?? '')); break
         case 'result': pushTrace(p.ok ? '✔️' : '✖️', String(p.detail ?? ''), p.ok ? 'ok' : 'warn'); break
         case 'confirm':
-          setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'confirm', label: String(p.label ?? '이 행동') } }))
-          pushTrace('⏸️', `확인 필요: ${String(p.label ?? '')}`, 'warn')
+          setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'confirm', label: String(p.label ?? tr('ai.tab.trace.thisAction', '이 행동')) } }))
+          pushTrace('⏸️', tr('ai.tab.trace.confirmNeeded', '확인 필요: {label}', { label: String(p.label ?? '') }), 'warn')
           break
         case 'ask':
-          setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'ask', message: String(p.message ?? '추가 정보가 필요합니다.') } }))
+          setPtaskPending((prev) => ({ ...prev, [id]: { kind: 'ask', message: String(p.message ?? tr('ai.tab.trace.needMoreInfo', '추가 정보가 필요합니다.')) } }))
           pushTrace('❓', String(p.message ?? ''))
           break
         case 'challenge':
           pushTrace(p.kind === 'captcha' ? '🧩' : '🔐',
-            `${p.kind === 'captcha' ? '사람 확인(CAPTCHA)' : '로그인'} 화면 감지 — 브라우저에서 직접 처리해 주세요`, 'warn')
+            p.kind === 'captcha'
+              ? tr('ai.tab.trace.challengeCaptchaShort', '사람 확인(CAPTCHA) 화면 감지 — 브라우저에서 직접 처리해 주세요')
+              : tr('ai.tab.trace.challengeLoginShort', '로그인 화면 감지 — 브라우저에서 직접 처리해 주세요'), 'warn')
           break
         case 'answer':
           setPtaskPending((prev) => { const n = { ...prev }; delete n[id]; return n })
-          pushTrace('🗣️', `답변: ${String(p.text ?? '')}`, 'muted')
+          pushTrace('🗣️', tr('ai.tab.trace.answer', '답변: {text}', { text: String(p.text ?? '') }), 'muted')
           break
         default: break
       }
@@ -479,7 +489,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     if (!t.retry) return null
     const remain = Math.max(0, t.retry.nextAt - Date.now())
     const sec = Math.ceil(remain / 1000)
-    return sec >= 60 ? `${Math.ceil(sec / 60)}분 후 재시도` : `${sec}초 후 재시도`
+    return sec >= 60
+      ? tr('ai.tab.retryInMin', '{m}분 후 재시도', { m: Math.ceil(sec / 60) })
+      : tr('ai.tab.retryInSec', '{s}초 후 재시도', { s: sec })
   }
 
   // 장시간 실행 기본값(설정에서) — 최초 진입 시 한 번 불러와 입력 필드 기본값으로.
@@ -548,7 +560,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     // 챗 모드는 페이지와 대화만 하고 실제 조작은 못 하므로, 명령을 챗으로 보내면 헛수고가 된다.
     if (mode === 'chat' && !agentRunning && looksLikeAgentCommand(trimmed)) {
       if (isInternal) {
-        setNotice('🤖 브라우저 조작은 웹 페이지에서 실행됩니다. 사이트를 연 뒤 다시 시도하세요.')
+        setNotice('🤖 ' + tr('ai.tab.notice.agentNeedsWeb', '브라우저 조작은 웹 페이지에서 실행됩니다. 사이트를 연 뒤 다시 시도하세요.'))
         return
       }
       setNotice(null)
@@ -592,7 +604,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   const lastSummarizeNonce = useRef(0)
   useEffect(() => {
     if (!summarizeNonce || summarizeNonce === lastSummarizeNonce.current) return
-    if (isInternal) { lastSummarizeNonce.current = summarizeNonce; setNotice('웹 페이지에서 열면 요약할 수 있습니다.'); return }
+    if (isInternal) { lastSummarizeNonce.current = summarizeNonce; setNotice(tr('ai.tab.notice.summarizeNeedsWeb', '웹 페이지에서 열면 요약할 수 있습니다.')); return }
     if (!providerReady) return // 아직 준비 전 — providerReady 가 true 되면 이 effect 가 재실행되어 발동
     lastSummarizeNonce.current = summarizeNonce
     setMode('chat')
@@ -631,7 +643,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   }
   const clearHistory = () => {
     if (history.length === 0) return
-    if (!window.confirm('저장된 모든 대화를 삭제할까요?')) return
+    if (!window.confirm(tr('ai.tab.confirmClearHistory', '저장된 모든 대화를 삭제할까요?'))) return
     void window.browserAPI.ai.convClear().then(() => {
       suppressSaveRef.current = true; setConvId(null); setMessages([]); setShowHistory(false); resetCompaction()
     })
@@ -694,7 +706,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   }
   const deleteFolderConfirm = (id: string) => {
     const f = folders.find((x) => x.id === id)
-    if (!window.confirm(`'${f?.name ?? '폴더'}' 폴더를 삭제할까요? (대화는 미분류로 이동)`)) return
+    if (!window.confirm(tr('ai.tab.confirmDeleteFolder', "'{name}' 폴더를 삭제할까요? (대화는 미분류로 이동)", { name: f?.name ?? tr('ai.tab.folderFallbackName', '폴더') }))) return
     void window.browserAPI.ai.folderDelete(id)
   }
   const createFolderTop = () => {
@@ -801,7 +813,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   // 상태 변경 호출은 throw 하지 않고 {ok, error} 를 돌려준다(소유 창이 아니거나 상태 전이가
   // 불가할 때) — 조용히 무시하면 "눌렀는데 아무 일도 안 일어난다"가 되므로 실패 사유를 반드시 보인다.
   const runPtaskAction = (p: Promise<{ ok: boolean; error?: string }>) => {
-    void p.then((r) => { if (!r?.ok) setPtaskNotice(r?.error || '요청을 처리하지 못했습니다.') })
+    void p.then((r) => { if (!r?.ok) setPtaskNotice(r?.error || tr('ai.tab.requestFailed', '요청을 처리하지 못했습니다.')) })
       .catch((e) => setPtaskNotice(e instanceof Error ? e.message : String(e)))
   }
   const startPersistentTask = (task: string) => {
@@ -821,7 +833,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
       instruction: trimmed, tabId: activeId, mode: execMode,
       ...(Object.keys(budget).length ? { budget } : {}),
     }).then((summary) => {
-      if (!summary) { setPtaskNotice('작업을 만들지 못했습니다(빈 지시).'); return }
+      if (!summary) { setPtaskNotice(tr('ai.tab.taskCreateFailedEmpty', '작업을 만들지 못했습니다(빈 지시).')); return }
       runPtaskAction(window.browserAPI.ai.ptaskStart(summary.id))
     })
   }
@@ -853,7 +865,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             maxPosts: icAutoMaxPosts,
             minutes: icAutoMinutes,
           })
-          if (!g) setIntentError('자동 게시 선승인을 등록하지 못했습니다 — 확인 후 게시로 진행합니다.')
+          if (!g) setIntentError(tr('ai.tab.intent.autoPublishGrantFailed', '자동 게시 선승인을 등록하지 못했습니다 — 확인 후 게시로 진행합니다.'))
         }
         const w = await window.browserAPI.ai.socialStart({
           service: icService,
@@ -866,7 +878,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           windowId,
           tabId: activeId,
         })
-        if (!w) { setIntentError('작업을 시작하지 못했습니다.'); return }
+        if (!w) { setIntentError(tr('ai.tab.intent.startFailed', '작업을 시작하지 못했습니다.')); return }
         setPendingIntent(null)
         setSocialOpen(true) // 진행 상황은 🎨 만들기 패널의 카드에서 볼 수 있다
       } else if (pendingIntent.kind === 'blog-engage') {
@@ -891,12 +903,12 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         const summary = await window.browserAPI.ai.ptaskCreate({
           instruction: res.task, tabId: activeId, mode: 'normal', budget: { allowedHosts: res.allowedHosts },
         })
-        if (!summary) { setIntentError('작업을 만들지 못했습니다.'); return }
+        if (!summary) { setIntentError(tr('ai.tab.intent.createFailed', '작업을 만들지 못했습니다.')); return }
         const startRes = await window.browserAPI.ai.ptaskStart(summary.id)
-        if (!startRes?.ok) { setIntentError(startRes?.error || '작업을 시작하지 못했습니다.'); return }
+        if (!startRes?.ok) { setIntentError(startRes?.error || tr('ai.tab.intent.startFailed', '작업을 시작하지 못했습니다.')); return }
         setPendingIntent(null)
         setMode('agent')
-        setPtaskNotice('작업을 시작했습니다 — 📌 작업에서 진행 상황을 볼 수 있습니다.')
+        setPtaskNotice(tr('ai.tab.intent.started', '작업을 시작했습니다 — 📌 작업에서 진행 상황을 볼 수 있습니다.'))
       }
     } catch (e) {
       setIntentError(e instanceof Error ? e.message : String(e))
@@ -913,7 +925,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   const rerunPtask = (t: TaskSummary) => {
     if (isInternal || !providerReady || !activeId) return
     void window.browserAPI.ai.ptaskCreate({ instruction: t.instruction, tabId: activeId, mode: t.mode }).then((s) => {
-      if (!s) { setPtaskNotice('작업을 만들지 못했습니다.'); return }
+      if (!s) { setPtaskNotice(tr('ai.tab.intent.createFailed', '작업을 만들지 못했습니다.')); return }
       runPtaskAction(window.browserAPI.ai.ptaskStart(s.id))
     })
   }
@@ -995,7 +1007,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   const deleteRun = (id: string, e: React.MouseEvent) => { e.stopPropagation(); void window.browserAPI.ai.runDelete(id) }
   const clearRuns = () => {
     if (agentRuns.length === 0) return
-    if (!window.confirm('저장된 모든 작업 이력을 삭제할까요?')) return
+    if (!window.confirm(tr('ai.tab.confirmClearRuns', '저장된 모든 작업 이력을 삭제할까요?'))) return
     void window.browserAPI.ai.runClear().then(() => { setViewRun(null) })
   }
   const rerunTask = (task: string) => {
@@ -1007,9 +1019,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
   if (config && !config.enabled) {
     return (
       <div className="ai-setup">
-        <div className="ai-setup-title">AI 기능이 꺼져 있습니다</div>
-        <p className="ai-setup-desc">설정에서 AI 를 켜면 이 페이지에 대해 질문하고 요약할 수 있습니다.</p>
-        <button className="ai-setup-btn" onClick={openSettings}>설정 열기</button>
+        <div className="ai-setup-title">{tr('ai.tab.setup.disabledTitle', 'AI 기능이 꺼져 있습니다')}</div>
+        <p className="ai-setup-desc">{tr('ai.tab.setup.disabledDesc', '설정에서 AI 를 켜면 이 페이지에 대해 질문하고 요약할 수 있습니다.')}</p>
+        <button className="ai-setup-btn" onClick={openSettings}>{tr('ai.tab.setup.openSettings', '설정 열기')}</button>
       </div>
     )
   }
@@ -1019,11 +1031,11 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     const notReady = detection?.candidates.filter((c) => !c.ready) ?? []
     return (
       <div className="ai-setup">
-        <div className="ai-setup-title">AI를 연결하세요</div>
-        {detecting && <p className="ai-setup-desc">이 컴퓨터에서 쓸 수 있는 방법을 찾는 중…</p>}
+        <div className="ai-setup-title">{tr('ai.tab.setup.connectTitle', 'AI를 연결하세요')}</div>
+        {detecting && <p className="ai-setup-desc">{tr('ai.tab.setup.detecting', '이 컴퓨터에서 쓸 수 있는 방법을 찾는 중…')}</p>}
         {!detecting && usable.length > 0 && (
           <>
-            <p className="ai-setup-desc">지금 바로 쓸 수 있는 방법을 찾았습니다. 하나를 고르면 연결까지 확인합니다.</p>
+            <p className="ai-setup-desc">{tr('ai.tab.setup.usableFound', '지금 바로 쓸 수 있는 방법을 찾았습니다. 하나를 고르면 연결까지 확인합니다.')}</p>
             <div className="ai-provider-list">
               {usable.map((c) => (
                 <button
@@ -1034,10 +1046,10 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 >
                   <span className="ai-provider-head">
                     <span className="ai-provider-name">{c.label}</span>
-                    <span className={`ai-provider-cost cost-${c.cost}`}>{COST_LABEL[c.cost]}</span>
+                    <span className={`ai-provider-cost cost-${c.cost}`}>{costLabel(tr, c.cost)}</span>
                   </span>
                   <span className="ai-provider-detail">{c.detail}</span>
-                  {connecting === c.id && <span className="ai-provider-detail">연결 확인 중…</span>}
+                  {connecting === c.id && <span className="ai-provider-detail">{tr('ai.tab.setup.connecting', '연결 확인 중…')}</span>}
                 </button>
               ))}
             </div>
@@ -1045,7 +1057,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         )}
         {!detecting && usable.length === 0 && (
           <p className="ai-setup-desc">
-            이 컴퓨터에서 바로 쓸 수 있는 AI를 찾지 못했습니다. 아래 중 하나를 준비하면 됩니다.
+            {tr('ai.tab.setup.noneUsable', '이 컴퓨터에서 바로 쓸 수 있는 AI를 찾지 못했습니다. 아래 중 하나를 준비하면 됩니다.')}
           </p>
         )}
         {connectError && (
@@ -1056,7 +1068,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         )}
         {!detecting && notReady.length > 0 && (
           <details className="ai-provider-more">
-            <summary>준비되지 않은 방법 {notReady.length}개 보기</summary>
+            <summary>{tr('ai.tab.setup.notReadyCount', '준비되지 않은 방법 {n}개 보기', { n: notReady.length })}</summary>
             {notReady.map((c) => (
               <div key={c.id} className="ai-provider-row">
                 <span className="ai-provider-name">{c.label}</span>
@@ -1067,8 +1079,8 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           </details>
         )}
         <div className="ai-setup-actions">
-          <button className="ai-setup-btn" onClick={openSettings}>설정에서 직접 고르기</button>
-          <button className="ai-setup-btn ghost" disabled={detecting} onClick={() => void loadDetection(true)}>다시 찾기</button>
+          <button className="ai-setup-btn" onClick={openSettings}>{tr('ai.tab.setup.pickManually', '설정에서 직접 고르기')}</button>
+          <button className="ai-setup-btn ghost" disabled={detecting} onClick={() => void loadDetection(true)}>{tr('ai.tab.setup.retryDetect', '다시 찾기')}</button>
         </div>
       </div>
     )
@@ -1078,28 +1090,28 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
     <div className="ai-tab">
       <div className="ai-meta">
         <div className="ai-mode">
-          <button className={`ai-mode-btn ${mode === 'chat' ? 'active' : ''}`} onClick={() => setMode('chat')} title="페이지와 대화">💬 챗</button>
-          <button className={`ai-mode-btn ${mode === 'agent' ? 'active' : ''}`} onClick={() => setMode('agent')} title="작업을 자동 수행">🤖 에이전트</button>
-          <button className={`ai-mode-btn ${mode === 'write' ? 'active' : ''}`} onClick={() => setMode('write')} title="블로그 글 작성">✍️ 글쓰기</button>
+          <button className={`ai-mode-btn ${mode === 'chat' ? 'active' : ''}`} onClick={() => setMode('chat')} title={tr('ai.tab.mode.chatTitle', '페이지와 대화')}>💬 {tr('ai.tab.mode.chat', '챗')}</button>
+          <button className={`ai-mode-btn ${mode === 'agent' ? 'active' : ''}`} onClick={() => setMode('agent')} title={tr('ai.tab.mode.agentTitle', '작업을 자동 수행')}>🤖 {tr('ai.tab.mode.agent', '에이전트')}</button>
+          <button className={`ai-mode-btn ${mode === 'write' ? 'active' : ''}`} onClick={() => setMode('write')} title={tr('ai.tab.mode.writeTitle', '블로그 글 작성')}>✍️ {tr('ai.tab.mode.write', '글쓰기')}</button>
         </div>
         <div className="ai-meta-actions">
           <span className="ai-provider" title={config ? `${config.providerLabel} · ${config.model}` : ''}>{config ? config.model : '…'}</span>
-          <button className="ai-mini-btn" onClick={() => void window.browserAPI.tabs.create(windowId, 'browser://ai-memory', { background: false })} title="AI 기억 보기·편집">🧠 기억</button>
-          <button className={`ai-mini-btn ${socialOpen ? 'active' : ''}`} onClick={() => setSocialOpen((s) => !s)} title="이미지 생성→게시, 관심 블로그 댓글·좋아요 자동화">🎨 만들기</button>
+          <button className="ai-mini-btn" onClick={() => void window.browserAPI.tabs.create(windowId, 'browser://ai-memory', { background: false })} title={tr('ai.tab.memoryTitle', 'AI 기억 보기·편집')}>🧠 {tr('ai.tab.memory', '기억')}</button>
+          <button className={`ai-mini-btn ${socialOpen ? 'active' : ''}`} onClick={() => setSocialOpen((s) => !s)} title={tr('ai.tab.socialTitle', '이미지 생성→게시, 관심 블로그 댓글·좋아요 자동화')}>🎨 {tr('ai.tab.social', '만들기')}</button>
           {mode === 'chat' && (
             <>
               <button className="ai-mini-btn" onClick={() => void compact()} disabled={streaming || compacting || messages.length - foldCount < 4}
-                title="긴 대화의 앞부분을 요약해 압축(컨텍스트 절약)">{compacting ? '🗜 압축 중…' : '🗜 압축'}</button>
-              <button className={`ai-mini-btn ${showHistory ? 'active' : ''}`} onClick={toggleHistory} title="이전 대화">🕘 대화</button>
-              <button className="ai-mini-btn" onClick={newChat} title="새 대화 시작">＋ 새 대화</button>
+                title={tr('ai.tab.compactTitle', '긴 대화의 앞부분을 요약해 압축(컨텍스트 절약)')}>{compacting ? '🗜 ' + tr('ai.tab.compacting', '압축 중…') : '🗜 ' + tr('ai.tab.compact', '압축')}</button>
+              <button className={`ai-mini-btn ${showHistory ? 'active' : ''}`} onClick={toggleHistory} title={tr('ai.tab.historyTitle', '이전 대화')}>🕘 {tr('ai.tab.history', '대화')}</button>
+              <button className="ai-mini-btn" onClick={newChat} title={tr('ai.tab.newChatTitle', '새 대화 시작')}>＋ {tr('ai.tab.newChat', '새 대화')}</button>
             </>
           )}
           {mode === 'agent' && (
             <>
-              <button className={`ai-mini-btn ${showPtasks ? 'active' : ''}`} onClick={togglePtasks} title="영속 작업 — 일시정지·재개, 사이드바를 닫아도 계속 진행">📌 작업</button>
-              <button className={`ai-mini-btn ${showRuns ? 'active' : ''}`} onClick={toggleRuns} title="작업 이력">🕘 이력</button>
-              {(trace.length > 0 || showRuns) && !agentRunning && <button className="ai-mini-btn" onClick={resetAgent} title="새 작업">＋ 새 작업</button>}
-              <button className="ai-mini-btn" onClick={saveCurrentTask} disabled={!agentTask.trim()} title="현재 작업을 매크로로 저장">💾 저장</button>
+              <button className={`ai-mini-btn ${showPtasks ? 'active' : ''}`} onClick={togglePtasks} title={tr('ai.tab.ptasksTitle', '영속 작업 — 일시정지·재개, 사이드바를 닫아도 계속 진행')}>📌 {tr('ai.tab.ptasks', '작업')}</button>
+              <button className={`ai-mini-btn ${showRuns ? 'active' : ''}`} onClick={toggleRuns} title={tr('ai.tab.runsTitle', '작업 이력')}>🕘 {tr('ai.tab.runs', '이력')}</button>
+              {(trace.length > 0 || showRuns) && !agentRunning && <button className="ai-mini-btn" onClick={resetAgent} title={tr('ai.tab.newTaskTitle', '새 작업')}>＋ {tr('ai.tab.newTask', '새 작업')}</button>}
+              <button className="ai-mini-btn" onClick={saveCurrentTask} disabled={!agentTask.trim()} title={tr('ai.tab.saveTaskTitle', '현재 작업을 매크로로 저장')}>💾 {tr('ai.tab.saveTask', '저장')}</button>
             </>
           )}
         </div>
@@ -1125,21 +1137,21 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             {showFolderManage ? (
               <>
                 <div className="ai-history-head">
-                  <button className="ai-mini-btn" onClick={() => setShowFolderManage(false)}>← 뒤로</button>
-                  <span>폴더 관리</span>
+                  <button className="ai-mini-btn" onClick={() => setShowFolderManage(false)}>← {tr('ai.tab.back', '뒤로')}</button>
+                  <span>{tr('ai.tab.folderManage', '폴더 관리')}</span>
                   <span />
                 </div>
                 <div className="ai-assign-newfolder" style={{ margin: '8px 2px' }}>
-                  <input className="ai-assign-input" value={mgNewFolder} placeholder="새 폴더 이름…"
+                  <input className="ai-assign-input" value={mgNewFolder} placeholder={tr('ai.tab.newFolderPlaceholder', '새 폴더 이름…')}
                     onChange={(e) => setMgNewFolder(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createFolderTop() } }} />
-                  <button className="ai-mini-btn" onClick={createFolderTop} disabled={!mgNewFolder.trim()}>＋ 폴더</button>
+                  <button className="ai-mini-btn" onClick={createFolderTop} disabled={!mgNewFolder.trim()}>＋ {tr('ai.tab.folder', '폴더')}</button>
                 </div>
                 {folders.length === 0 ? (
-                  <div className="ai-welcome-page dim" style={{ padding: '16px', textAlign: 'center' }}>폴더가 없습니다. 위에서 만들어 보세요.</div>
+                  <div className="ai-welcome-page dim" style={{ padding: '16px', textAlign: 'center' }}>{tr('ai.tab.noFolders', '폴더가 없습니다. 위에서 만들어 보세요.')}</div>
                 ) : (
                   <div className="ai-history-list">
-                    {folders.length > 1 && <div className="ai-hint">드래그해서 순서를 바꿀 수 있습니다.</div>}
+                    {folders.length > 1 && <div className="ai-hint">{tr('ai.tab.dragToReorder', '드래그해서 순서를 바꿀 수 있습니다.')}</div>}
                     {folders.map((f) => {
                       const count = history.filter((h) => h.folderId === f.id).length
                       return (
@@ -1158,17 +1170,17 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                             ) : (
                               <>
                                 <div className="ai-history-title">{folderIcon(f)}{f.name}</div>
-                                <div className="ai-history-sub">{count}개 대화</div>
+                                <div className="ai-history-sub">{tr('ai.tab.convCount', '{n}개 대화', { n: count })}</div>
                                 <div className="ai-folder-swatches" onClick={(e) => e.stopPropagation()}>
                                   {FOLDER_PALETTE.map((c) => (
                                     <button key={c} className={`ai-swatch ${f.color === c ? 'active' : ''}`} style={{ background: folderHex(c) }}
-                                      title={`색: ${c}`} onClick={() => setFolderColorFn(f.id, c)} />
+                                      title={tr('ai.tab.colorTitle', '색: {c}', { c })} onClick={() => setFolderColorFn(f.id, c)} />
                                   ))}
                                 </div>
                                 <div className="ai-folder-emojis" onClick={(e) => e.stopPropagation()}>
-                                  <button className={`ai-emoji-btn ${!f.emoji ? 'active' : ''}`} title="아이콘 없음(색 점)" onClick={() => setFolderEmojiFn(f.id, '')}>∅</button>
+                                  <button className={`ai-emoji-btn ${!f.emoji ? 'active' : ''}`} title={tr('ai.tab.noIcon', '아이콘 없음(색 점)')} onClick={() => setFolderEmojiFn(f.id, '')}>∅</button>
                                   {FOLDER_EMOJIS.map((em) => (
-                                    <button key={em} className={`ai-emoji-btn ${f.emoji === em ? 'active' : ''}`} title={`아이콘: ${em}`} onClick={() => setFolderEmojiFn(f.id, em)}>{em}</button>
+                                    <button key={em} className={`ai-emoji-btn ${f.emoji === em ? 'active' : ''}`} title={tr('ai.tab.iconTitle', '아이콘: {em}', { em })} onClick={() => setFolderEmojiFn(f.id, em)}>{em}</button>
                                   ))}
                                 </div>
                               </>
@@ -1176,8 +1188,8 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                           </div>
                           {editingFolderId !== f.id && (
                             <>
-                              <button className="ai-history-icon" onClick={(e) => beginFolderRename(f, e)} title="이름 변경">✎</button>
-                              <button className="ai-history-del" onClick={() => deleteFolderConfirm(f.id)} title="삭제">×</button>
+                              <button className="ai-history-icon" onClick={(e) => beginFolderRename(f, e)} title={tr('ai.tab.rename', '이름 변경')}>✎</button>
+                              <button className="ai-history-del" onClick={() => deleteFolderConfirm(f.id)} title={tr('ai.tab.delete', '삭제')}>×</button>
                             </>
                           )}
                         </div>
@@ -1189,23 +1201,23 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             ) : (
               <>
             <div className="ai-history-head">
-              <span>이전 대화</span>
+              <span>{tr('ai.tab.historyHeading', '이전 대화')}</span>
               <div className="ai-history-head-actions">
-                <button className="ai-mini-btn" onClick={() => setShowFolderManage(true)} title="폴더 관리">📁 폴더</button>
-                <button className="ai-mini-btn" onClick={exportBulk} disabled={filteredHistory.length === 0} title="현재 목록을 하나의 마크다운으로 내보내기">⤓ 내보내기</button>
-                <button className="ai-mini-btn" onClick={clearHistory} disabled={history.length === 0}>전체 삭제</button>
-                <button className="ai-mini-btn" onClick={() => setShowHistory(false)}>닫기</button>
+                <button className="ai-mini-btn" onClick={() => setShowFolderManage(true)} title={tr('ai.tab.folderManage', '폴더 관리')}>📁 {tr('ai.tab.folder', '폴더')}</button>
+                <button className="ai-mini-btn" onClick={exportBulk} disabled={filteredHistory.length === 0} title={tr('ai.tab.exportListTitle', '현재 목록을 하나의 마크다운으로 내보내기')}>⤓ {tr('ai.tab.export', '내보내기')}</button>
+                <button className="ai-mini-btn" onClick={clearHistory} disabled={history.length === 0}>{tr('ai.tab.clearAll', '전체 삭제')}</button>
+                <button className="ai-mini-btn" onClick={() => setShowHistory(false)}>{tr('ai.tab.close', '닫기')}</button>
               </div>
             </div>
             {history.length > 0 && (
-              <input className="ai-history-search" value={histSearch} placeholder="대화 검색 (제목·내용)…"
+              <input className="ai-history-search" value={histSearch} placeholder={tr('ai.tab.searchHistoryPlaceholder', '대화 검색 (제목·내용)…')}
                 onChange={(e) => setHistSearch(e.target.value)} />
             )}
             {(folders.length > 0 || allTags.length > 0) && (
               <div className="ai-filter-row">
                 {folders.length > 0 && (
                   <div className="ai-chips">
-                    <button className={`ai-chip ${folderFilter === 'all' ? 'active' : ''}`} onClick={() => setFolderFilter('all')}>전체</button>
+                    <button className={`ai-chip ${folderFilter === 'all' ? 'active' : ''}`} onClick={() => setFolderFilter('all')}>{tr('ai.tab.all', '전체')}</button>
                     {folders.map((f) => (
                       <button key={f.id}
                         className={`ai-chip ${folderFilter === f.id ? 'active' : ''} ${dragOverFolder === f.id ? 'dragover' : ''}`}
@@ -1213,7 +1225,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                         onDragOver={(e) => { e.preventDefault(); setDragOverFolder(f.id) }}
                         onDragLeave={() => setDragOverFolder((prev) => (prev === f.id ? null : prev))}
                         onDrop={(e) => onFolderDrop(f.id, e)}
-                        title="여기로 대화를 끌어다 놓으면 이 폴더로 이동">{folderIcon(f)}{f.name}</button>
+                        title={tr('ai.tab.dropToMoveFolder', '여기로 대화를 끌어다 놓으면 이 폴더로 이동')}>{folderIcon(f)}{f.name}</button>
                     ))}
                     <button
                       className={`ai-chip ${folderFilter === '__none__' ? 'active' : ''} ${dragOverFolder === '__none__' ? 'dragover' : ''}`}
@@ -1221,7 +1233,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                       onDragOver={(e) => { e.preventDefault(); setDragOverFolder('__none__') }}
                       onDragLeave={() => setDragOverFolder((prev) => (prev === '__none__' ? null : prev))}
                       onDrop={(e) => onFolderDrop(null, e)}
-                      title="여기로 끌어다 놓으면 미분류로">미분류</button>
+                      title={tr('ai.tab.dropToUncategorize', '여기로 끌어다 놓으면 미분류로')}>{tr('ai.tab.uncategorized', '미분류')}</button>
                   </div>
                 )}
                 {allTags.length > 0 && (
@@ -1234,8 +1246,8 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
               </div>
             )}
             {(() => {
-              if (history.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>저장된 대화가 없습니다.</div>
-              if (filteredHistory.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>검색 결과가 없습니다.</div>
+              if (history.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>{tr('ai.tab.noSavedConvs', '저장된 대화가 없습니다.')}</div>
+              if (filteredHistory.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>{tr('ai.tab.noSearchResults', '검색 결과가 없습니다.')}</div>
               return (
                 <div className="ai-history-list">
                   {filteredHistory.map((h) => (
@@ -1255,7 +1267,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                             <>
                               <div className="ai-history-title">{histSearch.trim() ? highlightNodes(h.title, histSearch) : h.title}</div>
                               <div className="ai-history-sub">
-                                {relTime(h.updatedAt)} · {h.messageCount}개
+                                {relTime(tr, h.updatedAt)} · {tr('ai.tab.messageCount', '{n}개', { n: h.messageCount })}
                                 {h.folderId ? <span className="ai-meta-folder"> · {folderIcon(folderById(h.folderId))}{folderName(h.folderId)}</span> : null}
                                 {(h.tags ?? []).map((t) => <span key={t} className="ai-meta-tag"> #{t}</span>)}
                               </div>
@@ -1268,40 +1280,40 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                         </div>
                         {editingConvId !== h.id && (
                           <>
-                            <button className={`ai-history-icon ai-pin ${h.pinned ? 'on' : ''}`} onClick={(e) => togglePin(h, e)} title={h.pinned ? '고정 해제' : '고정'}>📌</button>
-                            <button className={`ai-history-icon ${assignConvId === h.id ? 'on' : ''}`} onClick={(e) => beginAssign(h.id, e)} title="폴더·태그">📁</button>
-                            <button className="ai-history-icon" onClick={(e) => beginRename(h, e)} title="이름 변경">✎</button>
-                            <button className="ai-history-del" onClick={(e) => deleteConv(h.id, e)} title="삭제">×</button>
+                            <button className={`ai-history-icon ai-pin ${h.pinned ? 'on' : ''}`} onClick={(e) => togglePin(h, e)} title={h.pinned ? tr('ai.tab.unpin', '고정 해제') : tr('ai.tab.pin', '고정')}>📌</button>
+                            <button className={`ai-history-icon ${assignConvId === h.id ? 'on' : ''}`} onClick={(e) => beginAssign(h.id, e)} title={tr('ai.tab.folderAndTags', '폴더·태그')}>📁</button>
+                            <button className="ai-history-icon" onClick={(e) => beginRename(h, e)} title={tr('ai.tab.rename', '이름 변경')}>✎</button>
+                            <button className="ai-history-del" onClick={(e) => deleteConv(h.id, e)} title={tr('ai.tab.delete', '삭제')}>×</button>
                           </>
                         )}
                       </div>
                       {assignConvId === h.id && (
                         <div className="ai-assign" onClick={(e) => e.stopPropagation()}>
-                          <div className="ai-assign-label">폴더</div>
+                          <div className="ai-assign-label">{tr('ai.tab.folder', '폴더')}</div>
                           <div className="ai-chips">
-                            <button className={`ai-chip ${!h.folderId ? 'active' : ''}`} onClick={() => assignFolder(h.id, null)}>미분류</button>
+                            <button className={`ai-chip ${!h.folderId ? 'active' : ''}`} onClick={() => assignFolder(h.id, null)}>{tr('ai.tab.uncategorized', '미분류')}</button>
                             {folders.map((f) => (
                               <button key={f.id} className={`ai-chip ${h.folderId === f.id ? 'active' : ''}`} onClick={() => assignFolder(h.id, f.id)}>{folderIcon(f)}{f.name}</button>
                             ))}
                           </div>
                           <div className="ai-assign-newfolder">
-                            <input className="ai-assign-input" value={newFolderName} placeholder="새 폴더 이름…"
+                            <input className="ai-assign-input" value={newFolderName} placeholder={tr('ai.tab.newFolderPlaceholder', '새 폴더 이름…')}
                               onChange={(e) => setNewFolderName(e.target.value)}
                               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); createFolderInline(h.id) } }} />
-                            <button className="ai-mini-btn" onClick={() => createFolderInline(h.id)} disabled={!newFolderName.trim()}>＋ 폴더</button>
+                            <button className="ai-mini-btn" onClick={() => createFolderInline(h.id)} disabled={!newFolderName.trim()}>＋ {tr('ai.tab.folder', '폴더')}</button>
                           </div>
-                          <div className="ai-assign-label">태그</div>
+                          <div className="ai-assign-label">{tr('ai.tab.tags', '태그')}</div>
                           {(h.tags ?? []).length > 0 && (
                             <div className="ai-chips">
                               {(h.tags ?? []).map((t) => (
-                                <button key={t} className="ai-chip tag removable" onClick={() => removeTag(h.id, t)} title="제거">#{t} ×</button>
+                                <button key={t} className="ai-chip tag removable" onClick={() => removeTag(h.id, t)} title={tr('ai.tab.remove', '제거')}>#{t} ×</button>
                               ))}
                             </div>
                           )}
-                          <input className="ai-assign-input" value={tagDraft} placeholder="태그 추가 후 Enter…"
+                          <input className="ai-assign-input" value={tagDraft} placeholder={tr('ai.tab.addTagPlaceholder', '태그 추가 후 Enter…')}
                             onChange={(e) => setTagDraft(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(h.id, tagDraft) } }} />
-                          <button className="ai-mini-btn ai-assign-export" onClick={() => exportConv(h.id)} title="이 대화를 마크다운 파일로 저장">⤓ 이 대화 .md 로 내보내기</button>
+                          <button className="ai-mini-btn ai-assign-export" onClick={() => exportConv(h.id)} title={tr('ai.tab.exportConvTitle', '이 대화를 마크다운 파일로 저장')}>⤓ {tr('ai.tab.exportConv', '이 대화 .md 로 내보내기')}</button>
                         </div>
                       )}
                     </div>
@@ -1317,16 +1329,16 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           <div className="ai-body" ref={bodyRef}>
             {messages.length === 0 ? (
               <div className="ai-welcome">
-                <div className="ai-welcome-title">이 페이지와 대화하세요</div>
+                <div className="ai-welcome-title">{tr('ai.tab.welcomeTitle', '이 페이지와 대화하세요')}</div>
                 {pageInfo && !isInternal ? (
                   <div className="ai-welcome-page" title={pageInfo.url}>📄 {pageInfo.title || hostOf(pageInfo.url)}</div>
                 ) : (
-                  <div className="ai-welcome-page dim">웹 페이지에서 열면 그 페이지 내용을 함께 봅니다.</div>
+                  <div className="ai-welcome-page dim">{tr('ai.tab.welcomeNeedsWeb', '웹 페이지에서 열면 그 페이지 내용을 함께 봅니다.')}</div>
                 )}
                 <div className="ai-quick">
-                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => send('이 페이지의 핵심 내용을 불릿으로 간결하게 요약해줘.')}>📝 이 페이지 요약</button>
-                  <button className="ai-quick-btn" disabled={isInternal || !pageInfo?.hasSelection} onClick={() => send('내가 선택(드래그)한 텍스트를 쉽게 풀어서 설명해줘.')}>💡 선택 영역 설명</button>
-                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => send('이 페이지에서 중요한 사실이나 수치를 뽑아줘.')}>🔑 핵심 정보 추출</button>
+                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => send('이 페이지의 핵심 내용을 불릿으로 간결하게 요약해줘.')}>📝 {tr('ai.tab.quickSummarize', '이 페이지 요약')}</button>
+                  <button className="ai-quick-btn" disabled={isInternal || !pageInfo?.hasSelection} onClick={() => send('내가 선택(드래그)한 텍스트를 쉽게 풀어서 설명해줘.')}>💡 {tr('ai.tab.quickExplainSelection', '선택 영역 설명')}</button>
+                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => send('이 페이지에서 중요한 사실이나 수치를 뽑아줘.')}>🔑 {tr('ai.tab.quickExtractFacts', '핵심 정보 추출')}</button>
                 </div>
               </div>
             ) : (
@@ -1334,15 +1346,15 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 {foldCount > 0 && (
                   <div className="ai-fold-banner">
                     <button className="ai-fold-toggle" onClick={() => setFoldExpanded((v) => !v)}
-                      title={foldExpanded ? '요약으로 접기' : '접힌 원문 보기'}>
-                      🗜 이전 대화 {foldCount}개 요약됨 · {foldExpanded ? '접기' : '펼치기'}
+                      title={foldExpanded ? tr('ai.tab.foldToSummary', '요약으로 접기') : tr('ai.tab.foldShowOriginal', '접힌 원문 보기')}>
+                      🗜 {tr('ai.tab.foldedCount', '이전 대화 {n}개 요약됨', { n: foldCount })} · {foldExpanded ? tr('ai.tab.fold', '접기') : tr('ai.tab.unfold', '펼치기')}
                     </button>
                     {!foldExpanded && summary && <div className="ai-fold-summary">{summary}</div>}
                   </div>
                 )}
                 {(foldExpanded ? messages : messages.slice(foldCount)).map((m) => (
                   <div key={m.id} className={`ai-msg ai-${m.role} ${m.error ? 'ai-err' : ''}`}>
-                    <div className="ai-msg-role">{m.role === 'user' ? '나' : 'AI'}</div>
+                    <div className="ai-msg-role">{m.role === 'user' ? tr('ai.tab.me', '나') : 'AI'}</div>
                     <div className="ai-msg-text">
                       {m.role === 'assistant' && !m.error && m.content
                         ? <Markdown text={m.content} windowId={windowId} />
@@ -1356,17 +1368,17 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           </div>
           <div className="ai-compose">
             {notice && <div className="ai-handoff-note">{notice}</div>}
-            <label className="ai-ctx-toggle" title="현재 페이지 내용을 질문에 함께 보냅니다">
+            <label className="ai-ctx-toggle" title={tr('ai.tab.includePageTitle', '현재 페이지 내용을 질문에 함께 보냅니다')}>
               <input type="checkbox" checked={includePage} disabled={isInternal} onChange={(e) => setIncludePage(e.target.checked)} />
-              페이지 컨텍스트{isInternal ? ' (내부 페이지 불가)' : ''}
+              {tr('ai.tab.pageContext', '페이지 컨텍스트')}{isInternal ? ' ' + tr('ai.tab.internalNotSupported', '(내부 페이지 불가)') : ''}
             </label>
             <div className="ai-input-row">
               <textarea className="ai-input" value={input} rows={2}
-                placeholder={providerReady ? '이 페이지에 대해 물어보세요… (Enter 전송)' : 'AI 설정을 먼저 완료하세요'}
+                placeholder={providerReady ? tr('ai.tab.chatInputPlaceholder', '이 페이지에 대해 물어보세요… (Enter 전송)') : tr('ai.tab.aiNotSetup', 'AI 설정을 먼저 완료하세요')}
                 disabled={!providerReady} onChange={(e) => { setInput(e.target.value); if (notice) setNotice(null) }} onKeyDown={onKeyDown} />
               {streaming
-                ? <button className="ai-send ai-stop" onClick={stop} title="중단">■</button>
-                : <button className="ai-send" onClick={() => send(input)} disabled={!providerReady || !input.trim()} title="전송">↑</button>}
+                ? <button className="ai-send ai-stop" onClick={stop} title={tr('ai.tab.stop', '중단')}>■</button>
+                : <button className="ai-send" onClick={() => send(input)} disabled={!providerReady || !input.trim()} title={tr('ai.tab.send', '전송')}>↑</button>}
             </div>
           </div>
         </>
@@ -1375,19 +1387,19 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
         showPtasks ? (
           <div className="ai-body">
             <div className="ai-history-head">
-              <span>영속 작업</span>
+              <span>{tr('ai.tab.ptasksHeading', '영속 작업')}</span>
               <div className="ai-history-head-actions">
-                <button className="ai-mini-btn" onClick={() => setShowPtasks(false)}>닫기</button>
+                <button className="ai-mini-btn" onClick={() => setShowPtasks(false)}>{tr('ai.tab.close', '닫기')}</button>
               </div>
             </div>
             {ptaskNotice && <div className="ai-handoff-note">{ptaskNotice}</div>}
             {ptasks.length === 0 ? (
-              <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>영속 작업이 없습니다. 입력창에서 작업을 실행하면 여기에 남습니다.</div>
+              <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>{tr('ai.tab.noPtasks', '영속 작업이 없습니다. 입력창에서 작업을 실행하면 여기에 남습니다.')}</div>
             ) : (
               <div className="ai-task-list">
                 {ptasks.map((t) => (
                   <TaskCard key={t.id} t={t} windowId={windowId}
-                    elapsedLabel={fmtDuration(ptaskElapsed(t))}
+                    elapsedLabel={fmtDuration(tr, ptaskElapsed(t))}
                     retryLabel={ptaskRetryCountdown(t)}
                     pending={ptaskPending[t.id]}
                     traceItems={ptaskTraces[t.id] ?? []}
@@ -1413,20 +1425,20 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             {viewRun ? (
               <>
                 <div className="ai-history-head">
-                  <button className="ai-mini-btn" onClick={() => setViewRun(null)}>← 뒤로</button>
-                  <span className="ai-run-detail-title" title={viewRun.task}>{RUN_STATUS[viewRun.status].icon} {viewRun.task}</span>
-                  <button className="ai-mini-btn" onClick={() => rerunTask(viewRun.task)} disabled={isInternal || agentRunning} title={isInternal ? '웹 페이지에서만 실행' : '이 작업 다시 실행'}>▶ 다시</button>
+                  <button className="ai-mini-btn" onClick={() => setViewRun(null)}>← {tr('ai.tab.back', '뒤로')}</button>
+                  <span className="ai-run-detail-title" title={viewRun.task}>{runStatusInfo(tr, viewRun.status).icon} {viewRun.task}</span>
+                  <button className="ai-mini-btn" onClick={() => rerunTask(viewRun.task)} disabled={isInternal || agentRunning} title={isInternal ? tr('ai.tab.webOnly', '웹 페이지에서만 실행') : tr('ai.tab.rerunThisTitle', '이 작업 다시 실행')}>▶ {tr('ai.taskcard.rerun', '다시')}</button>
                 </div>
                 {viewRun.steps.length > 3 && (
-                  <input className="ai-history-search" value={runDetailSearch} placeholder="단계 검색…"
+                  <input className="ai-history-search" value={runDetailSearch} placeholder={tr('ai.tab.searchStepsPlaceholder', '단계 검색…')}
                     onChange={(e) => setRunDetailSearch(e.target.value)} />
                 )}
                 <div className="ai-trace">
                   {(() => {
-                    if (viewRun.steps.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '16px' }}>기록된 단계가 없습니다.</div>
+                    if (viewRun.steps.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '16px' }}>{tr('ai.tab.noSteps', '기록된 단계가 없습니다.')}</div>
                     const q = runDetailSearch.trim().toLowerCase()
                     const steps = q ? viewRun.steps.filter((st) => st.text.toLowerCase().includes(q)) : viewRun.steps
-                    if (steps.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '16px' }}>검색 결과가 없습니다.</div>
+                    if (steps.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '16px' }}>{tr('ai.tab.noSearchResults', '검색 결과가 없습니다.')}</div>
                     return steps.map((st, i) => (
                       <div key={i} className={`ai-trace-item ${st.tone ?? ''}`}>
                         <span className="ai-trace-icon">{st.icon}</span>
@@ -1439,31 +1451,31 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             ) : (
               <>
                 <div className="ai-history-head">
-                  <span>작업 이력</span>
+                  <span>{tr('ai.tab.runsHeading', '작업 이력')}</span>
                   <div className="ai-history-head-actions">
-                    <button className="ai-mini-btn" onClick={clearRuns} disabled={agentRuns.length === 0}>전체 삭제</button>
-                    <button className="ai-mini-btn" onClick={() => setShowRuns(false)}>닫기</button>
+                    <button className="ai-mini-btn" onClick={clearRuns} disabled={agentRuns.length === 0}>{tr('ai.tab.clearAll', '전체 삭제')}</button>
+                    <button className="ai-mini-btn" onClick={() => setShowRuns(false)}>{tr('ai.tab.close', '닫기')}</button>
                   </div>
                 </div>
                 {agentRuns.length > 0 && (
-                  <input className="ai-history-search" value={runSearch} placeholder="작업 검색…"
+                  <input className="ai-history-search" value={runSearch} placeholder={tr('ai.tab.searchTasksPlaceholder', '작업 검색…')}
                     onChange={(e) => setRunSearch(e.target.value)} />
                 )}
                 {(() => {
-                  if (agentRuns.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>아직 실행한 작업이 없습니다.</div>
+                  if (agentRuns.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>{tr('ai.tab.noRunsYet', '아직 실행한 작업이 없습니다.')}</div>
                   const q = runSearch.trim().toLowerCase()
                   const runs = q ? agentRuns.filter((r) => r.task.toLowerCase().includes(q)) : agentRuns
-                  if (runs.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>검색 결과가 없습니다.</div>
+                  if (runs.length === 0) return <div className="ai-welcome-page dim" style={{ padding: '20px', textAlign: 'center' }}>{tr('ai.tab.noSearchResults', '검색 결과가 없습니다.')}</div>
                   return (
                     <div className="ai-history-list">
                       {runs.map((r) => (
                         <div key={r.id} className="ai-history-item" onClick={() => openRun(r.id)}>
                           <div className="ai-history-main">
-                            <div className="ai-history-title">{RUN_STATUS[r.status].icon} {r.task}</div>
-                            <div className="ai-history-sub">{relTime(r.startedAt)} · {RUN_STATUS[r.status].label} · {r.stepCount}단계</div>
+                            <div className="ai-history-title">{runStatusInfo(tr, r.status).icon} {r.task}</div>
+                            <div className="ai-history-sub">{relTime(tr, r.startedAt)} · {runStatusInfo(tr, r.status).label} · {tr('ai.tab.stepCount', '{n}단계', { n: r.stepCount })}</div>
                           </div>
-                          <button className="ai-history-icon" onClick={(e) => { e.stopPropagation(); rerunTask(r.task) }} disabled={isInternal || agentRunning} title={isInternal ? '웹 페이지에서만 실행' : '다시 실행'}>↻</button>
-                          <button className="ai-history-del" onClick={(e) => deleteRun(r.id, e)} title="삭제">×</button>
+                          <button className="ai-history-icon" onClick={(e) => { e.stopPropagation(); rerunTask(r.task) }} disabled={isInternal || agentRunning} title={isInternal ? tr('ai.tab.webOnly', '웹 페이지에서만 실행') : tr('ai.tab.rerun', '다시 실행')}>↻</button>
+                          <button className="ai-history-del" onClick={(e) => deleteRun(r.id, e)} title={tr('ai.tab.delete', '삭제')}>×</button>
                         </div>
                       ))}
                     </div>
@@ -1481,7 +1493,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
               <div className="ai-task-list">
                 {livePtasks.map((t) => (
                   <TaskCard key={t.id} t={t} windowId={windowId}
-                    elapsedLabel={fmtDuration(ptaskElapsed(t))}
+                    elapsedLabel={fmtDuration(tr, ptaskElapsed(t))}
                     retryLabel={ptaskRetryCountdown(t)}
                     pending={ptaskPending[t.id]}
                     traceItems={ptaskTraces[t.id] ?? []}
@@ -1503,25 +1515,25 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             )}
             {trace.length === 0 && !agentRunning ? (
               <div className="ai-welcome">
-                <div className="ai-welcome-title">🤖 에이전트</div>
+                <div className="ai-welcome-title">🤖 {tr('ai.tab.mode.agent', '에이전트')}</div>
                 {isInternal
-                  ? <div className="ai-welcome-page dim">웹 페이지(http/https)에서만 실행할 수 있습니다.</div>
-                  : <div className="ai-welcome-page" title={pageInfo?.url}>📄 {pageInfo?.title || (pageInfo ? hostOf(pageInfo.url) : '현재 탭')}</div>}
-                <p className="ai-agent-desc">현재 탭에서 대신 작업을 수행합니다. 클릭·입력·이동을 스스로 하며, <b>결제·삭제·전송</b> 같은 행동은 실행 전에 확인을 요청합니다.</p>
+                  ? <div className="ai-welcome-page dim">{tr('ai.tab.agentWebOnly', '웹 페이지(http/https)에서만 실행할 수 있습니다.')}</div>
+                  : <div className="ai-welcome-page" title={pageInfo?.url}>📄 {pageInfo?.title || (pageInfo ? hostOf(pageInfo.url) : tr('ai.tab.currentTab', '현재 탭'))}</div>}
+                <p className="ai-agent-desc">{tr('ai.tab.agentDesc', '현재 탭에서 대신 작업을 수행합니다. 클릭·입력·이동을 스스로 하며, ')}<b>{tr('ai.tab.agentDescBold', '결제·삭제·전송')}</b>{tr('ai.tab.agentDescTail', ' 같은 행동은 실행 전에 확인을 요청합니다.')}</p>
                 <div className="ai-quick">
-                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => startAgent('이 페이지에서 가장 중요한 정보를 찾아 요약해줘.')}>🔎 핵심 정보 찾기</button>
-                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => startAgent('이 페이지의 주요 링크와 메뉴 구조를 파악해서 알려줘.')}>🧭 페이지 구조 파악</button>
-                  <button className="ai-quick-btn" disabled={isInternal} onClick={startSiteReport} title="로그인된 이 사이트의 여러 페이지를 훑어보고 분석 보고서를 만듭니다(읽기 전용).">📊 이 사이트 분석 보고서</button>
+                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => startAgent('이 페이지에서 가장 중요한 정보를 찾아 요약해줘.')}>🔎 {tr('ai.tab.agentQuickFindKey', '핵심 정보 찾기')}</button>
+                  <button className="ai-quick-btn" disabled={isInternal} onClick={() => startAgent('이 페이지의 주요 링크와 메뉴 구조를 파악해서 알려줘.')}>🧭 {tr('ai.tab.agentQuickStructure', '페이지 구조 파악')}</button>
+                  <button className="ai-quick-btn" disabled={isInternal} onClick={startSiteReport} title={tr('ai.tab.siteReportTitle', '로그인된 이 사이트의 여러 페이지를 훑어보고 분석 보고서를 만듭니다(읽기 전용).')}>📊 {tr('ai.tab.siteReport', '이 사이트 분석 보고서')}</button>
                   <div className="ai-chips ai-report-depth">
-                    <button className={`ai-chip ${reportDepth === 'brief' ? 'active' : ''}`} onClick={() => setReportDepth('brief')} title="핵심 페이지 위주로 빠르게">간단히</button>
-                    <button className={`ai-chip ${reportDepth === 'full' ? 'active' : ''}`} onClick={() => setReportDepth('full')} title="주요 페이지를 폭넓게(단계 수 더 필요)">자세히</button>
+                    <button className={`ai-chip ${reportDepth === 'brief' ? 'active' : ''}`} onClick={() => setReportDepth('brief')} title={tr('ai.tab.reportBriefTitle', '핵심 페이지 위주로 빠르게')}>{tr('ai.tab.reportBrief', '간단히')}</button>
+                    <button className={`ai-chip ${reportDepth === 'full' ? 'active' : ''}`} onClick={() => setReportDepth('full')} title={tr('ai.tab.reportFullTitle', '주요 페이지를 폭넓게(단계 수 더 필요)')}>{tr('ai.tab.reportFull', '자세히')}</button>
                   </div>
                 </div>
                 {!isInternal && (
                   <div className="ai-examples">
-                    <div className="ai-examples-head">💡 이런 것도 시킬 수 있어요 <span className="ai-examples-hint">(눌러서 다듬고 실행)</span></div>
+                    <div className="ai-examples-head">💡 {tr('ai.tab.examplesHead', '이런 것도 시킬 수 있어요')} <span className="ai-examples-hint">{tr('ai.tab.examplesHint', '(눌러서 다듬고 실행)')}</span></div>
                     <div className="ai-examples-list">
-                      {AGENT_EXAMPLES.map((ex) => (
+                      {agentExamples(tr).map((ex) => (
                         <button key={ex.label} className="ai-example-btn" onClick={() => fillAgentTask(ex.task)} title={ex.task}>{ex.label}</button>
                       ))}
                     </div>
@@ -1529,7 +1541,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 )}
                 {savedTasks.length > 0 && (
                   <div className="ai-saved-tasks">
-                    <div className="ai-saved-head">💾 저장된 작업</div>
+                    <div className="ai-saved-head">💾 {tr('ai.tab.savedTasks', '저장된 작업')}</div>
                     {savedTasks.map((s) => (
                       <div key={s.id} className="ai-saved-item">
                         {editingTaskId === s.id ? (
@@ -1540,10 +1552,10 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                         ) : (
                           <>
                             <button className="ai-saved-run" disabled={isInternal} onClick={() => runSavedTask(s)} title={s.task}>
-                              ▶ {s.name}{s.lastRunAt ? <span className="ai-saved-time"> · {relTime(s.lastRunAt)}</span> : ''}
+                              ▶ {s.name}{s.lastRunAt ? <span className="ai-saved-time"> · {relTime(tr, s.lastRunAt)}</span> : ''}
                             </button>
-                            <button className="ai-history-icon" onClick={(e) => beginTaskRename(s, e)} title="이름 변경">✎</button>
-                            <button className="ai-saved-del" onClick={(e) => deleteSavedTask(s.id, e)} title="삭제">×</button>
+                            <button className="ai-history-icon" onClick={(e) => beginTaskRename(s, e)} title={tr('ai.tab.rename', '이름 변경')}>✎</button>
+                            <button className="ai-saved-del" onClick={(e) => deleteSavedTask(s.id, e)} title={tr('ai.tab.delete', '삭제')}>×</button>
                           </>
                         )}
                       </div>
@@ -1558,16 +1570,16 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                     <span className="ai-trace-icon">{t.icon}</span>
                     <span className="ai-trace-text">
                       {t.text}
-                      {t.shot && <img className="ai-trace-shot" src={`data:image/png;base64,${t.shot}`} alt="완료 화면" />}
+                      {t.shot && <img className="ai-trace-shot" src={`data:image/png;base64,${t.shot}`} alt={tr('ai.tab.completeScreenAlt', '완료 화면')} />}
                     </span>
                   </div>
                 ))}
                 {awaitingConfirm && (
                   <div className="ai-confirm">
-                    <div className="ai-confirm-msg">⏸️ <b>{awaitingConfirm}</b> 을(를) 실행할까요?</div>
+                    <div className="ai-confirm-msg">⏸️ {tr('ai.taskcard.confirmRun', '{label} 을(를) 실행할까요?', { label: awaitingConfirm })}</div>
                     <div className="ai-confirm-btns">
-                      <button className="ai-confirm-yes" onClick={() => respondConfirm(true)}>승인</button>
-                      <button className="ai-confirm-no" onClick={() => respondConfirm(false)}>거부</button>
+                      <button className="ai-confirm-yes" onClick={() => respondConfirm(true)}>{tr('ai.taskcard.approve', '승인')}</button>
+                      <button className="ai-confirm-no" onClick={() => respondConfirm(false)}>{tr('ai.taskcard.reject', '거부')}</button>
                     </div>
                   </div>
                 )}
@@ -1575,17 +1587,17 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                   <div className="ai-confirm">
                     <div className="ai-confirm-msg">❓ {awaitingAsk}</div>
                     <div className="ai-ask-row">
-                      <input className="ai-ask-input" value={askInput} autoFocus placeholder="답변을 입력하세요…"
+                      <input className="ai-ask-input" value={askInput} autoFocus placeholder={tr('ai.taskcard.answerPlaceholder', '답변을 입력하세요…')}
                         onChange={(e) => setAskInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); respondAsk() } }} />
-                      <button className="ai-confirm-yes" onClick={respondAsk} disabled={!askInput.trim()}>보내기</button>
+                      <button className="ai-confirm-yes" onClick={respondAsk} disabled={!askInput.trim()}>{tr('ai.taskcard.send', '보내기')}</button>
                     </div>
                   </div>
                 )}
                 {agentRunning && !awaitingConfirm && !awaitingAsk && (
                   <div className="ai-trace-item muted">
                     <span className={agentPaused ? 'ai-trace-icon' : 'ai-trace-icon ai-spin'}>{agentPaused ? '⏸️' : '◔'}</span>
-                    <span className="ai-trace-text">{agentPaused ? '일시정지 — 페이지 조작을 멈췄습니다' : '작업 중…'}</span>
+                    <span className="ai-trace-text">{agentPaused ? tr('ai.tab.trace.paused', '일시정지 — 페이지 조작을 멈췄습니다') : tr('ai.tab.working', '작업 중…')}</span>
                   </div>
                 )}
               </div>
@@ -1594,20 +1606,20 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           {report && (
             <div className="ai-report">
               <div className="ai-data-head">
-                <button className="ai-data-title ai-report-toggle" onClick={() => setReportOpen((v) => !v)} title="접기/펼치기">
+                <button className="ai-data-title ai-report-toggle" onClick={() => setReportOpen((v) => !v)} title={tr('ai.tab.toggleTitle', '접기/펼치기')}>
                   {reportOpen ? '▾' : '▸'} 📊 {report.title}
                 </button>
                 <div className="ai-data-actions">
-                  <button className="ai-mini-btn active" onClick={openReportInStudio} title="글쓰기 스튜디오에서 편집·다듬기">✍️ 편집</button>
-                  <button className="ai-mini-btn" onClick={() => void window.browserAPI.ai.reportExport({ title: report.title, markdown: report.markdown }).then((r) => setNotice(r.ok ? `⤓ 저장됨: ${r.path}` : '저장 실패'))} title="다운로드 폴더에 .md 로 저장">⤓ .md</button>
-                  <button className="ai-mini-btn" onClick={() => void copyText(report.markdown)}>복사</button>
-                  <button className="ai-mini-btn" onClick={() => setReport(null)}>지우기</button>
+                  <button className="ai-mini-btn active" onClick={openReportInStudio} title={tr('ai.tab.editInStudioTitle', '글쓰기 스튜디오에서 편집·다듬기')}>✍️ {tr('ai.tab.edit', '편집')}</button>
+                  <button className="ai-mini-btn" onClick={() => void window.browserAPI.ai.reportExport({ title: report.title, markdown: report.markdown }).then((r) => setNotice(r.ok ? tr('ai.tab.savedAt', '⤓ 저장됨: {path}', { path: r.path ?? '' }) : tr('ai.tab.saveFailed', '저장 실패')))} title={tr('ai.tab.saveMdTitle', '다운로드 폴더에 .md 로 저장')}>⤓ .md</button>
+                  <button className="ai-mini-btn" onClick={() => void copyText(report.markdown)}>{tr('ai.tab.copy', '복사')}</button>
+                  <button className="ai-mini-btn" onClick={() => setReport(null)}>{tr('ai.tab.clear', '지우기')}</button>
                 </div>
               </div>
               {reportOpen && (
                 <div className="ai-report-scroll">
                   <Markdown text={report.markdown} windowId={windowId} />
-                  {report.sources.length > 0 && <div className="ai-report-src">🔗 살펴본 페이지 {report.sources.length}개</div>}
+                  {report.sources.length > 0 && <div className="ai-report-src">🔗 {tr('ai.tab.sourcesVisited', '살펴본 페이지 {n}개', { n: report.sources.length })}</div>}
                 </div>
               )}
             </div>
@@ -1619,14 +1631,14 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
             return (
               <div className="ai-data">
                 <div className="ai-data-head">
-                  <span className="ai-data-title">📊 수집한 데이터 {extractRows.length}건</span>
+                  <span className="ai-data-title">📊 {tr('ai.tab.collectedData', '수집한 데이터 {n}건', { n: extractRows.length })}</span>
                   <div className="ai-data-actions">
-                    <button className="ai-mini-btn active" disabled={streaming} onClick={analyzeCollectedData} title="수집한 데이터를 AI 로 비교·분석해 리포트로">🧠 분석·비교</button>
-                    <button className="ai-mini-btn" onClick={() => { void window.browserAPI.ai.exportWebhook(extractRows).then((r) => setNotice(r.ok ? `🔗 웹훅 전송됨 (${r.detail})` : `웹훅 전송 실패: ${r.detail}`)) }} title="설정한 웹훅으로 전송(Zapier·구글시트·노션·메일 연동)">🔗 전송</button>
+                    <button className="ai-mini-btn active" disabled={streaming} onClick={analyzeCollectedData} title={tr('ai.tab.analyzeTitle', '수집한 데이터를 AI 로 비교·분석해 리포트로')}>🧠 {tr('ai.tab.analyze', '분석·비교')}</button>
+                    <button className="ai-mini-btn" onClick={() => { void window.browserAPI.ai.exportWebhook(extractRows).then((r) => setNotice(r.ok ? tr('ai.tab.webhookSent', '🔗 웹훅 전송됨 ({detail})', { detail: r.detail }) : tr('ai.tab.webhookFailed', '웹훅 전송 실패: {detail}', { detail: r.detail }))) }} title={tr('ai.tab.webhookTitle', '설정한 웹훅으로 전송(Zapier·구글시트·노션·메일 연동)')}>🔗 {tr('ai.tab.send2', '전송')}</button>
                     <button className="ai-mini-btn" onClick={() => downloadText(`data-${ts}.csv`, 'text/csv', rowsToCSV(extractRows))}>CSV</button>
                     <button className="ai-mini-btn" onClick={() => downloadText(`data-${ts}.json`, 'application/json', JSON.stringify(extractRows, null, 2))}>JSON</button>
-                    <button className="ai-mini-btn" onClick={() => void copyText(rowsToCSV(extractRows))}>복사</button>
-                    <button className="ai-mini-btn" onClick={() => setExtractRows([])}>지우기</button>
+                    <button className="ai-mini-btn" onClick={() => void copyText(rowsToCSV(extractRows))}>{tr('ai.tab.copy', '복사')}</button>
+                    <button className="ai-mini-btn" onClick={() => setExtractRows([])}>{tr('ai.tab.clear', '지우기')}</button>
                   </div>
                 </div>
                 <div className="ai-data-scroll">
@@ -1635,7 +1647,7 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                     <tbody>{shown.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c} title={r[c] ?? ''}>{r[c] ?? ''}</td>)}</tr>)}</tbody>
                   </table>
                 </div>
-                {extractRows.length > shown.length && <div className="ai-data-more">표엔 {shown.length}건만 표시 · 내보내기에는 전체 {extractRows.length}건 포함</div>}
+                {extractRows.length > shown.length && <div className="ai-data-more">{tr('ai.tab.dataMore', '표엔 {shown}건만 표시 · 내보내기에는 전체 {total}건 포함', { shown: shown.length, total: extractRows.length })}</div>}
               </div>
             )
           })()}
@@ -1645,9 +1657,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 <div key={r.id} className="ai-repeat-item">
                   <div className="ai-repeat-head">
                     <span className="ai-repeat-task" title={r.task}>🔁 {r.task}</span>
-                    <button className="ai-repeat-stop" onClick={() => void window.browserAPI.ai.repeatStop(r.id)} title="반복 중지">중지</button>
+                    <button className="ai-repeat-stop" onClick={() => void window.browserAPI.ai.repeatStop(r.id)} title={tr('ai.tab.repeatStopTitle', '반복 중지')}>{tr('ai.tab.stop2', '중지')}</button>
                   </div>
-                  <div className="ai-repeat-meta">{repeatStatusText(r)}{r.autoConfirm ? ' · 무인 자동 승인' : ''}{r.lastResult ? ` · ${r.lastResult}` : ''}</div>
+                  <div className="ai-repeat-meta">{repeatStatusText(tr, r)}{r.autoConfirm ? ' · ' + tr('ai.tab.autoApproved', '무인 자동 승인') : ''}{r.lastResult ? ` · ${r.lastResult}` : ''}</div>
                 </div>
               ))}
               {/* 재시작 후 자동 부활하지 않는다(T10) — 사용자가 명시적으로 다시 시작해야 한다. */}
@@ -1655,9 +1667,9 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 <div key={r.id} className="ai-repeat-item muted">
                   <div className="ai-repeat-head">
                     <span className="ai-repeat-task" title={r.task}>🔁 {r.task}</span>
-                    <button className="ai-repeat-stop resume" onClick={() => void window.browserAPI.ai.scheduleResume(r.id)} title="다시 시작">재시작으로 멈춤 — 다시 시작</button>
+                    <button className="ai-repeat-stop resume" onClick={() => void window.browserAPI.ai.scheduleResume(r.id)} title={tr('ai.tab.resumeTitle', '다시 시작')}>{tr('ai.tab.stoppedResume', '재시작으로 멈춤 — 다시 시작')}</button>
                   </div>
-                  <div className="ai-repeat-meta">{r.doneCount}회 완료됨</div>
+                  <div className="ai-repeat-meta">{tr('ai.tab.doneCount', '{n}회 완료됨', { n: r.doneCount })}</div>
                 </div>
               ))}
             </div>
@@ -1665,45 +1677,45 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
           {pendingIntent && (
             <div className="ai-intent-card" data-intent="card" data-intent-kind={pendingIntent.kind}>
               <div className="ai-intent-head">
-                🔗 이 요청을 {pendingIntent.kind === 'image-post' ? '이미지 생성 → SNS 게시' : '블로그 댓글·좋아요'} 작업으로 실행할까요?
+                🔗 {tr('ai.tab.intentHead', '이 요청을 {kind} 작업으로 실행할까요?', { kind: pendingIntent.kind === 'image-post' ? tr('ai.tab.intentKindImagePost', '이미지 생성 → SNS 게시') : tr('ai.tab.intentKindBlogEngage', '블로그 댓글·좋아요') })}
               </div>
               <div className="ai-hint">{pendingIntent.summary}</div>
 
               {pendingIntent.kind === 'image-post' ? (
                 <>
-                  <label className="ai-write-label">생성 서비스</label>
+                  <label className="ai-write-label">{tr('ai.tab.genService', '생성 서비스')}</label>
                   <div className="ai-chips">
                     {(['genspark', 'chatgpt', 'custom'] as const).map((s) => (
                       <button key={s} className={`ai-chip ${icService === s ? 'active' : ''}`} data-intent="service" data-intent-value={s} onClick={() => setIcService(s)}>
-                        {s === 'genspark' ? 'Genspark' : s === 'chatgpt' ? 'ChatGPT' : '직접 입력'}
+                        {s === 'genspark' ? 'Genspark' : s === 'chatgpt' ? 'ChatGPT' : tr('ai.tab.directInput', '직접 입력')}
                       </button>
                     ))}
                   </div>
                   {icService === 'custom' && (
-                    <input className="ai-input" value={icCustomUrl} placeholder="생성 서비스 URL" onChange={(e) => setIcCustomUrl(e.target.value)} />
+                    <input className="ai-input" value={icCustomUrl} placeholder={tr('ai.tab.genServiceUrl', '생성 서비스 URL')} onChange={(e) => setIcCustomUrl(e.target.value)} />
                   )}
 
-                  <label className="ai-write-label">만들 이미지</label>
-                  <textarea className="ai-input" rows={2} value={icPrompt} placeholder="어떤 이미지를 만들지 설명하세요"
+                  <label className="ai-write-label">{tr('ai.tab.imageToMake', '만들 이미지')}</label>
+                  <textarea className="ai-input" rows={2} value={icPrompt} placeholder={tr('ai.tab.describeImage', '어떤 이미지를 만들지 설명하세요')}
                     data-intent="prompt" onChange={(e) => setIcPrompt(e.target.value)} />
 
-                  <label className={`ai-write-label ${!icPlatform ? 'ai-field-needed' : ''}`}>게시할 곳</label>
+                  <label className={`ai-write-label ${!icPlatform ? 'ai-field-needed' : ''}`}>{tr('ai.tab.whereToPost', '게시할 곳')}</label>
                   <div className="ai-chips" data-intent="platform" data-intent-needed={!icPlatform ? '1' : undefined}>
                     {(['instagram', 'youtube', 'tiktok'] as const).map((p) => (
                       <button key={p} className={`ai-chip ${icPlatform === p ? 'active' : ''}`} onClick={() => setIcPlatform(p)}>
-                        {p === 'instagram' ? '인스타그램' : p === 'youtube' ? '유튜브' : '틱톡'}
+                        {p === 'instagram' ? tr('ai.tab.platformInstagram', '인스타그램') : p === 'youtube' ? tr('ai.tab.platformYoutube', '유튜브') : tr('ai.tab.platformTiktok', '틱톡')}
                       </button>
                     ))}
                   </div>
 
-                  <label className={`ai-write-label ${!icAccount.trim() ? 'ai-field-needed' : ''}`}>계정</label>
-                  <input className="ai-input" value={icAccount} placeholder="게시할 계정 표시 이름"
+                  <label className={`ai-write-label ${!icAccount.trim() ? 'ai-field-needed' : ''}`}>{tr('ai.tab.account', '계정')}</label>
+                  <input className="ai-input" value={icAccount} placeholder={tr('ai.tab.accountDisplayName', '게시할 계정 표시 이름')}
                     data-intent="account" data-intent-needed={!icAccount.trim() ? '1' : undefined} onChange={(e) => setIcAccount(e.target.value)} />
 
-                  <label className="ai-write-label">진행 방식</label>
+                  <label className="ai-write-label">{tr('ai.tab.howToProceed', '진행 방식')}</label>
                   <div className="ai-chips">
-                    <button className={`ai-chip ${icMode === 'draft' ? 'active' : ''}`} data-intent="mode" data-intent-value="draft" onClick={() => setIcMode('draft')}>초안까지만</button>
-                    <button className={`ai-chip ${icMode === 'publish' ? 'active' : ''}`} data-intent="mode" data-intent-value="publish" onClick={() => setIcMode('publish')}>게시까지</button>
+                    <button className={`ai-chip ${icMode === 'draft' ? 'active' : ''}`} data-intent="mode" data-intent-value="draft" onClick={() => setIcMode('draft')}>{tr('ai.tab.draftOnly', '초안까지만')}</button>
+                    <button className={`ai-chip ${icMode === 'publish' ? 'active' : ''}`} data-intent="mode" data-intent-value="publish" onClick={() => setIcMode('publish')}>{tr('ai.tab.toPublish', '게시까지')}</button>
                   </div>
 
                   {icTags.length > 0 && (
@@ -1714,27 +1726,28 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
 
                   {icMode === 'publish' && (
                     <>
-                      <div className="ai-handoff-note ai-err">⚠ 실제 계정에 게시됩니다. 되돌릴 수 없습니다.</div>
+                      <div className="ai-handoff-note ai-err">⚠ {tr('ai.tab.publishWarning', '실제 계정에 게시됩니다. 되돌릴 수 없습니다.')}</div>
                       {/* 한 번 맡기면 끝까지 — 다만 사용자가 여기서 직접 켤 때만(AiSocialPanel 과 같은 문구·규칙). */}
-                      <label className="ai-write-label">캡션 확인 없이 게시(이번 작업 한정)</label>
+                      <label className="ai-write-label">{tr('ai.tab.publishNoConfirm', '캡션 확인 없이 게시(이번 작업 한정)')}</label>
                       <div className="ai-chips" data-intent="autopublish">
-                        <button className={`ai-chip ${icAutoPublish ? '' : 'active'}`} onClick={() => setIcAutoPublish(false)}>확인 후 게시</button>
-                        <button className={`ai-chip ${icAutoPublish ? 'active' : ''}`} onClick={() => setIcAutoPublish(true)}>맡기고 자동 게시</button>
+                        <button className={`ai-chip ${icAutoPublish ? '' : 'active'}`} onClick={() => setIcAutoPublish(false)}>{tr('ai.tab.publishAfterConfirm', '확인 후 게시')}</button>
+                        <button className={`ai-chip ${icAutoPublish ? 'active' : ''}`} onClick={() => setIcAutoPublish(true)}>{tr('ai.tab.autoPublishEntrust', '맡기고 자동 게시')}</button>
                       </div>
                       {icAutoPublish && (
                         <>
                           <div className="ai-social-auto-row">
-                            <label className="ai-write-label">최대 건수</label>
+                            <label className="ai-write-label">{tr('ai.tab.maxCount', '최대 건수')}</label>
                             <input className="ai-input ai-input-sm" type="number" min={1} max={50} value={icAutoMaxPosts}
                               onChange={(e) => setIcAutoMaxPosts(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
-                            <label className="ai-write-label">유효 시간(분)</label>
+                            <label className="ai-write-label">{tr('ai.tab.validMinutes', '유효 시간(분)')}</label>
                             <input className="ai-input ai-input-sm" type="number" min={5} max={1440} value={icAutoMinutes}
                               onChange={(e) => setIcAutoMinutes(Math.max(5, Math.min(1440, Number(e.target.value) || 5)))} />
                           </div>
                           <div className="ai-handoff-note ai-err">
-                            ⚠ {icPlatform ? (icPlatform === 'instagram' ? '인스타그램' : icPlatform === 'youtube' ? '유튜브' : '틱톡') : '(게시할 곳 미지정)'} ·
-                            계정 "{icAccount.trim() || '(계정 미지정)'}" 로 최대 {icAutoMaxPosts}건을 {icAutoMinutes}분 안에 <b>확인 없이 게시</b>합니다.
-                            이미지가 모호하거나 캡션 생성이 실패하면 자동 게시하지 않고 확인을 기다립니다.
+                            {tr('ai.tab.autoPublishWarning', '⚠ {platform} · 계정 "{account}" 로 최대 {max}건을 {minutes}분 안에 ', {
+                              platform: icPlatform ? (icPlatform === 'instagram' ? tr('ai.tab.platformInstagram', '인스타그램') : icPlatform === 'youtube' ? tr('ai.tab.platformYoutube', '유튜브') : tr('ai.tab.platformTiktok', '틱톡')) : tr('ai.tab.platformUnset', '(게시할 곳 미지정)'),
+                              account: icAccount.trim() || tr('ai.tab.accountUnset', '(계정 미지정)'), max: icAutoMaxPosts, minutes: icAutoMinutes,
+                            })}<b>{tr('ai.tab.autoPublishWarningBold', '확인 없이 게시')}</b>{tr('ai.tab.autoPublishWarningTail', '합니다. 이미지가 모호하거나 캡션 생성이 실패하면 자동 게시하지 않고 확인을 기다립니다.')}
                           </div>
                         </>
                       )}
@@ -1743,52 +1756,52 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 </>
               ) : pendingIntent.kind === 'blog-engage' ? (
                 <>
-                  <label className={`ai-write-label ${!bcTopic.trim() && !bcMyBlogUrl.trim() ? 'ai-field-needed' : ''}`}>주제</label>
-                  <input className="ai-input" value={bcTopic} placeholder="예: 홈트레이닝, 캠핑 장비"
+                  <label className={`ai-write-label ${!bcTopic.trim() && !bcMyBlogUrl.trim() ? 'ai-field-needed' : ''}`}>{tr('ai.tab.topic', '주제')}</label>
+                  <input className="ai-input" value={bcTopic} placeholder={tr('ai.tab.topicPlaceholder', '예: 홈트레이닝, 캠핑 장비')}
                     data-intent="topic" data-intent-needed={!bcTopic.trim() && !bcMyBlogUrl.trim() ? '1' : undefined} onChange={(e) => setBcTopic(e.target.value)} />
 
-                  <label className="ai-write-label">내 블로그 주소 (선택 — 위와 하나는 필요)</label>
+                  <label className="ai-write-label">{tr('ai.tab.myBlogUrl', '내 블로그 주소 (선택 — 위와 하나는 필요)')}</label>
                   <input className="ai-input" value={bcMyBlogUrl} placeholder="https://blog.naver.com/내블로그" onChange={(e) => setBcMyBlogUrl(e.target.value)} />
 
-                  <label className="ai-write-label">무엇을</label>
+                  <label className="ai-write-label">{tr('ai.tab.whatToDoShort', '무엇을')}</label>
                   <div className="ai-chips">
-                    <label className="ai-write-autoopen"><input type="checkbox" checked={bcDoComment} data-intent="action" data-intent-value="comment" onChange={(e) => setBcDoComment(e.target.checked)} /><span>댓글</span></label>
-                    <label className="ai-write-autoopen"><input type="checkbox" checked={bcDoLike} data-intent="action" data-intent-value="like" onChange={(e) => setBcDoLike(e.target.checked)} /><span>좋아요</span></label>
+                    <label className="ai-write-autoopen"><input type="checkbox" checked={bcDoComment} data-intent="action" data-intent-value="comment" onChange={(e) => setBcDoComment(e.target.checked)} /><span>{tr('ai.tab.comment', '댓글')}</span></label>
+                    <label className="ai-write-autoopen"><input type="checkbox" checked={bcDoLike} data-intent="action" data-intent-value="like" onChange={(e) => setBcDoLike(e.target.checked)} /><span>{tr('ai.tab.like', '좋아요')}</span></label>
                   </div>
 
                   <div className="ai-social-auto-row">
-                    <label className="ai-write-label">글 수</label>
+                    <label className="ai-write-label">{tr('ai.tab.postCount', '글 수')}</label>
                     <input className="ai-input ai-input-sm" type="number" min={1} max={20} value={bcMaxPosts}
                       data-intent="maxposts" onChange={(e) => setBcMaxPosts(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} />
-                    <label className="ai-write-label">간격(초)</label>
+                    <label className="ai-write-label">{tr('ai.tab.intervalSecondsShort', '간격(초)')}</label>
                     <input className="ai-input ai-input-sm" type="number" min={0} max={600} value={bcIntervalSeconds}
                       data-intent="interval" onChange={(e) => setBcIntervalSeconds(Math.max(0, Math.min(600, Number(e.target.value) || 0)))} />
                   </div>
 
-                  <label className={`ai-write-label ${!bcAccount.trim() ? 'ai-field-needed' : ''}`}>계정</label>
-                  <input className="ai-input" value={bcAccount} placeholder="댓글에 쓸 이름"
+                  <label className={`ai-write-label ${!bcAccount.trim() ? 'ai-field-needed' : ''}`}>{tr('ai.tab.account', '계정')}</label>
+                  <input className="ai-input" value={bcAccount} placeholder={tr('ai.tab.commentNamePlaceholder', '댓글에 쓸 이름')}
                     data-intent="account" data-intent-needed={!bcAccount.trim() ? '1' : undefined} onChange={(e) => setBcAccount(e.target.value)} />
 
-                  <label className="ai-write-label">진행 방식</label>
+                  <label className="ai-write-label">{tr('ai.tab.howToProceed', '진행 방식')}</label>
                   <div className="ai-chips">
-                    <button className={`ai-chip ${bcMode === 'draft' ? 'active' : ''}`} data-intent="mode" data-intent-value="draft" onClick={() => setBcMode('draft')}>초안만</button>
-                    <button className={`ai-chip ${bcMode === 'act' ? 'active' : ''}`} data-intent="mode" data-intent-value="act" onClick={() => setBcMode('act')}>실제로 남기기</button>
+                    <button className={`ai-chip ${bcMode === 'draft' ? 'active' : ''}`} data-intent="mode" data-intent-value="draft" onClick={() => setBcMode('draft')}>{tr('ai.tab.draftOnly2', '초안만')}</button>
+                    <button className={`ai-chip ${bcMode === 'act' ? 'active' : ''}`} data-intent="mode" data-intent-value="act" onClick={() => setBcMode('act')}>{tr('ai.tab.actForReal', '실제로 남기기')}</button>
                   </div>
-                  {bcMode === 'act' && <div className="ai-handoff-note ai-err">⚠ 실제로 댓글/좋아요가 등록됩니다. 되돌릴 수 없습니다.</div>}
+                  {bcMode === 'act' && <div className="ai-handoff-note ai-err">⚠ {tr('ai.tab.engageWarning', '실제로 댓글/좋아요가 등록됩니다. 되돌릴 수 없습니다.')}</div>}
 
-                  <label className="ai-write-label">제외할 사이트 (선택, 쉼표)</label>
+                  <label className="ai-write-label">{tr('ai.tab.excludeHosts', '제외할 사이트 (선택, 쉼표)')}</label>
                   <input className="ai-input" value={bcExcludeHosts} placeholder="example.com, ads.co.kr" onChange={(e) => setBcExcludeHosts(e.target.value)} />
                 </>
               ) : null}
 
               {intentError && <div className="ai-handoff-note ai-err" data-intent="error">{intentError}</div>}
-              {!activeId && <div className="ai-hint">활성 탭이 필요합니다.</div>}
+              {!activeId && <div className="ai-hint">{tr('ai.tab.needActiveTab', '활성 탭이 필요합니다.')}</div>}
               <div className="ai-write-actions">
                 <button className="ai-send ai-social-cta" data-intent="run" onClick={() => void executeIntent()} disabled={intentBusy || !activeId || !intentCanExecute}>
-                  {intentBusy ? '실행 중…' : '이 작업으로 실행'}
+                  {intentBusy ? tr('ai.tab.executing', '실행 중…') : tr('ai.tab.executeAsTask', '이 작업으로 실행')}
                 </button>
-                <button className="ai-mini-btn" data-intent="fallback" onClick={runIntentAsPlainAgent} disabled={intentBusy}>일반 에이전트로 실행</button>
-                <button className="ai-mini-btn" data-intent="cancel" onClick={dismissIntentCard} disabled={intentBusy}>취소</button>
+                <button className="ai-mini-btn" data-intent="fallback" onClick={runIntentAsPlainAgent} disabled={intentBusy}>{tr('ai.tab.executeAsPlainAgent', '일반 에이전트로 실행')}</button>
+                <button className="ai-mini-btn" data-intent="cancel" onClick={dismissIntentCard} disabled={intentBusy}>{tr('ai.tab.cancel', '취소')}</button>
               </div>
             </div>
           )}
@@ -1798,76 +1811,76 @@ export function AiTab({ windowId, active, summarizeNonce, writeNonce }: { window
                 일반 실행이 압도 다수이므로 기본은 항상 '일반'(로드 시 초기화 안 함 — 사용자가 마지막에
                 고른 방식이 아니라 매번 안전한 기본값으로 시작). */}
             <div className="ai-exec-mode">
-              <span className="ai-exec-label">실행 방식</span>
+              <span className="ai-exec-label">{tr('ai.tab.execMode', '실행 방식')}</span>
               <div className="ai-chips">
-                <button className={`ai-chip ${execMode === 'normal' ? 'active' : ''}`} onClick={() => setExecMode('normal')}>일반</button>
-                <button className={`ai-chip ${execMode === 'long' ? 'active' : ''}`} onClick={() => setExecMode('long')} title="사이드바를 닫거나 브라우저를 오래 켜 둔 채로 장시간 이어가는 작업">장시간</button>
+                <button className={`ai-chip ${execMode === 'normal' ? 'active' : ''}`} onClick={() => setExecMode('normal')}>{tr('ai.tab.execNormal', '일반')}</button>
+                <button className={`ai-chip ${execMode === 'long' ? 'active' : ''}`} onClick={() => setExecMode('long')} title={tr('ai.tab.execLongTitle', '사이드바를 닫거나 브라우저를 오래 켜 둔 채로 장시간 이어가는 작업')}>{tr('ai.tab.execLong', '장시간')}</button>
               </div>
             </div>
             {execMode === 'long' && (
               <div className="ai-exec-long">
-                <div className="ai-exec-warn">⚠ 브라우저를 켜 둔 동안 최대 {longMaxHours}시간 계속 시도합니다.</div>
+                <div className="ai-exec-warn">{tr('ai.tab.execLongWarn', '⚠ 브라우저를 켜 둔 동안 최대 {h}시간 계속 시도합니다.', { h: longMaxHours })}</div>
                 <div className="ai-repeat-fields">
-                  <span>최대 <input type="number" min={1} value={longMaxHours} onChange={(e) => setLongMaxHours(Math.max(1, Number(e.target.value) || 1))} />시간</span>
-                  <span>단계 <input type="number" min={10} value={longMaxSteps} onChange={(e) => setLongMaxSteps(Math.max(10, Number(e.target.value) || 10))} />개</span>
-                  <span>호출 <input type="number" min={10} value={longMaxLlmCalls} onChange={(e) => setLongMaxLlmCalls(Math.max(10, Number(e.target.value) || 10))} />회</span>
+                  <span>{tr('ai.tab.maxHoursLabel', '최대')} <input type="number" min={1} value={longMaxHours} onChange={(e) => setLongMaxHours(Math.max(1, Number(e.target.value) || 1))} />{tr('ai.tab.hoursUnit', '시간')}</span>
+                  <span>{tr('ai.tab.stepsLabel', '단계')} <input type="number" min={10} value={longMaxSteps} onChange={(e) => setLongMaxSteps(Math.max(10, Number(e.target.value) || 10))} />{tr('ai.tab.countUnit', '개')}</span>
+                  <span>{tr('ai.tab.callsLabel', '호출')} <input type="number" min={10} value={longMaxLlmCalls} onChange={(e) => setLongMaxLlmCalls(Math.max(10, Number(e.target.value) || 10))} />{tr('ai.tab.timesUnit', '회')}</span>
                 </div>
               </div>
             )}
             <button className="ai-adv-toggle" onClick={() => setShowAdvanced((v) => !v)}
-              title="자동 반복·데이터 반복·허용 사이트 등 고급 실행 옵션">
+              title={tr('ai.tab.advancedTitle', '자동 반복·데이터 반복·허용 사이트 등 고급 실행 옵션')}>
               <span className="ai-adv-caret">{showAdvanced ? '▾' : '▸'}</span>
-              고급 옵션
-              {(repeatOn || batchOn || allowedHostsText.trim()) && <span className="ai-adv-badge">켜짐</span>}
+              {tr('ai.tab.advanced', '고급 옵션')}
+              {(repeatOn || batchOn || allowedHostsText.trim()) && <span className="ai-adv-badge">{tr('ai.tab.on', '켜짐')}</span>}
             </button>
             {showAdvanced && (
             <div className="ai-repeat-config">
-              <label className="ai-ctx-toggle" title="작업을 일정 간격으로 자동 반복 실행합니다">
+              <label className="ai-ctx-toggle" title={tr('ai.tab.repeatOnTitle', '작업을 일정 간격으로 자동 반복 실행합니다')}>
                 <input type="checkbox" checked={repeatOn} disabled={isInternal} onChange={(e) => setRepeatOn(e.target.checked)} />
-                🔁 자동 반복
+                🔁 {tr('ai.tab.autoRepeat', '자동 반복')}
               </label>
               {repeatOn && (
                 <div className="ai-repeat-fields">
-                  <span>매 <input type="number" min={1} value={repeatEvery} onChange={(e) => setRepeatEvery(Math.max(1, Number(e.target.value) || 1))} />분</span>
-                  <span><input type="number" min={0} value={repeatCount} onChange={(e) => setRepeatCount(Math.max(0, Number(e.target.value) || 0))} />회 <span className="dim">(0=무제한)</span></span>
-                  <label className="ai-repeat-auto" title="게시·삭제 같은 되돌리기 어려운 동작을 확인 없이 자동 승인합니다. 위험하니 신뢰하는 작업에만 켜세요.">
+                  <span>{tr('ai.tab.every', '매')} <input type="number" min={1} value={repeatEvery} onChange={(e) => setRepeatEvery(Math.max(1, Number(e.target.value) || 1))} />{tr('ai.tab.minutesUnit', '분')}</span>
+                  <span><input type="number" min={0} value={repeatCount} onChange={(e) => setRepeatCount(Math.max(0, Number(e.target.value) || 0))} />{tr('ai.tab.timesUnit', '회')} <span className="dim">{tr('ai.tab.unlimitedHint', '(0=무제한)')}</span></span>
+                  <label className="ai-repeat-auto" title={tr('ai.tab.autoApproveWarnRisky', '게시·삭제 같은 되돌리기 어려운 동작을 확인 없이 자동 승인합니다. 위험하니 신뢰하는 작업에만 켜세요.')}>
                     <input type="checkbox" checked={repeatAuto} onChange={(e) => setRepeatAuto(e.target.checked)} />
-                    무인 자동 승인 ⚠
+                    {tr('ai.tab.autoApproved', '무인 자동 승인')} ⚠
                   </label>
                 </div>
               )}
-              <label className="ai-ctx-toggle" title="데이터(CSV 또는 목록)의 각 행마다 같은 작업을 자동 반복합니다">
+              <label className="ai-ctx-toggle" title={tr('ai.tab.batchOnTitle', '데이터(CSV 또는 목록)의 각 행마다 같은 작업을 자동 반복합니다')}>
                 <input type="checkbox" checked={batchOn} disabled={isInternal} onChange={(e) => setBatchOn(e.target.checked)} />
-                📋 데이터 반복
+                📋 {tr('ai.tab.batchRepeat', '데이터 반복')}
               </label>
               {batchOn && (
                 <div className="ai-batch-fields">
                   <textarea className="ai-batch-data" rows={3} value={batchData} disabled={agentRunning}
-                    placeholder={'CSV(첫 줄 헤더) 또는 한 줄에 하나.\n예:\n이름,이메일\n홍길동,a@b.com\n김철수,c@d.com\n\n지시에 {이름} 처럼 열 이름을 쓰면 값으로 채워집니다.'}
+                    placeholder={tr('ai.tab.batchDataPlaceholder', 'CSV(첫 줄 헤더) 또는 한 줄에 하나.\n예:\n이름,이메일\n홍길동,a@b.com\n김철수,c@d.com\n\n지시에 {이름} 처럼 열 이름을 쓰면 값으로 채워집니다.')}
                     onChange={(e) => setBatchData(e.target.value)} />
-                  {(() => { const n = parseDataset(batchData).length; return n ? <div className="dim" style={{ fontSize: 11 }}>{n}개 행 감지 — 각 행마다 작업 실행</div> : <div className="dim" style={{ fontSize: 11 }}>데이터를 붙여넣으세요(CSV/목록)</div> })()}
-                  <label className="ai-repeat-auto" title="게시·삭제 같은 되돌리기 어려운 동작을 확인 없이 자동 승인합니다.">
+                  {(() => { const n = parseDataset(batchData).length; return n ? <div className="dim" style={{ fontSize: 11 }}>{tr('ai.tab.rowsDetected', '{n}개 행 감지 — 각 행마다 작업 실행', { n })}</div> : <div className="dim" style={{ fontSize: 11 }}>{tr('ai.tab.pasteData', '데이터를 붙여넣으세요(CSV/목록)')}</div> })()}
+                  <label className="ai-repeat-auto" title={tr('ai.tab.autoApproveWarn', '게시·삭제 같은 되돌리기 어려운 동작을 확인 없이 자동 승인합니다.')}>
                     <input type="checkbox" checked={repeatAuto} onChange={(e) => setRepeatAuto(e.target.checked)} />
-                    무인 자동 승인 ⚠
+                    {tr('ai.tab.autoApproved', '무인 자동 승인')} ⚠
                   </label>
                 </div>
               )}
               {/* 실행별 범위 한도 — 일반·장시간 어느 쪽에도 적용. 비우면 제한 없음. */}
               <div className="ai-exec-hosts">
-                <label className="ai-exec-hosts-label" title="이 실행에서 이동을 허용할 사이트. 비우면 제한 없음.">🌐 허용 사이트 (선택)</label>
+                <label className="ai-exec-hosts-label" title={tr('ai.tab.allowedHostsTitle', '이 실행에서 이동을 허용할 사이트. 비우면 제한 없음.')}>🌐 {tr('ai.tab.allowedHosts', '허용 사이트 (선택)')}</label>
                 <textarea className="ai-batch-data" rows={2} value={allowedHostsText}
-                  placeholder={'example.com\nshop.example.com\n(줄바꿈 또는 쉼표로 구분 · 비우면 제한 없음)'}
+                  placeholder={tr('ai.tab.allowedHostsPlaceholder', 'example.com\nshop.example.com\n(줄바꿈 또는 쉼표로 구분 · 비우면 제한 없음)')}
                   onChange={(e) => setAllowedHostsText(e.target.value)} />
               </div>
             </div>
             )}
             <div className="ai-input-row">
               <textarea ref={agentInputRef} className="ai-input" value={agentTask} rows={2}
-                placeholder={isInternal ? '웹 페이지에서만 실행할 수 있습니다' : providerReady ? '무엇이든 시켜보세요 (예: 로그인 폼 찾아서 이메일칸 클릭)' : 'AI 설정을 먼저 완료하세요'}
+                placeholder={isInternal ? tr('ai.tab.agentWebOnlyPlaceholder', '웹 페이지에서만 실행할 수 있습니다') : providerReady ? tr('ai.tab.agentInputPlaceholder', '무엇이든 시켜보세요 (예: 로그인 폼 찾아서 이메일칸 클릭)') : tr('ai.tab.aiNotSetup', 'AI 설정을 먼저 완료하세요')}
                 disabled={!providerReady || isInternal || agentRunning} onChange={(e) => setAgentTask(e.target.value)} onKeyDown={onAgentKeyDown} />
               {agentRunning
-                ? <button className="ai-send ai-stop" onClick={stopAgent} title="중단">■</button>
-                : <button className="ai-send" onClick={runAgentOrRepeat} disabled={!providerReady || isInternal || !agentTask.trim()} title={batchOn ? '데이터 반복 실행' : repeatOn ? '반복 시작' : '실행'}>{batchOn ? '📋' : repeatOn ? '🔁' : '▶'}</button>}
+                ? <button className="ai-send ai-stop" onClick={stopAgent} title={tr('ai.tab.stop', '중단')}>■</button>
+                : <button className="ai-send" onClick={runAgentOrRepeat} disabled={!providerReady || isInternal || !agentTask.trim()} title={batchOn ? tr('ai.tab.runBatchTitle', '데이터 반복 실행') : repeatOn ? tr('ai.tab.startRepeatTitle', '반복 시작') : tr('ai.tab.runTitle', '실행')}>{batchOn ? '📋' : repeatOn ? '🔁' : '▶'}</button>}
             </div>
           </div>
         </>
