@@ -1,4 +1,4 @@
-import { app, session, type Session, type WebContents } from 'electron'
+import { app, session, webContents, type Session, type WebContents } from 'electron'
 import path from 'node:path'
 import { promises as fsPromises } from 'node:fs'
 import { permissionDecisionFor } from './features/policy'
@@ -38,11 +38,23 @@ interface PendingPermissionPrompt {
   cb: (allow: boolean) => void
   timer: NodeJS.Timeout
   cleanup: () => void
+  // 프롬프트를 띄운 외피(셸) webContents — 사용자 응답 없이(타임아웃·탭 소멸) 메인이 스스로
+  // 거부를 확정할 때, 이 창에 "그 프롬프트는 이제 치워도 된다"고 알리기 위해 보관한다.
+  // 요청을 보낸 콘텐츠 탭(wc)은 이 시점에 이미 파괴됐을 수 있어 셸 쪽을 따로 들고 있어야 한다.
+  chromeWebContentsId: number
 }
 
 const pendingPermissionPrompts = new Map<string, PendingPermissionPrompt>()
 let permissionPromptCounter = 0
 const PERMISSION_PROMPT_TIMEOUT_MS = 60_000
+
+/** 셸이 아직 안 파괴됐으면 promptClosed 를 보낸다 — 외피 큐에 남아 있을 그 promptId 를 지우라는 신호. */
+function notifyPromptClosed(chromeWebContentsId: number, promptId: string): void {
+  try {
+    const wc = webContents.fromId(chromeWebContentsId)
+    if (wc && !wc.isDestroyed()) wc.send(IPC.permissions.promptClosed, { promptId })
+  } catch { /* 창이 이미 닫혔거나 — 어차피 지울 큐도 없다 */ }
+}
 
 /** 외피(PermissionPrompt.tsx)가 사용자의 선택을 알려줄 때 호출 — ipc/permissions.ts 에서 연결. */
 export function resolvePermissionPrompt(promptId: string, allow: boolean, remember: boolean): void {
@@ -62,6 +74,9 @@ function denyAndForget(promptId: string): void {
   p.cleanup()
   pendingPermissionPrompts.delete(promptId)
   p.cb(false)
+  // 사용자가 직접 고른 게 아니므로(타임아웃·탭 소멸) — 외피 큐에 그 프롬프트가 아직 남아
+  // 있다면 지우라고 알린다. 이게 없으면 이미 사라진 탭에 대한 말풍선이 화면에 영원히 남는다.
+  notifyPromptClosed(p.chromeWebContentsId, promptId)
 }
 
 /**
@@ -85,7 +100,9 @@ function requestPermissionFromUser(
   wc.once('destroyed', onDestroyed)
   const cleanup = (): void => { try { wc.removeListener('destroyed', onDestroyed) } catch { /* noop */ } }
 
-  pendingPermissionPrompts.set(promptId, { origin, permission, cb, timer, cleanup })
+  pendingPermissionPrompts.set(promptId, {
+    origin, permission, cb, timer, cleanup, chromeWebContentsId: ctx.chrome.webContents.id,
+  })
   ctx.chrome.webContents.send(IPC.permissions.promptOpen, {
     promptId, origin, permission, tabId: found.tabId,
   })

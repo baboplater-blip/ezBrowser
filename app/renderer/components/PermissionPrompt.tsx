@@ -34,7 +34,12 @@ export function PermissionPrompt({ windowId }: Props): JSX.Element | null {
     const off = window.browserAPI.permissions.onPromptOpen((p) => {
       setQueue((q) => (q.some((x) => x.promptId === p.promptId) ? q : [...q, p]))
     })
-    return () => { off() }
+    // 사용자가 답하기 전에 메인이 스스로 거부를 확정했을 때(60초 타임아웃·탭 소멸) —
+    // 이게 없으면 이미 사라진 탭에 대한 말풍선이 화면에 영원히 남는다.
+    const offClosed = window.browserAPI.permissions.onPromptClosed(({ promptId }) => {
+      setQueue((q) => q.filter((x) => x.promptId !== promptId))
+    })
+    return () => { off(); offClosed() }
   }, [])
 
   // 대기 중인 프롬프트가 있는 동안 chrome 을 콘텐츠 위로 승격 — 그렇지 않으면 페이지에 가려 보이지 않는다.

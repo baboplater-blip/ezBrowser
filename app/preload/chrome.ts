@@ -139,6 +139,9 @@ const api = {
     ) => on(IPC.permissions.promptOpen, cb),
     respondPrompt: (promptId: string, allow: boolean, remember: boolean): Promise<void> =>
       ipcRenderer.invoke(IPC.permissions.promptRespond, { promptId, allow, remember }),
+    // 사용자가 응답하기 전에 메인이 스스로 거부를 확정했을 때(60초 타임아웃·탭 소멸) —
+    // 외피 큐에 그 promptId 가 남아 있으면 치우라는 신호.
+    onPromptClosed: (cb: (p: { promptId: string }) => void) => on(IPC.permissions.promptClosed, cb),
   },
   sitedata: {
     summary: (origin: string): Promise<{ cookies: number; hasData: boolean }> =>
