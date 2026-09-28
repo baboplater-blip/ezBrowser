@@ -5,7 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary scope="외피">
+  <ErrorBoundary scope="ui.errorBoundary.scope.default">
     <App />
   </ErrorBoundary>,
 )

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useI18nT } from '../i18n'
 
 interface FindBarProps {
   open: boolean
@@ -9,6 +10,7 @@ interface FindBarProps {
 }
 
 export function FindBar({ open, initialText, tabId, stepSignal, onClose }: FindBarProps) {
+  const tr = useI18nT()
   const [text, setText] = useState('')
   const [matchCase, setMatchCase] = useState(false)
   const [result, setResult] = useState<{ active: number; total: number } | null>(null)
@@ -75,8 +77,8 @@ export function FindBar({ open, initialText, tabId, stepSignal, onClose }: FindB
   if (!open) return null
 
   const countLabel = result
-    ? (result.total > 0 ? `${result.active}/${result.total}` : '결과 없음')
-    : (text ? '검색 중…' : '')
+    ? (result.total > 0 ? `${result.active}/${result.total}` : tr('ui.findBar.noResults', '결과 없음'))
+    : (text ? tr('ui.findBar.searching', '검색 중…') : '')
 
   return (
     <div className="findbar" role="search">
@@ -84,7 +86,7 @@ export function FindBar({ open, initialText, tabId, stepSignal, onClose }: FindB
         ref={inputRef}
         className="findbar-input"
         value={text}
-        placeholder="페이지에서 찾기"
+        placeholder={tr('ui.findBar.placeholder', '페이지에서 찾기')}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -101,12 +103,12 @@ export function FindBar({ open, initialText, tabId, stepSignal, onClose }: FindB
       </span>
       <button
         className={`findbar-btn${matchCase ? ' findbar-btn--on' : ''}`}
-        title="대소문자 구분"
+        title={tr('ui.findBar.matchCase', '대소문자 구분')}
         onClick={() => setMatchCase((v) => !v)}
       >Aa</button>
-      <button className="findbar-btn" title="이전 (Shift+Enter)" onClick={() => step(false)} disabled={!text}>↑</button>
-      <button className="findbar-btn" title="다음 (Enter)" onClick={() => step(true)} disabled={!text}>↓</button>
-      <button className="findbar-btn" title="닫기 (Esc)" onClick={close}>✕</button>
+      <button className="findbar-btn" title={tr('ui.findBar.prev', '이전 (Shift+Enter)')} onClick={() => step(false)} disabled={!text}>↑</button>
+      <button className="findbar-btn" title={tr('ui.findBar.next', '다음 (Enter)')} onClick={() => step(true)} disabled={!text}>↓</button>
+      <button className="findbar-btn" title={tr('ui.findBar.close', '닫기 (Esc)')} onClick={close}>✕</button>
     </div>
   )
 }

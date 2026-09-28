@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useI18nT } from '../i18n'
+
+type TFn = (key: string, fallback?: string, vars?: Record<string, string | number>) => string
 
 interface ClosedEntry { id: number; url: string; title: string; closedAt: number }
 
@@ -14,18 +17,19 @@ function faviconOf(url: string): string {
 function hostOf(u: string): string {
   try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u }
 }
-function ago(ts: number): string {
+function ago(ts: number, tr: TFn): string {
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
-  if (s < 30) return '방금'
-  if (s < 60) return `${s}초 전`
+  if (s < 30) return tr('ui.recentlyClosed.justNow', '방금')
+  if (s < 60) return tr('ui.recentlyClosed.secondsAgo', '{n}초 전', { n: s })
   const m = Math.floor(s / 60)
-  if (m < 60) return `${m}분 전`
+  if (m < 60) return tr('ui.recentlyClosed.minutesAgo', '{n}분 전', { n: m })
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}시간 전`
-  return `${Math.floor(h / 24)}일 전`
+  if (h < 24) return tr('ui.recentlyClosed.hoursAgo', '{n}시간 전', { n: h })
+  return tr('ui.recentlyClosed.daysAgo', '{n}일 전', { n: Math.floor(h / 24) })
 }
 
 export function RecentlyClosed({ windowId, open, onClose }: Props) {
+  const tr = useI18nT()
   const [items, setItems] = useState<ClosedEntry[]>([])
   const [highlight, setHighlight] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
@@ -77,16 +81,16 @@ export function RecentlyClosed({ windowId, open, onClose }: Props) {
         onKeyDown={handleKey}
       >
         <div className="rc-head">
-          <span className="rc-title">최근 닫은 탭</span>
+          <span className="rc-title">{tr('ui.recentlyClosed.title', '최근 닫은 탭')}</span>
           {items.length > 0 && (
             <button className="rc-clear" onMouseDown={(e) => { e.preventDefault(); void window.browserAPI.recentClosed.clear(); setItems([]) }}>
-              전체 비우기
+              {tr('ui.recentlyClosed.clearAll', '전체 비우기')}
             </button>
           )}
         </div>
         <div className="command-palette-list" ref={listRef}>
           {items.length === 0 ? (
-            <div className="command-palette-empty">최근에 닫은 탭이 없습니다</div>
+            <div className="command-palette-empty">{tr('ui.recentlyClosed.empty', '최근에 닫은 탭이 없습니다')}</div>
           ) : (
             items.map((t, i) => (
               <div
@@ -101,7 +105,7 @@ export function RecentlyClosed({ windowId, open, onClose }: Props) {
                   <span className="ts-title">{t.title || hostOf(t.url)}</span>
                   <span className="ts-url">{hostOf(t.url)}</span>
                 </span>
-                <span className="rc-time">{ago(t.closedAt)}</span>
+                <span className="rc-time">{ago(t.closedAt, tr)}</span>
               </div>
             ))
           )}

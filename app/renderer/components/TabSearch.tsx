@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TabSummary, TabGroup, TabGroupColor } from '../../shared/types'
 import { chosung, scoreFuzzy } from '../utils/fuzzy'
+import { useI18nT } from '../i18n'
 
 interface Props {
   windowId: string
@@ -20,6 +21,7 @@ function hostOf(u: string): string {
 }
 
 export function TabSearch({ windowId, open, onClose, tabs, activeTabId }: Props) {
+  const tr = useI18nT()
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const [groups, setGroups] = useState<TabGroup[]>([])
@@ -58,7 +60,7 @@ export function TabSearch({ windowId, open, onClose, tabs, activeTabId }: Props)
     const isChosungQuery = /^[ㄱ-ㅎ]+$/.test(trimmed)
     return tabs
       .map((t) => {
-        const title = t.title || t.url || '새 탭'
+        const title = t.title || t.url || tr('ui.tabbar.newTab', '새 탭')
         const titleLower = title.toLowerCase()
         const urlLower = (t.url || '').toLowerCase()
         let s = Math.max(scoreFuzzy(titleLower, ql), scoreFuzzy(urlLower, ql) * 0.9)
@@ -113,11 +115,11 @@ export function TabSearch({ windowId, open, onClose, tabs, activeTabId }: Props)
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={`열린 탭 ${tabs.length}개 검색 — 제목·주소·초성  ·  Enter 이동, Ctrl+Enter/Del 닫기`}
+          placeholder={tr('ui.tabSearch.placeholder', '열린 탭 {count}개 검색 — 제목·주소·초성  ·  Enter 이동, Ctrl+Enter/Del 닫기', { count: tabs.length })}
         />
         <div className="command-palette-list" ref={listRef}>
           {filtered.length === 0 ? (
-            <div className="command-palette-empty">일치하는 탭이 없습니다</div>
+            <div className="command-palette-empty">{tr('ui.tabSearch.noMatch', '일치하는 탭이 없습니다')}</div>
           ) : (
             filtered.map((t, i) => {
               const g = t.groupId ? groupsById.get(t.groupId) : undefined
@@ -134,22 +136,22 @@ export function TabSearch({ windowId, open, onClose, tabs, activeTabId }: Props)
                     : <span className="ts-favicon ts-favicon-empty" aria-hidden />}
                   <span className="ts-text">
                     <span className="ts-title">
-                      {t.pinned && <span className="ts-badge" title="고정됨">📌</span>}
-                      {t.discarded && <span className="ts-badge" title="잠자는 탭">💤</span>}
-                      {t.title || t.url || '새 탭'}
+                      {t.pinned && <span className="ts-badge" title={tr('ui.tabSearch.pinned', '고정됨')}>📌</span>}
+                      {t.discarded && <span className="ts-badge" title={tr('ui.tabbar.discardedBadge', '잠자는 탭')}>💤</span>}
+                      {t.title || t.url || tr('ui.tabbar.newTab', '새 탭')}
                     </span>
                     <span className="ts-url">{hostOf(t.url || '')}</span>
                   </span>
                   {g && (
-                    <span className="ts-group" title={`그룹: ${g.title}`}>
+                    <span className="ts-group" title={tr('ui.tabSearch.groupTitle', '그룹: {name}', { name: g.title })}>
                       <span className="tg-dot" style={{ background: GROUP_HEX[g.color] }} />
                       {g.title}
                     </span>
                   )}
-                  {t.id === activeTabId && <span className="ts-now">현재</span>}
+                  {t.id === activeTabId && <span className="ts-now">{tr('ui.tabSearch.current', '현재')}</span>}
                   <button
                     className="ts-close"
-                    aria-label="탭 닫기"
+                    aria-label={tr('ui.tabbar.closeTab', '탭 닫기')}
                     onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); closeOne(t.id) }}
                   >×</button>
                 </div>

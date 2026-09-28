@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 interface Props {
   windowId: string | null
 }
 
 export function QrModal({ windowId }: Props) {
+  const tr = useI18nT()
   const [url, setUrl] = useState<string | null>(null)
   const [dataUrl, setDataUrl] = useState<string | null>(null)
 
@@ -40,17 +42,17 @@ export function QrModal({ windowId }: Props) {
   return (
     <div className="qr-modal-backdrop" onClick={() => setUrl(null)}>
       <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="qr-modal-title">현재 페이지 QR 코드</div>
+        <div className="qr-modal-title">{tr('ui.qrModal.title', '현재 페이지 QR 코드')}</div>
         <div className="qr-modal-body">
           {dataUrl ? (
             <img src={dataUrl} alt="QR" width={280} height={280} />
           ) : (
-            <div className="qr-modal-loading">생성 중…</div>
+            <div className="qr-modal-loading">{tr('ui.qrModal.generating', '생성 중…')}</div>
           )}
         </div>
         <div className="qr-modal-url" title={url}>{url}</div>
         <div className="qr-modal-actions">
-          <button className="btn" onClick={() => setUrl(null)}>닫기</button>
+          <button className="btn" onClick={() => setUrl(null)}>{tr('ui.qrModal.close', '닫기')}</button>
         </div>
       </div>
     </div>

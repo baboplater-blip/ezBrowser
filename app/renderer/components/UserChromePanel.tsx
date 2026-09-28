@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useI18nT } from '../i18n'
 
 interface Props {
   open: boolean
@@ -6,6 +7,7 @@ interface Props {
 }
 
 export function UserChromePanel({ open, onClose }: Props) {
+  const tr = useI18nT()
   const [css, setCss] = useState('')
   const [enabled, setEnabled] = useState(true)
   const [error, setError] = useState<string | undefined>()
@@ -31,7 +33,7 @@ export function UserChromePanel({ open, onClose }: Props) {
     <div className="sidepanel right" onMouseDown={(e) => e.stopPropagation()}>
       <div className="sidepanel-header">
         <span>userChrome.css</span>
-        <button className="icon-btn" onClick={onClose} aria-label="닫기">×</button>
+        <button className="icon-btn" onClick={onClose} aria-label={tr('ui.userChrome.close', '닫기')}>×</button>
       </div>
       <div className="sidepanel-body">
         <div className="row">
@@ -41,10 +43,10 @@ export function UserChromePanel({ open, onClose }: Props) {
               checked={enabled}
               onChange={(e) => window.browserAPI.settings.set('freedom.userChromeCss', e.target.checked)}
             />
-            {' '}활성화
+            {' '}{tr('ui.userChrome.enabled', '활성화')}
           </label>
-          <button onClick={() => window.browserAPI.userchrome.open('css')}>외부 에디터로 열기</button>
-          <button onClick={() => window.browserAPI.userchrome.reload()}>핫리로드</button>
+          <button onClick={() => window.browserAPI.userchrome.open('css')}>{tr('ui.userChrome.openExternal', '외부 에디터로 열기')}</button>
+          <button onClick={() => window.browserAPI.userchrome.reload()}>{tr('ui.userChrome.hotReload', '핫리로드')}</button>
         </div>
         {error && <div className="error">⚠️ {error}</div>}
         <textarea
@@ -58,11 +60,11 @@ export function UserChromePanel({ open, onClose }: Props) {
             className="primary"
             onClick={() => window.browserAPI.userchrome.update('css', css)}
           >
-            저장 + 적용
+            {tr('ui.userChrome.saveApply', '저장 + 적용')}
           </button>
         </div>
         <details className="hint">
-          <summary>사용 가능한 안전 셀렉터·변수</summary>
+          <summary>{tr('ui.userChrome.hintSummary', '사용 가능한 안전 셀렉터·변수')}</summary>
           <pre>
 {`.tabbar, .tab, .tab.active, .tab.pinned
 .toolbar, .omnibox, .omnibox-suggestions

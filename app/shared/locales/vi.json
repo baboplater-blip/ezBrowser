@@ -261,6 +261,462 @@
       "palette": {
         "label": "Bảng lệnh",
         "title": "Bảng lệnh (Ctrl+Shift+P)"
+      },
+      "workspaceRail": {
+        "collapse": "Thu gọn thanh không gian làm việc",
+        "expand": "Mở rộng thanh không gian làm việc",
+        "title": "Thanh không gian làm việc (trái) — chuyển đổi bằng chip màu, + để thêm không gian mới"
+      },
+      "nav": {
+        "back": "Quay lại",
+        "forward": "Tiến tới",
+        "stop": "Dừng",
+        "reload": "Tải lại"
+      },
+      "incognito": {
+        "title": "Cửa sổ ẩn danh — không lưu lịch sử · mật khẩu",
+        "label": "🕶 Ẩn danh"
+      },
+      "siteInfo": {
+        "label": "Thông tin trang",
+        "title": "Thông tin trang · quyền"
+      },
+      "omnibox": {
+        "placeholder": "Tìm kiếm hoặc nhập URL · lệnh (vd: !yt từ khóa)"
+      },
+      "zoom": {
+        "label": "Thu phóng {percent}% — bấm để về 100%",
+        "title": "Thu phóng {percent}% — bấm để về mặc định"
+      },
+      "sidepanel": {
+        "leftOpen": "Mở bảng bên trái",
+        "leftClose": "Đóng bảng bên trái",
+        "leftTitle": "Bảng bên trái (Ctrl+B) — dấu trang · lịch sử · ghi chú",
+        "rightOpen": "Mở bảng bên phải",
+        "rightClose": "Đóng bảng bên phải",
+        "rightTitle": "Bảng bên phải (Ctrl+Alt+B) — dấu trang · lịch sử · ghi chú"
+      },
+      "bookmark": {
+        "add": "Thêm dấu trang",
+        "edit": "Sửa dấu trang",
+        "addTitle": "Thêm dấu trang (Ctrl+D)",
+        "editTitle": "Sửa dấu trang (Ctrl+D)"
+      },
+      "readlater": {
+        "add": "Thêm vào danh sách đọc sau",
+        "remove": "Xóa khỏi danh sách đọc sau",
+        "addTitle": "Thêm vào danh sách đọc sau"
+      },
+      "video": {
+        "open": "Mở bảng video",
+        "close": "Đóng bảng video",
+        "title": "Phát hiện {count} video — mở/đóng bảng"
+      }
+    },
+    "app": {
+      "downloadsBadge": "Đang tải {count} tệp"
+    },
+    "errorBoundary": {
+      "title": "Đã xảy ra lỗi ở {where}",
+      "retry": "Thử lại",
+      "reload": "Tải lại giao diện",
+      "hint": "Các tab và trang đang mở vẫn còn nguyên.",
+      "scope": {
+        "default": "giao diện",
+        "sidePanel": "bảng bên",
+        "videoPanel": "bảng video",
+        "downloadPanel": "bảng tải xuống"
+      }
+    },
+    "tabbar": {
+      "newTab": "Tab mới",
+      "closeTab": "Đóng tab",
+      "mute": "Tắt tiếng",
+      "unmute": "Bật tiếng",
+      "mutedHint": "Đã tắt tiếng — bấm để bật lại",
+      "audibleHint": "Đang phát âm thanh — bấm để tắt tiếng",
+      "pinnedSuffix": " (đã ghim)",
+      "mutedSuffix": " (đã tắt tiếng)",
+      "discardedBadge": "Tab đang ngủ",
+      "discardedTitle": "{url}\n(Tab đang ngủ — bấm để tải lại)",
+      "group": {
+        "expand": "Mở rộng",
+        "collapse": "Thu gọn",
+        "headerTitle": "{title} — bấm để {action}, chuột phải để mở menu",
+        "color": {
+          "red": "Đỏ",
+          "orange": "Cam",
+          "yellow": "Vàng",
+          "green": "Xanh lá",
+          "blue": "Xanh dương",
+          "purple": "Tím",
+          "pink": "Hồng",
+          "gray": "Xám"
+        }
+      },
+      "ctx": {
+        "selectedCount": "Đã chọn {count} tab",
+        "groupSelected": "Gộp thành nhóm mới",
+        "moveToGroup": "Chuyển sang nhóm {title}",
+        "addBookmark": "Thêm vào dấu trang",
+        "addReadLater": "Thêm vào danh sách đọc sau",
+        "closeCount": "Đóng {count} tab",
+        "clearSelection": "Bỏ chọn",
+        "reload": "Tải lại",
+        "duplicate": "Nhân bản tab",
+        "addThisBookmark": "Thêm tab này vào dấu trang",
+        "pin": "Ghim tab",
+        "unpin": "Bỏ ghim tab",
+        "muteTab": "Tắt tiếng tab",
+        "muteOthers": "Tắt tiếng các tab khác",
+        "unmuteAll": "Bật tiếng tất cả tab",
+        "moveToNewGroup": "Chuyển sang nhóm mới",
+        "removeFromGroup": "Bỏ khỏi nhóm",
+        "reopenClosed": "Mở lại tab đã đóng",
+        "closeOthers": "Đóng các tab khác",
+        "closeRight": "Đóng các tab bên phải",
+        "groupNameLabel": "Tên nhóm",
+        "rename": "Đổi tên",
+        "ungroup": "Bỏ nhóm"
+      },
+      "preview": {
+        "capturing": "Đang chụp…",
+        "none": "Không có bản xem trước"
+      }
+    },
+    "sidepanel": {
+      "loading": "Đang tải…",
+      "close": "Đóng",
+      "closeAria": "Đóng bảng bên",
+      "tab": {
+        "bookmarks": "Dấu trang",
+        "history": "Lịch sử",
+        "notes": "Ghi chú",
+        "readlater": "Danh sách đọc sau",
+        "briefing": "Bản tóm tắt hằng ngày"
+      },
+      "bookmarks": {
+        "empty": "Chưa có dấu trang nào. Nhấn Ctrl+D để thêm.",
+        "searchPlaceholder": "Tìm theo tiêu đề · URL"
+      },
+      "history": {
+        "searchPlaceholder": "Tìm trong lịch sử",
+        "noResults": "Không có kết quả",
+        "empty": "Chưa có lịch sử truy cập.",
+        "removeItem": "Xóa mục này"
+      },
+      "readlater": {
+        "empty": "Danh sách đọc sau đang trống. Lưu trang bằng nút 📖 cạnh thanh địa chỉ.",
+        "countLine": "{unread} chưa đọc · tổng {total}",
+        "toggleTitle": "Chuyển hiển thị mục đã đọc",
+        "unreadOnly": "Chỉ chưa đọc",
+        "showAll": "Xem tất cả",
+        "clearReadTitle": "Xóa hết mục đã đọc",
+        "clearRead": "Xóa mục đã đọc",
+        "noUnread": "Không có mục chưa đọc.",
+        "markUnread": "Đánh dấu chưa đọc",
+        "markRead": "Đánh dấu đã đọc",
+        "removeTitle": "Xóa khỏi danh sách"
+      },
+      "notes": {
+        "placeholder": "Ghi chú tự do ở đây. Tự động lưu khi bạn gõ."
+      },
+      "briefing": {
+        "empty": "Chưa có bộ thu thập nào.",
+        "createLink": "+ Tạo thu thập hằng ngày",
+        "off": "Tắt",
+        "runNowTitle": "Thu thập ngay",
+        "runNow": "Thu thập ngay",
+        "running": "Đang thu thập…",
+        "neverRun": "Chưa từng chạy",
+        "newCount": " · {count} mục mới",
+        "filterLabel": " · lọc: {keyword}",
+        "noDigest": "Chưa có bản tóm tắt. Hãy thử “Thu thập ngay”.",
+        "collapseItems": "▾ Thu gọn mục",
+        "expandItems": "▸ Xem các mục đã thu thập",
+        "noItems": "Không có mục nào."
+      },
+      "relTime": {
+        "justNow": "vừa xong",
+        "minutesAgo": "{n} phút trước",
+        "hoursAgo": "{n} giờ trước",
+        "daysAgo": "{n} ngày trước"
+      }
+    },
+    "siteinfo": {
+      "internalPage": "Trang nội bộ",
+      "secure": "Kết nối an toàn",
+      "insecure": "Kết nối không an toàn",
+      "internalEmpty": "Trang này không có quyền theo trang.",
+      "permissionsTitle": "Quyền",
+      "permDefault": "Mặc định",
+      "permAllow": "Cho phép",
+      "permDeny": "Chặn",
+      "adblockSite": "Chặn quảng cáo trên trang này",
+      "dataTitle": "Dữ liệu trang",
+      "dataCleared": "Đã xóa",
+      "dataChecking": "Đang kiểm tra…",
+      "cookieCount": "{count} cookie",
+      "clearDataTitle": "Xóa cookie · bộ nhớ cục bộ · bộ nhớ đệm của trang này",
+      "clearing": "Đang xóa…",
+      "clearedDone": "✓ Xong",
+      "clearDataBtn": "Xóa dữ liệu",
+      "clearHint": "Xóa cookie · localStorage · IndexedDB · service worker · bộ nhớ đệm rồi tải lại trang. Bạn có thể bị đăng xuất.",
+      "manageAll": "Quản lý tất cả quyền theo trang →",
+      "perm": {
+        "media": "Camera · micro",
+        "geolocation": "Vị trí",
+        "notifications": "Thông báo",
+        "clipboard-read": "Bảng nhớ tạm",
+        "passkey": "Hộp thoại đăng nhập passkey"
+      }
+    },
+    "downloads": {
+      "header": "Tải xuống",
+      "closeAria": "Đóng",
+      "closeTitle": "Đóng bảng tải xuống",
+      "addPlaceholder": "magnet:?xt=... hoặc URL .torrent",
+      "addTorrent": "Thêm torrent",
+      "searchPlaceholder": "Tìm theo tên tệp · URL",
+      "searchClearAria": "Xóa tìm kiếm",
+      "clearFinishedTitle": "Xóa tất cả mục đã hoàn tất, lỗi hoặc đã hủy",
+      "clearFinished": "Xóa mục đã xong",
+      "emptyNone": "Chưa có tệp nào được tải.",
+      "emptyFiltered": "Không có kết quả.",
+      "accelBadge": "{count} kết nối",
+      "etaSuffix": "⏱ còn {eta}",
+      "peers": "{n} peer",
+      "ratio": "tỉ lệ {n}",
+      "pause": "Tạm dừng",
+      "resume": "Tiếp tục",
+      "cancel": "Hủy",
+      "remove": "Xóa",
+      "removeWithFiles": "Xóa + xóa tệp",
+      "openFolder": "Mở thư mục",
+      "hideFiles": "Ẩn tệp",
+      "showFiles": "Tệp ({count})",
+      "eta": {
+        "seconds": "{n} giây",
+        "minutesSeconds": "{m} phút {s} giây",
+        "hoursMinutes": "{h} giờ {m} phút"
+      },
+      "state": {
+        "active": "Đang tải",
+        "paused": "Đã tạm dừng",
+        "metadata": "Siêu dữ liệu",
+        "done": "Hoàn tất",
+        "seeding": "Đang chia sẻ",
+        "failed": "Thất bại",
+        "cancelled": "Đã hủy",
+        "queued": "Đang chờ"
+      },
+      "filter": {
+        "all": "Tất cả",
+        "active": "Đang tải",
+        "done": "Hoàn tất",
+        "failed": "Thất bại"
+      },
+      "ctx": {
+        "openFile": "📂 Mở tệp",
+        "retry": "↻ Thử lại",
+        "showInFolder": "🗂 Hiện trong thư mục",
+        "copyPath": "📋 Sao chép đường dẫn",
+        "removeFromList": "🗑 Xóa khỏi danh sách"
+      }
+    },
+    "palette": {
+      "placeholder": "Tìm lệnh — nhập tên (vd: tối, cài đặt)  ·  bấm ? để xem trợ giúp",
+      "hintPrefix": "Lệnh thường dùng · nhập tên để tìm trong tất cả (",
+      "hintSuffix": "trợ giúp)",
+      "emptyPrefix": "Không có kết quả — thử từ khóa khác hoặc ",
+      "emptySuffix": " để xem trợ giúp",
+      "help": {
+        "title": "Hướng dẫn dùng bảng lệnh",
+        "move": "Di chuyển",
+        "run": "Chạy",
+        "close": "Đóng",
+        "narrowSection": "Thu hẹp phạm vi tìm",
+        "actionsOnlyLabel": "Chỉ hành động (vd: ",
+        "actionsOnlyExample": ">tối",
+        "tabsOnlyLabel": "Chỉ tab đang mở (vd: ",
+        "tabsOnlyExample": "#github",
+        "savedMacros": "Macro đã lưu",
+        "tipsSection": "Mẹo tìm kiếm",
+        "chosungTip": "Cũng có thể tìm bằng phụ âm đầu tiếng Hàn — ",
+        "chosungExample": "ㅂㅁㅋ",
+        "chosungResult": "dấu trang",
+        "mruTip": "Lệnh dùng thường xuyên tự động lên đầu (MRU)"
+      }
+    },
+    "workspaceRail": {
+      "activeSuffix": " (đang hoạt động)",
+      "chipHint": "\nChuột phải = menu, bấm đúp = đổi tên",
+      "chipAria": "Không gian làm việc {name}",
+      "newTitle": "Không gian mới (Ctrl+Alt+N)",
+      "newAria": "Không gian làm việc mới",
+      "alertLastSpace": "Không thể xóa không gian cuối cùng.",
+      "confirmDelete": "Xóa không gian \"{name}\"?\n(Tất cả tab và phiên trong không gian này sẽ mất.)",
+      "color": {
+        "red": "Đỏ",
+        "orange": "Cam",
+        "yellow": "Vàng",
+        "green": "Xanh lá",
+        "blue": "Xanh dương",
+        "purple": "Tím",
+        "pink": "Hồng",
+        "gray": "Xám"
+      },
+      "menu": {
+        "rename": "Đổi tên…",
+        "setHome": "Đặt trang chủ…",
+        "colorSection": "Màu",
+        "delete": "Xóa",
+        "namePlaceholder": "Tên không gian",
+        "homePlaceholder": "https://… (để trống để mở tab mới)",
+        "confirm": "OK",
+        "cancel": "Hủy"
+      }
+    },
+    "paneStage": {
+      "dropHint": "Chia tại đây",
+      "emptyPane": "Ô trống",
+      "newTabHere": "Tab mới trong ô này",
+      "unsplit": "Bỏ chia (Ctrl+Alt+0)",
+      "left": "Trái",
+      "right": "Phải",
+      "top": "Trên",
+      "bottom": "Dưới",
+      "splitterTitle": "Kéo = chỉnh tỉ lệ · bấm đúp = 50:50"
+    },
+    "permPrompt": {
+      "requestSuffix": " muốn {label}",
+      "remember": "Ghi nhớ lựa chọn này",
+      "queueMore": "Còn {count} yêu cầu đang chờ",
+      "allow": "Cho phép",
+      "deny": "Chặn",
+      "perm": {
+        "media": "dùng camera · micro",
+        "geolocation": "dùng vị trí của bạn",
+        "notifications": "hiển thị thông báo",
+        "clipboard-read": "đọc bảng nhớ tạm"
+      }
+    },
+    "video": {
+      "downloadFailed": "Không khởi động được tải video — bạn từ chối cài yt-dlp hoặc có lỗi xảy ra.",
+      "detected": "Phát hiện {count} video",
+      "none": "Không phát hiện video nào.",
+      "ytdlpHint": "Ứng viên HLS/DASH/trang được yt-dlp tự xử lý (tải khoảng 15MB lần đầu, sau khi bạn đồng ý).",
+      "kind": {
+        "video": "Video",
+        "site": "Trang"
+      }
+    },
+    "extActions": {
+      "overflowTitle": "{count} tiện ích khác",
+      "overflowAria": "Xem thêm {count} tiện ích",
+      "hiddenGroupAria": "Biểu tượng tiện ích ẩn",
+      "menuAria": "Menu {name}",
+      "options": "Tùy chọn",
+      "manage": "Quản lý tiện ích",
+      "confirmRemove": "Gỡ tiện ích \"{name}\"?",
+      "remove": "Gỡ bỏ"
+    },
+    "tabSearch": {
+      "placeholder": "Tìm trong {count} tab đang mở — tiêu đề · URL · phụ âm đầu  ·  Enter chuyển, Ctrl+Enter/Del đóng",
+      "noMatch": "Không có tab phù hợp",
+      "pinned": "Đã ghim",
+      "groupTitle": "Nhóm: {name}",
+      "current": "Hiện tại"
+    },
+    "findBar": {
+      "noResults": "Không có kết quả",
+      "searching": "Đang tìm…",
+      "placeholder": "Tìm trong trang",
+      "matchCase": "Phân biệt hoa thường",
+      "prev": "Trước (Shift+Enter)",
+      "next": "Sau (Enter)",
+      "close": "Đóng (Esc)"
+    },
+    "bookmarkBar": {
+      "empty": "Chưa có dấu trang nào. Thêm bằng Ctrl+D trên bất kỳ trang nào.",
+      "manage": "Quản lý",
+      "emptyFolder": "Thư mục trống"
+    },
+    "pwPrompt": {
+      "updateTitle": "Cập nhật mật khẩu này?",
+      "saveTitle": "Lưu mật khẩu này?",
+      "update": "Cập nhật",
+      "save": "Lưu",
+      "discard": "Không phải lúc này",
+      "never": "Không dùng cho trang này",
+      "queueMore": "Còn {count} yêu cầu đang chờ"
+    },
+    "clearData": {
+      "title": "Xóa dữ liệu duyệt web",
+      "done": "✓ Đã xóa lịch sử duyệt web.",
+      "range": "Khoảng thời gian",
+      "note": "Lịch sử trong khoảng đã chọn sẽ bị xóa. Không thể hoàn tác.",
+      "cancel": "Hủy",
+      "clearing": "Đang xóa…",
+      "clear": "Xóa",
+      "ranges": {
+        "lastHour": "1 giờ qua",
+        "last24h": "24 giờ qua",
+        "last7d": "7 ngày qua",
+        "last4w": "4 tuần qua",
+        "allTime": "Toàn bộ thời gian"
+      }
+    },
+    "bookmarkBubble": {
+      "added": "Đã thêm dấu trang",
+      "saving": "Đang lưu…",
+      "name": "Tên",
+      "folder": "Thư mục",
+      "bookmarkBar": "Thanh dấu trang",
+      "remove": "Xóa",
+      "done": "Xong"
+    },
+    "updateBanner": {
+      "availablePrefix": "Phiên bản mới ",
+      "availableSuffix": " đã có (hiện tại v{current})",
+      "downloading": "Đang tải bản cập nhật… ",
+      "readyPrefix": "Bản cập nhật ",
+      "readySuffix": " đã sẵn sàng — sẽ áp dụng khi khởi động lại",
+      "download": "Tải xuống",
+      "install": "Khởi động lại & cài đặt",
+      "dismiss": "Đóng thông báo"
+    },
+    "qrModal": {
+      "title": "Mã QR của trang hiện tại",
+      "generating": "Đang tạo…",
+      "close": "Đóng"
+    },
+    "userChrome": {
+      "close": "Đóng",
+      "enabled": "Bật",
+      "openExternal": "Mở bằng trình soạn thảo ngoài",
+      "hotReload": "Tải lại nhanh",
+      "saveApply": "Lưu + áp dụng",
+      "hintSummary": "Bộ chọn · biến an toàn khả dụng"
+    },
+    "recentlyClosed": {
+      "justNow": "vừa xong",
+      "secondsAgo": "{n} giây trước",
+      "minutesAgo": "{n} phút trước",
+      "hoursAgo": "{n} giờ trước",
+      "daysAgo": "{n} ngày trước",
+      "title": "Tab vừa đóng",
+      "clearAll": "Xóa tất cả",
+      "empty": "Không có tab nào vừa đóng"
+    },
+    "omnibox": {
+      "source": {
+        "url": "URL",
+        "history": "Lịch sử",
+        "bookmark": "Dấu trang",
+        "tab": "Tab đang mở",
+        "search": "Tìm kiếm",
+        "action": "Lệnh"
       }
     }
   }

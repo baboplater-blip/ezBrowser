@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 interface Prompt {
   promptId: string
@@ -27,6 +28,7 @@ const PERMISSION_ICON: Record<string, string> = {
 }
 
 export function PermissionPrompt({ windowId }: Props): JSX.Element | null {
+  const tr = useI18nT()
   const [queue, setQueue] = useState<Prompt[]>([])
   const [remember, setRemember] = useState(true)
 
@@ -61,7 +63,7 @@ export function PermissionPrompt({ windowId }: Props): JSX.Element | null {
     host = current.origin
   }
 
-  const label = PERMISSION_LABEL[current.permission] ?? current.permission
+  const label = tr(`ui.permPrompt.perm.${current.permission}`, PERMISSION_LABEL[current.permission] ?? current.permission)
   const icon = PERMISSION_ICON[current.permission] ?? '🔒'
 
   return (
@@ -70,7 +72,7 @@ export function PermissionPrompt({ windowId }: Props): JSX.Element | null {
         <div className="perm-prompt-icon">{icon}</div>
         <div className="perm-prompt-text">
           <div className="perm-prompt-title">
-            <span className="perm-prompt-host">{host}</span>이(가) {label}을(를) 요청합니다
+            <span className="perm-prompt-host">{host}</span>{tr('ui.permPrompt.requestSuffix', '이(가) {label}을(를) 요청합니다', { label })}
           </div>
           <label className="perm-prompt-remember">
             <input
@@ -78,14 +80,14 @@ export function PermissionPrompt({ windowId }: Props): JSX.Element | null {
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
             />
-            이 선택 기억
+            {tr('ui.permPrompt.remember', '이 선택 기억')}
           </label>
-          {queue.length > 1 && <div className="perm-prompt-queue">대기 중인 요청 {queue.length - 1}건 더</div>}
+          {queue.length > 1 && <div className="perm-prompt-queue">{tr('ui.permPrompt.queueMore', '대기 중인 요청 {count}건 더', { count: queue.length - 1 })}</div>}
         </div>
       </div>
       <div className="perm-prompt-actions">
-        <button type="button" className="perm-prompt-btn primary" onClick={() => respond(true)}>허용</button>
-        <button type="button" className="perm-prompt-btn" onClick={() => respond(false)}>차단</button>
+        <button type="button" className="perm-prompt-btn primary" onClick={() => respond(true)}>{tr('ui.permPrompt.allow', '허용')}</button>
+        <button type="button" className="perm-prompt-btn" onClick={() => respond(false)}>{tr('ui.permPrompt.deny', '차단')}</button>
       </div>
     </div>
   )

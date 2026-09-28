@@ -118,6 +118,21 @@ async function main() {
       const aiTitle = await evaluate(shell, `document.querySelector('.ai-btn')?.getAttribute('title') || ''`)
       check('I1', '외피(en) — AI 버튼 title 이 영어', /AI Assistant/.test(aiTitle), `title="${aiTitle}"`)
 
+      // I10: TabBar 의 "새 탭" 버튼 aria-label 이 en 문구인지(묶음 M1 — TabBar.tsx).
+      const newTabAria = await evaluate(shell, `document.querySelector('.tab-new')?.getAttribute('aria-label') || ''`)
+      check('I10', '외피(en) — 탭바 새 탭 버튼 aria-label 이 "New tab"', newTabAria === 'New tab', `aria-label="${newTabAria}"`)
+
+      // I11: Toolbar 다운로드 버튼 title 이 en 문구인지(묶음 M1 — Toolbar.tsx).
+      const dlTitle = await evaluate(shell, `document.querySelector('.downloads-btn')?.getAttribute('title') || ''`)
+      check('I11', '외피(en) — 다운로드 버튼 title 이 "Downloads (Ctrl+J)…"', /^Downloads \(Ctrl\+J\)/.test(dlTitle), `title="${dlTitle}"`)
+
+      // I12: 명령 팔레트 placeholder 가 en 문구인지(묶음 M1 — CommandPalette.tsx).
+      await evaluate(shell, `window.browserAPI.actions.run('action.palette.open', { windowId: ${JSON.stringify(windowId)} })`)
+      await sleep(500)
+      const paletteHolder = await evaluate(shell, `document.querySelector('.command-palette-input')?.getAttribute('placeholder') || ''`)
+      check('I12', '외피(en) — 명령 팔레트 placeholder 가 "Search commands…"', /^Search commands/.test(paletteHolder), `placeholder="${paletteHolder}"`)
+      await evaluate(shell, `document.querySelector('.command-palette-backdrop')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`)
+
       // I2: browser://settings 의 nav 라벨이 en 인지(data-i18n 정적 치환).
       const settingsTarget = await openInternalPage(args.port, shell, windowId, 'browser://settings')
       const settingsSession = await connectSession(settingsTarget, 'settings-en')
@@ -184,6 +199,21 @@ async function main() {
       await sleep(1000)
       const aiTitle = await evaluate(shell, `document.querySelector('.ai-btn')?.getAttribute('title') || ''`)
       check('I7', 'language=auto — OS 로케일(ko) 기준 외피가 한국어', /AI 어시스턴트/.test(aiTitle), `title="${aiTitle}"`)
+
+      // I13~I15: 기본(ko) 렌더링이 이행 전 원문과 바이트 단위로 동일한지(묶음 M1 회귀 확인).
+      const newTabAriaKo = await evaluate(shell, `document.querySelector('.tab-new')?.getAttribute('aria-label') || ''`)
+      check('I13', '외피(ko 기본) — 탭바 새 탭 버튼 aria-label 이 "새 탭"(원문 그대로)', newTabAriaKo === '새 탭', `aria-label="${newTabAriaKo}"`)
+
+      const dlTitleKo = await evaluate(shell, `document.querySelector('.downloads-btn')?.getAttribute('title') || ''`)
+      check('I14', '외피(ko 기본) — 다운로드 버튼 title 이 "다운로드 (Ctrl+J) — 사이드바 열기/닫기"(원문 그대로)',
+        dlTitleKo === '다운로드 (Ctrl+J) — 사이드바 열기/닫기', `title="${dlTitleKo}"`)
+
+      await evaluate(shell, `window.browserAPI.actions.run('action.palette.open', { windowId: ${JSON.stringify(await evaluate(shell, `new URL(location.href).searchParams.get('windowId')`))} })`)
+      await sleep(500)
+      const paletteHolderKo = await evaluate(shell, `document.querySelector('.command-palette-input')?.getAttribute('placeholder') || ''`)
+      check('I15', '외피(ko 기본) — 명령 팔레트 placeholder 가 원문 그대로',
+        paletteHolderKo === '명령 검색 — 이름을 입력하세요 (예: 다크, 설정, ㅂㅁㅋ)  ·  ? 누르면 도움말', `placeholder="${paletteHolderKo}"`)
+      await evaluate(shell, `document.querySelector('.command-palette-backdrop')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`)
 
       // I8: 존재하지 않는 키를 fallback 으로 조회하면(폴백 안전망) 앱이 죽지 않고 폴백이 나오는가.
       const fb = await evaluate(shell, `(() => {

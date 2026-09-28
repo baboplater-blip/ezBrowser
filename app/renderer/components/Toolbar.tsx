@@ -226,15 +226,15 @@ export function Toolbar({
       <div className="toolbar-nav">
         <button
           className={`nav-btn workspace-toggle-btn ${workspaceRailOpen ? 'active' : ''}`}
-          aria-label={workspaceRailOpen ? '워크스페이스 사이드바 접기' : '워크스페이스 사이드바 펼치기'}
-          title={'워크스페이스 사이드바 (좌측) — 색 칩으로 스페이스 전환, + 로 새 스페이스 추가'}
+          aria-label={workspaceRailOpen ? t('ui.toolbar.workspaceRail.collapse', '워크스페이스 사이드바 접기') : t('ui.toolbar.workspaceRail.expand', '워크스페이스 사이드바 펼치기')}
+          title={t('ui.toolbar.workspaceRail.title', '워크스페이스 사이드바 (좌측) — 색 칩으로 스페이스 전환, + 로 새 스페이스 추가')}
           onClick={onToggleWorkspaceRail}
         ><Icon name="grid" size={16} /></button>
-        <button className="nav-btn" aria-label="뒤로" disabled={!active?.canGoBack} onClick={back}><Icon name="back" size={16} /></button>
-        <button className="nav-btn" aria-label="앞으로" disabled={!active?.canGoForward} onClick={forward}><Icon name="forward" size={16} /></button>
+        <button className="nav-btn" aria-label={t('ui.toolbar.nav.back', '뒤로')} disabled={!active?.canGoBack} onClick={back}><Icon name="back" size={16} /></button>
+        <button className="nav-btn" aria-label={t('ui.toolbar.nav.forward', '앞으로')} disabled={!active?.canGoForward} onClick={forward}><Icon name="forward" size={16} /></button>
         <button
           className="nav-btn"
-          aria-label={active?.loading ? '중지' : '새로고침'}
+          aria-label={active?.loading ? t('ui.toolbar.nav.stop', '중지') : t('ui.toolbar.nav.reload', '새로고침')}
           onClick={reloadOrStop}
           disabled={!active}
         >
@@ -242,21 +242,21 @@ export function Toolbar({
         </button>
       </div>
       {incognito && (
-        <span className="incognito-badge" title="시크릿 창 — 방문 기록·비밀번호 자동 저장을 남기지 않습니다">
-          🕶 시크릿
+        <span className="incognito-badge" title={t('ui.toolbar.incognito.title', '시크릿 창 — 방문 기록·비밀번호 자동 저장을 남기지 않습니다')}>
+          {t('ui.toolbar.incognito.label', '🕶 시크릿')}
         </span>
       )}
       <div className="omnibox-wrap">
         <button
           className="site-info-btn"
-          aria-label="사이트 정보"
-          title="사이트 정보 · 권한"
+          aria-label={t('ui.toolbar.siteInfo.label', '사이트 정보')}
+          title={t('ui.toolbar.siteInfo.title', '사이트 정보 · 권한')}
           onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onOpenSiteInfo(r.left, r.bottom) }}
         ><Icon name={siteIcon(active?.url)} size={13} /></button>
         <input
           ref={inputRef}
           className="omnibox"
-          placeholder="검색하거나 URL · 명령 입력 (예: !yt 검색어)"
+          placeholder={t('ui.toolbar.omnibox.placeholder', '검색하거나 URL · 명령 입력 (예: !yt 검색어)')}
           value={value}
           style={zoomPercent !== null ? { paddingRight: 52 } : undefined}
           onChange={(e) => setValue(e.target.value)}
@@ -270,8 +270,8 @@ export function Toolbar({
         {zoomPercent !== null && (
           <button
             className="zoom-badge"
-            aria-label={`배율 ${zoomPercent}% — 클릭해서 100%로`}
-            title={`배율 ${zoomPercent}% — 클릭해서 기본 배율로`}
+            aria-label={t('ui.toolbar.zoom.label', '배율 {percent}% — 클릭해서 100%로', { percent: zoomPercent })}
+            title={t('ui.toolbar.zoom.title', '배율 {percent}% — 클릭해서 기본 배율로', { percent: zoomPercent })}
             onClick={() => {
               if (!active) return
               void window.browserAPI.page.zoomSet(active.id, 0).then((z) => setZoom(z))
@@ -297,16 +297,16 @@ export function Toolbar({
         </button>
         <button
           className={`nav-btn sidepanel-btn ${leftPanelOpen ? 'active' : ''}`}
-          aria-label={leftPanelOpen ? '좌측 사이드 패널 닫기' : '좌측 사이드 패널 열기'}
-          title={'좌측 사이드 패널 (Ctrl+B) — 북마크·이력·메모'}
+          aria-label={leftPanelOpen ? t('ui.toolbar.sidepanel.leftClose', '좌측 사이드 패널 닫기') : t('ui.toolbar.sidepanel.leftOpen', '좌측 사이드 패널 열기')}
+          title={t('ui.toolbar.sidepanel.leftTitle', '좌측 사이드 패널 (Ctrl+B) — 북마크·이력·메모')}
           onClick={onToggleLeftPanel}
         >
           <Icon name="panel-left" size={16} />
         </button>
         <button
           className={`nav-btn sidepanel-btn ${rightPanelOpen ? 'active' : ''}`}
-          aria-label={rightPanelOpen ? '우측 사이드 패널 닫기' : '우측 사이드 패널 열기'}
-          title={'우측 사이드 패널 (Ctrl+Alt+B) — 북마크·이력·메모'}
+          aria-label={rightPanelOpen ? t('ui.toolbar.sidepanel.rightClose', '우측 사이드 패널 닫기') : t('ui.toolbar.sidepanel.rightOpen', '우측 사이드 패널 열기')}
+          title={t('ui.toolbar.sidepanel.rightTitle', '우측 사이드 패널 (Ctrl+Alt+B) — 북마크·이력·메모')}
           onClick={onToggleRightPanel}
         >
           <Icon name="panel-right" size={16} />
@@ -314,8 +314,8 @@ export function Toolbar({
         <button
           ref={bookmarkBtnRef}
           className={`nav-btn bookmark-btn ${bookmarked ? 'active' : ''}`}
-          aria-label={bookmarked ? '북마크 편집' : '북마크 추가'}
-          title={bookmarked ? '북마크 편집 (Ctrl+D)' : '북마크에 추가 (Ctrl+D)'}
+          aria-label={bookmarked ? t('ui.toolbar.bookmark.edit', '북마크 편집') : t('ui.toolbar.bookmark.add', '북마크 추가')}
+          title={bookmarked ? t('ui.toolbar.bookmark.editTitle', '북마크 편집 (Ctrl+D)') : t('ui.toolbar.bookmark.addTitle', '북마크에 추가 (Ctrl+D)')}
           onClick={toggleBookmark}
           disabled={!active}
         >
@@ -323,8 +323,8 @@ export function Toolbar({
         </button>
         <button
           className={`nav-btn readlater-btn ${readLaterSaved ? 'active' : ''}`}
-          aria-label={readLaterSaved ? '읽기 목록에서 제거' : '읽기 목록에 추가'}
-          title={readLaterSaved ? '읽기 목록에서 제거' : '읽기 목록에 추가 — 나중에 보기'}
+          aria-label={readLaterSaved ? t('ui.toolbar.readlater.remove', '읽기 목록에서 제거') : t('ui.toolbar.readlater.add', '읽기 목록에 추가')}
+          title={readLaterSaved ? t('ui.toolbar.readlater.remove', '읽기 목록에서 제거') : t('ui.toolbar.readlater.addTitle', '읽기 목록에 추가 — 나중에 보기')}
           onClick={toggleReadLater}
           disabled={!active}
         >
@@ -333,8 +333,8 @@ export function Toolbar({
         {videoCandidateCount > 0 && (
           <button
             className={`nav-btn video-btn ${videoOpen ? 'active' : ''}`}
-            aria-label={videoOpen ? '동영상 사이드바 닫기' : '동영상 사이드바 열기'}
-            title={`감지된 동영상 ${videoCandidateCount}개 — 사이드바 열기/닫기`}
+            aria-label={videoOpen ? t('ui.toolbar.video.close', '동영상 사이드바 닫기') : t('ui.toolbar.video.open', '동영상 사이드바 열기')}
+            title={t('ui.toolbar.video.title', '감지된 동영상 {count}개 — 사이드바 열기/닫기', { count: videoCandidateCount })}
             onClick={onToggleVideo}
           >
             <Icon name="play" size={15} />
