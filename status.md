@@ -96,16 +96,17 @@
 
 ### 최신 실행
 
-**`npm run verify` — 20/20 PASS · 1m 17s** (2026-09-28 23:06)
+**`npm run verify` — 21/21 PASS · 1m 13s** (2026-09-28 23:32)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
-| typecheck | ✅ PASS | 7s | 종료코드 0 |
-| build | ✅ PASS | 7s | 종료코드 0 |
-| package | ✅ PASS | 12s | 종료코드 0 |
-| smoke | ✅ PASS | 14s | PASS 16 |
+| typecheck | ✅ PASS | 6s | 종료코드 0 |
+| build | ✅ PASS | 6s | 종료코드 0 |
+| package | ✅ PASS | 11s | 종료코드 0 |
+| smoke | ✅ PASS | 13s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
 | editor-text | ✅ PASS | 0s | PASS 5 |
+| userscript-match | ✅ PASS | 0s | PASS 10 |
 | engage-ledger | ✅ PASS | 0s | 종료코드 0 |
 | auto-publish | ✅ PASS | 2s | 종료코드 0 |
 | draft-promotion | ✅ PASS | 1s | 종료코드 0 |
@@ -123,6 +124,7 @@
 
 ### 최근 10회
 
+- 2026-09-28 23:32 · `quick` · **21/21 PASS** · 1m 13s
 - 2026-09-28 23:06 · `quick` · **20/20 PASS** · 1m 17s
 - 2026-09-28 23:04 · `quick` · **20/20 PASS** · 1m 12s
 - 2026-09-28 23:00 · `quick` · **2/3 PASS** · 11s
@@ -132,7 +134,6 @@
 - 2026-09-28 13:50 · `quick` · **20/20 PASS** · 2m 15s
 - 2026-09-20 08:30 · `quick` · **20/20 PASS** · 1m 10s
 - 2026-09-20 06:02 · `quick` · **19/19 PASS** · 2m 8s
-- 2026-09-20 04:56 · `quick` · **19/19 PASS** · 1m 40s
 
 <!-- verify-all:end -->
 

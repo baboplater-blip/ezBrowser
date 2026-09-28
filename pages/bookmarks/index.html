@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>북마크</title>
     <style>
       :root { color-scheme: light dark;
@@ -92,20 +94,20 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>북마크</h1>
-        <input id="q" class="q" placeholder="제목·URL 검색" />
-        <button class="btn primary" id="new-bookmark">+ 새 북마크</button>
-        <button class="btn" id="btn-import">가져오기</button>
-        <button class="btn" id="btn-export">내보내기</button>
+        <h1 data-i18n="page.bookmarks.a1">북마크</h1>
+        <input id="q" class="q" placeholder="제목·URL 검색" data-i18n-attr="placeholder:page.bookmarks.a16" />
+        <button class="btn primary" id="new-bookmark" data-i18n="page.bookmarks.a2">+ 새 북마크</button>
+        <button class="btn" id="btn-import" data-i18n="page.bookmarks.a3">가져오기</button>
+        <button class="btn" id="btn-export" data-i18n="page.bookmarks.a4">내보내기</button>
       </header>
       <main>
         <aside>
-          <div class="tree-title">폴더</div>
+          <div class="tree-title" data-i18n="page.bookmarks.a5">폴더</div>
           <div id="tree"></div>
           <div class="folder-actions">
-            <button id="new-folder">새 폴더</button>
-            <button id="rename-folder">이름 변경</button>
-            <button id="del-folder">폴더 삭제</button>
+            <button id="new-folder" data-i18n="page.bookmarks.a6">새 폴더</button>
+            <button id="rename-folder" data-i18n="page.bookmarks.a7">이름 변경</button>
+            <button id="del-folder" data-i18n="page.bookmarks.a8">폴더 삭제</button>
           </div>
         </aside>
         <section class="list">
@@ -121,16 +123,16 @@
     <!-- 새 북마크 모달 -->
     <div id="add-modal" class="modal-backdrop hidden">
       <div class="modal">
-        <h3>새 북마크 추가</h3>
-        <label>제목</label>
+        <h3 data-i18n="page.bookmarks.a11">새 북마크 추가</h3>
+        <label data-i18n="page.bookmarks.a12">제목</label>
         <input id="add-title" type="text" placeholder="예: 위키백과" />
         <label>URL</label>
         <input id="add-url" type="url" placeholder="https://..." />
-        <label>폴더</label>
+        <label data-i18n="page.bookmarks.a13">폴더</label>
         <select id="add-folder"></select>
         <div class="modal-actions">
-          <button class="btn" id="add-cancel">취소</button>
-          <button class="btn primary" id="add-save">추가</button>
+          <button class="btn" id="add-cancel" data-i18n="page.bookmarks.a14">취소</button>
+          <button class="btn primary" id="add-save" data-i18n="page.bookmarks.a15">추가</button>
         </div>
       </div>
     </div>
@@ -139,6 +141,7 @@
     <input id="import-file" type="file" accept=".html,text/html" class="hidden" />
 
     <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
       let tree = { folders: [], bookmarks: [] }
       let currentFolderId = null  // null = 루트
       let query = ''
@@ -377,7 +380,7 @@
           })
           el.querySelector('.rm').addEventListener('click', async (ev) => {
             ev.preventDefault()
-            if (!confirm('이 북마크를 삭제할까요?')) return
+            if (!confirm(trSafe('page.bookmarks.d1', '이 북마크를 삭제할까요?'))) return
             await window.internalAPI.bookmarks.remove(id)
           })
         })
@@ -396,12 +399,12 @@
         buildTree()
       })
       document.getElementById('rename-folder').addEventListener('click', () => {
-        if (currentFolderId === null) { alert('루트는 이름을 변경할 수 없습니다. 폴더를 선택하세요.'); return }
+        if (currentFolderId === null) { alert(trSafe('page.bookmarks.d2', '루트는 이름을 변경할 수 없습니다. 폴더를 선택하세요.')); return }
         renameFolderById(currentFolderId)
       })
       document.getElementById('del-folder').addEventListener('click', async () => {
-        if (currentFolderId === null) { alert('루트는 삭제할 수 없습니다.'); return }
-        if (!confirm('폴더와 안의 모든 북마크를 삭제할까요?')) return
+        if (currentFolderId === null) { alert(trSafe('page.bookmarks.d3', '루트는 삭제할 수 없습니다.')); return }
+        if (!confirm(trSafe('page.bookmarks.d4', '폴더와 안의 모든 북마크를 삭제할까요?'))) return
         await window.internalAPI.bookmarks.folderRemove(currentFolderId)
         currentFolderId = null
       })
@@ -434,7 +437,7 @@
       addModal.addEventListener('click', (e) => { if (e.target === addModal) closeAddModal() })
       document.getElementById('add-save').addEventListener('click', async () => {
         const url = addUrl.value.trim()
-        if (!url) { alert('URL을 입력하세요.'); return }
+        if (!url) { alert(trSafe('page.bookmarks.d5', 'URL을 입력하세요.')); return }
         const title = addTitle.value.trim() || url
         const folderId = addFolder.value === '' ? null : Number(addFolder.value)
         await window.internalAPI.bookmarks.add({ url, title, folderId })
@@ -464,7 +467,7 @@
         if (!file) return
         const text = await file.text()
         importFile.value = ''
-        if (!confirm('이 파일의 북마크를 현재 목록에 추가할까요? (기존 항목은 그대로 유지됩니다.)')) return
+        if (!confirm(trSafe('page.bookmarks.d6', '이 파일의 북마크를 현재 목록에 추가할까요? (기존 항목은 그대로 유지됩니다.)'))) return
         try {
           const result = await window.internalAPI.bookmarks.importHtml(text)
           alert(`가져오기 완료: 폴더 ${result.folders}개, 북마크 ${result.bookmarks}개 추가됨.`)

@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>오픈소스 라이선스</title>
     <style>
       :root { color-scheme: light dark;
@@ -42,24 +44,24 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>오픈소스 라이선스</h1>
-      <p class="lead">ezBrowser 는 아래의 오픈소스 소프트웨어로 만들어졌습니다. 각 구성요소는 해당 라이선스 조건에 따라 사용됩니다. 핵심 엔진(Chromium·V8·Electron)은 별도의 다중 라이선스(BSD-3-Clause 외)를 따릅니다.</p>
+      <h1 data-i18n="page.licenses.a1">오픈소스 라이선스</h1>
+      <p class="lead" data-i18n="page.licenses.a2">ezBrowser 는 아래의 오픈소스 소프트웨어로 만들어졌습니다. 각 구성요소는 해당 라이선스 조건에 따라 사용됩니다. 핵심 엔진(Chromium·V8·Electron)은 별도의 다중 라이선스(BSD-3-Clause 외)를 따릅니다.</p>
 
       <div class="core">
-        <h2>핵심 구성요소</h2>
+        <h2 data-i18n="page.licenses.a3">핵심 구성요소</h2>
         <div class="item"><span>Electron <span id="ev" class="ver"></span></span><span class="lic">MIT</span></div>
-        <div class="item"><span>Chromium <span id="cv" class="ver"></span></span><span class="lic">BSD-3-Clause 외</span></div>
+        <div class="item"><span>Chromium <span id="cv" class="ver"></span></span><span class="lic" data-i18n="page.licenses.a4">BSD-3-Clause 외</span></div>
         <div class="item"><span>V8 JavaScript Engine</span><span class="lic">BSD-3-Clause</span></div>
-        <div class="item"><span>Node.js</span><span class="lic">MIT 외</span></div>
+        <div class="item"><span>Node.js</span><span class="lic" data-i18n="page.licenses.a5">MIT 외</span></div>
         <div class="item"><span>React</span><span class="lic">MIT</span></div>
       </div>
 
       <div class="bar">
-        <input id="q" type="text" placeholder="패키지 이름·라이선스 검색…" />
+        <input id="q" type="text" placeholder="패키지 이름·라이선스 검색…" data-i18n-attr="placeholder:page.licenses.a10" />
         <span class="count" id="count"></span>
       </div>
       <table>
-        <thead><tr><th>패키지</th><th>버전</th><th>라이선스</th><th>저장소</th></tr></thead>
+        <thead><tr><th data-i18n="page.licenses.a6">패키지</th><th data-i18n="page.licenses.a7">버전</th><th data-i18n="page.licenses.a8">라이선스</th><th data-i18n="page.licenses.a9">저장소</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>

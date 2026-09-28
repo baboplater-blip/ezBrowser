@@ -135,8 +135,37 @@ async function main() {
 
       const selValue = await evaluate(settingsSession, `document.querySelector('select[data-select="ui.language"]')?.value || null`)
       check('I4', 'browser://settings(en) — 언어 select 현재값이 en(설정 시드가 실제 반영)', selValue === 'en', `select.value="${selValue}"`)
-
       settingsSession.close()
+
+      // I10~I13: 묶음 M4(내부 페이지) 이관분 — 정적 data-i18n 이 en 사전으로 실제 치환되는지
+      // 페이지별 1개 대조(전 페이지를 다 열면 느려지므로 대표 4개: bookmarks/extensions/passwords/ai-memory).
+      const bmTarget = await openInternalPage(args.port, shell, windowId, 'browser://bookmarks')
+      const bmSession = await connectSession(bmTarget, 'bookmarks-en')
+      await sleep(1200)
+      const bmH1 = await evaluate(bmSession, `(document.querySelector('h1')?.textContent || '').trim()`)
+      check('I10', 'browser://bookmarks(en) — h1 이 "Bookmarks"', bmH1 === 'Bookmarks', `h1="${bmH1}"`)
+      bmSession.close()
+
+      const extTarget = await openInternalPage(args.port, shell, windowId, 'browser://extensions')
+      const extSession = await connectSession(extTarget, 'extensions-en')
+      await sleep(1200)
+      const extH1 = await evaluate(extSession, `(document.querySelector('h1')?.textContent || '').trim()`)
+      check('I11', 'browser://extensions(en) — h1 이 "Extensions"', extH1 === 'Extensions', `h1="${extH1}"`)
+      extSession.close()
+
+      const pwTarget = await openInternalPage(args.port, shell, windowId, 'browser://passwords')
+      const pwSession = await connectSession(pwTarget, 'passwords-en')
+      await sleep(1200)
+      const pwH1 = await evaluate(pwSession, `(document.querySelector('h1')?.textContent || '').trim()`)
+      check('I12', 'browser://passwords(en) — h1 이 "Password Manager"', pwH1 === 'Password Manager', `h1="${pwH1}"`)
+      pwSession.close()
+
+      const memTarget = await openInternalPage(args.port, shell, windowId, 'browser://ai-memory')
+      const memSession = await connectSession(memTarget, 'ai-memory-en')
+      await sleep(1200)
+      const memSave = await evaluate(memSession, `(document.querySelector('[data-i18n="page.ai-memory.a3"]')?.textContent || '').trim()`)
+      check('I13', 'browser://ai-memory(en) — 저장 버튼이 "Save"', memSave === 'Save', `btn="${memSave}"`)
+      memSession.close()
     } catch (err) {
       check('FATAL-EN', 'en 시드 실행', false, err.message)
     } finally {
@@ -164,8 +193,22 @@ async function main() {
         return o ? o.textContent.trim() : null
       })()`)
       check('I6', 'browser://settings(vi) — "자동" 옵션 라벨이 베트남어', langAuto === 'Tự động (theo hệ thống)', `auto="${langAuto ?? '(못찾음)'}"`)
-
       settingsSession.close()
+
+      // I14~I15: 묶음 M4(내부 페이지) 이관분 — vi 사전 대조 2종.
+      const bmTargetVi = await openInternalPage(args.port, shell, windowId, 'browser://bookmarks')
+      const bmSessionVi = await connectSession(bmTargetVi, 'bookmarks-vi')
+      await sleep(1200)
+      const bmH1Vi = await evaluate(bmSessionVi, `(document.querySelector('h1')?.textContent || '').trim()`)
+      check('I14', 'browser://bookmarks(vi) — h1 이 "Dấu trang"', bmH1Vi === 'Dấu trang', `h1="${bmH1Vi}"`)
+      bmSessionVi.close()
+
+      const pwTargetVi = await openInternalPage(args.port, shell, windowId, 'browser://passwords')
+      const pwSessionVi = await connectSession(pwTargetVi, 'passwords-vi')
+      await sleep(1200)
+      const pwH1Vi = await evaluate(pwSessionVi, `(document.querySelector('h1')?.textContent || '').trim()`)
+      check('I15', 'browser://passwords(vi) — h1 이 "Quản lý mật khẩu"', pwH1Vi === 'Quản lý mật khẩu', `h1="${pwH1Vi}"`)
+      pwSessionVi.close()
     } catch (err) {
       check('FATAL-VI', 'vi 시드 실행', false, err.message)
     } finally {
