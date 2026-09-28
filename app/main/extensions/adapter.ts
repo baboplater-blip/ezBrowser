@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { promises as fsp, existsSync, createWriteStream, readFileSync, writeFileSync } from 'node:fs'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { createHash, generateKeyPairSync } from 'node:crypto'
+import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto'
 import path from 'node:path'
 import extract from 'extract-zip'
 import {
@@ -13,11 +13,13 @@ import { getAllWindows, getWindow } from '../windows/window-service'
 import { addSessionInitHook, forEachInstalledSession, partitionOfSession } from '../session-bootstrap'
 import { listWorkspaces } from '../features/workspace'
 import { DEFAULT_SESSION } from '../../shared/constants'
-import type { ExtensionSessionLoad, ExtensionSummary } from '../../shared/types'
+import type { ExtensionSessionLoad, ExtensionSummary, ExtensionInstallPreview } from '../../shared/types'
 import {
   reloadDnrRules, dnrRuleCountFor, loadDynamicRules, watchDiskDynamicRules,
   updateRuntimeRules, getRuntimeRules, dropRuntimeRules,
+  updateEnabledRulesets, getDisabledRulesetIds,
 } from '../features/extensions/dnr'
+import { openExtensionPopup, closeAllPopupsForExtension, getExtensionPopupPath } from './popup'
 
 let extensionsAdapter: unknown = null
 let extensionsModule: { ElectronChromeExtensions: ExtensionsCtor } | null = null
@@ -73,7 +75,7 @@ async function loadModule(): Promise<{ ElectronChromeExtensions: ExtensionsCtor 
   }
 }
 
-function extensionsRoot(): string {
+export function extensionsRoot(): string {
   return path.join(app.getPath('userData'), 'extensions')
 }
 
@@ -119,9 +121,46 @@ function registerDnrIpc(): void {
     if (!okId(a?.extId)) return []
     return getRuntimeRules(a.extId, a.scope === 'session' ? 'session' : 'dynamic')
   })
-  // 룰셋 활성/비활성은 아직 정적 룰셋 전체를 다시 읽는 것으로만 대응한다(부분 토글 미지원).
-  ipcMain.handle('bb-dnr:rulesets', async () => ({ ok: true }))
-  ipcMain.handle('bb-dnr:rulesets-get', () => [])
+  // 룰셋 부분 활성/비활성(chrome.declarativeNetRequest.updateEnabledRulesets).
+  ipcMain.handle('bb-dnr:rulesets', (_e, a: {
+    extId?: string; enableRulesetIds?: unknown[]; disableRulesetIds?: unknown[]
+  }) => {
+    if (!okId(a?.extId)) return { ok: false }
+    return updateEnabledRulesets(a.extId, {
+      enableRulesetIds: Array.isArray(a.enableRulesetIds) ? a.enableRulesetIds.map(String) : undefined,
+      disableRulesetIds: Array.isArray(a.disableRulesetIds) ? a.disableRulesetIds.map(String) : undefined,
+    })
+  })
+  ipcMain.handle('bb-dnr:rulesets-get', (_e, a: { extId?: string }) => {
+    if (!okId(a?.extId)) return []
+    return getDisabledRulesetIds(a.extId)
+  })
+}
+
+// ===== DNR 세션 룰 preload — 확장 서비스워커/프레임 컨텍스트에 주입(묶음 J 항목 2) =====
+//
+// `chrome.declarativeNetRequest.updateSessionRules` 는 디스크에 쓰이지 않아(design — 크롬 API
+// 스펙상 세션 룰은 메모리 전용) 동적 룰처럼 파일을 훔쳐볼 수 없다. 그래서 확장 컨텍스트 안에서
+// 그 함수 호출 자체를 가로채는 preload(app/preload/ext-dnr-session.ts)를 세션마다 등록한다.
+// 세션당 한 번만 등록하면 되므로(파일 자체가 바뀌지 않는 한) WeakSet 으로 멱등성을 지킨다.
+const dnrSessionPreloadRegistered = new WeakSet<Session>()
+
+function registerExtDnrSessionPreload(ses: Session): void {
+  if (isIncognitoSession(ses)) return // 시크릿엔 확장 자체를 안 올린다 — 등록할 이유가 없다
+  if (dnrSessionPreloadRegistered.has(ses)) return
+  dnrSessionPreloadRegistered.add(ses)
+  const filePath = path.join(__dirname, '../../preload/ext-dnr-session.js')
+  if (!existsSync(filePath)) return // 개발 중 아직 빌드 전이면 조용히 건너뛴다(에러로 부팅을 막지 않는다)
+  const withRegister = ses as unknown as {
+    registerPreloadScript?: (opts: { id: string; type: string; filePath: string }) => void
+  }
+  if (typeof withRegister.registerPreloadScript !== 'function') return
+  try {
+    withRegister.registerPreloadScript({ id: 'bb-dnr-session-sw', type: 'service-worker', filePath })
+    withRegister.registerPreloadScript({ id: 'bb-dnr-session-frame', type: 'frame', filePath })
+  } catch (err) {
+    console.warn('[extensions] DNR 세션 룰 preload 등록 실패', err)
+  }
 }
 
 extensionEvents.on('changed', () => {
@@ -335,6 +374,12 @@ export async function initExtensions(): Promise<void> {
   await loadDynamicRules()
   // 확장이 런타임에 넣는 룰은 Electron 이 디스크에 쓴다 — 그것을 읽어 우리 엔진에 병합한다.
   watchDiskDynamicRules()
+
+  // 세션 룰 preload 도 라이브러리 유무와 무관하다(우리 자체 DNR 엔진 — electron-chrome-extensions
+  // 없이도 declarativeNetRequest 는 세션에 이미 네이티브로 존재한다). 현재·미래 세션 전부에 적용.
+  registerExtDnrSessionPreload(session.defaultSession)
+  for (const ses of sessions()) registerExtDnrSessionPreload(ses)
+  addSessionInitHook((ses) => { registerExtDnrSessionPreload(ses) })
 
   const mod = await loadModule()
   if (!mod) return
@@ -834,7 +879,90 @@ async function finalizeInstall(preparedDir: string, computedId: string): Promise
   return { ok: true, id: finalId }
 }
 
-export async function installFromCrx(crxPath: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+// ── 설치 전 동의 (묶음 J 항목 3) ────────────────────────────────────────────
+//
+// 왜: 예전엔 .crx 를 고르거나 웹스토어 URL 을 붙여넣으면 사용자가 이름·권한을 보기도 전에
+// 곧바로 설치·로드됐다. 크롬도 콕콕도 설치 전에 "이 확장이 요청하는 권한" 화면을 반드시 거친다.
+// unpack + key 주입(=ID 계산)까지는 그대로 해 두고(사용자에게 정확한 ID·아이콘·권한을 보여주려면
+// manifest 를 읽어야 하므로), **최종 배치(finalizeInstall → 실제 세션 로드)만** 사용자 확인 뒤로 미룬다.
+interface PendingInstall { dir: string; id: string; createdAt: number }
+const pendingInstalls = new Map<string, PendingInstall>()
+const PENDING_TTL_MS = 10 * 60 * 1000
+
+/** 방치된(동의 화면을 닫고 잊어버린) 준비 디렉터리를 정리한다. 매 prepare 호출 앞에서 부른다. */
+function sweepPendingInstalls(): void {
+  const now = Date.now()
+  for (const [token, p] of [...pendingInstalls]) {
+    if (now - p.createdAt < PENDING_TTL_MS) continue
+    pendingInstalls.delete(token)
+    void fsp.rm(p.dir, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
+interface PermissionManifestShape {
+  permissions?: unknown
+  host_permissions?: unknown
+}
+
+function toStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+}
+
+/** unpack·key 주입이 끝난 디렉터리를 동의 대기 상태로 등록하고 화면에 보여줄 요약을 만든다. */
+async function stageForConsent(
+  preparedDir: string, computedId: string, source: 'crx' | 'unpacked',
+): Promise<{ ok: true; pending: ExtensionInstallPreview } | { ok: false; error: string }> {
+  let manifest: ManifestJson & PermissionManifestShape
+  try {
+    manifest = JSON.parse(await fsp.readFile(path.join(preparedDir, 'manifest.json'), 'utf-8'))
+  } catch (err) {
+    await fsp.rm(preparedDir, { recursive: true, force: true }).catch(() => undefined)
+    return { ok: false, error: `manifest.json 을 읽을 수 없습니다: ${(err as Error).message}` }
+  }
+  const messages = await loadLocaleMessages(preparedDir, manifest.default_locale || 'en')
+  const iconDataUrl = await readBestIcon(preparedDir, manifest).catch(() => undefined)
+  const token = randomUUID()
+  sweepPendingInstalls()
+  pendingInstalls.set(token, { dir: preparedDir, id: computedId, createdAt: Date.now() })
+  return {
+    ok: true,
+    pending: {
+      token,
+      id: computedId,
+      name: localizeString(manifest.name, messages) ?? computedId,
+      version: manifest.version ?? '0.0.0',
+      description: localizeString(manifest.description, messages),
+      iconDataUrl,
+      permissions: toStringArray(manifest.permissions),
+      hostPermissions: toStringArray(manifest.host_permissions),
+      source,
+    },
+  }
+}
+
+/** 사용자가 동의 화면에서 "설치"를 눌렀다 — 이제 실제로 세션에 로드한다. */
+export async function confirmPendingInstall(token: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const p = pendingInstalls.get(token)
+  if (!p) return { ok: false, error: '설치 요청이 만료되었거나 없습니다. 다시 시도해 주세요.' }
+  pendingInstalls.delete(token)
+  return finalizeInstall(p.dir, p.id)
+}
+
+/** 사용자가 동의 화면을 취소했다 — 준비 디렉터리를 버린다(아무것도 설치되지 않는다). */
+export function cancelPendingInstall(token: string): { ok: boolean } {
+  const p = pendingInstalls.get(token)
+  if (p) {
+    pendingInstalls.delete(token)
+    void fsp.rm(p.dir, { recursive: true, force: true }).catch(() => undefined)
+  }
+  return { ok: true }
+}
+
+/**
+ * .crx 파일을 unpack 하고 동의 화면용 미리보기를 만든다.
+ * **아직 설치되지 않는다** — `confirmPendingInstall(token)` 을 불러야 실제로 로드된다.
+ */
+export async function installFromCrx(crxPath: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> {
   if (!existsSync(crxPath)) return { ok: false, error: 'file not found' }
 
   // 임시 디렉터리에 압축 해제(+ CRX 헤더에서 서명 pubkey 추출)
@@ -853,7 +981,8 @@ export async function installFromCrx(crxPath: string): Promise<{ ok: boolean; id
     return { ok: false, error: 'manifest.json 을 읽을 수 없습니다.' }
   }
 
-  return finalizeInstall(tmpDir, computedId)
+  const staged = await stageForConsent(tmpDir, computedId, 'crx')
+  return staged.ok ? { ok: true, pending: staged.pending } : { ok: false, error: staged.error }
 }
 
 async function copyDir(src: string, dst: string): Promise<void> {
@@ -883,7 +1012,8 @@ export function parseWebstoreId(url: string): string | null {
   return m?.[1] ?? null
 }
 
-export async function installFromUrl(url: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+/** 웹스토어/직접 .crx URL 을 내려받아 동의 화면용 미리보기를 만든다(아직 설치되지 않는다). */
+export async function installFromUrl(url: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> {
   const id = parseWebstoreId(url)
   let downloadUrl: string
   if (id) {
@@ -917,6 +1047,7 @@ export async function removeExtension(id: string): Promise<{
   ok: boolean; error?: string }> {
   dropRuntimeRules(id)   // 확장이 사라지면 그 확장의 런타임 룰도 버린다
   clearLoadResults(id)   // 세션별 실패 기록도 함께(같은 id 로 재설치될 수 있다)
+  closeAllPopupsForExtension(id)   // 열려 있는 팝업이 삭제된 확장 페이지를 계속 보여주지 않게
   if (!/^[a-z]{32}$/i.test(id) && !/^[a-z0-9_-]+$/i.test(id)) {
     return { ok: false, error: 'invalid id' }
   }
@@ -944,6 +1075,7 @@ export async function setExtensionEnabled(id: string, enabled: boolean): Promise
     disabled.add(id)
     await writeDisabled(disabled)
     removeFromAll(id)
+    closeAllPopupsForExtension(id)
   }
   extensionEvents.emit('changed')
   return { ok: true }
@@ -964,28 +1096,28 @@ export async function openExtensionOptions(id: string, windowId: string): Promis
   return { ok: true }
 }
 
-export async function invokeExtensionAction(id: string, windowId: string): Promise<{ ok: boolean; error?: string }> {
-  // 기본 동작: popup 페이지를 새 탭으로 (정식 popup 창은 향후 보완)
+/**
+ * 툴바 확장 아이콘 클릭. `anchorRect` 를 주면(외피 아이콘에서 온 호출) 그 아이콘 아래
+ * 앵커된 소형 창으로 팝업을 띄운다(묶음 J 항목 1 — 예전엔 새 탭으로 열려 uBO/Bitwarden 류의
+ * 작은 드롭다운 UX 가 전체 탭으로 튀어나왔다). anchorRect 가 없으면(관리 페이지의 "실행" 버튼처럼
+ * 클릭 좌표를 모르는 호출) 창 좌상단 근처에 작게 띄운다 — 그래도 새 탭보다는 낫다.
+ * popup 이 아예 선언 안 된 확장은 옵션 페이지로, 옵션도 없으면 실패를 돌려준다.
+ */
+export async function invokeExtensionAction(
+  id: string, windowId: string, anchorRect?: { x: number; y: number; width: number; height: number },
+): Promise<{ ok: boolean; error?: string }> {
   const dir = path.join(extensionsRoot(), id)
   if (!existsSync(dir)) return { ok: false, error: 'not found' }
-  try {
-    const manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf-8')) as ManifestJson & {
-      action?: { default_popup?: string }
-      browser_action?: { default_popup?: string }
-    }
-    const popup = manifest.action?.default_popup ?? manifest.browser_action?.default_popup
-    if (popup) {
-      createTab({ windowId, url: `chrome-extension://${id}/${popup}` })
-      return { ok: true }
-    }
-    // popup 없으면 옵션 페이지로 fallback
-    return openExtensionOptions(id, windowId)
-  } catch (err) {
-    return { ok: false, error: (err as Error).message }
+  const popup = await getExtensionPopupPath(id)
+  if (popup) {
+    return openExtensionPopup(id, windowId, anchorRect ?? { x: 40, y: 40, width: 28, height: 28 })
   }
+  // popup 없으면 옵션 페이지로 fallback
+  return openExtensionOptions(id, windowId)
 }
 
-export async function importLocalUnpackedDir(srcDir: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+/** unpacked 폴더를 준비하고 동의 화면용 미리보기를 만든다(아직 설치되지 않는다). */
+export async function importLocalUnpackedDir(srcDir: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> {
   if (!existsSync(path.join(srcDir, 'manifest.json'))) {
     return { ok: false, error: 'manifest.json 없음 (unpacked 디렉터리가 맞나요?)' }
   }
@@ -1007,7 +1139,8 @@ export async function importLocalUnpackedDir(srcDir: string): Promise<{ ok: bool
     return { ok: false, error: 'manifest.json 을 읽을 수 없습니다.' }
   }
 
-  return finalizeInstall(tmpDir, computedId)
+  const staged = await stageForConsent(tmpDir, computedId, 'unpacked')
+  return staged.ok ? { ok: true, pending: staged.pending } : { ok: false, error: staged.error }
 }
 
 export function getExtensionsAdapter(): unknown {

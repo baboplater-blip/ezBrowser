@@ -80,6 +80,33 @@
         font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .15s ease; z-index: 9; }
       .toast.show { opacity: 1; }
       .toast.error { background: var(--danger); }
+
+      /* ===== 설치 전 동의(consent) 모달 — 묶음 J 항목 3 ===== */
+      .consent-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45);
+        display: flex; align-items: center; justify-content: center; z-index: 20;
+        opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+      .consent-backdrop.show { opacity: 1; pointer-events: auto; }
+      .consent-card { width: 420px; max-width: calc(100vw - 48px); max-height: calc(100vh - 64px);
+        overflow-y: auto; background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+        transform: translateY(6px) scale(.98); transition: transform .15s cubic-bezier(0.23,1,0.32,1); }
+      .consent-backdrop.show .consent-card { transform: translateY(0) scale(1); }
+      .consent-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+      .consent-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; background: var(--hover);
+        display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted); }
+      .consent-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+      .consent-title { font-size: 15px; font-weight: 700; }
+      .consent-sub { color: var(--muted); font-size: 11px; font-family: 'Menlo', monospace; margin-top: 2px; }
+      .consent-desc { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.5; }
+      .consent-section-title { font-size: 12px; font-weight: 600; margin: 14px 0 6px; }
+      .consent-perm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+      .consent-perm-list li { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.4; }
+      .consent-perm-list li .dot { flex-shrink: 0; margin-top: 5px; width: 5px; height: 5px; border-radius: 50%;
+        background: var(--accent); }
+      .consent-perm-list.danger li .dot { background: var(--danger); }
+      .consent-none { color: var(--muted); font-size: 12px; }
+      .consent-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+      .consent-actions button.btn { height: 32px; padding: 0 16px; border-radius: 16px; font-size: 12px; }
     
       /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
       button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
@@ -114,6 +141,27 @@
       <div id="list"></div>
     </div>
     <div class="toast" id="toast"></div>
+
+    <div class="consent-backdrop" id="consent-backdrop" data-consent-backdrop="1">
+      <div class="consent-card" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+        <div class="consent-head">
+          <div class="consent-icon" id="consent-icon">⌬</div>
+          <div>
+            <div class="consent-title" id="consent-title"></div>
+            <div class="consent-sub" id="consent-sub"></div>
+          </div>
+        </div>
+        <div class="consent-desc" id="consent-desc"></div>
+        <div class="consent-section-title">이 확장이 요청하는 권한</div>
+        <div id="consent-perms"></div>
+        <div class="consent-section-title">접근 가능한 사이트</div>
+        <div id="consent-hosts"></div>
+        <div class="consent-actions">
+          <button class="btn" id="consent-cancel">취소</button>
+          <button class="btn primary" id="consent-install">설치</button>
+        </div>
+      </div>
+    </div>
     <script>
       let exts = []
       function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
@@ -247,15 +295,109 @@
         })
       }
 
+      // ===== 설치 전 동의 화면(묶음 J 항목 3) =====
+      // installFromCrx/installFromUrl/importLocal 은 이제 곧바로 설치하지 않고 unpack 만 해서
+      // { pending } 미리보기를 돌려준다 — 사용자가 이 화면에서 확인해야 confirmInstall 로 실제 로드된다.
+
+      // 자주 보이는 권한 키만 한국어 설명을 붙인다. 목록에 없는 키는 원문 그대로 보여준다
+      // (지어내지 않는다 — 모르는 권한을 안다고 말하는 것이 가장 나쁘다).
+      const PERM_KO = {
+        tabs: '열려 있는 탭의 URL·제목 읽기',
+        activeTab: '지금 보고 있는 탭에 한해 접근',
+        storage: '확장 전용 저장 공간 사용',
+        scripting: '페이지에 스크립트 삽입·실행',
+        webRequest: '네트워크 요청 관찰',
+        webRequestBlocking: '네트워크 요청 차단·수정',
+        declarativeNetRequest: '규칙 기반으로 요청 차단·수정',
+        declarativeNetRequestWithHostAccess: '규칙 기반으로 요청 차단·수정(호스트 권한 포함)',
+        declarativeNetRequestFeedback: '차단·수정된 요청 통계 확인',
+        cookies: '쿠키 읽기·쓰기',
+        history: '방문 기록 읽기·수정',
+        bookmarks: '북마크 읽기·수정',
+        downloads: '다운로드 시작·관리',
+        clipboardRead: '클립보드 내용 읽기',
+        clipboardWrite: '클립보드에 쓰기',
+        notifications: '알림 표시',
+        contextMenus: '우클릭 메뉴 항목 추가',
+        geolocation: '위치 정보 접근',
+        management: '다른 확장·앱 목록 및 상태 관리',
+        proxy: '프록시(네트워크 경로) 설정 변경',
+        webNavigation: '페이지 이동 이벤트 관찰',
+        alarms: '주기적인 작업 예약',
+        idle: '기기 유휴 상태 감지',
+        contentSettings: '사이트별 콘텐츠 설정 변경',
+        unlimitedStorage: '저장 공간 제한 없이 사용',
+        sidePanel: '사이드 패널 UI 표시',
+      }
+      function permKo(key) { return PERM_KO[key] || ('권한: ' + key) }
+
+      function hostKo(pattern) {
+        if (pattern === '<all_urls>') return '모든 웹사이트'
+        const m = /^(\*|https?|ftp):\/\/(\*\.)?([^/]+)\//.exec(pattern) || /^(\*|https?|ftp):\/\/(\*\.)?([^/]+)$/.exec(pattern)
+        if (!m) return pattern
+        const host = m[3]
+        if (host === '*') return '모든 웹사이트'
+        return (m[2] ? host + '의 모든 하위 도메인' : host)
+      }
+
+      function permList(items, dangerClass) {
+        if (!items || items.length === 0) return '<div class="consent-none">요청하는 항목이 없습니다.</div>'
+        return '<ul class="consent-perm-list' + (dangerClass ? ' danger' : '') + '">'
+          + items.map((s) => '<li><span class="dot"></span><span>' + escape(s) + '</span></li>').join('')
+          + '</ul>'
+      }
+
+      let pendingResolve = null
+      function openConsent(pending) {
+        document.getElementById('consent-icon').innerHTML = pending.iconDataUrl
+          ? '<img src="' + pending.iconDataUrl + '" alt="">'
+          : (pending.name ? pending.name.slice(0, 1).toUpperCase() : '⌬')
+        document.getElementById('consent-title').textContent = pending.name + ' 설치'
+        document.getElementById('consent-sub').textContent = 'v' + pending.version + ' · ' + pending.id
+        document.getElementById('consent-desc').textContent = pending.description || ''
+        document.getElementById('consent-perms').innerHTML = permList((pending.permissions || []).map(permKo), false)
+        const hosts = (pending.hostPermissions || []).map(hostKo)
+        document.getElementById('consent-hosts').innerHTML = permList(hosts, hosts.some((h) => h === '모든 웹사이트'))
+        document.getElementById('consent-backdrop').classList.add('show')
+        return new Promise((resolve) => { pendingResolve = resolve })
+      }
+      function closeConsent(result) {
+        document.getElementById('consent-backdrop').classList.remove('show')
+        if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(result) }
+      }
+      document.getElementById('consent-cancel').addEventListener('click', () => closeConsent('cancel'))
+      document.getElementById('consent-install').addEventListener('click', () => closeConsent('install'))
+      document.getElementById('consent-backdrop').addEventListener('mousedown', (e) => {
+        if (e.target.dataset.consentBackdrop) closeConsent('cancel')
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('consent-backdrop').classList.contains('show')) closeConsent('cancel')
+      })
+
+      // { ok, pending, error } 를 받아 동의 화면을 보여주고, 사용자 선택에 따라 confirm/cancel 을 부른다.
+      // 성공 시 설치된 확장의 이름으로 토스트를 띄운다.
+      async function reviewAndInstall(prepareResult) {
+        if (!prepareResult.ok) {
+          if (prepareResult.error !== 'canceled') toast(prepareResult.error || '준비 실패', true)
+          return
+        }
+        const pending = prepareResult.pending
+        if (!pending) { toast('설치 정보를 읽지 못했습니다', true); return }
+        const choice = await openConsent(pending)
+        if (choice !== 'install') {
+          await window.internalAPI.extensions.cancelInstall(pending.token)
+          return
+        }
+        const r = await window.internalAPI.extensions.confirmInstall(pending.token)
+        if (r.ok) toast('설치됨: ' + pending.name)
+        else toast(r.error || '설치 실패', true)
+      }
+
       document.getElementById('btn-crx').addEventListener('click', async () => {
-        const r = await window.internalAPI.extensions.installFromCrx()
-        if (!r.ok && r.error !== 'canceled') toast(r.error || '설치 실패', true)
-        else if (r.ok) toast('설치됨')
+        await reviewAndInstall(await window.internalAPI.extensions.installFromCrx())
       })
       document.getElementById('btn-unpacked').addEventListener('click', async () => {
-        const r = await window.internalAPI.extensions.importLocal()
-        if (!r.ok && r.error !== 'canceled') toast(r.error || '실패', true)
-        else if (r.ok) toast('추가됨')
+        await reviewAndInstall(await window.internalAPI.extensions.importLocal())
       })
       document.getElementById('btn-url').addEventListener('click', async () => {
         const url = document.getElementById('url-input').value.trim()
@@ -264,12 +406,8 @@
         toast('다운로드 중…')
         const r = await window.internalAPI.extensions.installFromUrl(url)
         document.getElementById('btn-url').disabled = false
-        if (r.ok) {
-          toast('설치됨')
-          document.getElementById('url-input').value = ''
-        } else {
-          toast(r.error || '설치 실패', true)
-        }
+        if (r.ok) document.getElementById('url-input').value = ''
+        await reviewAndInstall(r)
       })
 
       const drop = document.getElementById('drop')
@@ -283,9 +421,7 @@
           const p = f.path || ''
           if (!p) continue
           if (!/\.(crx|zip)$/i.test(p)) { toast('CRX 파일만 지원합니다: ' + f.name, true); continue }
-          const r = await window.internalAPI.extensions.installFromCrx(p)
-          if (r.ok) toast('설치됨: ' + f.name)
-          else toast(r.error || '실패: ' + f.name, true)
+          await reviewAndInstall(await window.internalAPI.extensions.installFromCrx(p))
         }
       })
 

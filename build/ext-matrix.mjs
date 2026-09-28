@@ -326,41 +326,44 @@ function record(entry) {
 
 // ── 메인 검증 루틴 ───────────────────────────────────────────────────────
 
+// 묶음 J(항목 3, 설치 전 동의) 이후: installFromUrl 은 더 이상 곧바로 로드하지 않고
+// unpack 만 해서 { pending: { token, id, ... } } 를 돌려준다. 이 하네스는 실제 UI 클릭이 아니라
+// IPC 를 직접 두드리므로, 사용자가 "설치" 버튼을 누르는 것과 같은 뜻으로 confirmInstall 을
+// 이어서 부른다(취소 화면 자체는 verify-extension-ux-cdp.mjs U1~U4 가 이미 검증한다 — 여기서는
+// "실제 웹스토어 확장이 동의 뒤에도 여전히 정상 동작하는가"만 본다).
 async function installExtension(ctx, ext) {
   const webstoreUrl = `https://chromewebstore.google.com/detail/x/${ext.id}`
   try {
-    const res = await callApi(ctx.chromeSession, 'extensions.installFromUrl', [webstoreUrl], { timeoutMs: 45_000 })
-    return res
+    const staged = await callApi(ctx.chromeSession, 'extensions.installFromUrl', [webstoreUrl], { timeoutMs: 45_000 })
+    if (!staged || staged.ok !== true || !staged.pending?.token) {
+      return { ok: false, id: staged?.pending?.id, error: staged?.error ?? '동의 미리보기(pending)를 받지 못함' }
+    }
+    const confirmed = await callApi(ctx.chromeSession, 'extensions.confirmInstall', [staged.pending.token], { timeoutMs: 20_000 })
+    return confirmed
   } catch (err) {
     return { ok: false, error: `IPC/CDP 예외: ${err.message}` }
   }
 }
 
 async function checkActionRenders(ctx, realId) {
-  // browserAPI.extensions.invokeAction 은 popup(또는 옵션 페이지)을 새 탭으로 연다
-  // (app/main/extensions/adapter.ts invokeExtensionAction — 정식 팝업 창 미구현, 새 탭 폴백).
-  // 실사용자가 툴바 아이콘을 누르는 것과 동일한 코드 경로.
-  const before = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
-  const beforeIds = new Set(before.map((t) => t.id))
+  // 묶음 J(항목 1) 이후: browserAPI.extensions.invokeAction 은 popup 이 있으면 **탭이 아니라
+  // 앵커된 별도 창**으로 연다(app/main/extensions/popup.ts). popup 이 없는 확장은 여전히
+  // 옵션 페이지를 새 **탭**으로 연다(openExtensionOptions — 이 경로는 그대로다). 그래서 먼저
+  // CDP 타깃 목록에서 새 팝업 창을 찾고, 없으면 탭 목록에서 새 탭(옵션 폴백)을 찾는다.
+  const beforeTargetIds = new Set((await getTargetList(ctx.port)).map((t) => t.id))
+  const beforeTabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
+  const beforeTabIds = new Set(beforeTabs.map((t) => t.id))
   const res = await callApi(ctx.chromeSession, 'extensions.invokeAction', [realId], { timeoutMs: 10_000 })
   if (!res || res.ok !== true) return { rendered: false, note: `invokeAction 실패: ${res?.error ?? '(unknown)'}` }
 
   try {
-    const tab = await pollUntil(async () => {
-      const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
-      return tabs.find((t) => !beforeIds.has(t.id) && typeof t.url === 'string' && t.url.startsWith(`chrome-extension://${realId}/`)) ?? null
-    }, { timeoutMs: 6000, label: 'action popup/options 탭' })
-
-    await pollUntil(async () => {
-      const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
-      const t = tabs.find((x) => x.id === tab.id)
-      return t && !t.loading
-    }, { timeoutMs: 8000, label: '액션 탭 로드 완료' })
-
     const target = await pollUntil(async () => {
       const list = await getTargetList(ctx.port)
-      return list.find((x) => x.url === tab.url) ?? null
-    }, { timeoutMs: 5000, label: '액션 탭 CDP 타깃' })
+      return list.find((t) => !beforeTargetIds.has(t.id) && typeof t.url === 'string'
+        && t.url.startsWith(`chrome-extension://${realId}/`)) ?? null
+    }, { timeoutMs: 8000, label: 'action popup 창(또는 옵션 탭)' })
+
+    await new Promise((r) => setTimeout(r, 500)) // 팝업 리사이즈·로드 여유(popup.ts 의 220ms 재측정 뒤)
 
     const session = await connectSession(target, `ext-action:${realId}`)
     ctx.openSessions.push(session)
@@ -368,11 +371,22 @@ async function checkActionRenders(ctx, realId) {
     const htmlLen = await evaluate(session, 'document.documentElement ? document.documentElement.outerHTML.length : -1').catch(() => -1)
     const isChromeError = await evaluate(session, `document.documentElement && document.documentElement.getAttribute('data-bb-href') === 'chrome-error://chromewebdata/'`).catch(() => false)
     const readyState = await evaluate(session, 'document.readyState').catch(() => 'unknown')
-    await callApi(ctx.chromeSession, 'tabs.close', [tab.id]).catch(() => {})
+
+    // 정리: 옵션 탭이면 tabs.close, 팝업 창이면 같은 액션을 다시 "눌러" 토글로 닫는다.
+    const isNewTab = !beforeTabIds.has(target.id) && (await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId]))
+      .some((t) => t.url === target.url && !beforeTabIds.has(t.id))
+    if (isNewTab) {
+      const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
+      const tab = tabs.find((t) => t.url === target.url && !beforeTabIds.has(t.id))
+      if (tab) await callApi(ctx.chromeSession, 'tabs.close', [tab.id]).catch(() => {})
+    } else {
+      await callApi(ctx.chromeSession, 'extensions.invokeAction', [realId]).catch(() => {})
+    }
+
     // bodyLen>=0 만으로는 빈 chrome-error 페이지(로드 "성공"으로 보이는 실패)를 오탐한다 —
     // 실제 컨텐츠가 있어야(문서 HTML 이 최소한의 크기를 넘어야) "렌더됨"으로 판정한다.
     const rendered = readyState === 'complete' && !isChromeError && (bodyLen > 0 || htmlLen > 200)
-    return { rendered, note: `readyState=${readyState}, bodyTextLen=${bodyLen}, htmlLen=${htmlLen}, isChromeError=${isChromeError}, url=${tab.url}` }
+    return { rendered, note: `readyState=${readyState}, bodyTextLen=${bodyLen}, htmlLen=${htmlLen}, isChromeError=${isChromeError}, url=${target.url}, isNewTab=${isNewTab}` }
   } catch (err) {
     return { rendered: false, note: `팝업/옵션 탭 확인 실패: ${err.message}` }
   }

@@ -3,7 +3,7 @@ import { IPC } from '../../shared/ipc-channels'
 import {
   extensionEvents, importLocalUnpackedDir, installFromCrx, installFromUrl,
   invokeExtensionAction, listExtensions, openExtensionOptions, removeExtension,
-  setExtensionEnabled,
+  setExtensionEnabled, confirmPendingInstall, cancelPendingInstall,
 } from '../extensions/adapter'
 import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
 import { isTrustedSender } from './trust'
@@ -56,6 +56,20 @@ export function registerExtensionsIpc(): void {
     return installFromUrl(args.url)
   })
 
+  // 설치 전 동의 화면(묶음 J 항목 3) — installFromCrx/installFromUrl/importLocal 은 이제 준비만
+  // 하고(unpack + 권한 목록 추출) 실제 로드는 이 둘 중 하나를 불러야 일어난다.
+  ipcMain.handle(IPC.extensions.confirmInstall, (e, args: { token: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
+    if (!args?.token) return { ok: false, error: 'missing token' }
+    return confirmPendingInstall(args.token)
+  })
+
+  ipcMain.handle(IPC.extensions.cancelInstall, (e, args: { token: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
+    if (!args?.token) return { ok: false, error: 'missing token' }
+    return cancelPendingInstall(args.token)
+  })
+
   ipcMain.handle(IPC.extensions.remove, (e, args: { id: string }) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     return removeExtension(args.id)
@@ -73,11 +87,13 @@ export function registerExtensionsIpc(): void {
     return openExtensionOptions(args.id, wid)
   })
 
-  ipcMain.handle(IPC.extensions.invokeAction, (e, args: { id: string; windowId?: string }) => {
+  ipcMain.handle(IPC.extensions.invokeAction, (
+    e, args: { id: string; windowId?: string; anchorRect?: { x: number; y: number; width: number; height: number } },
+  ) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     const wid = args.windowId ?? resolveWindowId(e)
     if (!wid) return { ok: false, error: 'no window' }
-    return invokeExtensionAction(args.id, wid)
+    return invokeExtensionAction(args.id, wid, args.anchorRect)
   })
 
   ipcMain.handle(IPC.extensions.importLocal, async (e) => {
