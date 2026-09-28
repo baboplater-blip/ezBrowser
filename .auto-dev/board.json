@@ -1,10 +1,10 @@
 {
   "schema": "auto-dev/task-board@1",
   "project_id": null,
-  "task_id": "social-workflows-20260918",
+  "task_id": "general-engagement-20260920",
   "title": "이미지 생성→SNS 게시 / 관심 블로그 댓글·좋아요",
-  "revision": 188,
-  "updated_at": "2026-09-20T06:15:13Z",
+  "revision": 206,
+  "updated_at": "2026-09-20T08:35:23Z",
   "columns": [
     "대기",
     "진행",
@@ -1262,40 +1262,117 @@
     {
       "id": "run:run-20260920T044803Z-f0f99e",
       "title": "Claude 실행 — Previous run ended unclear with pending_background while IPC/UI and harness work",
-      "column": "진행",
+      "column": "완료",
       "owner": "Claude 팀장(lead)",
       "model": "opus",
-      "step": "세션 실행 중",
-      "evidence": null,
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260920T044803Z-f0f99e)의 구조화 완료 기록: pass (합격 기준 11건 전건 통과, 부정 사례 5건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가), (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요); 전체 요청 완료: 아니오",
       "blocker": null,
       "detail": "Previous run ended unclear with pending_background while IPC/UI and harness workers unfinished. Resume SAME authorized scope to actual completion. First reconcile existing worker state/results, do not duplicate edits/workers. restoreKey plumbing reportedly main typecheck passed, criteria W1-W10/T9 already fixed; finish target selection UI/IPC and actual-app multiwindow task rebinding tests. Main rejects intermediate waiting report as completion. Wait for own workers, integrate, fix failures, final npm verify, actual rc17 NSIS and packaged smoke, valid completion record before exiting. Maintain original scope/constraints; no new unrelated feature or paid/live external action. social-workflow preparePublishTab stale tab-id risk is related to target recovery: inspect whether restored durable task flow can still publish to wrong tab; fix only if necessary to satisfy original exact-target criterion, otherwise clearly document with reproduction not vague claim. Original required criteria remain mandatory. Report file .auto-dev/task-tab-recovery-20260920-final.md, board/efficiency. Return consolidated final receipt only after implementation tests packaging; if genuinely blocked provide precise blocker and safe checkpoint, never success for pending workers.",
       "tags": [
         "run",
-        "resume"
+        "success",
+        "5260.3s"
       ],
       "required": true,
       "run_id": "run-20260920T044803Z-f0f99e",
-      "updated_at": "2026-09-20T04:48:03Z"
+      "updated_at": "2026-09-20T06:15:44Z"
+    },
+    {
+      "id": "run:run-20260920T061614Z-677962",
+      "title": "Claude 실행 — Finish ONLY missing required validation: original briefing required actual user",
+      "column": "완료",
+      "owner": "Claude 팀장(lead)",
+      "model": "claude-opus-5",
+      "step": "종료 status=success",
+      "evidence": "이번 실행(run-20260920T061614Z-677962)의 구조화 완료 기록: pass (합격 기준 9건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가, (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다; 전체 요청 완료: 아니오",
+      "blocker": null,
+      "detail": "Finish ONLY missing required validation: original briefing required actual user target selection UI, receipt says main IPC only. Existing rc17 implementation and passed tests accepted, do not repeat broad tests. Use isolated packaged app actual DOM click flow (CDP DOM automation is fine, no direct selection IPC invocation): create missing/ambiguous target task, open recovery target selector, select allowed tab, confirm, then user resume; assert zero action before resume and expected local fixture tab after. Include cancel/no binding and disallowed workspace/incognito excluded or rejected UI, and show uncertainty/critical gate not approved by choosing. Test actual UI, not helper that bypasses React handlers. If missing UI/bug fix minimal and relevant verify + new package rc18 only when production changed; otherwise retain rc17 no unnecessary version/repackage. Keep current user install untouched/local only. Add executed evidence to same final report/completion, efficient receipt. Prior external signing/install restrictions are broader limitations, not contradictions to scoped pass. Do not silently demote actual UI criterion. Finish within 30min if possible; return precise blocker if genuinely unable, not pass missing. No unrelated work.",
+      "tags": [
+        "run",
+        "success",
+        "2348.3s"
+      ],
+      "required": true,
+      "run_id": "run-20260920T061614Z-677962",
+      "updated_at": "2026-09-20T06:55:22Z"
+    },
+    {
+      "id": "task-target-ui-verify",
+      "title": "task-target-ui-verify",
+      "column": "완료",
+      "owner": null,
+      "model": null,
+      "step": "대상 탭 재선택 UI를 실제 DOM 클릭으로 검증(TG1~TG7)",
+      "evidence": "verify-task-target-ui-cdp.mjs 7/7 PASS · verify --quick --skip-build 16/16 · 제품 무변경으로 rc.17 유지",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-20T06:54:50Z"
+    },
+    {
+      "id": "run:run-20260920T073021Z-f71b41",
+      "title": "Claude 실행 — Continue authorized development. Bounded confirmed gap from rc15: general durabl",
+      "column": "차단",
+      "owner": "Claude 팀장(lead)",
+      "model": "opus",
+      "step": "종료 status=failed",
+      "evidence": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로)",
+      "blocker": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로)",
+      "detail": "Continue authorized development. Bounded confirmed gap from rc15: general durable tasks outside engageGuard have no comment/like ledger; agent.ts1398 protects only engageGuard, task-runtime recordExternalWrite only publish classifier. Reproduce response lost or restart causing duplicate comment/like-toggle in general task without special marker, then minimally protect identifiable comment/like effects using existing durable external-write/uncertainty mechanisms. No invent all-sites guarantee, no blocking every click, no global default account ledger conflating sessions. Scope task/account or partition and specific observed target; ambiguous identity must pause with useful recovery, not falsely mark completed. Preserve ability to intentionally unlike when explicitly requested; do not confuse comment composer open with submit. Favor structured action metadata over expanding fragile prose regex; keep central gate. Need observed before/after external fixture counters. Required actual app/UI tests: general task comment commits response lost -> no second comment across retry and crash/restart; like commits then timeout -> no toggle off; normal safe read/navigation and uncommitted failure recover; different target legitimate action allowed; explicit intended unlike normal behavior; missing/ambiguous target recovery usable; storage failure no side effect; existing dedicated engageGuard/quota/publish/task-tab mapping regressions unchanged. Use real UI for any new recovery control, do",
+      "tags": [
+        "run",
+        "failed",
+        "3079.5s"
+      ],
+      "required": true,
+      "run_id": "run-20260920T073021Z-f71b41",
+      "updated_at": "2026-09-20T08:21:41Z"
+    },
+    {
+      "id": "general-engage-20260920",
+      "title": "general-engage-20260920",
+      "column": "진행",
+      "owner": null,
+      "model": null,
+      "step": "코드리뷰 High 5·Medium 6 반영(기록시점 이동·Enter제출 포함·aria-pressed·제목 유일성) + rc 재패키징",
+      "evidence": "typecheck 3/3 · 순수함수 general-engage 11/11·agent-gate 9/9·engage-ledger 54·engage-durability 6 · package 17:15",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-20T08:16:36Z"
+    },
+    {
+      "id": "gpt-finish-general-engagement",
+      "title": "GPT 전환: 일반 댓글·좋아요 수정 및 검증",
+      "column": "완료",
+      "owner": "GPT",
+      "model": "gpt-6-astra",
+      "step": "수정 검토 검증 rc.18 설치파일 생성 완료",
+      "evidence": "verify 20/20; local app E2E 19/19; NSIS rc.18 생성; .auto-dev/general-engagement-20260920-final.md",
+      "blocker": null,
+      "detail": null,
+      "tags": [],
+      "required": true,
+      "run_id": null,
+      "updated_at": "2026-09-20T08:35:23Z"
     }
   ],
   "summary": {
-    "all_requested_work_complete": false,
+    "all_requested_work_complete": true,
     "remaining_required": [],
-    "blockers": [
-      "코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가)",
-      "rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요)"
-    ],
-    "optional_next": [
-      "대상 선택 UI 를 화면 클릭으로 훑는 DOM 검사(이번엔 메인 IPC 경로로만 검증)",
-      "verify:full 전체 완주(이번엔 quick 19단계 + 영향 범위 하네스만)"
-    ],
+    "blockers": [],
+    "optional_next": [],
     "note": null,
-    "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가), (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요); 전체 요청 완료: 아니오"
+    "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
   },
   "source": {
-    "kind": "completion-record",
-    "run_id": "run-20260920T044803Z-f0f99e",
-    "at": "2026-09-20T06:15:13Z"
+    "kind": "cli",
+    "at": "2026-09-20T08:35:23Z"
   },
   "warnings": []
 }

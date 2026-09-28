@@ -1,0 +1,98 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260920T073021Z-f71b41",
+  "recorded_at": "2026-09-20T08:21:41Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260920T073021Z-f71b41",
+    "project_id": "browser-build-36466a626d",
+    "status": "failed",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로)",
+    "exit_code": 1,
+    "timed_out": false,
+    "session_id": "b0e692aa-d8cc-4014-9fba-155196a69889",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "none",
+    "criteria": [],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": false,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260920T073021Z-f71b41"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 3079.5,
+        "context_chars": 11815,
+        "total_tokens": 2873309,
+        "cache_read_tokens": 136705657
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9376,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 460,
+          "output": 224605,
+          "cache_read": 92496621,
+          "cache_creation": 1284949
+        },
+        "claude-sonnet-5": {
+          "input": 218,
+          "output": 182047,
+          "cache_read": 44209036,
+          "cache_creation": 1171632
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\general-engagement-20260920\\run-20260920T073021Z-f71b41-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\general-engagement-20260920\\run-20260920T073021Z-f71b41-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "You've hit your session limit · resets 5:30pm (Asia/Seoul)",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260920T073021Z-f71b41\\stream.jsonl",
+    "error": null
+  }
+}

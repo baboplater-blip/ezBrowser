@@ -1,0 +1,159 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260920T061614Z-677962",
+  "recorded_at": "2026-09-20T06:55:22Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260920T061614Z-677962",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260920T061614Z-677962)의 구조화 완료 기록: pass (합격 기준 9건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가, (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다; 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "d8144202-9bd9-4214-9074-f68e9e28f066",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 카드의 \"🎯 대상 탭 선택\" 버튼을 눌러 후보 목록을 연다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "허용된 탭을 DOM 클릭으로 고르면 그 탭에 묶인다(실행은 아님)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "고르기만 해서는 아무 페이지도 조작되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "이어가기를 DOM 클릭하면 고른 바로 그 탭에서만 재개된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "고르지 않고 닫으면 아무것도 묶이지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "경계 밖 탭은 UI 에서 고를 수 없다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "대상 선택은 위험 동작 승인이 아니다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "확인 대기 중에는 대상 선택 UI 자체가 없다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "하네스가 \"아무것도 못 찾아서\" 통과하지 않는다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가",
+        "rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다"
+      ],
+      "optional_next": [],
+      "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가, (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260920T061614Z-677962"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 2348.3,
+        "context_chars": 10714,
+        "total_tokens": 484996,
+        "cache_read_tokens": 31798774
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9147,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 178,
+          "output": 76555,
+          "cache_read": 31798774,
+          "cache_creation": 399094
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\task-tab-recovery-20260920\\run-20260920T061614Z-677962-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\task-tab-recovery-20260920\\run-20260920T061614Z-677962-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "rc.17 artifacts untouched (asar still 15:03, installer still 14:56), product source unchanged.\n\n## 결과 — 누락됐던 \"실제 UI\" 검증만 채웠다\n\n직전 수령증의 공백은 정확했다. 기존 `verify-window-tabs`(W4·W5·W6·W9)는 대상 재선택을 **메인 IPC**(`ptaskTargets`/`ptaskSetTarget`) 직접 호출로만 검증하고 있었다. 그 경로가 통과해도 카드에 버튼이 안 뜨거나 후보가 안 그려지면 사용자는 아무것도 못 한다.\n\n**신규 [build/verify-task-target-ui-cdp.mjs](build/verify-task-target-ui-cdp.mjs) — 7/7 PASS (한 번의 end-to-end 실행)**. 대상 선택 경로에 IPC를 **쓰지 않는다**: `.ai-target-open` / `.ai-target-pick[data-tab-id]` / 이어가기 버튼을 DOM에서 찾아 그 요소를 클릭한다(React onClick 그대로 통과). \"무엇이 실행됐는가\"는 픽스처 서버의 loadId 카운터로만 판정한다 — 상태 문구가 아니라 실제 도착한 요청으로.\n\n| | 확인한 것 | 증거 |\n|---|---|---|\n| TG1 | 선택 버튼 노출 → 클릭 → 후보 목록이 DOM에 그려짐 | 후보 2개, \"원래 대상: …/page?slot=A-orig · 창 1 · 기본\" |\n| TG2 | 후보 DOM 클릭 → 묶임(실행 아님), **이어가기 전 조작 0**, 이어가기 후 고른 탭에만 | 선택 직후 `{L3:0,L4:0}` → 이어가기 후 **고른 탭 L3=15 · 미끼 L4=0 · 옛 탭 L2=3 불변** |\n| TG3 | 고르지 않고 닫기 → 아무 탭에도 안 묶임 | `tab-target` 유지, 선택버튼 복귀, 조작 0 |\n| TG4 | 다른 워크스페이스·시크릿 탭은 목록에 없고 클릭 자체 불가 | 보임=false 둘 다, DOM 클릭=`not-in-list` |\n| TG5 | 선택 ≠ 승인 — 골라서 이어가도 결제는 관문에서 정지 | `waitCause=confirm`, **결제 실행 0회(L11=0)** |\n| TG6 | 확인 대기에서는 선택 UI가 아예 없음 | 선택버튼·픽커 없음, 승인/거부만 |\n| TG7 | 하네스 공회전 방지 | 없는 카드/후보 → 전부 `no-card` |\n\n부정 사례 6건이 포함돼 있고, TG5의 셋업은 **결제 관문이 사용자의 선택 이후에야 처음 나타나도록** 고쳤다(처음엔 셋업이 관문을 미리 승인해 버려 판정이 흐렸다).\n\n**제품은 손대지 않았다** → rc.17 유지, 재패키징·버전 올림 없음. `verify:full`에 `task-target-ui`로 등록(15분 상한). 회귀 확인은 `verify --quick --skip-build` **16/16**으로 했다 — 산출물을 다시 굽지 않으려고 의도적으로 `--skip-build`를 썼고, 그래서 status.md에는 기록되지 않는다(부분 실행 규칙대로). 검증은 전부 격리 프로필(`--user-data-dir`)이며 사용자 설치본은 건드리지 않았다.\n\n**한 가지 짚어둘 것**: 중간에 \"IPC엔 작업이 있는데 카드가 0개\"가 나와 제품 결함으로 보고할 뻔했다. 렌더러 오류·broadcast 수신·패널 재마운트까지 실제로 재고 나서 원인이 **내 하네스**임을 확정했다 — 영속 작업 카드는 **에이전트 모드에서만** 그려지는데(챗 모드는 별개의 `.ai-body` 분기) 모드를 안 바꿨다. 이 함정은 `resumeTask`가 `waiting-user`를 거부한다는 점, 실행 중 탭이 사라지면 `user-fix`로 간다는 점과 함께 하네스 주석에 남겼다.\n\n**남은 차단(자율 해결 불가, 이번 범위 밖)**: ① 코드 서명 `.pfx` 없음 — rc.17 미서명 ② rc.17 설치파일의 설치→부팅→제거 미검증(이 PC에 사용자 실설치본이 있어 `verify-install`이 스스로 BLOCKE",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260920T061614Z-677962\\stream.jsonl",
+    "error": null
+  }
+}

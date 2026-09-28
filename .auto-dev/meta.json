@@ -185,9 +185,27 @@
       "run_id": "run-20260920T042617Z-732aef",
       "status": "unclear",
       "at": "2026-09-20T04:47:39Z"
+    },
+    {
+      "session_id": "3863a0eb-23f7-47ff-a1fd-7dbb2c57192c",
+      "run_id": "run-20260920T044803Z-f0f99e",
+      "status": "success",
+      "at": "2026-09-20T06:15:44Z"
+    },
+    {
+      "session_id": "d8144202-9bd9-4214-9074-f68e9e28f066",
+      "run_id": "run-20260920T061614Z-677962",
+      "status": "success",
+      "at": "2026-09-20T06:55:22Z"
+    },
+    {
+      "session_id": "b0e692aa-d8cc-4014-9fba-155196a69889",
+      "run_id": "run-20260920T073021Z-f71b41",
+      "status": "failed",
+      "at": "2026-09-20T08:21:41Z"
     }
   ],
-  "last_run_id": "run-20260920T044803Z-f0f99e",
+  "last_run_id": "run-20260920T073021Z-f71b41",
   "baseline": {
     "user_quality": null,
     "interventions": null,

@@ -377,6 +377,236 @@ async function realClickXY(wc: WebContents, x: number, y: number, prof: InputPro
   lastMouse.set(wc, { x: ux, y: uy })
 }
 
+// ===== 클릭 대상이 "어느 글" 인가 (댓글·좋아요 중복 방지용 신원) =====
+//
+// 왜 페이지 주소만으로는 안 되는가: 피드에서는 글 10개가 **한 주소**를 공유한다. 주소로만 키를 잡으면
+// 첫 글에 댓글을 단 뒤 둘째 글의 댓글이 "이미 했다"로 막힌다(과차단). 반대로 아무 키나 쓰면 재시도가
+// 같은 글에 두 번 단다(미차단).
+//
+// 그래서 클릭한 요소에서 **위로 올라가며** 그 글의 정체를 찾는다.
+//  ① 조상 안의 퍼머링크(`<a href>`, 현재 주소와 다른 http(s)) — 가장 안정적이다.
+//  ② 없으면 조상의 제목(h1~h4) — 댓글이 달려 본문 아래가 길어져도 제목은 그대로다.
+//     (본문 앞부분을 지문으로 쓰면 댓글이 추가되는 순간 지문이 바뀌어 중복 방지가 샌다.)
+//  ③ 둘 다 없으면 **모른다고 답한다**(ambiguous). 호출자가 사람에게 묻는다 — 추측해서 누르지 않는다.
+//
+// ⚠ 제목에서 **폼 안의 구획 제목은 제외한다**(2026-09-20 픽스처 실측). 댓글 위젯은 보통
+//   `<h3>댓글</h3>` 같은 라벨을 품고 있어서, 그걸 글 제목으로 삼으면 **서로 다른 글 둘이 같은 키**를
+//   갖는다(둘째 글의 정당한 댓글이 중복으로 막힌다). 글 제목은 제출 폼 안에 있지 않다.
+export interface EngageTargetProbe {
+  /** 그 글의 고유 주소(찾았을 때만). */
+  permalink: string
+  /** 제목 텍스트(퍼머링크가 없을 때의 차선 신원). */
+  heading: string
+  /**
+   * 이 화면에 **같은 종류의 대상이 몇 개** 있는가(구조적 개수).
+   * 1 이면 이 페이지가 글 하나짜리라는 뜻이라, 신원을 못 찾아도 페이지 주소를 키로 쓸 수 있다.
+   * 2 이상인데 신원을 못 찾으면 **정말로 모르는 것**이다 — 그때만 사람에게 묻는다.
+   * (예전엔 "형제가 3개 이상이면 목록" 같은 모양 추측을 썼는데, 항목이 2개인 피드를 놓쳤다.)
+   */
+  peers: number
+  /**
+   * **이 대상 안에** 입력된 초안이 있는가 — 등록 버튼인지 작성창 열기인지 가르는 구조 신호.
+   * `null` = 입력칸을 못 찾아 판별 불가. 화면 전체를 보면 피드에서 **다른 글의 초안**에 속으므로
+   * 클릭한 컨트롤이 속한 폼(없으면 그 글 덩이) 안에서만 본다.
+   */
+  draftInScope: boolean | null
+  /**
+   * 이 컨트롤이 **이미 켜져 있는 토글**인가(aria-pressed / aria-checked / aria-selected).
+   * `null` = 그런 표시가 없음. 관찰 스키마(`ObservedElement.state`)는 aria-pressed 를 읽지 않아,
+   * "이름은 그냥 좋아요인데 이미 눌려 있는" 가장 흔한 마크업을 놓쳤다(2026-09-20 리뷰).
+   * 좌표 클릭(click_at)에는 관찰 요소가 아예 없으므로, 여기서 읽는 것이 유일한 경로이기도 하다.
+   */
+  pressed: boolean | null
+  /**
+   * 이 대상이 속한 폼을 **제출하는 컨트롤의 이름**. 댓글이 클릭이 아니라 Enter·폼 제출로 나갈 때,
+   * "무슨 제출인가" 를 판단할 유일한 구조적 단서다(입력 동작의 라벨에는 사용자가 친 글자뿐이다).
+   */
+  submitLabel: string
+  /** 조사 자체가 실패했는가(스크립트 오류·요소 소실). */
+  failed: boolean
+}
+
+const EMPTY_TARGET_PROBE: EngageTargetProbe = { permalink: '', heading: '', peers: 0, draftInScope: null, pressed: null, submitLabel: '', failed: true }
+
+// 인페이지 공통부 — 요소 하나를 받아 조상을 훑는다.
+const ENGAGE_TARGET_FN = `function engageTarget(el){
+  var out={permalink:'',heading:'',peers:0,draftInScope:null,pressed:null,submitLabel:''};
+  if(!el) return out;
+  function txt(n){ try{ return ((n.textContent||'')+'').replace(/\s+/g,' ').trim(); }catch(e){ return ''; } }
+  // 클릭 대상이 버튼 안의 아이콘·글자일 수 있다 — 실제로 눌리는 컨트롤로 올라가서 본다.
+  var ctl=el;
+  try{ if(el.closest) ctl=el.closest('button,[role=button],a[href],input')||el; }catch(e){}
+  // ① 토글 상태 — **관찰 스키마가 읽지 않는 aria-pressed 까지** 여기서 직접 본다.
+  //    이게 없으면 "이름은 그냥 좋아요인데 이미 눌려 있는" 가장 흔한 마크업에서 취소를 못 알아본다.
+  try{
+    var node0=ctl, d0=0, val=null;
+    while(node0&&node0.nodeType===1&&d0++<3&&val===null){
+      var ap=node0.getAttribute?(node0.getAttribute('aria-pressed')||node0.getAttribute('aria-checked')||node0.getAttribute('aria-selected')):null;
+      if(ap==='true') val=true; else if(ap==='false') val=false;
+      node0=node0.parentElement;
+    }
+    out.pressed=val;
+  }catch(e){}
+  // ② 이 대상 안의 초안 — 클릭한 컨트롤이 속한 폼(없으면 가장 가까운 글 덩이) 안에서만 본다.
+  try{
+    var scope=ctl.closest?(ctl.closest('form')||ctl.closest('article,li,section')):null;
+    if(scope){
+      var ins=scope.querySelectorAll('textarea,input[type=text],input:not([type]),[contenteditable=true]');
+      if(ins.length>0){
+        out.draftInScope=false;
+        for(var ii=0;ii<ins.length;ii++){
+          var iv=ins[ii].value!=null?ins[ii].value:txt(ins[ii]);
+          if(String(iv).trim()){ out.draftInScope=true; break; }
+        }
+      }
+    }
+  }catch(e){}
+  // ②-b 이 폼을 **제출하는 컨트롤의 이름** — 댓글이 클릭이 아니라 Enter·폼 제출로 나갈 때,
+  //     무슨 제출인지 판단할 유일한 구조적 단서다(입력 동작의 라벨에는 사용자가 친 글자뿐이다).
+  try{
+    var sc=ctl.closest?ctl.closest('form'):null;
+    if(sc){
+      var cands=sc.querySelectorAll('button[type=submit],input[type=submit],button:not([type]),button[type=button],[role=button]');
+      for(var si=cands.length-1;si>=0;si--){   // 제출 버튼은 보통 폼의 끝에 있다
+        var sn=txt(cands[si])||(cands[si].getAttribute&&(cands[si].getAttribute('aria-label')||cands[si].getAttribute('value')))||'';
+        if(sn){ out.submitLabel=String(sn).slice(0,120); break; }
+      }
+    }
+  }catch(e){}
+  // ③ 같은 종류의 대상 개수 — 같은 곳으로 보내는 폼 수, 폼이 없으면 같은 이름의 버튼 수.
+  //    이름의 숫자는 지운다("좋아요 12" vs "좋아요 5" 가 다른 종류로 갈리면 피드를 단일 글로 오인한다).
+  try{
+    var f=ctl.closest?ctl.closest('form'):null;
+    if(f){
+      var act=f.getAttribute('action')||'';
+      var fs=document.querySelectorAll('form');
+      for(var fi=0;fi<fs.length;fi++){ if((fs[fi].getAttribute('action')||'')===act) out.peers++; }
+    } else {
+      var norm=function(t){ return String(t||'').replace(/[0-9,.]+/g,'').replace(/\s+/g,' ').trim(); };
+      var mine=norm(txt(ctl)||(ctl.getAttribute&&ctl.getAttribute('aria-label'))||'');
+      if(mine){
+        var bs=document.querySelectorAll('button,[role=button],a[href]');
+        // 아주 큰 문서에서는 전수 순회를 하지 않는다(레이아웃 비용으로 탭을 붙잡는다).
+        if(bs.length<=3000){
+          for(var bi=0;bi<bs.length;bi++){
+            if(norm(txt(bs[bi])||(bs[bi].getAttribute&&bs[bi].getAttribute('aria-label')))===mine) out.peers++;
+          }
+        }
+      }
+    }
+  }catch(e){}
+  // ④ 신원 — 퍼머링크(제목 링크 우선) → 제목.
+  var doc=el.ownerDocument||document;
+  var here='';try{here=(doc.defaultView&&doc.defaultView.location&&doc.defaultView.location.href)||'';}catch(e){}
+  var hereNoHash=here.split('#')[0];
+  var inForm=function(n){ try{ return !!(n.closest&&n.closest('form')); }catch(e){ return false; } };
+  var usable=function(n){ var h=''; try{h=n.href||'';}catch(e){h='';}
+    if(!h||!/^https?:/i.test(h)) return ''; if(h.split('#')[0]===hereNoHash) return ''; if(inForm(n)) return '';
+    return h.slice(0,600); };
+  // 문서 전체의 제목 텍스트 빈도 — **여러 번 나오는 제목은 신원이 될 수 없다.**
+  // 댓글 위젯의 구획 라벨("댓글"·"Comments")이 폼 *밖*에 형제로 놓이는 마크업이 흔하고(픽스처 실측),
+  // 그걸 신원으로 삼으면 **같은 페이지의 서로 다른 글이 같은 키**가 되어 둘째 글이 중복으로 막힌다.
+  // 글 제목은 그 페이지에서 유일하다 — 유일하지 않으면 그것은 템플릿 라벨이다.
+  var headCount={};
+  try{
+    var allH=document.querySelectorAll('h1,h2,h3,h4,[role=heading]');
+    if(allH.length<=500){
+      for(var hi=0;hi<allH.length;hi++){ var hk=txt(allH[hi]); if(hk) headCount[hk]=(headCount[hk]||0)+1; }
+    }
+  }catch(e){}
+  var node=ctl, hops=0;
+  var STOP={BODY:1,HTML:1,MAIN:1,NAV:1,HEADER:1,FOOTER:1,ASIDE:1};
+  var titleLink='';
+  while(node && node.nodeType===1 && hops++<12){
+    // 글 한 덩이를 넘어 문서 전체로 올라가면 **엉뚱한 글의 링크**를 신원으로 삼는다(사이드바·추천·주입된 본문).
+    if(STOP[node.tagName]) break;
+    try{ if(txt(node).length>6000) break; }catch(e){}
+    if(!titleLink){
+      var hls=[];try{hls=node.querySelectorAll('h1 a[href],h2 a[href],h3 a[href],h4 a[href],[role=heading] a[href]');}catch(e){hls=[];}
+      for(var k=0;k<hls.length;k++){ var hv=usable(hls[k]); if(hv){ titleLink=hv; break; } }
+    }
+    // 일반 링크는 작성자·프로필일 수 있으므로 명시적인 bookmark 링크만 신원으로 쓴다.
+    if(!titleLink){
+      var links=[];try{links=node.querySelectorAll('a[href][rel~=bookmark]');}catch(e){links=[];}
+      for(var i=0;i<links.length;i++){ var lv=usable(links[i]); if(lv){ out.permalink=lv; break; } }
+    }
+    if(!out.heading){
+      var hs=[];try{hs=node.querySelectorAll('h1,h2,h3,h4,[role=heading]');}catch(e){hs=[];}
+      for(var j=0;j<hs.length;j++){
+        // 폼 안의 구획 제목은 글의 신원이 아니다.
+        if(inForm(hs[j])) continue;
+        var ht=txt(hs[j]);
+        if(!ht) continue;
+        // 페이지에서 유일하지 않은 제목도 신원이 아니다(위 headCount 주석 참고).
+        if((headCount[ht]||0)>1) continue;
+        out.heading=ht.slice(0,200); break;
+      }
+    }
+    // 가장 가까운 글/목록 항목까지 조사한 뒤 멈춘다. 부모 피드의 형제 글은 대상이 아니다.
+    var role=node.getAttribute?node.getAttribute('role'):'';
+    if(node.tagName==='ARTICLE'||node.tagName==='LI'||role==='article'||role==='listitem') break;
+    node=node.parentElement;
+  }
+  if(titleLink) out.permalink=titleLink;
+  return out;
+}`
+
+/** ref 로 지정된 요소가 속한 "글" 의 신원. 실패하면 failed=true(호출자가 모름으로 처리). */
+export async function probeEngageTargetByRef(wc: WebContents, ref: number, epoch?: string): Promise<EngageTargetProbe> {
+  if (wc.isDestroyed()) return EMPTY_TARGET_PROBE
+  const t = await targetFor(ref, epoch, { scrollIntoView: false })
+  if (isRefFail(t)) return EMPTY_TARGET_PROBE
+  try {
+    const r = (await runInTarget(wc, t, `
+(function(){
+  ${PICK_FN}
+  ${ENGAGE_TARGET_FN}
+  var el = pick(${t.localRef}${pickCallArg(epoch)}); if(!el) return null;
+  return engageTarget(el);
+})()
+`)) as Partial<EngageTargetProbe> | null
+    if (!r) return EMPTY_TARGET_PROBE
+    const peers = Number(r.peers)
+    return {
+      permalink: String(r.permalink ?? ''),
+      heading: String(r.heading ?? ''),
+      peers: Number.isFinite(peers) && peers > 0 ? Math.floor(peers) : 0,
+      draftInScope: typeof r.draftInScope === 'boolean' ? r.draftInScope : null,
+      pressed: typeof r.pressed === 'boolean' ? r.pressed : null,
+      submitLabel: String(r.submitLabel ?? ''),
+      failed: false,
+    }
+  } catch { return EMPTY_TARGET_PROBE }
+}
+
+/** 좌표 클릭(click_at)용 — 그 지점의 요소가 속한 "글" 의 신원. */
+export async function probeEngageTargetAtPoint(wc: WebContents, xPct: number, yPct: number): Promise<EngageTargetProbe> {
+  if (wc.isDestroyed()) return EMPTY_TARGET_PROBE
+  const x = Number.isFinite(xPct) ? Math.max(0, Math.min(100, xPct)) : 50
+  const y = Number.isFinite(yPct) ? Math.max(0, Math.min(100, yPct)) : 50
+  try {
+    const r = (await wc.executeJavaScript(`
+(function(){
+  ${ENGAGE_TARGET_FN}
+  var el = document.elementFromPoint(${x}/100*innerWidth, ${y}/100*innerHeight);
+  if(!el) return null;
+  return engageTarget(el);
+})()
+`, true)) as Partial<EngageTargetProbe> | null
+    if (!r) return EMPTY_TARGET_PROBE
+    const peers = Number(r.peers)
+    return {
+      permalink: String(r.permalink ?? ''),
+      heading: String(r.heading ?? ''),
+      peers: Number.isFinite(peers) && peers > 0 ? Math.floor(peers) : 0,
+      draftInScope: typeof r.draftInScope === 'boolean' ? r.draftInScope : null,
+      pressed: typeof r.pressed === 'boolean' ? r.pressed : null,
+      submitLabel: String(r.submitLabel ?? ''),
+      failed: false,
+    }
+  } catch { return EMPTY_TARGET_PROBE }
+}
+
 // 클릭 지점이 실제로 그 요소인지 확인 — 스티키 헤더·쿠키 배너·로딩 오버레이가 위를 덮고 있으면
 // 좌표만 보고 누르는 순간 엉뚱한 것이 눌린다. top 문서 좌표 기준(프레임 안 요소는 검사 생략).
 async function pointHitsRef(wc: WebContents, t: ExecTarget, x: number, y: number, epoch?: string): Promise<boolean> {
@@ -692,8 +922,9 @@ async function realTypeRef(wc: WebContents, t: ExecTarget, text: string, submit:
 
 // 화면 백분율 좌표에 실제 클릭(캔버스·커스텀 UI 등 요소 목록 밖 대상).
 // 과제2 U8 — execScript 의 click_at 과 동일하게, 범위 밖 좌표는 경계로 당겨 찍지 않고 거부한다.
-async function realClickAtPct(wc: WebContents, xPct: number, yPct: number, prof: InputProfile = PROFILE_STRICT): Promise<{ ok: boolean; detail: string }> {
+async function realClickAtPct(wc: WebContents, xPct: number, yPct: number, prof: InputProfile = PROFILE_STRICT, report?: { preDispatchFail?: boolean }): Promise<{ ok: boolean; detail: string }> {
   if (!Number.isFinite(xPct) || !Number.isFinite(yPct) || xPct < 0 || xPct > 100 || yPct < 0 || yPct > 100) {
+    if (report) report.preDispatchFail = true
     return { ok: false, detail: `화면 밖 좌표(${xPct}%, ${yPct}%) — xPct·yPct 는 0~100 사이여야 합니다` }
   }
   const vp = await viewportSize(wc)
@@ -782,11 +1013,18 @@ function normalizeKeyName(k: string): string {
 // 의도한 입력칸이 아니라 엉뚱한 편집 영역을 비우고, Enter 가 엉뚱한 폼을 제출한다 — 되돌릴 수 없는
 // 사고가 조용한 실패에서 나온다. 이제 **검증 실패 시 키를 한 개도 보내지 않고 즉시 사유와 함께 실패**한다.
 // (ref 를 아예 주지 않은 경우만 "지금 포커스에 보낸다" 는 의도된 동작이다.)
-export async function pressKey(wc: WebContents, spec: { key: string; ref?: number }, epoch?: string): Promise<{ ok: boolean; detail: string }> {
-  if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
+export async function pressKey(
+  wc: WebContents,
+  spec: { key: string; ref?: number },
+  epoch?: string,
+  // executeInPageAction 과 같은 계약 — **키를 하나도 보내기 전에** 실패했는가.
+  report?: { preDispatchFail?: boolean },
+): Promise<{ ok: boolean; detail: string }> {
+  if (report) report.preDispatchFail = false
+  if (wc.isDestroyed()) { if (report) report.preDispatchFail = true; return { ok: false, detail: 'tab destroyed' } }
   if (spec.ref != null) {
     const t = await targetFor(spec.ref, epoch)
-    if (isRefFail(t)) return { ok: false, detail: `${t.__fail} (ref ${spec.ref}) — 키를 보내지 않았습니다` }
+    if (isRefFail(t)) { if (report) report.preDispatchFail = true; return { ok: false, detail: `${t.__fail} (ref ${spec.ref}) — 키를 보내지 않았습니다` } }
     let focused: unknown = null
     try {
       focused = await runInTarget(wc, t, `
@@ -801,16 +1039,18 @@ export async function pressKey(wc: WebContents, spec: { key: string; ref?: numbe
 })()
 `)
     } catch (err) {
+      if (report) report.preDispatchFail = true
       return { ok: false, detail: `키 대상 요소를 확인할 수 없습니다(${String(err)}) — 키를 보내지 않았습니다` }
     }
     const f = focused as { ok?: boolean; reason?: string } | null
     if (!f || f.ok !== true) {
+      if (report) report.preDispatchFail = true
       return { ok: false, detail: `${f?.reason ?? '요소를 찾을 수 없습니다'} (ref ${spec.ref}) — 키를 보내지 않았습니다` }
     }
   }
   const parts = String(spec.key ?? '').split('+').map((s) => s.trim()).filter(Boolean)
   const keyName = parts.pop() ?? ''
-  if (!keyName) return { ok: false, detail: '키가 비어 있음' }
+  if (!keyName) { if (report) report.preDispatchFail = true; return { ok: false, detail: '키가 비어 있음' } }
   const modMap: Record<string, string> = { control: 'control', ctrl: 'control', shift: 'shift', alt: 'alt', option: 'alt', meta: 'meta', cmd: 'meta', command: 'meta', win: 'meta' }
   const modifiers = parts.map((p) => modMap[p.toLowerCase()]).filter(Boolean) as string[]
   const kc = normalizeKeyName(keyName)
@@ -1453,14 +1693,14 @@ function execScript(action: AgentAction, epoch?: string, localRef?: number): str
       // 과제2 U8 — 화면 밖 비율은 경계로 당겨 찍지 않고 거부한다. 조용히 clamp 하면 모델이 잘못
       // 계산한 좌표(예: 150%)를 "가장자리를 클릭했다"고 오해한 채 다음 단계로 넘어갈 수 있다.
       if (${xPct} < 0 || ${xPct} > 100 || ${yPct} < 0 || ${yPct} > 100) {
-        return { ok: false, detail: '화면 밖 좌표(' + ${xPct} + '%, ' + ${yPct} + '%) — xPct·yPct 는 0~100 사이여야 합니다' };
+        return { ok: false, preDispatchFail: true, detail: '화면 밖 좌표(' + ${xPct} + '%, ' + ${yPct} + '%) — xPct·yPct 는 0~100 사이여야 합니다' };
       }
       // 화면(뷰포트)의 백분율 좌표를 CSS 좌표로 바꿔, 그 지점의 요소에 실제 마우스 이벤트를 보낸다
       // (캔버스·커스텀 UI 처럼 DOM 요소 목록에 안 잡히는 대상도 클릭 가능).
       var vx = ${xPct} / 100 * window.innerWidth;
       var vy = ${yPct} / 100 * window.innerHeight;
       var tgt = document.elementFromPoint(vx, vy);
-      if (!tgt) return { ok: false, detail: '그 위치에 요소가 없습니다 (' + Math.round(vx) + ',' + Math.round(vy) + ')' };
+      if (!tgt) return { ok: false, preDispatchFail: true, detail: '그 위치에 요소가 없습니다 (' + Math.round(vx) + ',' + Math.round(vy) + ')' };
       var mo = { bubbles: true, cancelable: true, clientX: vx, clientY: vy, view: window, button: 0 };
       try {
         tgt.dispatchEvent(new MouseEvent('mousemove', mo));
@@ -1475,7 +1715,7 @@ function execScript(action: AgentAction, epoch?: string, localRef?: number): str
     // 과제1의 상세 사유 — 이 자리가 "주 경로"다: executeInPageAction 의 사람 입력이 실패하면 항상
     // 여기(합성 폴백)로 떨어지므로, 세대·프레임·이름 중 무엇이 안 맞았는지가 최종적으로 사용자·에이전트에
     // 보이는 detail 이 된다(fallback() 이 이 detail 을 그대로 실어 나른다).
-    if (!el) return { ok: false, detail: pickReasonText(pick.reason) + ' (ref ' + ${ref} + ')' };
+    if (!el) return { ok: false, preDispatchFail: true, detail: pickReasonText(pick.reason) + ' (ref ' + ${ref} + ')' };
     var win = winOf(el);
     el.scrollIntoView({ block: 'center' });
     if (act === 'click') { el.click(); return { ok: true, detail: 'clicked' }; }
@@ -1520,19 +1760,19 @@ function execScript(action: AgentAction, epoch?: string, localRef?: number): str
 }
 
 // 합성(synthetic) 실행 — el.click()·setNativeValue·dispatchEvent. 실제 입력 실패 시 폴백으로만 쓴다.
-async function execSynthetic(wc: WebContents, action: AgentAction, epoch?: string, target?: ExecTarget): Promise<{ ok: boolean; detail: string }> {
-  if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
+async function execSynthetic(wc: WebContents, action: AgentAction, epoch?: string, target?: ExecTarget): Promise<{ ok: boolean; detail: string; preDispatchFail?: boolean }> {
+  if (wc.isDestroyed()) return { ok: false, preDispatchFail: true, detail: 'tab destroyed' }
   // ref 가 있으면 그 요소가 사는 프레임에서 실행한다(교차 출처 프레임 포함). ref 가 없는 동작
   // (scroll·click_at)은 최상위에서 — 좌표가 최상위 뷰포트 기준이기 때문.
   let t: ExecTarget | null = target ?? null
   if (!t && action.ref != null && action.ref >= 0) {
     const r = await targetFor(action.ref, epoch, { scrollIntoView: false })
-    if (isRefFail(r)) return { ok: false, detail: `${r.__fail} (ref ${action.ref})` }
+    if (isRefFail(r)) return { ok: false, preDispatchFail: true, detail: `${r.__fail} (ref ${action.ref})` }
     t = r
   }
   const tt = t ?? TOP_TARGET(action.ref ?? -1)
   try {
-    return (await runInTarget(wc, tt, execScript(action, epoch, tt.localRef))) as { ok: boolean; detail: string }
+    return (await runInTarget(wc, tt, execScript(action, epoch, tt.localRef))) as { ok: boolean; detail: string; preDispatchFail?: boolean }
   } catch (err) {
     return { ok: false, detail: String(err) }
   }
@@ -1562,24 +1802,36 @@ export async function executeInPageAction(
   // epoch(과제1) — 이 행동이 근거한 관찰의 세대 토큰. observePage() 가 돌려준 obs.epoch 를 그대로 넘기면,
   // 그 사이 다른 관찰(탭 전환 후 재관찰 등)이 있었을 때 옛 ref 로 지금 화면의 다른 요소를 집지 않는다.
   // 생략하면(하위호환) 세대·프레임 검사 없이 예전과 동일하게 동작한다.
-  opts?: { humanInput?: boolean; profile?: InputProfile; epoch?: string; allowedHosts?: string[] },
+  // report.preDispatchFail — **입력 이벤트를 단 하나도 보내기 전에** 실패했는가.
+  // 호출자가 "이 동작은 확실히 나가지 않았다" 를 구분해야 하는 경우가 있다(되돌릴 수 없는 외부 쓰기의
+  // 장부 롤백). `ok:false` 만으로는 부족하다 — 클릭을 이미 보낸 뒤 확인 단계에서 실패한 경우도 섞인다.
+  opts?: { humanInput?: boolean; profile?: InputProfile; epoch?: string; allowedHosts?: string[]; report?: { preDispatchFail?: boolean } },
 ): Promise<{ ok: boolean; detail: string }> {
-  if (wc.isDestroyed()) return { ok: false, detail: 'tab destroyed' }
+  const rep = opts?.report
+  if (rep) rep.preDispatchFail = false
+  if (wc.isDestroyed()) { if (rep) rep.preDispatchFail = true; return { ok: false, detail: 'tab destroyed' } }
   const human = opts?.humanInput !== false
   const prof = opts?.profile ?? PROFILE_STRICT
   const epoch = opts?.epoch
-  if (!human) return execSynthetic(wc, action, epoch)
+  if (!human) {
+    const r = await execSynthetic(wc, action, epoch)
+    if (!r.ok && r.preDispatchFail === true && rep) rep.preDispatchFail = true
+    return r
+  }
   // 대상 해석을 한 번만 하고(프레임 오프셋 계산 포함) 실제 입력·합성 폴백이 같은 대상을 쓴다.
   let target: ExecTarget | null = null
   if (action.ref != null && action.ref >= 0) {
     const r = await targetFor(action.ref, epoch)
-    if (isRefFail(r)) return { ok: false, detail: `${r.__fail} (ref ${action.ref})` }
+    if (isRefFail(r)) { if (rep) rep.preDispatchFail = true; return { ok: false, detail: `${r.__fail} (ref ${action.ref})` } }
     target = r
   }
   // 합성 폴백은 isTrusted=false 이벤트라 봇 탐지에 걸릴 수 있다. 예전에는 아무 표시 없이 폴백해서
   // 사용자도 에이전트도 "사람처럼 클릭됐다"고 믿었다 — 이제 결과 detail 에 폴백 사실을 명시한다.
-  const fallback = async (why: string): Promise<{ ok: boolean; detail: string }> => {
+  // 명시적으로 입력 전 거부된 경우만 롤백한다. 예외·응답 유실은 이미 클릭했을 수 있다.
+  // 실제 입력 뒤의 type 폴백은 합성 실행이 사전 거부되어도 전체 동작의 사전 실패가 아니다.
+  const fallback = async (why: string, beforeInput = true): Promise<{ ok: boolean; detail: string }> => {
     const r = await execSynthetic(wc, action, epoch, target ?? undefined)
+    if (beforeInput && !r.ok && r.preDispatchFail === true && rep) rep.preDispatchFail = true
     return { ok: r.ok, detail: r.ok ? `${r.detail} ※ 사람 입력 대신 합성 이벤트 사용(${why})` : r.detail }
   }
   try {
@@ -1588,24 +1840,28 @@ export async function executeInPageAction(
       // 세대·프레임·이름 불일치(RefFail) 는 "화면 밖·가려짐" 과 다른 사고다 — 폴백으로 넘기지 않고
       // 바로 사유를 돌려준다(합성 클릭도 같은 pick() 을 거치므로 어차피 똑같이 거부되지만, 여기서
       // 즉시 끊으면 불필요한 왕복 없이 더 빠르고 사유가 더 분명하다).
-      if (r && isRefFail(r)) return { ok: false, detail: r.__fail }
+      // prepareClickPoint 단계의 거부(세대·프레임·이름 불일치)다 — 마우스 이벤트는 아직 하나도 안 나갔다.
+      if (r && isRefFail(r)) { if (rep) rep.preDispatchFail = true; return { ok: false, detail: r.__fail } }
       if (r) return { ok: true, detail: `클릭(사람처럼) ${r.name || action.ref}${target.frameHost ? ` [프레임 ${target.frameHost}]` : ''}` }
       return fallback(target.offset ? '화면 밖·좌표 불가·다른 요소가 덮음' : '프레임 화면 위치 계산 실패')
     }
     if (action.action === 'click_at') {
-      return await realClickAtPct(wc, Number(action.xPct ?? 50), Number(action.yPct ?? 50), prof)
+      return await realClickAtPct(wc, Number(action.xPct ?? 50), Number(action.yPct ?? 50), prof, rep)
     }
     if (action.action === 'type') {
       // ref 가 없으면(리치 에디터·iframe 칸) 직전 click_at 으로 포커스한 곳에 실제 키로 입력.
       if (!target) return typeIntoFocused(wc, action.text ?? '', !!action.submit, prof, opts?.allowedHosts)
       const r = await realTypeRef(wc, target, action.text ?? '', !!action.submit, prof, epoch)
       if (r.ok) return r
-      return fallback('실제 키 입력이 반영되지 않음')
+      // Enter가 이미 전송됐을 수 있으므로 제출 실패는 합성 방식으로 다시 제출하지 않는다.
+      if (action.submit) return r
+      return fallback('실제 키 입력이 반영되지 않음', false)
     }
     // scroll·select 등은 그대로(사람 입력 궤적이 필요 없는 동작) — 단, ref 가 있으면 그 프레임 안에서 실행된다.
     return execSynthetic(wc, action, epoch, target ?? undefined)
   } catch (err) {
-    return fallback('실제 입력 중 오류').catch(() => ({ ok: false, detail: String(err) }))
+    // 입력이 전송된 뒤 오류가 날 수 있다. 재실행하면 외부 쓰기가 중복될 수 있다.
+    return { ok: false, detail: String(err) }
   }
 }
 

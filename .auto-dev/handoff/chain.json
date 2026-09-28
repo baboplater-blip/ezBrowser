@@ -302,13 +302,52 @@
         "total_tokens": 1509294,
         "cache_read_tokens": 60074381
       }
+    },
+    {
+      "run_id": "run-20260920T044803Z-f0f99e",
+      "status": "success",
+      "at": "2026-09-20T06:15:44Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 5260.3,
+        "context_chars": 10728,
+        "total_tokens": 1953067,
+        "cache_read_tokens": 195164226
+      }
+    },
+    {
+      "run_id": "run-20260920T061614Z-677962",
+      "status": "success",
+      "at": "2026-09-20T06:55:22Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 2348.3,
+        "context_chars": 10714,
+        "total_tokens": 484996,
+        "cache_read_tokens": 31798774
+      }
+    },
+    {
+      "run_id": "run-20260920T073021Z-f71b41",
+      "status": "failed",
+      "at": "2026-09-20T08:21:41Z",
+      "rolled_from": null,
+      "handoff_id": null,
+      "measured": {
+        "elapsed_seconds": 3079.5,
+        "context_chars": 11815,
+        "total_tokens": 2873309,
+        "cache_read_tokens": 136705657
+      }
     }
   ],
   "progress_markers": [],
   "cumulative": {
-    "elapsed_seconds": 52113.6,
-    "total_tokens": 32694591,
-    "cache_read_tokens": 1952017204
+    "elapsed_seconds": 62801.7,
+    "total_tokens": 38005963,
+    "cache_read_tokens": 2315685861
   },
   "budget": {
     "max_total_tokens": null,

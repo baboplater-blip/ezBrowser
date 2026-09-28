@@ -186,6 +186,22 @@ function steps(outRoot) {
       timeoutMs: 3 * 60000, desc: '에이전트 안전 판정(돈·삭제 확인 / 발행 오탐 0) R1~R8',
     },
     {
+      // 순수 함수라 앱을 띄우지 않고 1초 안에 끝난다 — 마감 게이트(quick)에도 넣는다.
+      id: 'general-engage', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-general-engage.mjs', outArg: true,
+      result: (o) => path.join(o, 'general-engage', 'general-engage-results.json'),
+      timeoutMs: 3 * 60000, desc: '일반 작업 댓글·좋아요 구조적 판정(작성창/제출 구분·토글 인식) G1~G8',
+    },
+    {
+      // 위 general-engage(순수 함수)가 "판정 함수가 옳은가" 를 본다면, 이건 **실제 앱**으로
+      // 로컬 블로그 픽스처의 댓글·좋아요 카운터가 실제로 중복 없이 늘어나는가를 본다.
+      // 응답 유실·크래시+재시작·대상 불명 시 실제 화면(UI)으로 복구까지 — 앱을 두 번 띄운다.
+      id: 'general-engage-cdp', kind: 'harness', modes: ['full'],
+      script: 'verify-general-engage-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'general-engage-cdp', 'results.json'),
+      timeoutMs: 16 * 60000, desc: '일반 작업 댓글·좋아요 중복 방지 e2e GE1~GE9(픽스처 카운터 전후 대조·실제 UI 복구·Enter 제출 경로)',
+    },
+    {
       // 자연어 지시 → 생산 워크플로 라우팅 판정. 순수 함수라 앱을 안 띄우고 1초 안에 끝난다.
       // 여기가 느슨해지면 질문·금지·인용문에서 게시/댓글 작업 폼이 만들어지므로 quick 에 둔다.
       id: 'intent-routing', kind: 'harness', modes: ['quick', 'full'],

@@ -353,3 +353,9 @@ sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · `--
 
 
 - [2026-09-20T06:07:30Z] [intervention] 직전 실행이 배선만 하고 작업자 미완으로 끝나 같은 범위를 이어받았다. 같은 일을 재배정하지 않고 남은 조각(외피 대상선택 UI·게시탭 수정·검증 하네스)만 채웠다. 작업자가 돌리는 동안 dist 를 재빌드하지 않도록 빌드 시점을 알려 조율했고(직전 라운드의 재빌드 사고 반복 방지), 작업자가 제품 결함으로 본 W1 FAIL 은 하네스 기대값 문제임을 진단해 전달했다. 코드 리뷰가 잡은 취소 경합은 내가 직접 고쳤다.
+- [2026-09-20T06:15:44Z] run-20260920T044803Z-f0f99e 종료 status=success (이번 실행(run-20260920T044803Z-f0f99e)의 구조화 완료 기록: pass (합격 기준 11건 전건 통과, 부정 사례 5건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가), (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요); 전체 요청 완료: 아니오)
+- [2026-09-20T06:16:14Z] run-20260920T061614Z-677962 시작 (model=opus, task=Finish ONLY missing required validation: original briefing required actual user target selection UI, receipt says main I)
+- [2026-09-20T06:54:57Z] [intervention] 카드가 DOM 에 0개로 나와 '제품 결함(IPC 는 되는데 화면이 안 바뀜)' 으로 보고할 뻔했다. 렌더러 오류·broadcast 수신·재마운트까지 재고 나서야 원인이 하네스 쪽임을 확정했다 — 영속 작업 카드는 에이전트 모드에서만 그려지고(챗 모드는 별개의 .ai-body 분기) 내 하네스가 모드를 안 바꿨다. 기존 task-ui 하네스는 switchMode('에이전트') 를 하고 있었다. 추측으로 결함을 선언하지 않고 최소 재현으로 좁힌 것이 맞았다.
+- [2026-09-20T06:55:22Z] run-20260920T061614Z-677962 종료 status=success (이번 실행(run-20260920T061614Z-677962)의 구조화 완료 기록: pass (합격 기준 9건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가, (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다; 전체 요청 완료: 아니오)
+- [2026-09-20T07:30:21Z] run-20260920T073021Z-f71b41 시작 (model=opus, task=Continue authorized development. Bounded confirmed gap from rc15: general durable tasks outside engageGuard have no comm)
+- [2026-09-20T08:21:41Z] run-20260920T073021Z-f71b41 종료 status=failed (verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로))

@@ -1,5 +1,6 @@
 import { dialog } from 'electron'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { getSetting } from '../../storage/settings'
 import {
   getWebContentsByTabId, findTabIdByWebContentsId, listTabs, createTab, activateTab, closeTab,
@@ -10,7 +11,7 @@ import { chatOnce, chatWithTools, supportsNativeTools, supportsVision, isCliProv
 import {
   observePage, executeInPageAction, setFileInputFiles, armFileChooser, dropFilesOnRef, extractFromPage,
   waitForOnPage, runPageJs, hoverElement, dragOnPage, pressKey, resolveHref, resolveMediaSrc, autofillPage, inputProfileFor, isFastSite,
-  probeVerifyNeedles,
+  probeVerifyNeedles, probeEngageTargetByRef, probeEngageTargetAtPoint,
   type AgentAction, type PageObservation,
 } from './page-actions'
 import { downloadMedia, downloadStream, getCandidates } from '../video-download'
@@ -25,8 +26,8 @@ import { writeDownloadMd, safeFileName } from './conversations'
 import { detectChallenge, challengeKey, type ChallengeVerdict } from './challenge-detect'
 import { attemptAutoLogin, hasAutoLoginAccountFor } from './auto-login'
 import { hostAllowed as frameHostAllowed } from './frames'
-import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, parseVerifyProbeMark, verifyHostMatches, type RiskVerdict, type CompletionSignal } from './agent-gate'
-import { normalizeTargetUrl, alreadyDid, recordEngagement, engageQuotaCheck, engageQuotaRecord, persistEngageBoundary } from './blog-engage'
+import { assessRisk, detectInjection, looksLikeInstruction, isPublishAction, looksPublished, isNoPublishTask, parseCompletionMark, parseEngageMark, classifyEngageClick, classifyEngageAction, hasDraftTextIn, wantsUnlike, parseVerifyProbeMark, verifyHostMatches, type RiskVerdict, type CompletionSignal } from './agent-gate'
+import { normalizeTargetUrl, alreadyDid, recordEngagement, removeEngagement, engageQuotaCheck, engageQuotaRecord, persistEngageBoundary } from './blog-engage'
 
 // 자율 에이전트 — 관찰(observe) → LLM 판단 → 확인 게이트 → 실행(execute) 루프.
 // 판단은 두 경로: 지원 제공자/모델이면 네이티브 tool-use(구조화 함수 호출, 더 안정적),
@@ -603,6 +604,30 @@ function describeAction(action: AgentAction, obs: PageObservation): string {
   }
 }
 
+/**
+ * 클릭 대상 신원 → 중복 방지 키. 만들 수 없으면 빈 문자열(= 모름 → 호출자가 사람에게 묻는다).
+ *
+ * 우선순위: 퍼머링크 > 제목 지문 > (이 화면에 대상이 하나뿐이면) 페이지 주소.
+ * 제목을 **지문(해시)** 으로 쓰는 이유는 키가 길어지는 것을 막기 위함일 뿐이다 — 제목 자체가 신원이다.
+ */
+function engageTargetKey(pageUrl: string, probe: { permalink: string; heading: string; peers: number; failed: boolean }): string {
+  const base = normalizeTargetUrl(pageUrl)
+  // 조사 자체가 실패했다(요소가 사라졌거나 스크립트가 죽었다) — 이건 "글을 특정할 수 없다" 와 다르다.
+  // 그 이유로 사용자를 멈춰 세우면 **틀린 이유로 묻는 것**이 된다(2026-09-20 리뷰 M4). 페이지 단위로
+  // 거칠게 세어 두고 진행한다 — 과차단은 안전한 방향이고, ref 가 죽었다면 클릭도 실패해 아래에서 되돌려진다.
+  if (probe.failed) return base
+  if (probe.permalink) return normalizeTargetUrl(probe.permalink)
+  if (probe.heading) {
+    // 제목이 신원이므로 주소의 쿼리는 노이즈다. `?comment=123`·`?page=2` 처럼 댓글을 달면 붙는
+    // 파라미터가 키에 섞이면 **같은 글이 다른 키**가 되어 중복 방지가 샌다(2026-09-20 리뷰 H5).
+    const noQuery = base.split('?')[0] ?? base
+    return `${noQuery}#h=${createHash('sha1').update(probe.heading).digest('hex').slice(0, 16)}`
+  }
+  // 이 화면에 같은 종류의 대상이 하나뿐이면 페이지가 곧 그 글이다(평범한 글 상세 페이지).
+  if (probe.peers === 1) return base
+  return ''
+}
+
 // 보고서 파일명용 타임스탬프(YYYYMMDD-HHmm).
 function reportStamp(): string {
   const d = new Date()
@@ -952,6 +977,46 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
   const noPublish = isNoPublishTask(task)
   // 참여 가드 — 블로그 댓글·좋아요를 **코드로** 막는다(장부에 기록만 하면 방지가 아니다).
   const engageGuard = parseEngageMark(task)
+  /**
+   * **일반** 영속 작업의 댓글·좋아요 보호 범위. (2026-09-20)
+   *
+   * 위 `engageGuard` 는 참여 워크플로가 붙인 표식이 있을 때만 돈다. 사용자가 AI 패널에 직접 쓴
+   * 작업("이 글에 댓글 달아줘")은 그 표식이 없어 **아무 보호도 없었다** — 응답만 유실돼도 재시도가
+   * 같은 댓글을 또 달고, 크래시 뒤 이어가기가 좋아요를 다시 눌러 **취소**했다.
+   *
+   * 범위를 **작업 단위**로 잡는 이유: 재시도·재시작은 같은 작업 id 로 이어지므로 정확히 그 창을 덮고,
+   * 전역 'default' 계정 버킷과 달리 **다른 작업·다른 로그인 세션과 절대 섞이지 않는다**.
+   * 비영속(일회성 챗)에는 적용하지 않는다 — 구간·재시작이 없어 보호할 중복 경로 자체가 없다.
+   */
+  const generalEngageScope = (!engageGuard && !readOnly && (params.taskId ?? '').trim())
+    ? `task:${(params.taskId ?? '').trim()}`
+    : ''
+  // 사용자가 **명시적으로** 좋아요 취소를 요청했는가(작업 지시문 = 신뢰 경로).
+  const unlikeRequested = wantsUnlike(task)
+  // 이 작업이 이번 실행에서 좋아요를 누른 글 — 모호한 대상을 사용자가 "계속" 으로 통과시킨 뒤에도
+  // 토글 취소를 막기 위해 메모리에도 함께 둔다(디스크 장부가 정본이다).
+  const likedHere = new Set<string>()
+  /**
+   * 되돌릴 수 없는 참여를 **부작용 직전에** 디스크에 확정한다. 반환값이 비어 있지 않으면 사용자에게
+   * 보일 실패 사유이고, 그때는 **실행하지 않는다**("했는지 모르는 채로 남기느니 안 한다").
+   */
+  const commitEngage = (kind: 'comment' | 'like', key: string, actLabel: string): string => {
+    recordEngagement({ key, account: generalEngageScope, action: kind, note: actLabel.slice(0, 120) })
+    const durable = persistEngageBoundary()
+    if (!durable.ok) {
+      // No input was dispatched: do not retain a false in-memory reservation.
+      removeEngagement(key, generalEngageScope, kind)
+      persistEngageBoundary()
+      return `기록을 저장하지 못해 실행하지 않았습니다(${durable.failed.join(', ')}). 같은 글에 두 번 남기지 않기 위한 조치입니다.`
+    }
+    if (kind === 'like') likedHere.add(key)
+    return ''
+  }
+  /** 입력이 **하나도 나가지 않은** 것이 확인됐을 때만 기록을 되돌린다(불확실은 되돌리지 않는다). */
+  const rollbackEngage = (kind: 'comment' | 'like', key: string): void => {
+    removeEngagement(key, generalEngageScope, kind)
+    persistEngageBoundary()
+  }
   /**
    * 게시 여부 확인 표식 — "이 사이트의 화면에 이 문구가 실제로 보이는가" 를 **런타임이 직접** 본다.
    * 모델의 결론(산문)과 따로 기록해 두었다가 나중에 대조한다(모델은 이 값을 만들 수 없다).
@@ -1450,6 +1515,109 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
         }
       }
 
+      // ===== 일반 영속 작업의 참여 보호 (전용 참여 가드가 없는 작업) =====
+      // 위 가드는 참여 워크플로 표식이 있을 때만 돈다. 사용자가 직접 낸 작업에는 아무 보호가 없어,
+      // 응답 유실·재시작이 같은 댓글을 두 번 달고 좋아요를 다시 눌러 취소했다. 여기서 그 구멍을 막는다.
+      // 기존 장부·내구성 경계(blog-engage)를 그대로 쓰되, **작업 단위 범위**로 적어 세션이 섞이지 않게 한다.
+      let generalEngageKind: '' | 'comment' | 'like' = ''
+      let generalEngageKey = ''
+      // 댓글은 **버튼 클릭만으로 나가지 않는다.** 입력칸에서 Enter 를 치거나 `type` 에 submit 을 주면
+      // 실행 계층이 폼을 제출해 그대로 등록된다. 그 경로가 가드 밖에 있으면 "중복을 막았다" 고 말할 수 없다.
+      // 그래서 제출 의도가 있는 동작도 같은 가드를 타게 한다 — 무슨 제출인지는 **폼의 제출 버튼 이름**
+      // (페이지 조사에서 읽는 구조 정보)으로 가른다. 입력 동작의 라벨에는 사용자가 친 글자뿐이라 쓸 수 없다.
+      const submitIntent = (action.action === 'type' && action.submit === true)
+        || (action.action === 'key' && /^(enter|numpadenter|return)$/i.test(String(action.key ?? '').replace(/\s/g, '')))
+      const engageCandidate = action.action === 'click' || action.action === 'click_at' || (submitIntent && action.ref != null)
+      if (generalEngageScope && engageCandidate) {
+        const el = action.ref != null ? obs.elements.find((e) => e.ref === action.ref) ?? null : null
+        // 클릭은 어휘로 후보만 거른 뒤 페이지를 조사한다(무관한 클릭마다 스크립트를 돌리지 않기 위해).
+        // 제출 의도는 라벨로 알 수 없으므로 일단 조사하고, 제출 버튼 이름으로 판정한다.
+        const seedIsEngage = submitIntent || classifyEngageClick(label) !== null
+        // 관찰에 없는 번호(모델이 옛 번호를 썼거나 그 사이 화면이 바뀜)라면 동작 자체가 실패한다 —
+        // 일어나지 않을 일로 사용자에게 묻거나 장부를 더럽히지 않는다. 실행 계층이 정직하게 실패하게 둔다.
+        const refKnown = (action.action !== 'click' && !submitIntent) || el !== null
+        if (seedIsEngage && refKnown) {
+          // 대상 신원 + 그 대상 안의 초안 유무. 피드에서는 여러 글이 한 주소를 공유하므로
+          // 주소만으로는 갈리지 않고, 초안도 **다른 글의 입력칸**에 속으면 안 된다.
+          const probe = action.ref != null
+            ? await probeEngageTargetByRef(wc, action.ref, obs.epoch)
+            : await probeEngageTargetAtPoint(wc, action.xPct ?? 50, action.yPct ?? 50)
+          // 조사 동안 취소·일시정지가 들어왔을 수 있다(부작용 직전 관문과 같은 이유).
+          if (await gate()) return
+          const verdict = classifyEngageAction({
+            // 제출 경로는 '클릭' 이 아니지만 **같은 효과**를 낸다 — 분류기에 그 사실을 명시한다.
+            actionKind: submitIntent ? 'submit' : action.action,
+            // 제출 경로의 어휘 씨앗은 폼의 제출 버튼 이름이다(우리가 만든 클릭 라벨 모양으로 감싼다).
+            label: submitIntent ? (probe.submitLabel ? `클릭 "${probe.submitLabel}"` : '') : label,
+            el: el ? { tag: el.tag, type: el.type, name: el.name, ...(el.state ? { state: el.state } : {}) } : null,
+            probeTag: clickAtProbe.tag,
+            // 대상 안에서 본 것이 정답이다. 그걸 못 보면 화면 전체로 폴백한다(둘 다 모르면 강등하지 않는다).
+            hasDraftText: action.action === 'type' && action.submit === true
+              ? Boolean(action.text?.trim()) || probe.draftInScope === true
+              : probe.draftInScope ?? hasDraftTextIn(obs.elements),
+            pressed: probe.pressed,
+          })
+          // kind 가 null 이면 참여가 아니다 → 기존 흐름에 손대지 않는다(평범한 클릭·작성창 열기 등).
+          if (verdict.kind) {
+            let key = engageTargetKey(obs.url, probe)
+            if (!key) {
+              // **모른다 → 사람에게 묻는다.** 추측해서 누르지도, 조용히 완료로 넘기지도 않는다.
+              const askP = waitAsk(reqId)
+              emit({
+                type: 'ask',
+                message: `어느 글인지 특정할 수 없어 ${verdict.kind === 'comment' ? '댓글 등록' : '좋아요'}을(를) 멈췄습니다`
+                  + `(${obs.url.slice(0, 120)}). 이 글의 링크·제목을 찾지 못해 글 단위로 셀 수 없습니다.`
+                  + ` "계속" 이라고 하시면 **이 화면 단위로 한 번만** 진행하고, 같은 화면의 다음 대상은`
+                  + ` 중복으로 보아 건너뜁니다. 건너뛰려면 "건너뛰기" 라고 알려주세요.`,
+              })
+              const answer = await askP
+              if (cancelledSet.has(reqId) || answer === null) { emit({ type: 'cancelled' }); return }
+              emit({ type: 'answer', text: answer })
+              const approve = /계속|진행|해도|괜찮|그래|yes|ok|continue/i.test(answer)
+                && !/아니|하지\s*마|안\s*돼|중단|건너|취소|skip|no\b|stop/i.test(answer)
+              if (!approve) {
+                emit({ type: 'result', ok: false, label, detail: '대상을 특정할 수 없어 건너뛰었습니다.' })
+                pendingPrefix = '사용자가 건너뛰기로 했습니다. 이 글은 건드리지 말고 다음으로 넘어가거나, 더 할 일이 없으면 done 으로 마치세요.'
+                continue
+              }
+              // 승인 — 이 화면 단위로만 셀 수 있다(글을 못 가르므로). 그 사실을 모델에게도 알린다.
+              key = `${normalizeTargetUrl(obs.url)}#page`
+            }
+
+            if (verdict.kind === 'unlike') {
+              const ours = likedHere.has(key) || alreadyDid(key, generalEngageScope, 'like')
+              if (ours) {
+                const why = '이 작업에서 방금 좋아요를 눌렀습니다 — 다시 누르면 취소되므로 누르지 않았습니다.'
+                emit({ type: 'result', ok: false, label, detail: why })
+                pendingPrefix = `${why} 이미 처리된 글입니다. 다음으로 넘어가세요.`
+                continue
+              }
+              if (!unlikeRequested) {
+                const why = '이미 좋아요가 눌려 있습니다 — 취소해 달라는 요청이 없어 누르지 않았습니다.'
+                emit({ type: 'result', ok: false, label, detail: why })
+                pendingPrefix = `${why} 누르면 기존 좋아요가 풀립니다. 건너뛰고 다음으로 넘어가세요.`
+                continue
+              }
+              // 사용자가 명시적으로 취소를 요청했다 → 평소대로 진행한다(되돌리는 동작이라 장부에 적지 않는다).
+            } else {
+              const kind = verdict.kind
+              if (alreadyDid(key, generalEngageScope, kind)) {
+                const what = kind === 'comment' ? '댓글을 달았습니다' : '좋아요를 눌렀습니다'
+                emit({ type: 'result', ok: false, label, detail: `이 작업에서 이미 이 글에 ${what} — 중복이라 건너뜁니다.` })
+                pendingPrefix = `이 글에는 이미 ${what}. 중복이므로 건너뛰고 다음으로 넘어가세요.`
+                continue
+              }
+              // 여기서는 **결정만** 한다. 실제 기록은 아래 실행 직전(commitEngage)에서 한다 —
+              // 이 사이에 발행 중복 확인·발행 금지·막힘 감지 같은 분기가 `continue` 로 빠질 수 있어서,
+              // 여기서 적으면 **클릭은 안 나갔는데 장부에는 처리된 것으로** 남는다(2026-09-20 리뷰 H3).
+              // 그렇게 되면 그 글은 이 작업에서 영영 막히고, 사용자에게는 거짓 안내가 나간다.
+              generalEngageKind = kind
+              generalEngageKey = key
+            }
+          }
+        }
+      }
+
       const publishish = (action.action === 'click' || action.action === 'click_at') && isPublishAction(label)
       // 임시저장·입력만 모드에서는 발행성 클릭을 아예 실행하지 않는다(지시문이 아니라 코드로 보장).
       if (publishish && noPublish) {
@@ -1703,8 +1871,22 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       }
       if (action.action === 'key') {
         const label = `키: ${action.key ?? ''}`
-        emit({ type: 'action', label })
-        const r = await pressKey(wc, { key: action.key ?? '', ref: action.ref }, obs.epoch)
+        // Enter 한 번이 댓글을 등록할 수 있다 — 클릭과 **같은 경계**를 여기에도 둔다.
+        if (generalEngageKind && generalEngageKey) {
+          const why = commitEngage(generalEngageKind, generalEngageKey, label)
+          if (why) {
+            emit({ type: 'result', ok: false, label, detail: why })
+            pendingPrefix = `${why} 저장 공간·권한 문제일 수 있습니다. 이 글은 건너뛰고 다음으로 넘어가세요.`
+            continue
+          }
+        }
+        emit({ type: 'action', label, ...(generalEngageKind ? { external: generalEngageKind } : {}) })
+        const keyReport: { preDispatchFail?: boolean } = {}
+        const r = await pressKey(wc, { key: action.key ?? '', ref: action.ref }, obs.epoch, keyReport)
+        // 키를 하나도 보내지 못한 것이 확인되면 기록을 되돌린다(하지 않은 일로 재시도를 막지 않는다).
+        if (!r.ok && keyReport.preDispatchFail && generalEngageKind && generalEngageKey) {
+          rollbackEngage(generalEngageKind, generalEngageKey)
+        }
         await settleAfterAction(wc, action, fastSite)
         emit({ type: 'result', ok: r.ok, label, detail: r.detail })
         pendingPrefix = r.ok ? `키 입력함: ${action.key}` : `키 입력 실패: ${r.detail}`
@@ -2061,6 +2243,22 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
       // 여기가 **부작용 직전 마지막 자리**다 — 정지가 걸리면 이 아래의 클릭·입력이 나가지 않는다.
       if (await gate()) return
       let result: { ok: boolean; detail: string }
+      // 실행 계층이 "입력을 보내기 전에 실패했다" 를 알려 주는 자리(장부 롤백 판단에 쓴다).
+      const execReport: { preDispatchFail?: boolean } = {}
+
+      // ===== 참여 기록 확정 (부작용 직전) =====
+      // 되돌릴 수 없는 댓글·좋아요는 **클릭이 나가기 전에** 디스크에 적혀 있어야 한다. 그 사이 앱이
+      // 죽으면 재시작한 제품이 "안 건드렸다" 고 보고 같은 글에 또 나가기 때문이다.
+      // 동시에, 위의 어떤 분기로도 빠져나가지 않고 **정말 실행되는 것이 확정된 뒤**여야 한다.
+      // 이 자리가 그 두 조건을 동시에 만족하는 유일한 지점이다.
+      if (generalEngageKind && generalEngageKey) {
+        const why = commitEngage(generalEngageKind, generalEngageKey, label)
+        if (why) {
+          emit({ type: 'result', ok: false, label, detail: why })
+          pendingPrefix = `${why} 저장 공간·권한 문제일 수 있습니다. 이 글은 건너뛰고, 계속 실패하면 지금까지 한 일을 note 로 정리한 뒤 done 으로 마치세요.`
+          continue
+        }
+      }
       // 완료 신호 기준선 — **발행성 클릭**(게시·공유·업로드 확정) 직전 화면만. 입력·이동 뒤에도 판정하면 캡션에 들어간
       // 완료 어휘("…공유되었습니다 라고 썼다")가 게시 전에 거짓 완료를 만든다(리뷰 지적). 발행 클릭이 아니면 판정하지 않는다.
       if (completion && publishish && !noPublish && !readOnly) completionBase = { hay: guardHay(obs), url: obs.url, lines: guardLines(obs) }
@@ -2079,11 +2277,25 @@ export async function runAgentTask(params: AgentTaskParams, rawEmit: Emit): Prom
           result = { ok: true, detail: '이동함' }
         }
       } else {
-        emit({ type: 'action', label })
-        result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch, allowedHosts })
+        // 되돌릴 수 없는 **외부 쓰기**는 종류를 구조화해 실어 보낸다. 호출자(task-runtime)가 라벨 문구를
+        // 추측하지 않고 원장에 적을 수 있게 하기 위함이다 — 댓글·좋아요는 발행 정규식에 걸리지 않아
+        // 예전에는 원장에도, 불확실 대기에도 한 줄도 남지 않았다.
+        const external = publishish ? 'publish' : generalEngageKind
+        emit({ type: 'action', label, ...(external ? { external } : {}) })
+        result = await executeInPageAction(wc, action, { humanInput, profile: inputProfileFor(obs.url, inputMode), epoch: obs.epoch, allowedHosts, report: execReport })
         await settleAfterAction(wc, action, fastSite)
       }
 
+      // 클릭이 **발사조차 되지 못했으면**(요소 없음·관찰 세대 불일치 등) 장부 기록을 되돌린다.
+      // 기록은 클릭 직전에 적으므로(크래시 대비) 그대로 두면 하지도 않은 일이 정당한 재시도를 영원히 막는다.
+      //
+      // ⚠ **`ok:false` 만으로 되돌리면 안 된다.** 마우스 이벤트를 이미 보낸 뒤 확인 단계에서 실패한
+      //    경우가 섞여 있어, 그걸 되돌리면 "이미 나간 댓글" 을 안 나간 것으로 표시해 재시도가 두 번째를
+      //    보낸다. 그래서 실행 계층이 **입력을 하나도 보내기 전에 실패했다**(preDispatchFail)고
+      //    명시한 경우에만 되돌린다. 불확실은 불확실로 남고, 외부 쓰기 원장이 사람에게 묻는다.
+      if (!result.ok && execReport.preDispatchFail && generalEngageKind && generalEngageKey) {
+        rollbackEngage(generalEngageKind, generalEngageKey)
+      }
       emit({ type: 'result', ok: result.ok, label, detail: result.detail })
       // 확인 가드 꼬리 보관 — 성공한 일반 동작에만. 발행성 클릭·확인을 거친 위험 동작 뒤에는 반드시 모델이 새 화면을 보게 한다.
       if (result.ok && tailCandidate.length && !publishish && risk.level === 'none') { pendingTail = tailCandidate; pendingTailBase = { hay: guardHay(obs), url: obs.url, lines: guardLines(obs) } }

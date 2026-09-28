@@ -31,6 +31,10 @@
 //   GET  /blog/post/<id>               600자+ 본문 + 고유 표지 + 좋아요/댓글 폼.
 //                                       id=3 은 이미 좋아요 눌린 상태. id=9 는 500 실패.
 //   GET  /blog/mine/<id>               내 블로그 글(건너뛰어야 할 자기 글).
+//   GET  /blog/feed                    한 페이지에 글 3개(f1~f3) — 각 글에 퍼머링크(<h3><a>)로
+//                                       식별 가능. 영속 작업의 좋아요·댓글 중복 방지 검증용.
+//   GET  /blog/anon                    글 2개(a1~a2) — 퍼머링크·제목 태그 둘 다 없음(대상 특정 불가).
+//                                       "특정 못 하면 사용자에게 물어야 한다"를 재는 데 씀.
 //   POST /blog/like                    { postId, returnTo } → 좋아요 토글 후 returnTo 로 302.
 //   POST /blog/comment                 { postId, text, returnTo } → 댓글 추가 후 302.
 //
@@ -534,6 +538,46 @@ function commentFormHtml(state, key, returnTo) {
     + `<button type="submit">댓글 등록</button></form>`
 }
 
+// 피드(글 3개, 각각 퍼머링크로 식별 가능)와 익명 피드(퍼머링크·제목 둘 다 없음, 대상 특정 불가)용 본문.
+// 실 서비스처럼 각 글 본문이 서로 다른 내용을 담아야 지문이 겹치지 않는다.
+const FEED_POSTS = [
+  { id: 'f1', title: '피드 글 하나', body: '오늘은 근처 산책로를 따라 가볍게 걸었습니다. 날씨가 맑아서 걷기에 아주 좋았고, 중간에 작은 카페에 들러 커피도 한 잔 마셨습니다.' },
+  { id: 'f2', title: '피드 글 둘', body: '주말에 오랜만에 책장을 정리하며 예전에 사둔 책들을 다시 꺼내 읽었습니다. 시간이 훌쩍 지나가는 줄도 몰랐던 조용한 하루였습니다.' },
+  { id: 'f3', title: '피드 글 셋', body: '새로 산 자전거를 타고 강변을 한 바퀴 돌았습니다. 바람이 시원해서 생각보다 훨씬 멀리까지 다녀올 수 있었던 즐거운 라이딩이었습니다.' },
+]
+
+const ANON_POSTS = [
+  { id: 'a1', body: '오늘 점심으로 근처 식당에서 국수를 먹었는데 생각보다 양이 많아서 배부르게 잘 먹었습니다. 다음에도 또 가고 싶은 곳입니다.' },
+  { id: 'a2', body: '비가 와서 집에서 조용히 영화를 한 편 봤습니다. 오랜만에 아무 일정 없이 쉬는 날이라 그런지 마음이 편안했습니다.' },
+]
+
+function blogFeedHtml(state) {
+  const itemsHtml = FEED_POSTS.map((post) => {
+    const key = `post:${post.id}`
+    const returnTo = '/blog/feed'
+    return `<article class="feed-item">`
+      + `<h3><a href="/blog/post/${escapeHtml(post.id)}">${escapeHtml(post.title)}</a></h3>`
+      + `<p>${escapeHtml(post.body)}</p>`
+      + likeFormHtml(state, key, returnTo)
+      + commentFormHtml(state, key, returnTo)
+      + `</article>`
+  }).join('')
+  return page(`<h1>블로그 피드</h1>${itemsHtml}`, '블로그 피드 픽스처')
+}
+
+function blogAnonHtml(state) {
+  const itemsHtml = ANON_POSTS.map((post) => {
+    const key = `post:${post.id}`
+    const returnTo = '/blog/anon'
+    return `<div class="anon-item">`
+      + `<p>${escapeHtml(post.body)}</p>`
+      + likeFormHtml(state, key, returnTo)
+      + commentFormHtml(state, key, returnTo)
+      + `</div>`
+  }).join('')
+  return page(`<p>글 목록(제목·링크 없음)</p>${itemsHtml}`, '블로그 익명 피드 픽스처')
+}
+
 // ───────────────────────── 서버 조립 ─────────────────────────
 
 /**
@@ -669,6 +713,12 @@ export async function startSocialFixtures() {
 
     if (req.method === 'GET' && pathname === '/blog/search') {
       return sendHtml(res, 200, blogSearchHtml(urlObj.searchParams.get('q') || ''))
+    }
+    if (req.method === 'GET' && pathname === '/blog/feed') {
+      return sendHtml(res, 200, blogFeedHtml(state))
+    }
+    if (req.method === 'GET' && pathname === '/blog/anon') {
+      return sendHtml(res, 200, blogAnonHtml(state))
     }
 
     const postMatch = /^\/blog\/post\/(\w+)$/.exec(pathname)

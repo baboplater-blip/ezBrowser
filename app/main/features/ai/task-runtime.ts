@@ -120,6 +120,30 @@ export type WaitCause = 'confirm' | 'login' | 'captcha' | 'ask' | 'ledger' | 'us
 
 const WAIT_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ask', 'ledger', 'user-fix', 'tab-target'])
 
+/**
+ * 되돌릴 수 없는 **외부 쓰기**의 종류. `agent.ts` 가 행동 이벤트에 구조적으로 실어 보낸다.
+ * 라벨 문구로 추측하지 않는 이유: 댓글 등록·좋아요는 발행 어휘가 전혀 아니라 정규식에 걸리지 않고,
+ * 반대로 "저장하기" 는 발행 정규식에 걸리지만 임시저장일 뿐이다.
+ */
+export type ExternalWriteKind = 'publish' | 'comment' | 'like'
+const EXTERNAL_WRITE_KINDS = new Set<ExternalWriteKind>(['publish', 'comment', 'like'])
+/** 사용자에게 보일 이름 — "댓글인데 발행이 됐는지 묻는" 어긋난 문구를 막는다. */
+const EXTERNAL_WRITE_NOUN: Record<ExternalWriteKind, string> = {
+  publish: '발행', comment: '댓글 등록', like: '좋아요',
+}
+function writeNoun(w: { kind?: ExternalWriteKind } | null | undefined): string {
+  const k = w?.kind
+  return k && EXTERNAL_WRITE_KINDS.has(k) ? EXTERNAL_WRITE_NOUN[k] : '발행'
+}
+
+function writeRecoveryAdvice(w: { kind?: ExternalWriteKind }): string {
+  if (w.kind === 'comment' || w.kind === 'like') {
+    return ' 계속을 눌러도 이미 시도한 대상의 중복 차단은 유지되며 다른 작업만 이어갑니다.'
+      + ' 실제로 전송되지 않았음을 확인하고 다시 시도하려면 현재 작업을 중단한 뒤 새 작업을 만들어 주세요.'
+  }
+  return ` 이미 ${writeNoun(w)}이(가) 되었다면 중단하시고, 아직이라면 계속을 눌러 주세요.`
+}
+
 /** 사람이 **직접 조치**해야 풀리는 사유 — 재시작 뒤에도 그 사실을 문구로 유지한다. */
 const HUMAN_ACTION_CAUSES = new Set<WaitCause>(['confirm', 'login', 'captcha', 'ledger', 'user-fix', 'tab-target'])
 
@@ -195,7 +219,7 @@ export interface PersistentTask {
   readOnly: boolean
   incognito: boolean
   ownerWindowId: string | null
-  externalWrites: Array<{ label: string; at: number; confirmed: boolean }>
+  externalWrites: Array<{ label: string; at: number; confirmed: boolean; kind?: ExternalWriteKind }>
   createdAt: number; updatedAt: number; startedAt: number; endedAt?: number
   elapsedMs: number
 }
@@ -421,7 +445,12 @@ function reviveTask(raw: unknown): PersistentTask | null {
     ownerWindowId: typeof o.ownerWindowId === 'string' ? o.ownerWindowId : null,
     externalWrites: rawWrites
       .filter((w): w is Record<string, unknown> => !!w && typeof w === 'object')
-      .map((w) => ({ label: str(w.label), at: num(w.at), confirmed: w.confirmed === true }))
+      .map((w) => ({
+        label: str(w.label),
+        at: num(w.at),
+        confirmed: w.confirmed === true,
+        ...(EXTERNAL_WRITE_KINDS.has(w.kind as ExternalWriteKind) ? { kind: w.kind as ExternalWriteKind } : {}),
+      }))
       .filter((w) => w.label.length > 0)
       .slice(-MAX_EXTERNAL_WRITES),
     createdAt,
@@ -1000,10 +1029,10 @@ function budgetExceeded(task: PersistentTask): string | null {
  * 발행성 동작을 원장에 남긴다. 목적은 "정확히 한 번" 보장이 아니라 **모르는 채로 또 누르지 않기**다.
  * 완료 근거를 못 본 채 다음 구간을 시작하면 같은 글을 두 번 올릴 수 있다 → 구간 시작 전에 막는다.
  */
-function recordExternalWrite(task: PersistentTask, label: string): void {
+function recordExternalWrite(task: PersistentTask, label: string, kind: ExternalWriteKind = 'publish'): void {
   const trimmed = label.trim().slice(0, 120)
   if (!trimmed) return
-  task.externalWrites.push({ label: trimmed, at: Date.now(), confirmed: false })
+  task.externalWrites.push({ label: trimmed, at: Date.now(), confirmed: false, kind })
   if (task.externalWrites.length > MAX_EXTERNAL_WRITES) {
     task.externalWrites.splice(0, task.externalWrites.length - MAX_EXTERNAL_WRITES)
   }
@@ -1038,7 +1067,7 @@ function addResultFiles(task: PersistentTask, paths: string[]): void {
   }
 }
 
-function pendingExternalWrite(task: PersistentTask): { label: string; at: number; confirmed: boolean } | null {
+function pendingExternalWrite(task: PersistentTask): PersistentTask['externalWrites'][number] | null {
   for (let i = task.externalWrites.length - 1; i >= 0; i--) {
     const w = task.externalWrites[i]
     if (w && !w.confirmed) return w
@@ -1046,9 +1075,11 @@ function pendingExternalWrite(task: PersistentTask): { label: string; at: number
   return null
 }
 
-function confirmExternalWrites(task: PersistentTask): void {
+function confirmExternalWrites(task: PersistentTask, kind?: ExternalWriteKind): void {
   let changed = false
   for (const w of task.externalWrites) {
+    // 자동 관찰 근거는 그 종류만 확정한다. 종류 생략은 사용자의 명시적 확인 경로다.
+    if (kind && (w.kind ?? 'publish') !== kind) continue
     if (!w.confirmed) { w.confirmed = true; changed = true }
   }
   if (changed) { task.updatedAt = Date.now(); markDirty(task) }
@@ -1166,7 +1197,14 @@ function onSegmentEvent(task: PersistentTask, evt: AgentEvent, box: { outcome: S
     }
     case 'action': {
       const label = str(evt.label)
-      if (isPublishAction(label)) recordExternalWrite(task, label)
+      // **구조화 메타데이터 우선.** agent.ts 가 "이건 되돌릴 수 없는 외부 쓰기이고 종류는 이것" 이라고
+      // 직접 알려 주면 그대로 믿는다. 라벨 문구 추측(isPublishAction)은 그 신호가 없을 때의 폴백으로만
+      // 남긴다 — 댓글 등록·좋아요는 발행 정규식에 애초에 걸리지 않아 원장에 한 줄도 남지 않았다.
+      const declared = EXTERNAL_WRITE_KINDS.has(evt.external as ExternalWriteKind)
+        ? (evt.external as ExternalWriteKind)
+        : null
+      if (declared) recordExternalWrite(task, label, declared)
+      else if (isPublishAction(label)) recordExternalWrite(task, label, 'publish')
       return
     }
     // 에이전트 루프가 **실제로 관찰한** 대조 근거. 모델의 응답이 아니라 관찰 텍스트·주소에서
@@ -1456,9 +1494,10 @@ async function runLoop(id: string): Promise<void> {
       // 2. 외부 쓰기 원장 — 발행을 눌렀는데 완료 근거가 없으면 **다시 시도하지 않고** 사용자에게 묻는다.
       const pending = pendingExternalWrite(task)
       if (pending) {
+        const noun = writeNoun(pending)
         setWaiting(task, 'ledger', 'ledger',
-          `발행이 됐는지 확실하지 않습니다 — 확인해 주세요. (마지막 동작: ${pending.label})`
-          + ' 이미 올라갔다면 중단하시고, 아직이라면 계속을 눌러 주세요.')
+          `${noun}이(가) 실제로 됐는지 확실하지 않습니다 — 확인해 주세요. (마지막 동작: ${pending.label})`
+          + writeRecoveryAdvice(pending))
         break
       }
 
@@ -1519,10 +1558,16 @@ async function runLoop(id: string): Promise<void> {
           bumpSegment: true,
         })
         live.result = str(outcome.message, '완료')
-        if (outcome.evidence) {
+        const pendingEngagement = live.externalWrites.find((w) =>
+          !w.confirmed && (w.kind === 'comment' || w.kind === 'like'))
+        if (pendingEngagement) {
+          // 발행 안내나 결과 파일은 댓글·좋아요의 서버 반영 근거가 아니다.
+          delete live.verifyEvidence
+          setState(live, 'needs-verify', `${writeNoun(pendingEngagement)} 완료를 확인할 근거가 없습니다 — 결과를 확인한 뒤 승인해 주세요.`)
+        } else if (outcome.evidence) {
           live.verifyEvidence = outcome.evidence
           // 발행 완료 근거를 봤다 → 원장의 미확인 항목을 확정해 다음 지시가 막히지 않게 한다.
-          confirmExternalWrites(live)
+          confirmExternalWrites(live, 'publish')
           setState(live, 'completed')
         } else {
           // 모델이 "다 했다" 고만 말하고 결과를 못 대는 경우. 사용자가 acceptTaskResult 로 승인해야
@@ -1538,7 +1583,7 @@ async function runLoop(id: string): Promise<void> {
         if (ex) addResultFiles(live, ex.files)
         // 원장 확정은 라벨 추측이 아니라 agent.ts 가 센 publishPending 을 따른다. 발행이 없었거나
         // 완료 신호까지 확인됐다면 미확인 항목을 풀어 다음 구간이 헛되이 막히지 않게 한다.
-        if (ex && !ex.publishPending) confirmExternalWrites(live)
+        if (ex && !ex.publishPending) confirmExternalWrites(live, 'publish')
         saveCheckpoint(live, {
           stepsUsed: Math.max(observedSteps, ex?.stepsUsed ?? 0),
           ...(ex?.progressSummary ? { progressSummary: ex.progressSummary } : {}),
@@ -1592,9 +1637,10 @@ async function runLoop(id: string): Promise<void> {
       //    사용자에게 **진행 중인 것처럼** 보였고 backoff 도 헛되이 태웠다.)
       const uncertain = pendingExternalWrite(live)
       if (uncertain) {
+        const noun = writeNoun(uncertain)
         setWaiting(live, 'ledger', 'ledger',
-          `오류로 중단됐는데(${detail.slice(0, 120)}) 발행이 됐는지 확실하지 않습니다 — 확인해 주세요.`
-          + ` (마지막 동작: ${uncertain.label}) 이미 올라갔다면 중단하시고, 아직이라면 계속을 눌러 주세요.`)
+          `오류로 중단됐는데(${detail.slice(0, 120)}) ${noun}이(가) 실제로 됐는지 확실하지 않습니다 — 확인해 주세요.`
+          + ` (마지막 동작: ${uncertain.label})` + writeRecoveryAdvice(uncertain))
         break
       }
       if (!scheduleRetry(live, kind, detail)) break

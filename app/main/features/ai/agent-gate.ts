@@ -387,6 +387,182 @@ export function classifyEngageClick(label: string): EngageClick {
   return null
 }
 
+// ===== 구조적 분류 (일반 영속 작업용) =====
+//
+// 왜 어휘(위 정규식)만으로는 모자란가 — 두 방향으로 틀린다.
+//  ① **작성창 열기를 제출로 오인**한다. `<a>댓글 쓰기</a>` 는 아직 아무것도 남기지 않는데
+//     `COMMENT_SUBMIT_RE` 에 걸린다. 그걸 "댓글을 달았다" 로 장부에 적으면 **진짜 등록 버튼이
+//     중복으로 막혀** 작업이 영영 댓글을 못 단다(과차단).
+//  ② **이미 눌린 좋아요를 못 알아본다**. 버튼 이름이 그냥 "좋아요" 인 채로 `aria-pressed=true` 인
+//     사이트가 흔하다. 어휘로는 `like` 로 보이지만 실제로 누르면 **취소**된다(미차단 — 더 나쁘다).
+//
+// 그래서 정규식을 더 넓히는 대신 **관찰이 이미 갖고 있는 구조**(요소 tag·type·state, 화면에 입력된
+// 초안 유무)로 판정을 좁힌다. 어휘는 후보를 고르는 **씨앗**으로만 쓴다.
+
+export interface EngageElementInfo {
+  tag: string
+  type: string
+  name: string
+  state?: 'disabled' | 'checked' | 'unchecked'
+}
+
+export interface EngageClassifyInput {
+  /**
+   * 무슨 행동인가(`click` · `click_at` · `submit`). **누르거나 제출하는 행동이 아니면 참여로 보지 않는다.**
+   *
+   * 왜 필요한가 (2026-09-20, 검사가 잡음): 이 함수가 라벨 문자열만 보면, 사용자가 **타이핑한 글**에
+   * "좋아요" 같은 단어가 들어 있을 때 입력 동작이 좋아요로 분류된다 — 댓글 초안에 "좋아요 최고예요"
+   * 라고 쓰는 것은 아주 흔하다. 지금 호출부가 클릭만 넘기고 있어 실사용에는 닿지 않았지만,
+   * 판정 함수가 스스로 막지 못하면 **호출부가 하나 늘어나는 순간** 장부에 거짓 기록이 남는다.
+   */
+  actionKind?: string
+  /** describeAction 이 만든 프로즈 라벨 — 어휘 씨앗으로만 쓴다. */
+  label: string
+  /** 관찰된 대상 요소. click_at 처럼 요소를 모르면 null. */
+  el?: EngageElementInfo | null
+  /** click_at 좌표 조사에서 얻은 태그(BUTTON/A/…). 요소를 모를 때의 보조. */
+  probeTag?: string
+  /**
+   * 지금 화면에 **입력된 댓글 초안**이 있는가. undefined = 판별 불가(강등하지 않는다).
+   * 등록 버튼을 누르는 순간 입력칸에는 아직 글이 남아 있고, 작성창을 여는 순간에는 비어 있다.
+   */
+  hasDraftText?: boolean
+  /**
+   * 이 컨트롤이 **이미 켜진 토글**인가(페이지 조사에서 직접 읽은 aria-pressed 등).
+   * 관찰의 `state` 는 aria-pressed 를 읽지 않으므로 이쪽이 실질적인 근거다.
+   */
+  pressed?: boolean | null
+}
+
+export interface EngageVerdict {
+  kind: 'comment' | 'like' | 'unlike' | null
+  /** 이 클릭이 **이미 켜진 토글을 끄는** 것인가(구조적 근거). */
+  toggleOff: boolean
+  /** 왜 그렇게 봤는가 — 사용자 문구·로그·검사에서 쓴다. */
+  reason: string
+}
+
+const NONE_VERDICT: EngageVerdict = { kind: null, toggleOff: false, reason: '' }
+
+// 우리가 만드는 클릭 라벨의 형식(describeAction). 사이트에서 온 문자열이 아니라 **우리 코드가 쓴** 접두사다.
+const CLICK_LABEL_RE = /^\s*(클릭|화면 클릭)\s/
+
+/** 눌러서 무언가를 제출할 수 있는 컨트롤인가. 링크(a)는 보통 이동·작성창 열기다. */
+function submitCapable(el: EngageElementInfo | null | undefined, probeTag: string): boolean {
+  if (!el) {
+    const t = String(probeTag ?? '').toUpperCase()
+    if (!t) return true              // 아무것도 모르면 보수적으로 통과시킨다(미차단보다 과차단이 안전)
+    return t !== 'A'
+  }
+  const tag = String(el.tag ?? '').toLowerCase()
+  const type = String(el.type ?? '').toLowerCase()
+  if (tag === 'button') return true
+  if (tag === 'input') return type === 'submit' || type === 'button' || type === 'image'
+  if (tag === 'a') return false
+  // role=button 등으로 잡힌 요소, 또는 태그를 모르는 경우 — 통과.
+  return true
+}
+
+/**
+ * 댓글·좋아요 클릭을 **구조 우선**으로 판정한다.
+ * 어휘 정규식(UNLIKE_RE/COMMENT_SUBMIT_RE/LIKE_RE)은 손대지 않는다 — 여기서 좁히기만 한다.
+ */
+export function classifyEngageAction(input: EngageClassifyInput): EngageVerdict {
+  const label = String(input.label ?? '')
+  if (!label) return NONE_VERDICT
+  // 누르는 행동만 참여가 될 수 있다. 행동 종류를 알려 주면 그걸 믿고, 안 알려 주면 우리가 만든
+  // 클릭 라벨 형식(`클릭 …` / `화면 클릭 …`)으로 확인한다 — 둘 다 아니면 판정하지 않는다.
+  const kindGiven = String(input.actionKind ?? '')
+  // 'submit' = 폼 제출(입력칸 Enter·requestSubmit). 클릭은 아니지만 **같은 효과**라 같은 판정을 받는다.
+  const pressLike = kindGiven === 'click' || kindGiven === 'click_at' || kindGiven === 'submit'
+  if (kindGiven ? !pressLike : !CLICK_LABEL_RE.test(label)) return NONE_VERDICT
+  const seed = classifyEngageClick(label)
+  if (!seed) return NONE_VERDICT
+
+  const el = input.el ?? null
+  const probeTag = String(input.probeTag ?? '')
+
+  // ① 구조가 어휘를 이긴다 — 이미 켜진 토글을 누르면 꺼진다.
+  //    (좋아요류에만 적용한다. 댓글 등록 버튼의 checked 상태는 의미가 다르다.)
+  //    근거는 두 가지: 페이지 조사에서 직접 읽은 pressed(aria-pressed 포함, click_at 에서도 있다)와
+  //    관찰의 state(aria-checked·checkbox 계열). 둘 중 하나라도 켜져 있으면 누르면 꺼진다.
+  if ((seed === 'like' || seed === 'unlike') && (input.pressed === true || el?.state === 'checked')) {
+    return { kind: 'unlike', toggleOff: true, reason: '이 버튼은 이미 켜져 있습니다(누르면 취소됩니다)' }
+  }
+  if (seed === 'unlike') {
+    return { kind: 'unlike', toggleOff: true, reason: '버튼 이름이 취소·해제입니다' }
+  }
+
+  if (seed === 'comment') {
+    // ⚠ 제출 경로('submit')에서는 **"지금 누른 요소가 버튼처럼 생겼는가" 를 물을 수 없다** —
+    //   버튼을 누른 것이 아니라 입력칸에서 Enter 를 친 것이라 그 물음이 성립하지 않는다.
+    //   그 폼에 제출 컨트롤이 있다는 사실은 호출자가 **그 버튼의 이름을 찾아왔다는 것**으로 이미
+    //   증명돼 있다(이름을 못 찾으면 label 이 비어 위에서 이미 걸러진다). 2026-09-20 e2e 가 잡았다.
+    if (kindGiven !== 'submit' && !submitCapable(el, probeTag)) {
+      return { kind: null, toggleOff: false, reason: '제출 컨트롤이 아닙니다 — 작성창 열기로 봅니다' }
+    }
+    if (input.hasDraftText === false) {
+      return { kind: null, toggleOff: false, reason: '입력된 댓글이 없습니다 — 작성창 열기로 봅니다' }
+    }
+    return { kind: 'comment', toggleOff: false, reason: '댓글 등록 버튼' }
+  }
+
+  // seed === 'like'
+  return { kind: 'like', toggleOff: false, reason: '좋아요 버튼' }
+}
+
+/**
+ * 화면에 **입력된 텍스트 초안**이 있는가 — 관찰 요소만 보고 판단한다.
+ * 관찰이 값을 실어 주지 않는 종류만 있으면 `undefined`(판별 불가)를 돌려준다 — 그때는 강등하지 않는다.
+ */
+export function hasDraftTextIn(
+  elements: ReadonlyArray<{ tag: string; type: string; value?: string }> | undefined,
+): boolean | undefined {
+  if (!elements || elements.length === 0) return undefined
+  let sawEntryField = false
+  for (const e of elements) {
+    const tag = String(e?.tag ?? '').toLowerCase()
+    const type = String(e?.type ?? '').toLowerCase()
+    const entry = tag === 'textarea'
+      || (tag === 'input' && (type === '' || type === 'text' || type === 'search' || type === 'email'))
+      || type === 'textbox'   // contenteditable 은 role=textbox 로 잡힌다
+    if (!entry) continue
+    // 값이 보이면 종류와 무관하게 초안이 있는 것이다.
+    if (String(e?.value ?? '').trim()) return true
+    // ⚠ 값이 **비어 보이는 것**은 "빈 칸" 일 수도, "값을 관찰하지 못하는 종류" 일 수도 있다.
+    //   관찰(page-actions)은 input/textarea 에만 value 를 채운다 — contenteditable 은 항상 비어 보인다.
+    //   그걸 "초안 없음" 으로 세면 div 로만 짠 편집기에서 보호가 **조용히 꺼진다**(2026-09-20 리뷰 M2).
+    //   그래서 값을 관찰할 수 있는 종류만 "빈 칸" 의 근거로 센다.
+    const observable = tag === 'textarea'
+      || (tag === 'input' && (type === '' || type === 'text' || type === 'search' || type === 'email'))
+    if (observable) sawEntryField = true
+  }
+  return sawEntryField ? false : undefined
+}
+
+/**
+ * 작업 지시가 **명시적으로 좋아요 취소를 요청**했는가.
+ * 작업 지시문은 신뢰 경로다(사용자·신뢰 IPC 빌더만 쓴다 — 페이지 내용이 아니다).
+ * 그래서 여기서만 문구로 본다. 페이지에서 온 문자열에는 절대 쓰지 않는다.
+ */
+// korean-regex-ok: 한글 어휘라 단어경계(\b)를 쓰지 않는다(한글 뒤 \b 는 성립하지 않는다).
+const EXPLICIT_UNLIKE_RE = /(좋아요|공감|하트|like)[^\n]{0,12}(취소|해제|없애|빼|내려|제거)|(취소|해제|없애|빼|제거)[^\n]{0,8}(좋아요|공감|하트)|unlike|un-?like/i
+
+// ⚠ 매치 **주변의 부정**을 반드시 함께 본다 (2026-09-20 리뷰가 실행으로 잡았다).
+//   "좋아요 취소하지 마" 가 취소 요청으로 읽히면, 막으라고 한 바로 그 일을 허용하게 된다.
+// korean-regex-ok: 위와 같은 이유(한글 뒤 단어경계는 성립하지 않는다).
+const UNLIKE_NEGATION_RE = /하지\s*마|하지\s*말|말\s*것|말고|안\s*돼|안\s*됩|안\s*된|금지|없이|절대|do\s*not|don'?t|never/i
+
+export function wantsUnlike(taskText: string): boolean {
+  const t = String(taskText ?? '')
+  const m = EXPLICIT_UNLIKE_RE.exec(t)
+  if (!m) return false
+  // 매치 구간 앞뒤를 넉넉히 보고 부정이 섞여 있으면 "요청" 으로 읽지 않는다.
+  // 애매하면 **안전한 쪽**(허용하지 않음)으로 떨어진다 — 취소는 되돌릴 수 없다.
+  const around = t.slice(Math.max(0, m.index - 20), m.index + m[0].length + 20)
+  return !UNLIKE_NEGATION_RE.test(around)
+}
+
 // ===== 게시 여부 확인 근거 (읽기 전용 확인 작업) =====
 //
 // 왜 필요한가 (2026-09-19, 실사용 결함): "이미 게시됐는가" 를 모델이 `게시됨:` 이라고 **말했다는

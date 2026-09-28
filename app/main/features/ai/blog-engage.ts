@@ -274,6 +274,29 @@ export function alreadyDid(key: string, account: string, action: EngageAction): 
 }
 
 /**
+ * 기록을 **되돌린다** — 클릭이 실제로 나가지 못했을 때만 쓴다.
+ *
+ * 왜 필요한가: 기록은 클릭 **직전에** 적는다(뒤에 적으면 그 사이 크래시가 기록을 날려 다음 실행이
+ * 또 누른다). 그 대가로, 요소를 못 찾아 클릭이 **발사조차 되지 않은** 경우에도 "했다" 로 남아
+ * 정당한 재시도가 영원히 막힌다. 그런 경우는 되돌리는 것이 맞다.
+ *
+ * ⚠ **"눌렀는데 결과를 모르겠다" 에는 절대 쓰지 마라.** 되돌릴 수 있는 것은 *발사 전 실패* 뿐이다.
+ *   불확실은 불확실로 남겨야 한다(그쪽은 외부 쓰기 원장이 사람에게 묻는다).
+ */
+export function removeEngagement(key: string, account: string, action: EngageAction): boolean {
+  const k = String(key ?? '').trim()
+  if (!k) return false
+  const acc = normalizeAccount(account)
+  const list = all()
+  const at = list.findIndex((e) => e.key === k && e.account === acc && e.action === action)
+  if (at < 0) return false
+  list.splice(at, 1)
+  index = rebuildIndex(list)
+  store.markDirty()
+  return true
+}
+
+/**
  * 행동을 장부에 기록한다. 같은 (key, account, action) 조합은 **무시**한다(최초 기록을 보존 —
  * 언제 처음 그 행동을 했는지가 감사 기록으로서 의미 있고, 나중 기록으로 덮으면 그 정보가 사라진다).
  */

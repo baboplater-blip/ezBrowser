@@ -3,13 +3,13 @@
     "requested": "opus",
     "resolved": null,
     "verified": false,
-    "method": "ambiguous",
+    "method": "error",
     "candidates": [
       "claude-haiku-4-5-20251001",
       "claude-opus-5",
       "claude-sonnet-5"
     ],
-    "reason": "배경 모델 제외 후 2개가 남아 특정 불가",
-    "checked_at": "2026-09-20T04:47:39.856372+00:00"
+    "reason": "CLI 호출이 오류를 반환함(is_error=True)",
+    "checked_at": "2026-09-20T08:21:41.270551+00:00"
   }
 }

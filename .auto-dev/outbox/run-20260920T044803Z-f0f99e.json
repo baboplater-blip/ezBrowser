@@ -1,0 +1,182 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260920T044803Z-f0f99e",
+  "recorded_at": "2026-09-20T06:15:44Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260920T044803Z-f0f99e",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260920T044803Z-f0f99e)의 구조화 완료 기록: pass (합격 기준 11건 전건 통과, 부정 사례 5건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가), (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요); 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "3863a0eb-23f7-47ff-a1fd-7dbb2c57192c",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "다시 켠 뒤 자동화가 원래 그 탭에서만 이어간다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "같은 URL 탭이 여러 개여도 정확히 하나에서만 동작한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "여러 창이 각자의 탭·핀·활성 탭 그대로 복원된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "대상 탭을 못 찾으면 추측해서 아무 탭에나 붙지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 대상 탭을 직접 고르면 그 탭에서 재개된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "시크릿·다른 워크스페이스 탭으로는 넘어가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "브라우저를 켰다고 저절로 작업이 돌지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "대상 선택이 위험 동작 승인을 대신하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "재시작 뒤 게시가 엉뚱한 탭·다른 계정 세션으로 나가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "같은 사이트 안 리다이렉트는 묻지 않고 그 탭에서 계속한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "T9 기존 검사를 약화하지 않고 강화했다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가)",
+        "rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요)"
+      ],
+      "optional_next": [
+        "대상 선택 UI 를 화면 클릭으로 훑는 DOM 검사(이번엔 메인 IPC 경로로만 검증)",
+        "verify:full 전체 완주(이번엔 quick 19단계 + 영향 범위 하네스만)"
+      ],
+      "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 은 미서명이라 SmartScreen 경고(사용자 제공 필요, 자율 해결 불가), (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED. 우회하지 않았다(다른 PC/VM 필요); 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260920T044803Z-f0f99e"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 5260.3,
+        "context_chars": 10728,
+        "total_tokens": 1953067,
+        "cache_read_tokens": 195164226
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9159,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 310,
+          "output": 119058,
+          "cache_read": 69652670,
+          "cache_creation": 541781
+        },
+        "claude-sonnet-5": {
+          "input": 532,
+          "output": 270619,
+          "cache_read": 125511556,
+          "cache_creation": 1011586
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\task-tab-recovery-20260920\\run-20260920T044803Z-f0f99e-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\task-tab-recovery-20260920\\run-20260920T044803Z-f0f99e-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "라운드를 끝냈다. 직전 실행이 배선만 하고 작업자 미완으로 끊긴 범위를 **같은 일을 재배정하지 않고** 이어받아 마감했다.\n\n## 무엇을 고쳤나\n\n창·탭 id(`win-N`/`tab-N`)는 프로세스마다 1부터 다시 발급된다. 그래서 재시작 뒤 자동화 작업이 옛 id·URL 호스트 스캔으로 대상을 되찾으면 **같은 사이트의 엉뚱한 탭**(다른 창·다른 로그인 세션)에 붙었다. 발행·결제면 사고다.\n\n- 탭·창에 **복원 안정 키**를 두고 세션 스냅샷으로 물려준다. 재바인딩은 **그 키로만** — 호스트 스캔 폴백은 삭제.\n- 못 찾으면 추측 대신 멈추고, 작업 카드에서 **사용자가 대상 탭을 고른다**(외피 인라인 패널 신설). 목록은 메인이 정본이고 선택은 메인이 다시 검증한다. **고르는 것은 승인이 아니다** — 위험 동작 확인은 그대로 다시 묻는다.\n- **게시 준비도 같은 결함이 있었다**(범위 밖 발견 → 재현 후 수정). 저장된 탭 id를 믿고 navigate 해 무관한 탭을 게시 사이트로 끌고 갔고, 그 탭이 다른 워크스페이스면 **계정이 바뀐 채로 게시**됐다.\n\n## 통합 중 내가 추가로 막은 구멍 2건\n\n1. `setTaskTarget`이 **아무 대기에서나** 먹혔다 — 결제 승인 대기에서도 통과해 에이전트가 영영 응답을 못 받고 대기 사유까지 지워졌다.\n2. `resolveTaskTab`이 async가 되며 생긴 **취소·일시정지 경합** — 잠든 탭을 최대 15초 깨우는 사이 누른 중단이 유실돼 12단계 구간이 그대로 실행될 수 있었다(코드 리뷰가 잡았다).\n\n## 검증 (전부 실측)\n\n| 하네스 | 결과 |\n|---|---|\n| `window-tabs` W1~W10 (신규, 실제 패키징 앱) | **10/10** |\n| `task-runtime` T1~T15 (T9 강화) | **15/15** |\n| `auto-publish` (게시 탭 재현 4종 신설) | **58/58** |\n| `npm run verify` | **19/19 · 2m 8s** (스모크 16/16) |\n\n**음성 대조**로 검출력을 확인했다 — 수정 전 빌드는 대상 탭이 없을 때 다른 페이지에 붙어 **25단계 예산을 전부 태웠고**(자동 조작 발생), 새 빌드는 즉시 멈추고 조작 0이다. 게시 쪽도 수정 전 코드로 되돌리면 4건이 실패하며 `tab-1`을 instagram.com으로 navigate 하는 것이 재현된다.\n\nT9는 **옛 동작(URL 스캔)을 합격으로 기대하고 있었다** — 손대지 않았으면 `verify:full`이 거기서 깨졌다. 조건을 약화하지 않고 둘을 더했고, 그 과정에서 \"실행 중 탭이 닫히면 `user-fix`로 갔다가 다음 이어가기에서 대상 선택 경로에 합류한다\"는 추측이 실측으로 확정됐다.\n\n하네스 쪽 결함 5건(간헐 FAIL 포함)은 **제품 결함과 구분해** 기록했다 — 그중 하나는 강제종료 전에 작업이 예산을 다 써서 \"재개 후 클릭 0\"이 제품 결함처럼 보이던 것이었다.\n\n## 산출물\n\n`dist/ezBrowser-0.2.0-rc.17-win-x64.exe` · 121,944,684 B · sha256 `7b7aeee0f8a656532879fe917e1667ef4924f68b23ea9e89d92e28180aab964e` · `--publish never`.\n\n## 하지 못한 것\n\n- **미서명**(.pfx 없음) → SmartScreen 경고. 사용자 제공이 필요하다.\n- **설치파일의 설치→부팅→제거 미검증** — 이 PC에 사용자 실설치본이 등록돼 있어 `verify-install`이 스스로 BLOCKED 된다. **우회하지 않았다.** rc.17은 `win-unpacked` 직접 실행으로 확인했다.\n- `verify:full` 전체는 돌리지 않았다(quick 19단계 + 영향 범위 하네스만). 대상 선택 UI는 메인 IPC 경로로 검증했고, 화면 클릭 DOM 검사는 다음 라운드 후보다.\n\n보고서: `.auto-dev/task-tab-recovery-20260920-fina",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260920T044803Z-f0f99e\\stream.jsonl",
+    "error": null
+  }
+}

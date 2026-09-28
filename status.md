@@ -96,32 +96,35 @@
 
 ### 최신 실행
 
-**`npm run verify` — 19/19 PASS · 2m 8s** (2026-09-20 06:02)
+**`npm run verify` — 20/20 PASS · 2m 15s** (2026-09-28 13:50)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
-| typecheck | ✅ PASS | 7s | 종료코드 0 |
-| build | ✅ PASS | 9s | 종료코드 0 |
-| package | ✅ PASS | 46s | 종료코드 0 |
-| smoke | ✅ PASS | 19s | PASS 16 |
+| typecheck | ✅ PASS | 6s | 종료코드 0 |
+| build | ✅ PASS | 8s | 종료코드 0 |
+| package | ✅ PASS | 52s | 종료코드 0 |
+| smoke | ✅ PASS | 21s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
 | editor-text | ✅ PASS | 0s | PASS 5 |
 | engage-ledger | ✅ PASS | 0s | 종료코드 0 |
-| auto-publish | ✅ PASS | 2s | 종료코드 0 |
+| auto-publish | ✅ PASS | 3s | 종료코드 0 |
 | draft-promotion | ✅ PASS | 1s | 종료코드 0 |
 | post-time | ✅ PASS | 0s | 종료코드 0 |
 | persistence-boundary | ✅ PASS | 0s | PASS 27 |
 | engage-durability | ✅ PASS | 0s | PASS 6 |
-| publish-evidence | ✅ PASS | 5s | PASS 8 |
+| publish-evidence | ✅ PASS | 4s | PASS 8 |
 | artifacts | ✅ PASS | 0s | 종료코드 0 |
 | agent-gate | ✅ PASS | 0s | PASS 9 |
+| general-engage | ✅ PASS | 0s | PASS 12 |
 | intent-routing | ✅ PASS | 0s | PASS 8 |
 | ai-providers | ✅ PASS | 0s | PASS 4 |
-| ai-connect | ✅ PASS | 12s | PASS 9 |
+| ai-connect | ✅ PASS | 11s | PASS 9 |
 | session-schema | ✅ PASS | 0s | 종료코드 0 |
 
 ### 최근 10회
 
+- 2026-09-28 13:50 · `quick` · **20/20 PASS** · 2m 15s
+- 2026-09-20 08:30 · `quick` · **20/20 PASS** · 1m 10s
 - 2026-09-20 06:02 · `quick` · **19/19 PASS** · 2m 8s
 - 2026-09-20 04:56 · `quick` · **19/19 PASS** · 1m 40s
 - 2026-09-20 04:08 · `quick` · **19/19 PASS** · 1m 8s
@@ -130,8 +133,6 @@
 - 2026-09-19 09:57 · `quick` · **16/16 PASS** · 54s
 - 2026-09-19 09:52 · `quick` · **16/16 PASS** · 56s
 - 2026-09-19 09:41 · `quick` · **16/16 PASS** · 59s
-- 2026-09-19 08:54 · `quick` · **15/15 PASS** · 54s
-- 2026-09-19 08:47 · `quick` · **15/15 PASS** · 53s
 
 <!-- verify-all:end -->
 
