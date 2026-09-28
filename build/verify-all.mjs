@@ -408,6 +408,16 @@ function steps(outRoot) {
       desc: 'IPC 신뢰 경계 — internalAPI 프로토콜 가드(항목1)·판정함수(U1~U4)·가드 회귀(B1~B5)',
     },
     {
+      // 묶음 D(탭바·메뉴·접근성): window.prompt() 인라인화(TabBar 그룹·북마크 폴더) ·
+      // 탭 우클릭 메뉴 보강 · 미리보기 캐시 LRU(순수 로직) · 새 창/시크릿 창 링크·맞춤법
+      // 제안(정적 검증, 네이티브 OS 메뉴라 CDP 클릭 불가) · 탭바/사이드패널/워크스페이스/
+      // 명령팔레트 키보드 접근성.
+      id: 'tabbar-menus', kind: 'harness', modes: ['full'],
+      script: 'verify-tabbar-menus-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'tabbar-menus', 'tabbar-menus-results.json'),
+      timeoutMs: 10 * 60000, desc: '탭바·컨텍스트메뉴·접근성 S0·S1~S4·L1~L19',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',

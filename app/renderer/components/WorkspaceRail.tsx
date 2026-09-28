@@ -149,6 +149,7 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
         className="workspace-collapse"
         onClick={onToggle}
         title="워크스페이스 사이드바 접기"
+        aria-label="워크스페이스 사이드바 접기"
       >‹</button>
       {state.workspaces.map((w, idx) => (
         <button
@@ -159,6 +160,8 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
           onContextMenu={(e) => openContextMenu(e, w)}
           onDoubleClick={() => { setMenu({ workspace: w, x: 56, y: 60 + idx * 44, mode: 'rename' }) }}
           title={`${w.name}${w.id === state.activeId ? ' (활성)' : ''}\n우클릭 = 메뉴, 더블클릭 = 이름`}
+          aria-label={`워크스페이스 ${w.name}`}
+          aria-current={w.id === state.activeId ? 'true' : undefined}
           draggable
           onDragStart={(e) => {
             dragSourceId.current = w.id
@@ -194,6 +197,7 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
         className="workspace-new"
         onClick={handleNew}
         title="새 스페이스 (Ctrl+Alt+N)"
+        aria-label="새 워크스페이스"
       >+</button>
 
       {menu && (
