@@ -2,6 +2,12 @@
 // 동작 변경 없는 순수 이동 — AiTab.tsx 에서 그대로 옮겨졌다. React 상태·IPC 구독 없음.
 import type { AiProviderDetection } from '../../../shared/types'
 
+// i18n(묶음 M2) — 이 파일은 컴포넌트가 아니라 순수 함수 모음이라 useI18nT() 훅을 쓸 수 없다.
+// 호출부(AiTab.tsx·TaskCard.tsx)가 useI18nT() 로 얻은 번역 함수를 인자로 넘긴다.
+// 변수명은 `tr` — 이 영역의 TaskSummary/RepeatSummary 는 관례적으로 `t` 라는 이름을 쓰므로
+// (예: ptasks.map((t) => ...), TaskCard 의 t: TaskSummary prop) 충돌을 피하기 위함.
+export type TFn = (key: string, fallback?: string, vars?: Record<string, string | number>) => string
+
 export type Role = 'user' | 'assistant'
 export interface ChatMessage {
   id: string
@@ -24,11 +30,14 @@ export interface AiConfig {
 export interface PageInfo { url: string; title: string; hasSelection: boolean }
 
 /** 비용을 숨기지 않는다 — 고르기 전에 무엇이 드는지 먼저 보인다. */
-export const COST_LABEL: Record<AiProviderDetection['candidates'][number]['cost'], string> = {
-  subscription: '구독 계정 · 추가 요금 없음',
-  'free-local': '내 컴퓨터 · 무료',
-  'free-tier': '무료 티어',
-  'paid-key': '사용한 만큼 과금',
+export function costLabel(tr: TFn, cost: AiProviderDetection['candidates'][number]['cost']): string {
+  switch (cost) {
+    case 'subscription': return tr('ai.shared.cost.subscription', '구독 계정 · 추가 요금 없음')
+    case 'free-local': return tr('ai.shared.cost.freeLocal', '내 컴퓨터 · 무료')
+    case 'free-tier': return tr('ai.shared.cost.freeTier', '무료 티어')
+    case 'paid-key': return tr('ai.shared.cost.paidKey', '사용한 만큼 과금')
+    default: return cost
+  }
 }
 export interface TraceItem { id: string; icon: string; text: string; tone?: 'ok' | 'warn' | 'muted'; shot?: string }
 export interface ConvSummary { id: string; title: string; updatedAt: number; messageCount: number; folderId: string | null; tags: string[]; pinned: boolean }
@@ -65,13 +74,15 @@ export type RunStatus = 'running' | 'paused' | 'interrupted' | 'done' | 'error' 
 export interface RunSummary { id: string; task: string; startedAt: number; endedAt?: number; status: RunStatus; stepCount: number }
 export interface RunStep { icon: string; text: string; tone?: 'ok' | 'warn' | 'muted' }
 export interface RunDetail { id: string; task: string; startedAt: number; endedAt?: number; status: RunStatus; steps: RunStep[]; result?: string }
-export const RUN_STATUS: Record<RunStatus, { icon: string; label: string }> = {
-  running: { icon: '◔', label: '진행 중' },
-  paused: { icon: '⏸️', label: '일시정지' },
-  interrupted: { icon: '⏳', label: '미완료' },
-  done: { icon: '✅', label: '완료' },
-  error: { icon: '❌', label: '오류' },
-  cancelled: { icon: '⏹️', label: '중단' },
+export function runStatusInfo(tr: TFn, status: RunStatus): { icon: string; label: string } {
+  switch (status) {
+    case 'running': return { icon: '◔', label: tr('ai.shared.runStatus.running', '진행 중') }
+    case 'paused': return { icon: '⏸️', label: tr('ai.shared.runStatus.paused', '일시정지') }
+    case 'interrupted': return { icon: '⏳', label: tr('ai.shared.runStatus.interrupted', '미완료') }
+    case 'done': return { icon: '✅', label: tr('ai.shared.runStatus.done', '완료') }
+    case 'error': return { icon: '❌', label: tr('ai.shared.runStatus.error', '오류') }
+    case 'cancelled': return { icon: '⏹️', label: tr('ai.shared.runStatus.cancelled', '중단') }
+  }
 }
 export interface RepeatSummary {
   id: string; task: string; intervalMs: number; totalCount: number; doneCount: number
@@ -99,55 +110,84 @@ export interface TaskSummary {
 }
 // 대기 사유별 안내 — 재시작으로 중단(interrupted)됐을 때 "왜 멈췄는지"를 무해한 일반 문구 뒤에
 // 숨기지 않기 위한 사유별 문구. 승인 대기 중이던 결제·삭제 같은 위험 동작을 사람이 놓치지 않게 한다.
-export const WAIT_CAUSE_INFO: Record<TaskWaitCause, { icon: string; title: string; hint?: string }> = {
-  confirm: { icon: '⏸️', title: '승인이 필요했던 동작에서 멈췄습니다', hint: '이어가면 자동 승인되지 않습니다 — 다시 확인을 요청합니다.' },
-  login: { icon: '🔐', title: '로그인이 필요합니다', hint: '브라우저에서 직접 로그인한 뒤 이어가세요.' },
-  captcha: { icon: '🧩', title: '사람 확인이 필요합니다', hint: '직접 처리한 뒤 이어가세요.' },
-  ledger: { icon: '⚠', title: '게시 여부가 확인되지 않았습니다', hint: '이미 올라갔다면 이어가지 말고 중단하세요.' },
-  ask: { icon: '❓', title: '답변을 기다리다 멈췄습니다' },
-  'user-fix': { icon: '🔧', title: '직접 처리가 필요합니다' },
-  'tab-target': {
-    icon: '🎯', title: '작업하던 탭을 찾지 못했습니다',
-    hint: '어느 탭에서 이어갈지 직접 골라 주세요 — 비슷한 탭을 대신 추측하지 않습니다.',
-  },
+export function waitCauseInfo(tr: TFn, cause: TaskWaitCause): { icon: string; title: string; hint?: string } {
+  switch (cause) {
+    case 'confirm': return {
+      icon: '⏸️', title: tr('ai.shared.waitCause.confirm.title', '승인이 필요했던 동작에서 멈췄습니다'),
+      hint: tr('ai.shared.waitCause.confirm.hint', '이어가면 자동 승인되지 않습니다 — 다시 확인을 요청합니다.'),
+    }
+    case 'login': return {
+      icon: '🔐', title: tr('ai.shared.waitCause.login.title', '로그인이 필요합니다'),
+      hint: tr('ai.shared.waitCause.login.hint', '브라우저에서 직접 로그인한 뒤 이어가세요.'),
+    }
+    case 'captcha': return {
+      icon: '🧩', title: tr('ai.shared.waitCause.captcha.title', '사람 확인이 필요합니다'),
+      hint: tr('ai.shared.waitCause.captcha.hint', '직접 처리한 뒤 이어가세요.'),
+    }
+    case 'ledger': return {
+      icon: '⚠', title: tr('ai.shared.waitCause.ledger.title', '게시 여부가 확인되지 않았습니다'),
+      hint: tr('ai.shared.waitCause.ledger.hint', '이미 올라갔다면 이어가지 말고 중단하세요.'),
+    }
+    case 'ask': return { icon: '❓', title: tr('ai.shared.waitCause.ask.title', '답변을 기다리다 멈췄습니다') }
+    case 'user-fix': return { icon: '🔧', title: tr('ai.shared.waitCause.userFix.title', '직접 처리가 필요합니다') }
+    case 'tab-target': return {
+      icon: '🎯', title: tr('ai.shared.waitCause.tabTarget.title', '작업하던 탭을 찾지 못했습니다'),
+      hint: tr('ai.shared.waitCause.tabTarget.hint', '어느 탭에서 이어갈지 직접 골라 주세요 — 비슷한 탭을 대신 추측하지 않습니다.'),
+    }
+  }
 }
 // 이 사유들은 사람이 브라우저 안에서 직접 뭔가를 해야 풀린다 — '이어가기' 버튼 문구를 그렇게 바꿔
 // 눌러도 자동으로 아무 일도 재승인되지 않는다는 것을 알린다('ask' 는 답변만 하면 되므로 제외).
 export const NEEDS_MANUAL_ACTION: ReadonlySet<TaskWaitCause> = new Set(['confirm', 'login', 'captcha', 'ledger', 'user-fix', 'tab-target'])
 export type TaskPending = { kind: 'confirm'; label: string } | { kind: 'ask'; message: string }
-export const TASK_STATE_LABEL: Record<TaskState, { icon: string; label: string; tone?: 'ok' | 'warn' | 'muted' }> = {
-  queued: { icon: '🕐', label: '대기 중', tone: 'muted' },
-  running: { icon: '▶', label: '실행 중' },
-  paused: { icon: '⏸️', label: '일시정지', tone: 'muted' },
-  'waiting-user': { icon: '❓', label: '확인 대기', tone: 'warn' },
-  retrying: { icon: '🔄', label: '재시도 대기', tone: 'warn' },
-  interrupted: { icon: '⏳', label: '미완료', tone: 'warn' },
-  'needs-verify': { icon: '🔍', label: '확인 필요', tone: 'warn' },
-  completed: { icon: '✅', label: '완료', tone: 'ok' },
-  failed: { icon: '❌', label: '실패', tone: 'warn' },
-  cancelled: { icon: '⏹️', label: '중단됨', tone: 'muted' },
+export function taskStateLabel(tr: TFn, state: TaskState): { icon: string; label: string; tone?: 'ok' | 'warn' | 'muted' } {
+  switch (state) {
+    case 'queued': return { icon: '🕐', label: tr('ai.shared.taskState.queued', '대기 중'), tone: 'muted' }
+    case 'running': return { icon: '▶', label: tr('ai.shared.taskState.running', '실행 중') }
+    case 'paused': return { icon: '⏸️', label: tr('ai.shared.taskState.paused', '일시정지'), tone: 'muted' }
+    case 'waiting-user': return { icon: '❓', label: tr('ai.shared.taskState.waitingUser', '확인 대기'), tone: 'warn' }
+    case 'retrying': return { icon: '🔄', label: tr('ai.shared.taskState.retrying', '재시도 대기'), tone: 'warn' }
+    case 'interrupted': return { icon: '⏳', label: tr('ai.shared.taskState.interrupted', '미완료'), tone: 'warn' }
+    case 'needs-verify': return { icon: '🔍', label: tr('ai.shared.taskState.needsVerify', '확인 필요'), tone: 'warn' }
+    case 'completed': return { icon: '✅', label: tr('ai.shared.taskState.completed', '완료'), tone: 'ok' }
+    case 'failed': return { icon: '❌', label: tr('ai.shared.taskState.failed', '실패'), tone: 'warn' }
+    case 'cancelled': return { icon: '⏹️', label: tr('ai.shared.taskState.cancelled', '중단됨'), tone: 'muted' }
+  }
 }
-export const RETRY_KIND_LABEL: Record<string, string> = {
-  network: '네트워크 오류', 'rate-limit': '요청 한도 초과', 'cli-dead': 'CLI 연결 끊김',
-  'tab-gone': '작업 탭이 닫힘', login: '로그인 필요', model: '모델 오류', unknown: '알 수 없는 오류',
+export function retryKindLabel(tr: TFn, kind: string): string {
+  switch (kind) {
+    case 'network': return tr('ai.shared.retryKind.network', '네트워크 오류')
+    case 'rate-limit': return tr('ai.shared.retryKind.rateLimit', '요청 한도 초과')
+    case 'cli-dead': return tr('ai.shared.retryKind.cliDead', 'CLI 연결 끊김')
+    case 'tab-gone': return tr('ai.shared.retryKind.tabGone', '작업 탭이 닫힘')
+    case 'login': return tr('ai.shared.retryKind.login', '로그인 필요')
+    case 'model': return tr('ai.shared.retryKind.model', '모델 오류')
+    case 'unknown': return tr('ai.shared.retryKind.unknown', '알 수 없는 오류')
+    default: return kind
+  }
 }
-export function fmtDuration(ms: number): string {
+export function fmtDuration(tr: TFn, ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
-  if (s < 60) return `${s}초`
+  if (s < 60) return tr('ai.shared.duration.seconds', '{s}초', { s })
   const m = Math.floor(s / 60)
-  if (m < 60) return `${m}분 ${s % 60}초`
+  if (m < 60) return tr('ai.shared.duration.minSec', '{m}분 {s}초', { m, s: s % 60 })
   const h = Math.floor(m / 60)
-  return `${h}시간 ${m % 60}분`
+  return tr('ai.shared.duration.hourMin', '{h}시간 {m}분', { h, m: m % 60 })
 }
-export function repeatStatusText(r: RepeatSummary): string {
-  const of = r.totalCount > 0 ? `${r.doneCount}/${r.totalCount}회` : `${r.doneCount}회 (무제한)`
-  if (r.status === 'running') return `실행 중 · ${of}`
+export function repeatStatusText(tr: TFn, r: RepeatSummary): string {
+  const of = r.totalCount > 0
+    ? tr('ai.shared.repeat.countOf', '{done}/{total}회', { done: r.doneCount, total: r.totalCount })
+    : tr('ai.shared.repeat.countUnlimited', '{done}회 (무제한)', { done: r.doneCount })
+  if (r.status === 'running') return tr('ai.shared.repeat.running', '실행 중 · {of}', { of })
   if (r.status === 'waiting') {
     const sec = r.nextAt ? Math.max(0, Math.round((r.nextAt - Date.now()) / 1000)) : 0
-    return `대기 · ${of} · 다음 ${sec >= 60 ? Math.round(sec / 60) + '분' : sec + '초'} 후`
+    const nextIn = sec >= 60
+      ? tr('ai.shared.repeat.nextInMin', '{m}분', { m: Math.round(sec / 60) })
+      : tr('ai.shared.repeat.nextInSec', '{s}초', { s: sec })
+    return tr('ai.shared.repeat.waiting', '대기 · {of} · 다음 {nextIn} 후', { of, nextIn })
   }
-  if (r.status === 'finished') return `완료 · ${of}`
-  return `중지됨 · ${of}`
+  if (r.status === 'finished') return tr('ai.shared.repeat.finished', '완료 · {of}', { of })
+  return tr('ai.shared.repeat.stopped', '중지됨 · {of}', { of })
 }
 
 export function newId(): string {
@@ -170,14 +210,17 @@ export interface WorkflowIntent {
 
 // 에이전트에 무엇이든 시킬 수 있음을 보여주는 예시 작업(발견성). 클릭하면 입력창에 채워지고, 사용자가
 // 자기 사이트에 맞게 다듬어 실행한다(자동 실행 아님 — 되돌리기 어려운 동작은 실행 시 확인 게이트가 잡음).
-export const AGENT_EXAMPLES: Array<{ label: string; task: string }> = [
-  { label: '📋 목록을 표로 모아 CSV', task: '이 페이지의 목록을 페이지를 넘겨가며 빠짐없이 표로 수집하고 CSV로 내보내줘.' },
-  { label: '📨 안 읽은 메일만 요약', task: '받은 편지함에서 안 읽은 메일 중 중요한 것만 골라 발신자·제목·핵심을 요약해줘.' },
-  { label: '🧾 주문·예약 내역 정리', task: '내 주문/예약 내역을 최근 순으로 표로 정리해줘(날짜·항목·금액·상태).' },
-  { label: '✍️ 답글 초안 쓰기', task: '지금 보고 있는 글/문의에 대한 정중한 답글 초안을 한국어로 써줘(게시하지 말고 초안만).' },
-  { label: '🖊 폼 자동 작성', task: '이 페이지의 입력 폼을 내 저장된 프로필 정보로 채워줘(제출은 하지 말고 채우기만).' },
-  { label: '🔎 원하는 정보 찾기', task: '이 사이트에서 (원하는 것)을 찾아서 정리해줘.' },
-]
+// task 는 실제로 에이전트에 보내지는 지시문(프롬프트)이라 번역 범위에서 제외 — label(버튼 문구)만 옮긴다.
+export function agentExamples(tr: TFn): Array<{ label: string; task: string }> {
+  return [
+    { label: '📋 ' + tr('ai.shared.example.csv', '목록을 표로 모아 CSV'), task: '이 페이지의 목록을 페이지를 넘겨가며 빠짐없이 표로 수집하고 CSV로 내보내줘.' },
+    { label: '📨 ' + tr('ai.shared.example.mail', '안 읽은 메일만 요약'), task: '받은 편지함에서 안 읽은 메일 중 중요한 것만 골라 발신자·제목·핵심을 요약해줘.' },
+    { label: '🧾 ' + tr('ai.shared.example.orders', '주문·예약 내역 정리'), task: '내 주문/예약 내역을 최근 순으로 표로 정리해줘(날짜·항목·금액·상태).' },
+    { label: '✍️ ' + tr('ai.shared.example.reply', '답글 초안 쓰기'), task: '지금 보고 있는 글/문의에 대한 정중한 답글 초안을 한국어로 써줘(게시하지 말고 초안만).' },
+    { label: '🖊 ' + tr('ai.shared.example.form', '폼 자동 작성'), task: '이 페이지의 입력 폼을 내 저장된 프로필 정보로 채워줘(제출은 하지 말고 채우기만).' },
+    { label: '🔎 ' + tr('ai.shared.example.find', '원하는 정보 찾기'), task: '이 사이트에서 (원하는 것)을 찾아서 정리해줘.' },
+  ]
+}
 
 // 수집 데이터 내보내기 헬퍼 — 열 합집합·CSV·다운로드·복사.
 export function extractCols(rows: Array<Record<string, string>>): string[] {
@@ -247,15 +290,15 @@ export function looksLikeAgentCommand(text: string): boolean {
 export function hostOf(u: string): string {
   try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u }
 }
-export function relTime(ts: number): string {
+export function relTime(tr: TFn, ts: number): string {
   const diff = Date.now() - ts
   const m = Math.floor(diff / 60000)
-  if (m < 1) return '방금'
-  if (m < 60) return `${m}분 전`
+  if (m < 1) return tr('ai.shared.relTime.now', '방금')
+  if (m < 60) return tr('ai.shared.relTime.minutesAgo', '{m}분 전', { m })
   const h = Math.floor(m / 60)
-  if (h < 24) return `${h}시간 전`
+  if (h < 24) return tr('ai.shared.relTime.hoursAgo', '{h}시간 전', { h })
   const d = Math.floor(h / 24)
-  if (d < 7) return `${d}일 전`
+  if (d < 7) return tr('ai.shared.relTime.daysAgo', '{d}일 전', { d })
   try { return new Date(ts).toLocaleDateString() } catch { return '' }
 }
 
