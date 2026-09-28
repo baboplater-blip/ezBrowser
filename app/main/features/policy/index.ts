@@ -1,12 +1,9 @@
-import { app, session, type Session, type WebContents } from 'electron'
+import { app, type Session, type WebContents } from 'electron'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { HeaderPair, PolicyRule, PolicyRuleSummary } from '../../../shared/types'
-import { DEFAULT_SESSION } from '../../../shared/constants'
-import { applyClientHints } from '../client-hints'
-import { dnrRequestHeaders } from '../extensions/dnr'
 
 const policies = new Map<string, PolicyRule>()
 let loaded = false
@@ -348,7 +345,7 @@ function setHeader(headers: Record<string, string | string[]>, name: string, val
   headers[name] = value
 }
 
-function applyToRequestHeaders(
+export function applyToRequestHeaders(
   url: string, requestHeaders: Record<string, string | string[]>,
 ): Record<string, string | string[]> {
   const rules = activeRulesFor(url)
@@ -393,40 +390,14 @@ export function applyToResponseHeaders(
   return next
 }
 
-const installedSessions = new WeakSet<Session>()
-
-export function installPolicyOn(ses: Session): void {
-  installOn(ses)
-}
-
-function installOn(ses: Session): void {
-  if (installedSessions.has(ses)) return
-  installedSessions.add(ses)
-  // 세션당 onBeforeSendHeaders 리스너는 하나만 유효하다(마지막 등록만 살아남는다 — 회귀 #5 계열).
-  // 그래서 클라이언트 힌트 보강도 별도 등록이 아니라 이 디스패처 안에서 처리한다.
-  // 순서: 클라이언트 힌트 먼저 → 사용자 정책 룰이 그 위에 덮어쓸 수 있게(사용자 룰이 항상 최종 결정권).
-  ses.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, cb) => {
-    try {
-      // 순서: 확장 DNR → 클라이언트 힌트 → 사용자 정책.
-      // 사용자가 직접 만든 룰이 마지막이라 항상 최종 결정권을 갖는다.
-      const withDnr = dnrRequestHeaders(details, details.requestHeaders) ?? details.requestHeaders
-      const withHints = applyClientHints(details.url, withDnr)
-      const next = applyToRequestHeaders(details.url, withHints)
-      cb({ cancel: false, requestHeaders: next })
-    } catch (err) {
-      console.warn('[policy] onBeforeSendHeaders error', err)
-      cb({ cancel: false, requestHeaders: details.requestHeaders })
-    }
-  })
-  ses.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, cb) => {
-    try {
-      const next = applyToResponseHeaders(details.url, details.responseHeaders)
-      cb({ cancel: false, responseHeaders: next })
-    } catch (err) {
-      console.warn('[policy] onHeadersReceived error', err)
-      cb({ cancel: false, responseHeaders: details.responseHeaders })
-    }
-  })
+// 2026-09-28(묶음 B): webRequest 리스너(onBeforeSendHeaders/onHeadersReceived)의 등록은
+// features/web-request-dispatcher.ts 로 이전했다 — 세션당 리스너 1개 제약 때문에 policy·adblock 이
+// 각자 따로 등록하던 것을 단일 소유자로 통합(항목 3). 정책 적용 자체는 여전히 이 파일의
+// applyToRequestHeaders/applyToResponseHeaders(순수 함수)가 맡고, 디스패처가 그걸 호출한다.
+// installPolicyOn 은 main/index.ts 가 여전히 `addSessionInitHook` 으로 호출하므로(부팅 흐름
+// 담당 라인은 건드리지 않는다) 하위 호환을 위해 이름만 남기고 아무 것도 하지 않는 no-op 으로 둔다.
+export function installPolicyOn(_ses: Session): void {
+  // no-op — 실제 webRequest 등록은 session-bootstrap.setupSession() 이 dispatcher 로 처리한다.
 }
 
 export async function initPolicies(): Promise<void> {

@@ -16,6 +16,7 @@ import { SidePanel } from './components/SidePanel'
 import { PaneStage, type PaneLayout } from './components/PaneStage'
 import { WorkspaceRail, WORKSPACE_RAIL_WIDTH } from './components/WorkspaceRail'
 import { PasswordSavePrompt } from './components/PasswordSavePrompt'
+import { PermissionPrompt } from './components/PermissionPrompt'
 import { UpdateBanner } from './components/UpdateBanner'
 import { FindBar } from './components/FindBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -574,6 +575,7 @@ export function App() {
       <Toast windowId={windowId} />
       <QrModal windowId={windowId} />
       <PasswordSavePrompt windowId={windowId} />
+      <PermissionPrompt windowId={windowId} />
       <UpdateBanner windowId={windowId} />
     </div>
   )

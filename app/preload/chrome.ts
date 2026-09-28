@@ -134,6 +134,11 @@ const api = {
       ipcRenderer.invoke(IPC.permissions.clearOrigin, { origin }),
     onChanged: (cb: (list: Array<{ origin: string; permissions: Record<string, 'allow' | 'deny'> }>) => void) =>
       on(IPC.permissions.changed, cb),
+    onPromptOpen: (
+      cb: (p: { promptId: string; origin: string; permission: string; tabId: string }) => void,
+    ) => on(IPC.permissions.promptOpen, cb),
+    respondPrompt: (promptId: string, allow: boolean, remember: boolean): Promise<void> =>
+      ipcRenderer.invoke(IPC.permissions.promptRespond, { promptId, allow, remember }),
   },
   sitedata: {
     summary: (origin: string): Promise<{ cookies: number; hasData: boolean }> =>

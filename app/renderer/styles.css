@@ -2590,7 +2590,7 @@ button:not(.tab):not(.si-toggle):not(.sidepanel-tab):not(.ai-fold-toggle):not(:d
 @media (prefers-reduced-motion: reduce) {
   .tab-ctx, .ext-context-menu, .bookmark-folder-menu,
   .video-popover, .ext-overflow-panel, .workspace-menu, .siteinfo,
-  .qr-modal, .cd-modal, .toast, .tab-preview, .update-banner, .pw-prompt {
+  .qr-modal, .cd-modal, .toast, .tab-preview, .update-banner, .pw-prompt, .perm-prompt {
     animation: bb-fade 120ms ease;
   }
   .workspace-chip:hover, .workspace-chip:active { transform: none; }
@@ -2664,3 +2664,50 @@ button:not(.tab):not(.si-toggle):not(.sidepanel-tab):not(.ai-fold-toggle):not(:d
   word-break: break-all;
   margin-top: 2px;
 }
+
+/* ===== Permission Prompt (항목 1 — 카메라·마이크·위치·알림·클립보드 요청) ===== */
+.perm-prompt {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 700;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  padding: 14px 16px;
+  animation: pw-prompt-in 180ms var(--ease-out);
+}
+.perm-prompt-body { display: flex; align-items: flex-start; gap: 12px; }
+.perm-prompt-icon { font-size: 22px; line-height: 1; padding-top: 2px; }
+.perm-prompt-text { flex: 1; min-width: 0; }
+.perm-prompt-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; line-height: 1.4; }
+.perm-prompt-host { font-weight: 600; color: var(--color-accent-primary); }
+.perm-prompt-remember {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--color-text-muted); cursor: pointer; user-select: none;
+}
+.perm-prompt-queue { font-size: 10px; color: var(--color-text-muted); margin-top: 6px; }
+.perm-prompt-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; margin-top: 2px; }
+.perm-prompt-btn {
+  height: 26px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.perm-prompt-btn:hover { border-color: var(--color-accent-primary); color: var(--color-accent-primary); }
+.perm-prompt-btn.primary {
+  background: var(--color-accent-primary);
+  color: white;
+  border-color: transparent;
+  font-weight: 500;
+}
+.perm-prompt-btn.primary:hover { opacity: 0.9; color: white; }

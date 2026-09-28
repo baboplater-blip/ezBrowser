@@ -1,14 +1,95 @@
-import { app, session, type Session } from 'electron'
+import { app, session, type Session, type WebContents } from 'electron'
 import path from 'node:path'
 import { promises as fsPromises } from 'node:fs'
 import { permissionDecisionFor } from './features/policy'
-import { getPermissionDecision } from './storage/permissions'
+import { getPermissionDecision, setPermission } from './storage/permissions'
 import { installResponseHooks } from './features/response-hooks'
+import { installWebRequestDispatcher } from './features/web-request-dispatcher'
+import { IPC } from '../shared/ipc-channels'
+import { findTabIdByWebContentsId } from './tabs/tab-service'
+import { getWindow } from './windows/window-service'
 
-const PERMISSION_ALLOWED: ReadonlyArray<string> = [
-  'media', 'geolocation', 'notifications',
-  'clipboard-read', 'fullscreen', 'pointerLock',
-]
+// 무해한 권한 — 사용자에게 물을 필요 없이 항상 허용(내부 페이지·웹 페이지 무관).
+const PERMISSION_AUTO_ALLOW: ReadonlySet<string> = new Set(['fullscreen', 'pointerLock'])
+
+// 크롬처럼 "물어야" 하는 권한 — 사이트별 저장된 결정·정책 룰이 없으면 사용자에게 프롬프트.
+// (예전엔 여기 있는 것들이 PERMISSION_ALLOWED 에 들어가 **무조건 허용**됐다 — 카메라·마이크·
+// 위치·알림을 아무 사이트에나 묻지도 않고 내줬다는 뜻. 항목 1.)
+const PERMISSION_PROMPTABLE: ReadonlySet<string> = new Set(['media', 'geolocation', 'notifications', 'clipboard-read'])
+
+// http/https 가 아닌 컨텍스트(외피 자신·확장·내부 페이지 등 — 물어볼 "사이트"가 없다)에서는
+// 예전과 같이 promptable 권한도 자동 허용한다(신뢰된 컨텍스트).
+function isPromptableContext(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+// ===== 권한 프롬프트 큐 =====
+// setPermissionRequestHandler 의 cb 는 언제 불러도 되는 비동기 콜백이다 — 외피에 말풍선을 띄우고
+// 사용자가 허용/차단을 고를 때까지(또는 닫힘·탭 소멸·60초 무응답으로 거부될 때까지) 쥐고 있는다.
+
+interface PendingPermissionPrompt {
+  origin: string
+  permission: string
+  cb: (allow: boolean) => void
+  timer: NodeJS.Timeout
+  cleanup: () => void
+}
+
+const pendingPermissionPrompts = new Map<string, PendingPermissionPrompt>()
+let permissionPromptCounter = 0
+const PERMISSION_PROMPT_TIMEOUT_MS = 60_000
+
+/** 외피(PermissionPrompt.tsx)가 사용자의 선택을 알려줄 때 호출 — ipc/permissions.ts 에서 연결. */
+export function resolvePermissionPrompt(promptId: string, allow: boolean, remember: boolean): void {
+  const p = pendingPermissionPrompts.get(promptId)
+  if (!p) return
+  clearTimeout(p.timer)
+  p.cleanup()
+  pendingPermissionPrompts.delete(promptId)
+  if (remember) setPermission(p.origin, p.permission, allow ? 'allow' : 'deny')
+  p.cb(allow)
+}
+
+function denyAndForget(promptId: string): void {
+  const p = pendingPermissionPrompts.get(promptId)
+  if (!p) return
+  clearTimeout(p.timer)
+  p.cleanup()
+  pendingPermissionPrompts.delete(promptId)
+  p.cb(false)
+}
+
+/**
+ * 저장된 결정·정책 룰이 없는 promptable 권한을 사용자에게 물어본다.
+ * 창/탭을 못 찾거나(팝업·서비스워커 등 화면에 보여줄 곳이 없음) 요청 콘텐츠가 곧 사라지면
+ * 안전하게 거부한다 — "물어볼 수 없으면 허용하지 않는다".
+ */
+function requestPermissionFromUser(
+  wc: WebContents, permission: string, origin: string, cb: (allow: boolean) => void,
+): void {
+  const found = findTabIdByWebContentsId(wc.id)
+  if (!found) { cb(false); return }
+  const ctx = getWindow(found.windowId)
+  if (!ctx || ctx.chrome.webContents.isDestroyed()) { cb(false); return }
+
+  permissionPromptCounter += 1
+  const promptId = `perm-${Date.now().toString(36)}-${permissionPromptCounter}`
+
+  const timer = setTimeout(() => denyAndForget(promptId), PERMISSION_PROMPT_TIMEOUT_MS)
+  const onDestroyed = (): void => denyAndForget(promptId)
+  wc.once('destroyed', onDestroyed)
+  const cleanup = (): void => { try { wc.removeListener('destroyed', onDestroyed) } catch { /* noop */ } }
+
+  pendingPermissionPrompts.set(promptId, { origin, permission, cb, timer, cleanup })
+  ctx.chrome.webContents.send(IPC.permissions.promptOpen, {
+    promptId, origin, permission, tabId: found.tabId,
+  })
+}
 
 const ASSET_MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -119,7 +200,14 @@ export function setupSession(ses: Session): void {
     }
   }
 
-  // 2) 권한 핸들러 — 사이트별 오버라이드 우선 → policy 룰 → 화이트리스트 fallback
+  // 1-b) webRequest 디스패처(onBeforeRequest/onBeforeSendHeaders/onHeadersReceived) 단독 소유 —
+  //      확장 DNR·클라이언트 힌트·서드파티 쿠키 차단·사용자 정책이 부팅 즉시 걸린다. adblock 은
+  //      뒤늦게(초기화 완료 시) setAdblockProviders 로 판정만 등록하고 리스너는 걸지 않는다.
+  try { installWebRequestDispatcher(ses) } catch (err) { console.warn('[session-bootstrap] dispatcher install failed', err) }
+
+  // 2) 권한 핸들러 — 사이트별 오버라이드 우선 → policy 룰 → 무해한 권한 자동 허용 →
+  //    나머지(media/geolocation/notifications/clipboard-read)는 크롬처럼 사용자에게 묻는다.
+  //    (예전엔 이 promptable 권한들이 전부 무조건 허용이었다 — 항목 1.)
   ses.setPermissionRequestHandler((wc, perm, cb, details) => {
     const url = (details as { requestingUrl?: string })?.requestingUrl ?? wc?.getURL() ?? ''
     const site = url ? getPermissionDecision(url, perm) : null
@@ -128,7 +216,16 @@ export function setupSession(ses: Session): void {
     const decision = url ? permissionDecisionFor(url, perm) : null
     if (decision === 'allow') return cb(true)
     if (decision === 'deny') return cb(false)
-    cb(PERMISSION_ALLOWED.includes(perm))
+    if (PERMISSION_AUTO_ALLOW.has(perm)) return cb(true)
+    if (!isPromptableContext(url)) {
+      // 내부 페이지·확장·file: 등 — 사용자에게 보여줄 "사이트" 가 없는 신뢰된 컨텍스트.
+      return cb(PERMISSION_PROMPTABLE.has(perm))
+    }
+    if (!PERMISSION_PROMPTABLE.has(perm)) return cb(false)
+    if (!wc || wc.isDestroyed()) return cb(false)
+    let origin: string
+    try { origin = new URL(url).origin } catch { return cb(false) }
+    requestPermissionFromUser(wc, perm, origin, cb)
   })
   ses.setPermissionCheckHandler((wc, perm, requestingOrigin) => {
     const url = requestingOrigin || wc?.getURL() || ''
@@ -138,13 +235,17 @@ export function setupSession(ses: Session): void {
     const decision = url ? permissionDecisionFor(url, perm) : null
     if (decision === 'allow') return true
     if (decision === 'deny') return false
-    return PERMISSION_ALLOWED.includes(perm)
+    if (PERMISSION_AUTO_ALLOW.has(perm)) return true
+    if (!isPromptableContext(url)) return PERMISSION_PROMPTABLE.has(perm)
+    // promptable 인데 저장된 결정이 없으면 — 사용자가 프롬프트에서 고르기 전까지는 false
+    // (크롬의 "prompt" 상태와 같은 의미).
+    return false
   })
 
   // 3) 미디어/토렌트 감지용 onResponseStarted (모든 세션에 설치 — 탭은 파티션 세션 사용)
   try { installResponseHooks(ses) } catch (err) { console.warn('[session-bootstrap] response-hooks failed', err) }
 
-  // 4) 외부 모듈 hook (policy webRequest, 향후 adblock 등)
+  // 4) 외부 모듈 hook (userscript·정책 customJs 트래킹 등 webRequest 아닌 것들)
   for (const hook of sessionHooks) {
     try { hook(ses) } catch (err) { console.warn('[session-bootstrap] hook failed', err) }
   }
