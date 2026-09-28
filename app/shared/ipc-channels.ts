@@ -157,6 +157,18 @@ export const IPC = {
     remove: 'userscript:remove',
     setEnabled: 'userscript:set-enabled',
     changed: 'userscript:changed',
+    // ===== 콘텐츠(preload) 전용 채널 — isTrustedSender 대신 e.senderFrame 의 실제 URL/프레임으로 검증 =====
+    // (묶음 I: isolated world 주입 + GM_* 브릿지. content.js/internal.ts → external-features.ts 만 호출)
+    contextSync: 'userscript:context-sync', // ipcRenderer.sendSync — document-start 타이밍용(동기)
+    context: 'userscript:context', // 위와 동일 계산의 비동기 버전(테스트 하네스 등 sendSync 트리거가 어려운 환경용)
+    gmSetValue: 'userscript:gm-set-value',
+    gmDeleteValue: 'userscript:gm-delete-value',
+    gmXhr: 'userscript:gm-xhr',
+    menuRegister: 'userscript:menu-register',
+    menuRunEvent: 'userscript:menu-run-event', // main → 콘텐츠(broadcast, 탭 한정): 사용자가 메뉴 명령 실행
+    // ===== browser:// 전용(신뢰 발신자) — 메뉴 명령 조회/실행 플러밍. UI 연결은 다른 묶음 몫 =====
+    menuList: 'userscript:menu-list',
+    menuRun: 'userscript:menu-run',
   },
   policy: {
     list: 'policy:list',

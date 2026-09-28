@@ -80,6 +80,15 @@ function steps(outRoot) {
       timeoutMs: 2 * 60000, desc: '마크다운→에디터 평문 변환(누출 0·내용 보존) M1~M5',
     },
     {
+      // 순수 함수 — 묶음 I(userscript 엔진) match pattern 컴파일러 + 메타데이터 파서.
+      // `*.example.com` 이 베어 도메인도 포함해야 하는데(item 6), 옛 구현은 문자열 치환이라
+      // 항상 리터럴 점(.)을 요구해 절대 안 맞았다 — 정규식 한 줄만 어긋나도 조용히 재발한다.
+      id: 'userscript-match', kind: 'harness', modes: ['quick', 'full'],
+      script: 'verify-userscript-match.mjs', outArg: true,
+      result: (o) => path.join(o, 'userscript-match', 'userscript-match-results.json'),
+      timeoutMs: 2 * 60000, desc: 'match pattern 컴파일러(베어 도메인·regex·exclude) + 메타데이터 파서 M1~M10',
+    },
+    {
       // 순수 함수 — 같은 글에 두 번 손대지 않는다는 방어. 주소 정규화가 느슨해지면 중복 댓글이,
       // 과해지면 남의 글을 건너뛴다. 양쪽을 다 본다(검출력 확인 2026-09-18: 정규화를 무력화하니 4건 FAIL).
       id: 'engage-ledger', kind: 'harness', modes: ['quick', 'full'],
@@ -423,6 +432,17 @@ function steps(outRoot) {
       script: 'verify-input-guards-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'input-guards', 'input-guards-results.json'),
       timeoutMs: 8 * 60000, desc: '사용자 입력을 파일에 쓰는 5경로가 잘못된 입력을 거부하는가 G1~G6',
+    },
+    {
+      // 실제 패키징 앱 + 로컬 fixture(http×2 + https 자체서명). 묶음 I(userscript 엔진) —
+      // GM 값 저장소 격리(페이지 localStorage 미노출)·document-start 순서·격리 월드·
+      // GM_xmlhttpRequest(같은origin 성공·@connect 없는 교차출처 거부·사설망 교차출처 거부)·
+      // @require/@resource(사설망 리터럴 허용+DNS리바인딩 차단·크기상한)·@noframes·
+      // GM_registerMenuCommand 왕복·@grant 미선언 함수 비노출 을 실제 DOM 으로 확인한다.
+      id: 'userscript', kind: 'harness', modes: ['full'],
+      script: 'verify-userscript-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'userscript', 'userscript-results.json'),
+      timeoutMs: 6 * 60000, desc: 'userscript 엔진(격리 월드·GM 값·document-start·xhr SSRF·require·noframes·메뉴) U1~U15',
     },
     {
       id: 'ipc-trust', kind: 'harness', modes: ['full'],

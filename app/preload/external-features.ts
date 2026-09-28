@@ -5,8 +5,10 @@
 // browser:// 페이지에서도 side-effect 안전 (가벼운 이벤트 리스너만).
 //
 // contextBridge 노출 없음 — 모든 IPC 는 ipcRenderer.invoke 직접.
+// (예외: 맨 아래 "Userscript 엔진" 섹션만 GM_* 브릿지를 위해 contextBridge.exposeInIsolatedWorld 를
+//  쓴다 — 페이지 메인 월드가 아니라 우리가 만든 별도 격리 월드에만 노출하므로 위 원칙과 상충하지 않는다.)
 
-import { ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 
 // =========== 콘텐츠 기능 토글 캐시 (settings.freedom) ===========
@@ -791,3 +793,89 @@ if (!isExcludedContext()) {
   hideKnownAntiAdblockModals()
   if (isAntiAdblockHost()) defuseAntiAdblock()
 }
+
+// =========== Userscript 엔진: 격리 월드 주입 + GM_* 브릿지 (묶음 I) ===========
+// 설계 요약(상세 근거는 app/main/features/userscript/index.ts 상단 주석):
+//  - 이 파일(preload)은 Electron 이 "그 문서의 다른 어떤 스크립트보다 먼저" 실행을 보장하는
+//    유일한 지점이다. 그래서 document-start 스크립트는 **여기서** 동기(sendSync)로 주입한다 —
+//    main 프로세스의 dom-ready/did-finish-load 이벤트는 이미 DOMContentLoaded 급으로 늦다.
+//  - GM_* 값이 필요한(= @grant 가 'none' 이 아닌) 스크립트는 contextBridge.exposeInIsolatedWorld 로
+//    만든 전용 격리 월드에서 돈다 — 그 월드에만 GM 브릿지가 노출되고, 페이지의 메인 월드(사이트 자신의
+//    JS)는 그 월드에 전혀 접근할 수 없다. GM_setValue 로 쓴 값이 페이지 localStorage 로 새던 예전
+//    구현의 문제를 구조적으로 막는다.
+//  - @grant none 스크립트는 GM_* 이 전혀 필요 없으므로 격리 없이 메인 월드에서 직접 돈다 —
+//    unsafeWindow(= 진짜 페이지 window)가 필요한 극히 일부 스크립트를 위한 의도된 예외.
+
+interface BbUserscriptEntry {
+  id: string
+  name: string
+  runAt: 'document-start' | 'document-end' | 'document-idle'
+  worldId: number | null
+  code: string
+  bridgeKey: string
+}
+
+function bbBuildBridge(entry: BbUserscriptEntry): Record<string, unknown> {
+  return {
+    setValue: (key: string, value: unknown) => ipcRenderer.invoke(IPC.userscript.gmSetValue, { id: entry.id, key, value }),
+    deleteValue: (key: string) => ipcRenderer.invoke(IPC.userscript.gmDeleteValue, { id: entry.id, key }),
+    xhr: (details: unknown) => ipcRenderer.invoke(IPC.userscript.gmXhr, { id: entry.id, details }),
+    menuRegister: (label: string) => ipcRenderer.invoke(IPC.userscript.menuRegister, { id: entry.id, label }),
+    onMenuRun: (cb: (commandId: string) => void) => {
+      ipcRenderer.on(IPC.userscript.menuRunEvent, (_e, payload: { id?: string; commandId?: string }) => {
+        if (payload && payload.id === entry.id && payload.commandId) cb(payload.commandId)
+      })
+    },
+  }
+}
+
+function bbInjectOne(entry: BbUserscriptEntry): void {
+  try {
+    if (entry.worldId !== null) {
+      contextBridge.exposeInIsolatedWorld(entry.worldId, entry.bridgeKey, bbBuildBridge(entry))
+      void webFrame.executeJavaScriptInIsolatedWorld(entry.worldId, [{ code: entry.code }]).catch(() => { /* ignore */ })
+    } else {
+      void webFrame.executeJavaScript(entry.code, true).catch(() => { /* ignore */ })
+    }
+  } catch (err) {
+    console.warn('[userscript] 주입 실패', entry.name, err)
+  }
+}
+
+function initUserscriptEngine(): void {
+  if (isExcludedContext()) return
+  const proto = window.location.protocol
+  if (proto !== 'http:' && proto !== 'https:') return
+
+  let entries: BbUserscriptEntry[] = []
+  try {
+    // document-start 타이밍이 이 한 줄에 달려 있다 — 동기 호출이라 이 스크립트 실행이 반환되기
+    // 전에(= 페이지 자신의 스크립트가 아직 한 줄도 안 돈 시점에) document-start 주입이 끝난다.
+    entries = (ipcRenderer.sendSync(IPC.userscript.contextSync) as BbUserscriptEntry[] | undefined) ?? []
+  } catch {
+    entries = []
+  }
+  if (!entries.length) return
+
+  const byRunAt: Record<string, BbUserscriptEntry[]> = { 'document-start': [], 'document-end': [], 'document-idle': [] }
+  for (const e of entries) {
+    const bucket = byRunAt[e.runAt] ?? byRunAt['document-idle']
+    bucket?.push(e)
+  }
+
+  byRunAt['document-start']?.forEach(bbInjectOne)
+
+  const endList = byRunAt['document-end'] ?? []
+  if (endList.length) {
+    if (document.readyState !== 'loading') endList.forEach(bbInjectOne)
+    else document.addEventListener('DOMContentLoaded', () => endList.forEach(bbInjectOne), { once: true })
+  }
+
+  const idleList = byRunAt['document-idle'] ?? []
+  if (idleList.length) {
+    if (document.readyState === 'complete') idleList.forEach(bbInjectOne)
+    else window.addEventListener('load', () => idleList.forEach(bbInjectOne), { once: true })
+  }
+}
+
+initUserscriptEngine()
