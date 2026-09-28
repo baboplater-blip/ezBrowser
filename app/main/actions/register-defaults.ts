@@ -1,9 +1,10 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { registerAction } from './registry'
+import { IPC } from '../../shared/ipc-channels'
 import {
   activateTab, closeTab, createTab, duplicateTab, focusNextPane, listTabs, pinTab,
   restoreLastClosed, splitWindow, tabBack, tabForward, tabReload, tabStop, unsplitWindow,
-  getTab, getWebContentsByTabId, moveTabToWorkspace, setTabMuted,
+  getTab, getWebContentsByTabId, moveTabToWorkspace, setTabMuted, navigateTab,
 } from '../tabs/tab-service'
 import { clearSiteData } from '../features/sitedata'
 import { createBrowserWindow, getAllWindows, getWindow } from '../windows/window-service'
@@ -11,7 +12,7 @@ import { NEW_TAB_URL } from '../../shared/constants'
 import { reloadUserChrome, openUserChromeInEditor } from '../features/userchrome'
 import { captureViewport } from '../features/screenshot'
 import {
-  addBookmark, isBookmarked, removeBookmarkByUrl,
+  addBookmark, isBookmarked,
 } from '../storage/bookmarks'
 import {
   addReadLater, isReadLaterSaved, removeReadLaterByUrl,
@@ -25,9 +26,9 @@ import { checkForUpdates as checkForUpdatesNow } from '../features/auto-update'
 import { toggleReader } from '../features/reader'
 import { togglePageTranslate } from '../features/translate'
 import {
-  createWorkspace, getActiveWorkspaceId, listWorkspaces, nextWorkspaceId, setActiveWorkspace,
+  createWorkspace, getActiveWorkspace, getActiveWorkspaceId, listWorkspaces, nextWorkspaceId, setActiveWorkspace,
 } from '../features/workspace'
-import { printTab, printTabToPdf, adjustZoom } from '../features/page-tools'
+import { printTab, printTabToPdf, adjustZoom, savePageAs } from '../features/page-tools'
 import { autofillPage } from '../features/ai/page-actions'
 import { getProfile, hasProfileData } from '../features/ai/profile'
 
@@ -140,11 +141,59 @@ export function registerDefaultActions(): void {
   })
 
   registerAction({
+    id: 'action.nav.home', category: 'nav', labelKey: 'action.nav.home',
+    defaultKey: 'Alt+Home', when: 'global',
+    run: ({ windowId, tabId }) => {
+      const id = tabId ?? activeTabIdOf(windowId)
+      if (!id) return
+      const home = getActiveWorkspace()?.homeUrl || NEW_TAB_URL
+      navigateTab(id, home)
+    },
+  })
+
+  registerAction({
     id: 'action.page.reload', category: 'nav', labelKey: 'action.page.reload',
     defaultKey: 'Ctrl+R', when: 'global',
     run: ({ windowId, tabId }) => {
       const id = tabId ?? activeTabIdOf(windowId)
       if (id) tabReload(id)
+    },
+  })
+
+  registerAction({
+    id: 'action.page.reloadHard', category: 'nav', labelKey: 'action.page.reloadHard',
+    defaultKey: 'Ctrl+Shift+R', when: 'global',
+    run: ({ windowId, tabId }) => {
+      const id = tabId ?? activeTabIdOf(windowId)
+      if (!id) return
+      const wc = getWebContentsByTabId(id)
+      wc?.reloadIgnoringCache()
+    },
+  })
+
+  registerAction({
+    id: 'action.page.viewSource', category: 'tools', labelKey: 'action.page.viewSource',
+    defaultKey: 'Ctrl+U', when: 'global',
+    run: ({ windowId, tabId }) => {
+      if (!windowId) return
+      const id = tabId ?? activeTabIdOf(windowId)
+      const t = id ? getTab(id) : null
+      const url = t?.url
+      if (!url || !/^https?:|^file:/i.test(url)) return
+      createTab({ windowId, url: `view-source:${url}` })
+    },
+  })
+
+  registerAction({
+    id: 'action.page.save', category: 'tools', labelKey: 'action.page.save',
+    defaultKey: 'Ctrl+S', when: 'global',
+    run: ({ windowId, tabId }) => {
+      const id = tabId ?? activeTabIdOf(windowId)
+      if (!id) return
+      void savePageAs(id).then((r) => {
+        if (r.ok) broadcastToast(windowId, '페이지 저장 완료 💾')
+        else if (r.error !== 'canceled') broadcastToast(windowId, '페이지 저장 실패')
+      })
     },
   })
 
@@ -224,6 +273,24 @@ export function registerDefaultActions(): void {
     run: ({ windowId }) => {
       const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
       ctx?.chrome.webContents.send('find:open', {})
+    },
+  })
+
+  registerAction({
+    id: 'action.find.next', category: 'tools', labelKey: 'action.find.next',
+    defaultKey: 'F3', when: 'global',
+    run: ({ windowId }) => {
+      const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
+      ctx?.chrome.webContents.send(IPC.find.step, { forward: true })
+    },
+  })
+
+  registerAction({
+    id: 'action.find.prev', category: 'tools', labelKey: 'action.find.prev',
+    defaultKey: 'Shift+F3', when: 'global',
+    run: ({ windowId }) => {
+      const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
+      ctx?.chrome.webContents.send(IPC.find.step, { forward: false })
     },
   })
 
@@ -359,18 +426,20 @@ export function registerDefaultActions(): void {
   registerAction({
     id: 'action.bookmark.add', category: 'bookmark', labelKey: 'action.bookmark.add',
     defaultKey: 'Ctrl+D', when: 'global',
+    // 예전엔 이미 북마크된 페이지에서 Ctrl+D 를 누르면 확인 없이 바로 삭제됐다(오삭제 위험) —
+    // 크롬처럼 "추가(없으면) + 항상 편집 말풍선 열기" 로 바꾸고, 실제 삭제는 말풍선의 삭제
+    // 버튼으로만 하도록 이동했다.
     run: ({ windowId, tabId }) => {
       const id = tabId ?? activeTabIdOf(windowId)
       if (!id) return
       const t = getTab(id)
       if (!t || !t.url || /^browser:|^chrome:|^about:/i.test(t.url)) return
-      if (isBookmarked(t.url)) {
-        removeBookmarkByUrl(t.url)
-        broadcastToast(windowId, '북마크에서 제거됨')
-      } else {
+      if (!isBookmarked(t.url)) {
         addBookmark({ url: t.url, title: t.title || t.url })
         broadcastToast(windowId, '북마크에 추가됨 ★')
       }
+      const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
+      ctx?.chrome.webContents.send(IPC.bookmarks.bubbleOpen, { tabId: id })
     },
   })
 

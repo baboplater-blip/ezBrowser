@@ -48,9 +48,12 @@
     },
     "page": {
       "reload": "Reload",
+      "reloadHard": "Hard Reload (ignore cache)",
       "stop": "Stop",
       "print": "Print",
       "printPdf": "Save as PDF",
+      "viewSource": "View Source",
+      "save": "Save Page As…",
       "zoom": {
         "in": "Zoom In",
         "out": "Zoom Out",
@@ -58,7 +61,9 @@
       }
     },
     "find": {
-      "toggle": "Find in Page"
+      "toggle": "Find in Page",
+      "next": "Find Next",
+      "prev": "Find Previous"
     },
     "window": {
       "incognito": "New Incognito Window",
@@ -74,7 +79,7 @@
       "openPage": "Downloads Page"
     },
     "bookmark": {
-      "add": "Add/remove bookmark",
+      "add": "Add / Edit Bookmark",
       "list": "Bookmark manager",
       "bar": {
         "toggle": "Toggle Bookmark Bar"
@@ -85,7 +90,8 @@
     },
     "nav": {
       "back": "Back",
-      "forward": "Forward"
+      "forward": "Forward",
+      "home": "Home"
     },
     "palette": {
       "open": "Command Palette"

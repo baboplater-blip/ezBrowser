@@ -236,6 +236,15 @@ function steps(outRoot) {
       timeoutMs: 12 * 60000, desc: '교차출처 iframe 조작·ref 세대 안전·로그인/CAPTCHA 인계 F1~F8·K1~K2·C1~C4',
     },
     {
+      // 묶음 C(주소창·단축키): 탭전환 제안 재로드 방지·Ctrl+휠/핀치 배율 배지·표준 단축키
+      // (강력새로고침·소스보기·F3/Shift+F3 찾기·Alt+Home 이 콘텐츠 포커스에서도 동작)·
+      // Ctrl+D 확인없는 삭제 방지(BookmarkBubble)·bangsEnabled 설정. 로컬 서버만 쓴다.
+      id: 'omnibox-shortcuts', kind: 'harness', modes: ['full'],
+      script: 'verify-omnibox-shortcuts-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'omnibox-shortcuts', 'omnibox-shortcuts-results.json'),
+      timeoutMs: 6 * 60000, desc: '탭전환 제안·줌 배지·콘텐츠 포커스 표준 단축키·북마크 말풍선·bang 설정 B1~R4',
+    },
+    {
       // 로컬 HTTPS 픽스처(자체 서명 인증서 + --ignore-certificate-errors, 검증 실행 한정)와
       // 더미 자격증명만 쓴다. 실제 사이트에 접속하지 않는다.
       id: 'saved-login', kind: 'harness', modes: ['full'],
