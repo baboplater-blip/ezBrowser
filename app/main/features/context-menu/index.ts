@@ -8,6 +8,7 @@ import { startFind } from '../find'
 import { createBrowserWindow, getWindow } from '../../windows/window-service'
 import { collectMenuItems } from '../mod-api'
 import { handleOverlayDownload } from '../video-download'
+import { tMain } from '../../i18n'
 
 const SEARCH_LABEL_MAX = 24
 
@@ -166,7 +167,7 @@ function buildTemplate(
           if (t?.url && !/^browser:|^chrome:|^about:/i.test(t.url)) {
             addBookmark({ url: t.url, title: t.title || t.url })
             const ctx = getWindow(windowId)
-            ctx?.chrome.webContents.send('toast:show', { message: '북마크에 추가됨 ★', ts: 0 })
+            ctx?.chrome.webContents.send('toast:show', { message: tMain('main.toast.bookmarkAdded', '북마크에 추가됨 ★'), ts: 0 })
           }
         },
       },

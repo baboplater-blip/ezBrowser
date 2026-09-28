@@ -205,5 +205,63 @@
   },
   "omnibox": {
     "placeholder": "검색하거나 URL 입력"
+  },
+  "main": {
+    "toast": {
+      "bookmarkAdded": "북마크에 추가됨 ★"
+    },
+    "download": {
+      "completeTitle": "다운로드 완료",
+      "completeToast": "✓ {filename} 다운로드 완료",
+      "failedToast": "✗ {filename} 다운로드 실패"
+    }
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "label": "언어",
+        "desc": "외피와 내부 페이지에 쓸 언어를 고릅니다. 자동은 시스템 언어를 따릅니다.",
+        "auto": "자동 (시스템 언어)",
+        "ko": "한국어",
+        "en": "English",
+        "vi": "Tiếng Việt"
+      }
+    },
+    "nav": {
+      "appearance": "모양",
+      "ai": "✨ AI",
+      "widgets": "새 탭",
+      "adblock": "광고·트래커 차단",
+      "search": "검색",
+      "privacy": "개인정보",
+      "permissions": "사이트 권한",
+      "accounts": "🔐 로그인 계정",
+      "downloads": "다운로드",
+      "freedom": "자유도",
+      "workspace": "워크스페이스",
+      "keymap": "단축키",
+      "design": "디자인 토큰",
+      "update": "업데이트",
+      "data": "데이터 관리",
+      "about": "정보"
+    }
+  },
+  "ui": {
+    "toolbar": {
+      "ai": {
+        "label": "AI 어시스턴트",
+        "title": "AI 어시스턴트 (Ctrl+Shift+Space) — 이 페이지 요약·질문"
+      },
+      "downloads": {
+        "label": "다운로드",
+        "labelClose": "다운로드 사이드바 닫기",
+        "labelOpen": "다운로드 사이드바 열기",
+        "title": "다운로드 (Ctrl+J) — 사이드바 열기/닫기"
+      },
+      "palette": {
+        "label": "명령 팔레트",
+        "title": "명령 팔레트 (Ctrl+Shift+P)"
+      }
+    }
   }
 }

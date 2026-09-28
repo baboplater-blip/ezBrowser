@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { CHROME_HEIGHT, INTERNAL_URL_PREFIXES, incognitoPartition } from '../../shared/constants'
 import { getSetting } from '../storage/settings'
+import { currentMainLocale } from '../i18n'
 import { removeInstalledSession } from '../session-bootstrap'
 
 export interface ShellInsets {
@@ -164,9 +165,12 @@ export function createBrowserWindow(opts?: CreateWindowOptions): BrowserWindowCo
   })
 
   const incognitoQuery = incognito ? '&incognito=1' : ''
+  // 초기 언어를 쿼리로 넘겨 외피가 첫 페인트부터 맞는 언어로 그려지게 한다(windowId 와 같은 패턴 —
+  // 부팅 직후 비동기 IPC 응답을 기다리면 그 사이 한 프레임 다른 언어가 보였다 바뀌는 깜빡임이 생긴다).
+  const langQuery = `&lang=${currentMainLocale()}`
   const chromeUrl = isDev
-    ? `${DEV_URL}?windowId=${id}${incognitoQuery}`
-    : `file://${path.join(__dirname, '../../renderer/index.html')}?windowId=${id}${incognitoQuery}`
+    ? `${DEV_URL}?windowId=${id}${incognitoQuery}${langQuery}`
+    : `file://${path.join(__dirname, '../../renderer/index.html')}?windowId=${id}${incognitoQuery}${langQuery}`
   chrome.webContents.loadURL(chromeUrl)
 
   const ctx: BrowserWindowContext = {

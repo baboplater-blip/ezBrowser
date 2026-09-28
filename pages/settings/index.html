@@ -2,8 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
     <title>설정</title>
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <style>
       :root { color-scheme: light dark;
         --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
@@ -190,22 +192,22 @@
     <div class="wrap">
       <aside>
         <h1>설정</h1>
-        <div class="nav-item active" data-cat="appearance">모양</div>
-        <div class="nav-item" data-cat="ai">✨ AI</div>
-        <div class="nav-item" data-cat="widgets">새 탭</div>
-        <div class="nav-item" data-cat="adblock">광고·트래커 차단</div>
-        <div class="nav-item" data-cat="search">검색</div>
-        <div class="nav-item" data-cat="privacy">개인정보</div>
-        <div class="nav-item" data-cat="permissions">사이트 권한</div>
-        <div class="nav-item" data-cat="accounts">🔐 로그인 계정</div>
-        <div class="nav-item" data-cat="downloads">다운로드</div>
-        <div class="nav-item" data-cat="freedom">자유도</div>
-        <div class="nav-item" data-cat="workspace">워크스페이스</div>
-        <div class="nav-item" data-cat="keymap">단축키</div>
-        <div class="nav-item" data-cat="design">디자인 토큰</div>
-        <div class="nav-item" data-cat="update">업데이트</div>
-        <div class="nav-item" data-cat="data">데이터 관리</div>
-        <div class="nav-item" data-cat="about">정보</div>
+        <div class="nav-item active" data-cat="appearance" data-i18n="settings.nav.appearance">모양</div>
+        <div class="nav-item" data-cat="ai" data-i18n="settings.nav.ai">✨ AI</div>
+        <div class="nav-item" data-cat="widgets" data-i18n="settings.nav.widgets">새 탭</div>
+        <div class="nav-item" data-cat="adblock" data-i18n="settings.nav.adblock">광고·트래커 차단</div>
+        <div class="nav-item" data-cat="search" data-i18n="settings.nav.search">검색</div>
+        <div class="nav-item" data-cat="privacy" data-i18n="settings.nav.privacy">개인정보</div>
+        <div class="nav-item" data-cat="permissions" data-i18n="settings.nav.permissions">사이트 권한</div>
+        <div class="nav-item" data-cat="accounts" data-i18n="settings.nav.accounts">🔐 로그인 계정</div>
+        <div class="nav-item" data-cat="downloads" data-i18n="settings.nav.downloads">다운로드</div>
+        <div class="nav-item" data-cat="freedom" data-i18n="settings.nav.freedom">자유도</div>
+        <div class="nav-item" data-cat="workspace" data-i18n="settings.nav.workspace">워크스페이스</div>
+        <div class="nav-item" data-cat="keymap" data-i18n="settings.nav.keymap">단축키</div>
+        <div class="nav-item" data-cat="design" data-i18n="settings.nav.design">디자인 토큰</div>
+        <div class="nav-item" data-cat="update" data-i18n="settings.nav.update">업데이트</div>
+        <div class="nav-item" data-cat="data" data-i18n="settings.nav.data">데이터 관리</div>
+        <div class="nav-item" data-cat="about" data-i18n="settings.nav.about">정보</div>
       </aside>
       <main id="main"><div>로딩 중…</div></main>
     </div>
@@ -227,6 +229,11 @@
       }
 
       function escape(s) { return String(s ?? '').replace(/</g, '&lt;') }
+      // browser://shared/i18n.js 가 window.t 를 심는다(전역 함수 선언은 전역 스크립트에서
+      // window 프로퍼티가 되므로 이름을 't' 로 겹치면 자기 자신을 호출해 무한 재귀가 난다 —
+      // 반드시 다른 이름을 쓸 것). 아주 드물게(스크립트 로드 실패 등) window.t 가 없을 수
+      // 있으므로 폴백을 감싼다 — 언어 select 등 동적 문구가 이 함수를 쓴다.
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
 
       async function reload() {
         if (!window.internalAPI) {
@@ -286,6 +293,13 @@
           + row('밀도', '간격 / 패딩', selectHtml('appearance.density', a.density, [
               { value: 'compact', label: '컴팩트' }, { value: 'regular', label: '보통' }, { value: 'comfy', label: '여유' },
             ]))
+          + row(trSafe('settings.appearance.language.label', '언어'), trSafe('settings.appearance.language.desc', '외피와 내부 페이지에 쓸 언어를 고릅니다. 자동은 시스템 언어를 따릅니다.'),
+              selectHtml('ui.language', ui.language || 'auto', [
+                { value: 'auto', label: trSafe('settings.appearance.language.auto', '자동 (시스템 언어)') },
+                { value: 'ko', label: trSafe('settings.appearance.language.ko', '한국어') },
+                { value: 'en', label: trSafe('settings.appearance.language.en', 'English') },
+                { value: 'vi', label: trSafe('settings.appearance.language.vi', 'Tiếng Việt') },
+              ]))
           + row('페이지 강제 다크', '모든 사이트에 CSS Filter invert (Ctrl+Shift+D)', toggleHtml('appearance.forcePageDark', a.forcePageDark))
           + row('OS 다크 모드 따라가기', '시스템 테마가 다크일 때만 페이지 다크 자동 적용', toggleHtml('appearance.pageDarkFollowSystem', !!a.pageDarkFollowSystem))
           + row('마우스 제스처', '우클릭 드래그 — ←뒤로 →앞으로 ↑새로고침 ↓새 탭 ↓→ 탭 닫기', toggleHtml('freedom.mouseGestures', settings.freedom?.mouseGestures !== false))
@@ -1404,6 +1418,11 @@
         if (window.internalAPI.update) {
           window.internalAPI.update.onStatus((s) => { if (currentCat === 'update') renderUpdateStatus(s) })
         }
+      }
+      // 언어가 바뀌면(설정 언어 select 자체 포함) window.t() 를 쓰는 동적 콘텐츠를 다시 그린다.
+      // 정적 data-i18n 요소(좌측 nav 등)는 shared/i18n.js 가 알아서 갱신한다.
+      if (typeof window.onI18nChanged === 'function') {
+        window.onI18nChanged(() => { try { render() } catch (e) { /* noop */ } })
       }
       reload()
     </script>

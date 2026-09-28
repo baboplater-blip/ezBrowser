@@ -41,6 +41,12 @@ export const IPC = {
     all: 'settings:all',
     changed: 'settings:changed',
   },
+  i18n: {
+    // 현재 로케일 + 평탄화된 사전을 한 번에 준다 — 페이지 로더(pages/shared/i18n.js)와
+    // 렌더러 초기 부팅(비-쿼리 경로) 양쪽이 쓰는 단일 출처. 언어가 바뀌면 changed 로 재조회 유도.
+    get: 'i18n:get',
+    changed: 'i18n:changed',
+  },
   actions: {
     list: 'actions:list',
     run: 'actions:run',
@@ -511,6 +517,7 @@ export type IpcChannel =
   | typeof IPC.tabs[keyof typeof IPC.tabs]
   | typeof IPC.omnibox[keyof typeof IPC.omnibox]
   | typeof IPC.settings[keyof typeof IPC.settings]
+  | typeof IPC.i18n[keyof typeof IPC.i18n]
   | typeof IPC.actions[keyof typeof IPC.actions]
   | typeof IPC.keymap[keyof typeof IPC.keymap]
   | typeof IPC.palette[keyof typeof IPC.palette]

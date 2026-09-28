@@ -1,0 +1,267 @@
+{
+  "app": {
+    "name": "ezBrowser",
+    "tagline": "Trình duyệt nhẹ và tự do"
+  },
+  "menu": {
+    "file": "Tệp",
+    "edit": "Chỉnh sửa",
+    "view": "Xem",
+    "tab": "Thẻ",
+    "bookmarks": "Dấu trang",
+    "tools": "Công cụ",
+    "help": "Trợ giúp"
+  },
+  "action": {
+    "tab": {
+      "new": "Thẻ mới",
+      "close": "Đóng thẻ",
+      "restore": "Khôi phục thẻ đã đóng",
+      "next": "Thẻ tiếp theo",
+      "prev": "Thẻ trước",
+      "reader": "Chế độ đọc",
+      "duplicate": "Nhân bản thẻ",
+      "pin": "Ghim thẻ",
+      "goto": "Đi đến thẻ",
+      "search": "Tìm thẻ",
+      "recentClosed": "Thẻ đã đóng gần đây",
+      "mute": "Bật/tắt tiếng thẻ",
+      "muteOthers": "Tắt tiếng các thẻ khác",
+      "unmuteAll": "Bật tiếng tất cả thẻ",
+      "move": {
+        "next": {
+          "workspace": "Chuyển thẻ sang không gian làm việc kế tiếp"
+        },
+        "prev": {
+          "workspace": "Chuyển thẻ sang không gian làm việc trước"
+        }
+      }
+    },
+    "ai": {
+      "open": "Trợ lý AI",
+      "summarize": "Tóm tắt trang này",
+      "collectors": "Quản lý thu thập tự động",
+      "write": "Viết blog"
+    },
+    "omnibox": {
+      "focus": "Đến thanh địa chỉ"
+    },
+    "page": {
+      "reload": "Tải lại",
+      "reloadHard": "Tải lại mạnh (bỏ qua bộ nhớ đệm)",
+      "stop": "Dừng",
+      "print": "In",
+      "printPdf": "Lưu dưới dạng PDF",
+      "viewSource": "Xem mã nguồn",
+      "save": "Lưu trang với tên khác…",
+      "zoom": {
+        "in": "Phóng to",
+        "out": "Thu nhỏ",
+        "reset": "Đặt lại tỉ lệ"
+      }
+    },
+    "find": {
+      "toggle": "Tìm trong trang",
+      "next": "Tìm tiếp",
+      "prev": "Tìm trước"
+    },
+    "window": {
+      "incognito": "Cửa sổ ẩn danh mới",
+      "new": "Cửa sổ mới",
+      "close": "Đóng cửa sổ"
+    },
+    "history": {
+      "open": "Lịch sử",
+      "clear": "Xóa lịch sử duyệt web"
+    },
+    "downloads": {
+      "open": "Tải xuống",
+      "openPage": "Trang tải xuống"
+    },
+    "bookmark": {
+      "add": "Thêm / Sửa dấu trang",
+      "list": "Quản lý dấu trang",
+      "bar": {
+        "toggle": "Bật/tắt thanh dấu trang"
+      }
+    },
+    "devtools": {
+      "toggle": "Bật/tắt DevTools"
+    },
+    "nav": {
+      "back": "Quay lại",
+      "forward": "Tiến tới",
+      "home": "Trang chủ"
+    },
+    "palette": {
+      "open": "Bảng lệnh"
+    },
+    "userchrome": {
+      "reload": "Tải lại userChrome",
+      "edit": "Sửa userChrome.css"
+    },
+    "userscript": {
+      "toggle": "Bảng Userscript"
+    },
+    "sidepanel": {
+      "left": {
+        "toggle": "Bật/tắt bảng bên trái"
+      },
+      "right": {
+        "toggle": "Bật/tắt bảng bên phải"
+      }
+    },
+    "screenshot": {
+      "area": "Chụp vùng chọn",
+      "viewport": "Chụp toàn khung nhìn"
+    },
+    "translate": {
+      "page": "Dịch trang"
+    },
+    "darkmode": {
+      "toggle": "Bật/tắt chế độ tối bắt buộc",
+      "toggleSite": "Bật/tắt chế độ tối cho trang này",
+      "followSystem": "Theo chế độ tối hệ thống"
+    },
+    "tabbar": {
+      "cycle": "Xoay vị trí thanh thẻ (Trên→Trái→Phải)"
+    },
+    "gesture": {
+      "exec": "Cử chỉ chuột"
+    },
+    "quickSearch": {
+      "open": "Tìm kiếm văn bản đã chọn"
+    },
+    "qrcode": {
+      "show": "Hiện mã QR"
+    },
+    "pane": {
+      "split": {
+        "h": "Chia trái/phải",
+        "v": "Chia trên/dưới"
+      },
+      "unsplit": "Bỏ chia",
+      "focus": {
+        "next": "Chuyển sang khung tiếp theo"
+      }
+    },
+    "workspace": {
+      "next": "Không gian làm việc tiếp theo",
+      "prev": "Không gian làm việc trước",
+      "new": "Không gian làm việc mới",
+      "switch": "Chuyển không gian làm việc"
+    },
+    "app": {
+      "quit": "Thoát"
+    },
+    "help": {
+      "report": "Gửi phản hồi"
+    },
+    "readlater": {
+      "add": "Thêm/Xóa danh sách đọc sau",
+      "open": "Mở danh sách đọc sau"
+    },
+    "sitedata": {
+      "clear": "Xóa dữ liệu trang web"
+    },
+    "autofill": {
+      "page": "Tự động điền thông tin của tôi"
+    },
+    "settings": {
+      "open": "Mở cài đặt"
+    },
+    "policy": {
+      "open": "Chính sách trang web"
+    },
+    "macros": {
+      "open": "Macro tự động hóa",
+      "run": "Chạy macro"
+    },
+    "mods": {
+      "open": "Mod"
+    },
+    "memory": {
+      "open": "Bộ nhớ AI"
+    },
+    "extensions": {
+      "open": "Tiện ích mở rộng"
+    },
+    "adblock": {
+      "openPage": "Chặn quảng cáo",
+      "toggleSite": "Bật/tắt chặn quảng cáo cho trang này"
+    },
+    "perf": {
+      "open": "Hiệu năng"
+    },
+    "keymap": {
+      "open": "Phím tắt"
+    },
+    "update": {
+      "check": "Kiểm tra cập nhật"
+    },
+    "password": {
+      "open": "Mật khẩu"
+    }
+  },
+  "omnibox": {
+    "placeholder": "Tìm kiếm hoặc nhập URL"
+  },
+  "main": {
+    "toast": {
+      "bookmarkAdded": "Đã thêm dấu trang ★"
+    },
+    "download": {
+      "completeTitle": "Tải xuống hoàn tất",
+      "completeToast": "✓ Đã tải xong {filename}",
+      "failedToast": "✗ Tải {filename} thất bại"
+    }
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "label": "Ngôn ngữ",
+        "desc": "Chọn ngôn ngữ cho khung ngoài và các trang nội bộ. Tự động sẽ theo ngôn ngữ hệ thống.",
+        "auto": "Tự động (theo hệ thống)",
+        "ko": "한국어",
+        "en": "English",
+        "vi": "Tiếng Việt"
+      }
+    },
+    "nav": {
+      "appearance": "Giao diện",
+      "ai": "✨ AI",
+      "widgets": "Thẻ mới",
+      "adblock": "Chặn quảng cáo & theo dõi",
+      "search": "Tìm kiếm",
+      "privacy": "Quyền riêng tư",
+      "permissions": "Quyền theo trang",
+      "accounts": "🔐 Tài khoản đăng nhập",
+      "downloads": "Tải xuống",
+      "freedom": "Mô-đun tự do",
+      "workspace": "Không gian làm việc",
+      "keymap": "Phím tắt",
+      "design": "Design Token",
+      "update": "Cập nhật",
+      "data": "Quản lý dữ liệu",
+      "about": "Giới thiệu"
+    }
+  },
+  "ui": {
+    "toolbar": {
+      "ai": {
+        "label": "Trợ lý AI",
+        "title": "Trợ lý AI (Ctrl+Shift+Space) — Tóm tắt/hỏi về trang này"
+      },
+      "downloads": {
+        "label": "Tải xuống",
+        "labelClose": "Đóng thanh bên tải xuống",
+        "labelOpen": "Mở thanh bên tải xuống",
+        "title": "Tải xuống (Ctrl+J) — bật/tắt thanh bên"
+      },
+      "palette": {
+        "label": "Bảng lệnh",
+        "title": "Bảng lệnh (Ctrl+Shift+P)"
+      }
+    }
+  }
+}

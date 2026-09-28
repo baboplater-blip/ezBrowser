@@ -5,6 +5,7 @@ import { useOmniboxSuggestions } from '../hooks/useOmniboxSuggestions'
 import { ExtensionActions } from './ExtensionActions'
 import { useExtensions } from '../hooks/useExtensions'
 import { Icon, type IconName } from './Icon'
+import { useI18nT } from '../i18n'
 
 function siteIcon(url?: string): IconName {
   if (!url || /^browser:/i.test(url)) return 'gear'
@@ -43,6 +44,7 @@ export function Toolbar({
   onToggleLeftPanel, onToggleRightPanel, onToggleWorkspaceRail,
   onOpenSiteInfo, onOpenAi, onOpenBookmarkBubble,
 }: Props) {
+  const t = useI18nT()
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const [composing, setComposing] = useState(false)
@@ -287,8 +289,8 @@ export function Toolbar({
       <div className="toolbar-actions">
         <button
           className="nav-btn ai-btn"
-          aria-label="AI 어시스턴트"
-          title="AI 어시스턴트 (Ctrl+Shift+Space) — 이 페이지 요약·질문"
+          aria-label={t('ui.toolbar.ai.label', 'AI 어시스턴트')}
+          title={t('ui.toolbar.ai.title', 'AI 어시스턴트 (Ctrl+Shift+Space) — 이 페이지 요약·질문')}
           onClick={onOpenAi}
         >
           <Icon name="sparkle" size={16} />
@@ -342,8 +344,10 @@ export function Toolbar({
         <ExtensionActions windowId={windowId} extensions={extensions} />
         <button
           className={`nav-btn downloads-btn ${downloadsOpen ? 'active' : ''}`}
-          aria-label={downloadsOpen ? '다운로드 사이드바 닫기' : '다운로드 사이드바 열기'}
-          title="다운로드 (Ctrl+J) — 사이드바 열기/닫기"
+          aria-label={downloadsOpen
+            ? t('ui.toolbar.downloads.labelClose', '다운로드 사이드바 닫기')
+            : t('ui.toolbar.downloads.labelOpen', '다운로드 사이드바 열기')}
+          title={t('ui.toolbar.downloads.title', '다운로드 (Ctrl+J) — 사이드바 열기/닫기')}
           onClick={onToggleDownloads}
         >
           <Icon name="download" size={16} />
@@ -351,8 +355,8 @@ export function Toolbar({
         </button>
         <button
           className="nav-btn"
-          aria-label="명령 팔레트"
-          title="명령 팔레트 (Ctrl+Shift+P)"
+          aria-label={t('ui.toolbar.palette.label', '명령 팔레트')}
+          title={t('ui.toolbar.palette.title', '명령 팔레트 (Ctrl+Shift+P)')}
           onClick={() => window.browserAPI.actions.run('action.palette.open', { windowId, tabId: active?.id })}
         >
           <Icon name="command" size={16} />

@@ -205,5 +205,63 @@
   },
   "omnibox": {
     "placeholder": "Search or enter URL"
+  },
+  "main": {
+    "toast": {
+      "bookmarkAdded": "Bookmark added ★"
+    },
+    "download": {
+      "completeTitle": "Download complete",
+      "completeToast": "✓ {filename} download complete",
+      "failedToast": "✗ {filename} download failed"
+    }
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "label": "Language",
+        "desc": "Choose the language for the shell and internal pages. Auto follows the system language.",
+        "auto": "Auto (system language)",
+        "ko": "한국어",
+        "en": "English",
+        "vi": "Tiếng Việt"
+      }
+    },
+    "nav": {
+      "appearance": "Appearance",
+      "ai": "✨ AI",
+      "widgets": "New Tab",
+      "adblock": "Ad & Tracker Blocking",
+      "search": "Search",
+      "privacy": "Privacy",
+      "permissions": "Site Permissions",
+      "accounts": "🔐 Login Accounts",
+      "downloads": "Downloads",
+      "freedom": "Freedom Modules",
+      "workspace": "Workspaces",
+      "keymap": "Keyboard Shortcuts",
+      "design": "Design Tokens",
+      "update": "Update",
+      "data": "Data Management",
+      "about": "About"
+    }
+  },
+  "ui": {
+    "toolbar": {
+      "ai": {
+        "label": "AI Assistant",
+        "title": "AI Assistant (Ctrl+Shift+Space) — Summarize/ask about this page"
+      },
+      "downloads": {
+        "label": "Downloads",
+        "labelClose": "Close downloads sidebar",
+        "labelOpen": "Open downloads sidebar",
+        "title": "Downloads (Ctrl+J) — toggle sidebar"
+      },
+      "palette": {
+        "label": "Command Palette",
+        "title": "Command Palette (Ctrl+Shift+P)"
+      }
+    }
   }
 }
