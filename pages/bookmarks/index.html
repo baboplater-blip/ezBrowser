@@ -59,6 +59,10 @@
       .empty { padding: 64px 0; text-align: center; color: var(--muted); }
       .empty-illust { display: block; width: 200px; max-width: 55%; margin: 0 auto 14px; opacity: .92; }
 
+      /* 폴더 트리 인라인 편집(이름 변경·새 폴더) */
+      .folder-node.renaming, .folder-node-input { background: var(--selected); }
+      .folder-name-input { flex: 1; font-size: 12px; padding: 3px 6px; border: 1px solid var(--accent); border-radius: 4px; background: var(--card); color: inherit; outline: none; min-width: 0; }
+
       /* 인라인 편집 */
       .row.editing { background: var(--selected); }
       .row.editing input { flex: 1; font-size: 13px; padding: 4px 8px; border: 1px solid var(--accent); border-radius: 4px; background: var(--card); color: inherit; outline: none; min-width: 0; }
@@ -139,6 +143,9 @@
       let currentFolderId = null  // null = 루트
       let query = ''
       let editingId = null  // 인라인 편집 중인 북마크 id
+      let renamingFolderId = null  // 인라인 이름 변경 중인 폴더 id
+      let creatingFolder = false  // 새 폴더 입력행 표시 여부
+      let creatingParentId = null  // 새 폴더가 생성될 부모 폴더 id
 
       const treeEl = document.getElementById('tree')
       const rowsEl = document.getElementById('rows')
@@ -162,12 +169,27 @@
         const html = ['<div class="folder-children">']
         const rootCount = bookmarksOfFolder(null).length
         html.push(renderNode({ id: null, name: '모든 북마크', isRoot: true, count: rootCount }))
+        html.push(renderCreateInputIfHere(null))
         for (const f of subfoldersOf(null)) html.push(renderTreeBranch(f))
         html.push('</div>')
         treeEl.innerHTML = html.join('')
         attachTreeHandlers()
+        attachFolderInputHandlers()
+      }
+      function renderCreateInputIfHere(parentId) {
+        if (!creatingFolder || creatingParentId !== parentId) return ''
+        return `<div class="folder-node-input">
+          <span class="ic">📁</span>
+          <input class="folder-name-input" type="text" data-mode="create" value="새 폴더" spellcheck="false" />
+        </div>`
       }
       function renderNode(info) {
+        if (!info.isRoot && info.id === renamingFolderId) {
+          return `<div class="folder-node renaming" data-folder-id="${info.id}">
+            <span class="ic">📁</span>
+            <input class="folder-name-input" type="text" data-mode="rename" data-folder-id="${info.id}" value="${escape(info.name)}" spellcheck="false" />
+          </div>`
+        }
         const sel = (info.id === currentFolderId) ? ' selected' : ''
         const ic = info.isRoot ? '★' : '📁'
         return `<div class="folder-node${sel}" data-folder-id="${info.id === null ? '' : info.id}">
@@ -179,9 +201,11 @@
       function renderTreeBranch(folder) {
         const count = bookmarksOfFolder(folder.id).length
         const subs = subfoldersOf(folder.id)
+        const createRow = renderCreateInputIfHere(folder.id)
         let html = renderNode({ id: folder.id, name: folder.name, count })
-        if (subs.length > 0) {
+        if (subs.length > 0 || createRow) {
           html += '<div class="folder-children">'
+          html += createRow
           for (const s of subs) html += renderTreeBranch(s)
           html += '</div>'
         }
@@ -197,7 +221,8 @@
           })
           el.addEventListener('dblclick', () => {
             if (fid === null) return
-            void renameFolderById(fid)
+            renamingFolderId = fid
+            buildTree()
           })
           el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop-target') })
           el.addEventListener('dragleave', () => el.classList.remove('drop-target'))
@@ -214,12 +239,54 @@
         })
       }
 
-      async function renameFolderById(fid) {
+      function renameFolderById(fid) {
         const cur = tree.folders.find((f) => f.id === fid)
         if (!cur) return
-        const name = prompt('새 폴더 이름', cur.name)
-        if (!name || name === cur.name) return
-        await window.internalAPI.bookmarks.folderRename(fid, name.trim())
+        renamingFolderId = fid
+        buildTree()
+      }
+
+      // 폴더 트리 인라인 입력(새 폴더·이름 변경) 공통 처리 — Enter 저장·Esc 취소·blur 저장.
+      function attachFolderInputHandlers() {
+        treeEl.querySelectorAll('.folder-name-input').forEach((inp) => {
+          inp.focus(); inp.select()
+          let settled = false
+          const mode = inp.dataset.mode
+          const commit = async () => {
+            if (settled) return
+            settled = true
+            const v = inp.value.trim()
+            if (mode === 'create') {
+              creatingFolder = false
+              if (v) {
+                await window.internalAPI.bookmarks.folderCreate(v, creatingParentId)
+              } else {
+                buildTree()
+              }
+            } else {
+              const fid = Number(inp.dataset.folderId)
+              const cur = tree.folders.find((f) => f.id === fid)
+              renamingFolderId = null
+              if (v && cur && v !== cur.name) {
+                await window.internalAPI.bookmarks.folderRename(fid, v)
+              } else {
+                buildTree()
+              }
+            }
+          }
+          const cancel = () => {
+            if (settled) return
+            settled = true
+            if (mode === 'create') creatingFolder = false
+            else renamingFolderId = null
+            buildTree()
+          }
+          inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); void commit() }
+            else if (e.key === 'Escape') { e.preventDefault(); cancel() }
+          })
+          inp.addEventListener('blur', () => { void commit() })
+        })
       }
 
       function filterRows() {
@@ -323,14 +390,14 @@
 
       qEl.addEventListener('input', () => { query = qEl.value.trim(); renderRows() })
 
-      document.getElementById('new-folder').addEventListener('click', async () => {
-        const name = prompt('새 폴더 이름', '새 폴더')
-        if (!name) return
-        await window.internalAPI.bookmarks.folderCreate(name.trim(), currentFolderId)
+      document.getElementById('new-folder').addEventListener('click', () => {
+        creatingFolder = true
+        creatingParentId = currentFolderId
+        buildTree()
       })
-      document.getElementById('rename-folder').addEventListener('click', async () => {
+      document.getElementById('rename-folder').addEventListener('click', () => {
         if (currentFolderId === null) { alert('루트는 이름을 변경할 수 없습니다. 폴더를 선택하세요.'); return }
-        await renameFolderById(currentFolderId)
+        renameFolderById(currentFolderId)
       })
       document.getElementById('del-folder').addEventListener('click', async () => {
         if (currentFolderId === null) { alert('루트는 삭제할 수 없습니다.'); return }

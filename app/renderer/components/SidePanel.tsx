@@ -70,30 +70,30 @@ export const SidePanel = forwardRef<HTMLDivElement, Props>(function SidePanel(
         <div className="sidepanel-tabs">
           <button
             className={`sidepanel-tab ${tab === 'ai' ? 'active' : ''}`}
-            onClick={() => setTab('ai')} title="AI 어시스턴트"
+            onClick={() => setTab('ai')} title="AI 어시스턴트" aria-label="AI 어시스턴트" aria-pressed={tab === 'ai'}
           ><Icon name="sparkle" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'bookmarks' ? 'active' : ''}`}
-            onClick={() => setTab('bookmarks')} title="북마크"
+            onClick={() => setTab('bookmarks')} title="북마크" aria-label="북마크" aria-pressed={tab === 'bookmarks'}
           ><Icon name="star" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'history' ? 'active' : ''}`}
-            onClick={() => setTab('history')} title="방문 기록"
+            onClick={() => setTab('history')} title="방문 기록" aria-label="방문 기록" aria-pressed={tab === 'history'}
           ><Icon name="clock" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'notes' ? 'active' : ''}`}
-            onClick={() => setTab('notes')} title="메모"
+            onClick={() => setTab('notes')} title="메모" aria-label="메모" aria-pressed={tab === 'notes'}
           ><Icon name="note" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'readlater' ? 'active' : ''}`}
-            onClick={() => setTab('readlater')} title="읽기 목록"
+            onClick={() => setTab('readlater')} title="읽기 목록" aria-label="읽기 목록" aria-pressed={tab === 'readlater'}
           ><Icon name="book" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'briefing' ? 'active' : ''}`}
-            onClick={() => setTab('briefing')} title="자동 수집 브리핑"
+            onClick={() => setTab('briefing')} title="자동 수집 브리핑" aria-label="자동 수집 브리핑" aria-pressed={tab === 'briefing'}
           ><Icon name="inbox" size={15} /></button>
         </div>
-        <button className="sidepanel-close" onClick={onClose} title="닫기"><Icon name="close" size={13} /></button>
+        <button className="sidepanel-close" onClick={onClose} title="닫기" aria-label="사이드 패널 닫기"><Icon name="close" size={13} /></button>
       </div>
       <div className={`sidepanel-body ${tab === 'ai' ? 'sidepanel-body-ai' : ''}`}>
         {tab === 'ai' && (

@@ -226,8 +226,14 @@ export function CommandPalette({ windowId, open, onClose, actions, tabs, macros,
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKey}
           placeholder="명령 검색 — 이름을 입력하세요 (예: 다크, 설정, ㅂㅁㅋ)  ·  ? 누르면 도움말"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="cp-listbox"
+          aria-autocomplete="list"
+          aria-activedescendant={!isHelp && filtered.length > 0 ? `cp-opt-${highlight}` : undefined}
+          aria-label="명령 팔레트"
         />
-        <div className="command-palette-list" ref={listRef}>
+        <div className="command-palette-list" ref={listRef} role="listbox" id="cp-listbox">
           {isHelp && (
             <div className="command-palette-help">
               <div className="cp-help-title">명령 팔레트 사용법</div>
@@ -252,7 +258,10 @@ export function CommandPalette({ windowId, open, onClose, actions, tabs, macros,
           {!isHelp && filtered.map((item, i) => (
             <div
               key={item.id}
+              id={`cp-opt-${i}`}
               data-idx={i}
+              role="option"
+              aria-selected={i === highlight}
               className={`command-palette-item ${i === highlight ? 'active' : ''}`}
               onMouseEnter={() => setHighlight(i)}
               onMouseDown={(e) => { e.preventDefault(); run(item) }}

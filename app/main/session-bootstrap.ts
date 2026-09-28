@@ -144,6 +144,9 @@ export function setupSession(ses: Session): void {
   // 3) 미디어/토렌트 감지용 onResponseStarted (모든 세션에 설치 — 탭은 파티션 세션 사용)
   try { installResponseHooks(ses) } catch (err) { console.warn('[session-bootstrap] response-hooks failed', err) }
 
+  // 3.5) 맞춤법 검사 언어 — 한국어 + 영어 동시 검사(콘텍스트 메뉴 제안·"사전에 추가"의 전제).
+  try { ses.setSpellCheckerLanguages(['ko', 'en-US']) } catch (err) { console.warn('[session-bootstrap] spellchecker langs failed', err) }
+
   // 4) 외부 모듈 hook (policy webRequest, 향후 adblock 등)
   for (const hook of sessionHooks) {
     try { hook(ses) } catch (err) { console.warn('[session-bootstrap] hook failed', err) }

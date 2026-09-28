@@ -5,7 +5,7 @@ import { createTab, getTab } from '../../tabs/tab-service'
 import { buildSearchUrl, getDefaultEngine } from '../../storage/search-engines'
 import { addBookmark } from '../../storage/bookmarks'
 import { startFind } from '../find'
-import { getWindow } from '../../windows/window-service'
+import { createBrowserWindow, getWindow } from '../../windows/window-service'
 import { collectMenuItems } from '../mod-api'
 import { handleOverlayDownload } from '../video-download'
 
@@ -49,7 +49,20 @@ function buildTemplate(
     const link = params.linkURL
     template.push(
       { label: '새 탭에서 링크 열기', click: () => { createTab({ windowId, url: link, background: true }) } },
-      { label: '새 창에서 링크 열기', click: () => { createTab({ windowId, url: link }) } },
+      {
+        label: '새 창에서 링크 열기',
+        click: () => {
+          const ctx = createBrowserWindow()
+          createTab({ windowId: ctx.id, url: link })
+        },
+      },
+      {
+        label: '시크릿 창에서 링크 열기',
+        click: () => {
+          const ctx = createBrowserWindow({ incognito: true })
+          createTab({ windowId: ctx.id, url: link })
+        },
+      },
       { label: '링크 주소 복사', click: () => clipboard.writeText(link) },
     )
     if (params.linkText) {
@@ -102,6 +115,23 @@ function buildTemplate(
         ctx?.chrome.webContents.send(IPC.find.open, { initialText: sel.slice(0, 200) })
         startFind(tabId, sel.slice(0, 200))
       },
+    })
+    sep()
+  }
+
+  // ===== 맞춤법 제안 (오타 위에서 우클릭) =====
+  if (params.isEditable && params.misspelledWord) {
+    const suggestions = params.dictionarySuggestions.slice(0, 5)
+    if (suggestions.length > 0) {
+      for (const s of suggestions) {
+        template.push({ label: s, click: () => wc.replaceMisspelling(s) })
+      }
+    } else {
+      template.push({ label: '맞춤법 제안 없음', enabled: false })
+    }
+    template.push({
+      label: '사전에 추가',
+      click: () => { wc.session.addWordToSpellCheckerDictionary(params.misspelledWord) },
     })
     sep()
   }

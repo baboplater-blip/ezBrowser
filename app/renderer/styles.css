@@ -481,6 +481,12 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 .tab-ctx-label {
   padding: 6px 10px 4px; font-size: 11px; font-weight: 600; color: var(--color-text-secondary);
 }
+.tab-ctx-rename { padding: 4px 8px; }
+.tab-ctx-rename-input {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px;
+  border: 1px solid var(--color-accent-primary); border-radius: var(--radius-sm);
+  background: var(--color-bg-base); color: var(--color-text-primary); outline: none;
+}
 
 /* 다중 선택된 탭 (Ctrl/Shift+클릭) */
 .tab.multi-selected {
