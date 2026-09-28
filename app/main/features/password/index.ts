@@ -4,6 +4,9 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PasswordEntry, PasswordSummary } from '../../../shared/types'
+import { decryptWithPassphrase, encryptWithPassphrase, type EncryptedPayload } from './backup-crypto'
+
+export type { EncryptedPayload } from './backup-crypto'
 
 const passwords = new Map<string, PasswordEntry>()
 let loaded = false
@@ -108,6 +111,7 @@ function persist(): void {
 
 export async function initPasswords(): Promise<void> {
   await loadAll()
+  await loadNever()
   if (!isPasswordStorageAvailable()) {
     console.warn('[password] safeStorage not available — entries can be loaded but new saves will fail')
   }
@@ -391,6 +395,61 @@ function nextPromptId(): string {
 
 const neverOrigins = new Set<string>()
 
+// ===== "이 사이트는 저장 안 함" 영속화 =====
+//
+// 예전에는 `neverOrigins` 가 메모리에만 있어 앱을 재시작하면 잊혔다 — 사용자가 껐던 저장 제안이
+// 다음 세션에 다시 뜨는 결함. `passwords.json` 과 같은 스타일(별도 파일, 디바운스 저장)로 고정한다.
+
+function neverFilePath(): string {
+  return path.join(app.getPath('userData'), 'password-never-save.json')
+}
+
+let neverLoaded = false
+async function loadNever(): Promise<void> {
+  if (neverLoaded) return
+  neverLoaded = true
+  await ensureDir()
+  if (!existsSync(neverFilePath())) return
+  try {
+    const raw = await readFile(neverFilePath(), 'utf-8')
+    const arr = JSON.parse(raw) as unknown
+    if (Array.isArray(arr)) {
+      for (const o of arr) {
+        if (typeof o === 'string' && o) neverOrigins.add(o)
+      }
+    }
+  } catch (err) {
+    console.warn('[password] never-list load failed', err)
+  }
+}
+
+let neverPersistTimer: NodeJS.Timeout | null = null
+function persistNever(): void {
+  if (neverPersistTimer) clearTimeout(neverPersistTimer)
+  neverPersistTimer = setTimeout(async () => {
+    neverPersistTimer = null
+    await ensureDir()
+    try {
+      await writeFile(neverFilePath(), JSON.stringify(Array.from(neverOrigins).sort(), null, 2), 'utf-8')
+    } catch (err) {
+      console.warn('[password] never-list persist failed', err)
+    }
+  }, 250)
+}
+
+/** 저장 제안을 끈 사이트 목록(관리 페이지 표시용). */
+export function listNeverOrigins(): string[] {
+  return Array.from(neverOrigins).sort()
+}
+
+/** 다시 저장 제안을 받도록 허용(관리 페이지의 "해제"). */
+export function removeNeverOrigin(origin: string): void {
+  if (neverOrigins.delete(origin)) {
+    persistNever()
+    passwordEvents.emit('never-changed')
+  }
+}
+
 /**
  * content.js 가 form submit 감지 시 호출.
  * 결과:
@@ -448,6 +507,8 @@ export function confirmSave(promptId: string, action: ConfirmAction): {
   if (action === 'discard') return { status: 'discarded' }
   if (action === 'never') {
     neverOrigins.add(p.origin)
+    persistNever()
+    passwordEvents.emit('never-changed')
     return { status: 'never' }
   }
 
@@ -498,4 +559,190 @@ export function removePassword(id: string): void {
     persist()
     passwordEvents.emit('changed')
   }
+}
+
+// ===== 백업 (데이터 내보내기/가져오기의 비밀번호 전용 경로) =====
+//
+// `passwords.json` 을 있는 그대로 내보내면 safeStorage 암호문이라 **이 PC 에서만** 복호화된다.
+// 사용자가 백업 암호를 입력했을 때만, 평문으로 복호화 → 사용자 암호로 재암호화(scrypt+AES-256-GCM)한
+// 이식 가능한 블록을 만든다. 짧은 암호는 브루트포스에 취약하므로 최소 길이를 강제한다.
+
+export const MIN_BACKUP_PASSPHRASE_LENGTH = 6
+
+interface BackupPasswordRow {
+  origin: string
+  username: string
+  password: string
+  autoLoginAllowed?: boolean
+  createdAt?: number
+  updatedAt?: number
+}
+
+/** 백업 암호로 모든 비밀번호를 재암호화한다. 암호가 너무 짧으면 null. */
+export function exportPasswordsForBackup(
+  passphrase: string,
+): { payload: EncryptedPayload; count: number; skipped: number } | null {
+  const pass = String(passphrase ?? '')
+  if (pass.length < MIN_BACKUP_PASSPHRASE_LENGTH) return null
+  const rows: BackupPasswordRow[] = []
+  let skipped = 0
+  for (const e of passwords.values()) {
+    const plain = decrypt(e.encryptedPassword)
+    if (plain === null) { skipped += 1; continue }
+    rows.push({
+      origin: e.origin,
+      username: e.username,
+      password: plain,
+      autoLoginAllowed: e.autoLoginAllowed === true,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+    })
+  }
+  const payload = encryptWithPassphrase(JSON.stringify(rows), pass)
+  return { payload, count: rows.length, skipped }
+}
+
+export type BackupImportStatus = 'ok' | 'wrong-password' | 'invalid-passphrase'
+
+/**
+ * 백업 암호로 풀어 이 PC 의 safeStorage 로 재암호화하며 병합한다.
+ * **병합 정책: 같은 origin+username 이 이미 있으면 `updatedAt` 이 더 최신인 쪽만 반영한다**
+ * (오래된 백업을 다시 가져와도 방금 고친 비밀번호가 덮어써지지 않도록).
+ */
+export function importPasswordsFromBackup(
+  payload: EncryptedPayload,
+  passphrase: string,
+): { status: BackupImportStatus; imported: number; updated: number; skipped: number } {
+  const pass = String(passphrase ?? '')
+  if (pass.length < MIN_BACKUP_PASSPHRASE_LENGTH) {
+    return { status: 'invalid-passphrase', imported: 0, updated: 0, skipped: 0 }
+  }
+  const json = decryptWithPassphrase(payload, pass)
+  if (json === null) return { status: 'wrong-password', imported: 0, updated: 0, skipped: 0 }
+
+  let rows: unknown
+  try {
+    rows = JSON.parse(json)
+  } catch {
+    return { status: 'wrong-password', imported: 0, updated: 0, skipped: 0 }
+  }
+  if (!Array.isArray(rows)) return { status: 'wrong-password', imported: 0, updated: 0, skipped: 0 }
+
+  let imported = 0
+  let updated = 0
+  let skipped = 0
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object') { skipped += 1; continue }
+    const row = raw as Partial<BackupPasswordRow>
+    const origin = normalizeHttpsOrigin(String(row.origin ?? ''))
+    const username = String(row.username ?? '').trim()
+    const password = String(row.password ?? '')
+    if (!origin || !username || !password) { skipped += 1; continue }
+    if (!isPasswordStorageAvailable()) { skipped += 1; continue }
+    const encoded = encrypt(password)
+    if (encoded === null) { skipped += 1; continue }
+    const incomingUpdatedAt = typeof row.updatedAt === 'number' ? row.updatedAt : Date.now()
+    const existing = findByOriginUser(origin, username)
+    if (existing) {
+      if (incomingUpdatedAt <= existing.updatedAt) { skipped += 1; continue }
+      existing.encryptedPassword = encoded
+      existing.updatedAt = Date.now()
+      if (row.autoLoginAllowed !== undefined) {
+        existing.autoLoginAllowed = row.autoLoginAllowed === true && origin.startsWith('https:')
+      }
+      updated += 1
+    } else {
+      const now = Date.now()
+      const e: PasswordEntry = {
+        id: nextId(),
+        origin,
+        username,
+        encryptedPassword: encoded,
+        createdAt: typeof row.createdAt === 'number' ? row.createdAt : now,
+        updatedAt: now,
+        lastUsedAt: 0,
+        autoLoginAllowed: row.autoLoginAllowed === true && origin.startsWith('https:'),
+        preferred: false,
+        autoLoginFailures: 0,
+        autoLoginBlockedUntil: 0,
+      }
+      passwords.set(e.id, e)
+      imported += 1
+    }
+  }
+  if (imported + updated > 0) {
+    persist()
+    passwordEvents.emit('changed')
+  }
+  return { status: 'ok', imported, updated, skipped }
+}
+
+// ===== CSV (크롬/엣지 호환) =====
+//
+// 복호화된 **평문**은 여기서 만든 뒤 호출자(IPC 핸들러)가 즉시 디스크에 쓰고 버린다 — 렌더러로
+// 절대 건네지 않는다(대량 내보내기가 렌더러를 거치면 그 순간 메모리·devtools 에 평문이 노출된다).
+
+export interface CsvPlainRow { origin: string; username: string; password: string }
+
+/** 모든 비밀번호를 평문으로 복호화한다. CSV 내보내기 전용 — 결과를 IPC 로 렌더러에 보내지 말 것. */
+export function exportPlainForCsv(): CsvPlainRow[] {
+  const out: CsvPlainRow[] = []
+  for (const e of passwords.values()) {
+    const plain = decrypt(e.encryptedPassword)
+    if (plain === null) continue
+    out.push({ origin: e.origin, username: e.username, password: plain })
+  }
+  return out.sort((a, b) => a.origin.localeCompare(b.origin) || a.username.localeCompare(b.username))
+}
+
+/**
+ * CSV 에서 파싱된 평문 행을 병합한다. https 만 허용(앱 전역 정책과 동일 — 평문 http 에는
+ * 비밀번호를 저장하지 않는다). 같은 origin+username 이 있으면 CSV 값으로 덮어쓴다
+ * (사용자가 명시적으로 고른 파일을 가져오는 행위라 "최신 우선"이 아니라 "가져온 값 우선").
+ */
+export function importPlainFromCsv(
+  rows: Array<{ url: string; username: string; password: string }>,
+): { imported: number; updated: number; skipped: number } {
+  let imported = 0
+  let updated = 0
+  let skipped = 0
+  for (const row of rows) {
+    const origin = normalizeHttpsOrigin(row.url)
+    const username = row.username.trim()
+    const password = row.password
+    if (!origin || !username || !password) { skipped += 1; continue }
+    if (!isPasswordStorageAvailable()) { skipped += 1; continue }
+    const encoded = encrypt(password)
+    if (encoded === null) { skipped += 1; continue }
+    const existing = findByOriginUser(origin, username)
+    if (existing) {
+      existing.encryptedPassword = encoded
+      existing.updatedAt = Date.now()
+      existing.autoLoginFailures = 0
+      existing.autoLoginBlockedUntil = 0
+      updated += 1
+    } else {
+      const now = Date.now()
+      const e: PasswordEntry = {
+        id: nextId(),
+        origin,
+        username,
+        encryptedPassword: encoded,
+        createdAt: now,
+        updatedAt: now,
+        lastUsedAt: 0,
+        autoLoginAllowed: false,
+        preferred: false,
+        autoLoginFailures: 0,
+        autoLoginBlockedUntil: 0,
+      }
+      passwords.set(e.id, e)
+      imported += 1
+    }
+  }
+  if (imported + updated > 0) {
+    persist()
+    passwordEvents.emit('changed')
+  }
+  return { imported, updated, skipped }
 }

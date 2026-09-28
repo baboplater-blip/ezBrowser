@@ -180,6 +180,13 @@ export const IPC = {
     // 선등록(사용자가 설정에서 직접 추가/수정) — 신뢰된 내부 페이지만.
     add: 'password:add',
     update: 'password:update',
+    // "이 사이트는 저장 안 함" 목록 — 관리 페이지 전용.
+    neverList: 'password:never-list',
+    neverRemove: 'password:never-remove',
+    neverChanged: 'password:never-changed',
+    // 크롬/엣지 호환 CSV 내보내기·가져오기 — 신뢰된 내부 페이지만, 다이얼로그로 경로 선택.
+    csvExport: 'password:csv-export',
+    csvImport: 'password:csv-import',
   },
   workspace: {
     list: 'workspace:list',
@@ -219,6 +226,9 @@ export const IPC = {
   data: {
     export: 'data:export',
     import: 'data:import',
+    // 가져오기 전 "코드 실행 항목"(userChrome.js·매크로·userscript·정책의 customJs)이
+    // 번들에 있는지 미리 알아본다 — 기본은 비포함, 사용자가 명시로 켜야 가져와진다.
+    previewCode: 'data:preview-code',
   },
   tokens: {
     get: 'tokens:get',

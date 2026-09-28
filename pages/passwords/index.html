@@ -157,7 +157,32 @@
       <div id="alert"></div>
 
       <div class="add-account">
-        <button class="btn primary" id="addToggleBtn" type="button">＋ 계정 추가</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn primary" id="addToggleBtn" type="button">＋ 계정 추가</button>
+          <button class="btn" id="genToggleBtn" type="button">🎲 비밀번호 생성</button>
+          <button class="btn" id="csvExportBtn" type="button">⬇ CSV로 내보내기</button>
+          <button class="btn" id="csvImportBtn" type="button">⬆ CSV 가져오기</button>
+        </div>
+        <div id="csvResult" class="add-hint" style="margin-top:6px;"></div>
+
+        <div class="add-form" id="genForm" style="display:none;">
+          <div class="add-field">
+            <label>길이: <span id="genLenLabel">16</span>자</label>
+            <input type="range" id="genLen" min="8" max="64" value="16" />
+          </div>
+          <label class="add-checkbox-row"><input type="checkbox" id="genUpper" checked /> <span>대문자 (A-Z)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genLower" checked /> <span>소문자 (a-z)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genNumbers" checked /> <span>숫자 (0-9)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genSymbols" checked /> <span>기호 (!@#$…)</span></label>
+          <div class="pw-input-row">
+            <input type="text" id="genOutput" readonly autocomplete="off" style="font-family:'Consolas','Monaco','Courier New',monospace;" />
+            <button class="btn" id="genRegenBtn" type="button">다시 생성</button>
+            <button class="btn" id="genCopyBtn" type="button">복사</button>
+          </div>
+          <div class="add-error" id="genError" style="display:none;"></div>
+          <div class="add-hint">브라우저 내장 암호학적 난수(Web Crypto)로 생성합니다 — 서버로 전송되지 않습니다.</div>
+        </div>
+
         <div class="add-form" id="addForm" style="display:none;">
           <div class="add-field">
             <label>사이트 주소</label>
@@ -190,9 +215,16 @@
 
       <input class="search-box" id="search" placeholder="도메인 또는 사용자명 검색…" />
       <div id="list" class="list"><div class="empty">로딩 중…</div></div>
+
+      <div class="never-section" id="neverSection" style="display:none;">
+        <h3 style="font-size:13px;margin:20px 0 8px;color:var(--muted);">저장 제안을 끈 사이트</h3>
+        <div class="add-hint" style="margin-bottom:8px;">"이 사이트는 안 함"을 선택한 사이트입니다. 여기서 해제하면 다음 방문 때 다시 저장을 제안합니다.</div>
+        <div id="neverList" class="list"></div>
+      </div>
     </div>
     <script>
       let entries = []
+      let neverEntries = []
       let revealed = new Set()
       let pwEditing = new Set()
       let query = ''
@@ -215,6 +247,29 @@
         if (addToggleBtn) addToggleBtn.disabled = !available
         entries = await window.internalAPI.password.list()
         render()
+        neverEntries = await window.internalAPI.password.neverList()
+        renderNever()
+      }
+
+      function renderNever() {
+        const section = document.getElementById('neverSection')
+        const list = document.getElementById('neverList')
+        if (neverEntries.length === 0) {
+          section.style.display = 'none'
+          return
+        }
+        section.style.display = ''
+        list.innerHTML = neverEntries.map(function(origin) {
+          return '<div class="item"><div class="item-main">'
+            + '<div class="origin">' + escape(origin) + '</div>'
+            + '<div class="item-actions"><button class="btn" data-never-remove="' + escape(origin) + '">해제</button></div>'
+            + '</div></div>'
+        }).join('')
+        list.querySelectorAll('[data-never-remove]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            await window.internalAPI.password.neverRemove(btn.dataset.neverRemove)
+          })
+        })
       }
 
       function filtered() {
@@ -483,12 +538,127 @@
         })
       }
 
+      // ===== 비밀번호 생성기 (순수 클라이언트 — Web Crypto, 서버로 전송되지 않음) =====
+      function generatePassword(length, useUpper, useLower, useNumbers, useSymbols) {
+        const sets = []
+        if (useUpper) sets.push('ABCDEFGHJKLMNPQRSTUVWXYZ')
+        if (useLower) sets.push('abcdefghijkmnopqrstuvwxyz')
+        if (useNumbers) sets.push('23456789')
+        if (useSymbols) sets.push('!@#$%^&*()-_=+[]{}?')
+        if (sets.length === 0) return null
+        const all = sets.join('')
+        const bytes = new Uint32Array(length)
+        crypto.getRandomValues(bytes)
+        let out = ''
+        for (let i = 0; i < length; i++) {
+          out += all[bytes[i] % all.length]
+        }
+        // 각 카테고리가 최소 1자 포함되도록 보정(짧은 길이에서 카테고리가 통째로 빠지는 것 방지)
+        const catBytes = new Uint32Array(sets.length)
+        crypto.getRandomValues(catBytes)
+        const chars = out.split('')
+        for (let i = 0; i < sets.length && i < chars.length; i++) {
+          const set = sets[i]
+          chars[i] = set[catBytes[i] % set.length]
+        }
+        // 순서를 다시 섞는다(앞쪽에 카테고리가 몰리지 않도록)
+        for (let i = chars.length - 1; i > 0; i--) {
+          const j = bytes[i] % (i + 1)
+          const tmp = chars[i]; chars[i] = chars[j]; chars[j] = tmp
+        }
+        return chars.join('')
+      }
+
+      function bindGenerator() {
+        const toggleBtn = document.getElementById('genToggleBtn')
+        const form = document.getElementById('genForm')
+        const lenInput = document.getElementById('genLen')
+        const lenLabel = document.getElementById('genLenLabel')
+        const upper = document.getElementById('genUpper')
+        const lower = document.getElementById('genLower')
+        const numbers = document.getElementById('genNumbers')
+        const symbols = document.getElementById('genSymbols')
+        const output = document.getElementById('genOutput')
+        const regenBtn = document.getElementById('genRegenBtn')
+        const copyBtn = document.getElementById('genCopyBtn')
+        const errorEl = document.getElementById('genError')
+
+        function regen() {
+          const length = Number(lenInput.value) || 16
+          const pw = generatePassword(length, upper.checked, lower.checked, numbers.checked, symbols.checked)
+          if (pw === null) {
+            errorEl.textContent = '최소 한 종류는 선택해야 합니다.'
+            errorEl.style.display = ''
+            output.value = ''
+            return
+          }
+          errorEl.style.display = 'none'
+          output.value = pw
+        }
+
+        toggleBtn.addEventListener('click', function() {
+          const opening = form.style.display === 'none'
+          form.style.display = opening ? '' : 'none'
+          if (opening) regen()
+        })
+        lenInput.addEventListener('input', function() {
+          lenLabel.textContent = lenInput.value
+          regen()
+        })
+        ;[upper, lower, numbers, symbols].forEach(function(cb) {
+          cb.addEventListener('change', regen)
+        })
+        regenBtn.addEventListener('click', regen)
+        copyBtn.addEventListener('click', async function() {
+          if (!output.value) return
+          try {
+            await navigator.clipboard.writeText(output.value)
+            const orig = copyBtn.textContent
+            copyBtn.textContent = '복사됨 ✓'
+            setTimeout(function() { copyBtn.textContent = orig }, 1200)
+          } catch (e) { alert('클립보드 접근 실패') }
+        })
+      }
+
+      // ===== CSV (크롬/엣지 호환) =====
+      function bindCsv() {
+        const exportBtn = document.getElementById('csvExportBtn')
+        const importBtn = document.getElementById('csvImportBtn')
+        const resultEl = document.getElementById('csvResult')
+
+        exportBtn.addEventListener('click', async function() {
+          resultEl.textContent = ''
+          const r = await window.internalAPI.password.csvExport()
+          if (r.canceled) return
+          if (!r.ok) {
+            resultEl.textContent = '⚠ 내보내기 실패: ' + (r.error || '알 수 없는 오류')
+            return
+          }
+          resultEl.textContent = '✓ ' + r.count + '개 계정을 CSV로 저장했습니다. 이 파일은 평문입니다 — 안전한 곳에 보관하고 다 쓰면 삭제하세요.'
+        })
+
+        importBtn.addEventListener('click', async function() {
+          resultEl.textContent = ''
+          if (!confirm('CSV 파일의 계정을 가져올까요? 같은 사이트·사용자명이 이미 있으면 CSV 값으로 덮어씁니다.')) return
+          const r = await window.internalAPI.password.csvImport()
+          if (r.canceled) return
+          if (!r.ok) {
+            resultEl.textContent = '⚠ 가져오기 실패: ' + (r.error || '알 수 없는 오류')
+            return
+          }
+          resultEl.textContent = '✓ 가져오기 완료 — 신규 ' + r.imported + '개, 갱신 ' + r.updated + '개'
+            + (r.skipped ? (', 건너뜀 ' + r.skipped + '개(https 아니거나 형식 오류)') : '')
+        })
+      }
+
       document.getElementById('search').addEventListener('input', function(e) {
         query = e.target.value
         render()
       })
 
       bindAddForm()
+      bindGenerator()
+      bindCsv()
 
       if (window.internalAPI) {
         window.internalAPI.password.onChanged(function(list) {
@@ -498,6 +668,10 @@
           revealed = new Set(Array.from(revealed).filter(function(id) { return ids.has(id) }))
           pwEditing = new Set(Array.from(pwEditing).filter(function(id) { return ids.has(id) }))
           render()
+        })
+        window.internalAPI.password.onNeverChanged(function(list) {
+          neverEntries = list
+          renderNever()
         })
       }
       reload()

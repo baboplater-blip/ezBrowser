@@ -122,6 +122,16 @@ const api = {
       ipcRenderer.invoke(IPC.password.update, a),
     onChanged: (cb: (list: PasswordSummary[]) => void) =>
       on(IPC.password.changed, cb),
+    // "이 사이트는 저장 안 함" 목록.
+    neverList: (): Promise<string[]> => ipcRenderer.invoke(IPC.password.neverList),
+    neverRemove: (origin: string): Promise<void> => ipcRenderer.invoke(IPC.password.neverRemove, { origin }),
+    onNeverChanged: (cb: (list: string[]) => void) => on(IPC.password.neverChanged, cb),
+    // 크롬/엣지 호환 CSV — 다이얼로그로 파일 경로를 고르므로 인자 없음.
+    csvExport: (): Promise<{ ok: boolean; canceled?: boolean; path?: string; count?: number; error?: string }> =>
+      ipcRenderer.invoke(IPC.password.csvExport),
+    csvImport: (): Promise<{
+      ok: boolean; canceled?: boolean; imported: number; updated: number; skipped: number; parsed: number; error?: string
+    }> => ipcRenderer.invoke(IPC.password.csvImport),
   },
   workspace: {
     list: (): Promise<Workspace[]> => ipcRenderer.invoke(IPC.workspace.list),
@@ -137,9 +147,21 @@ const api = {
       on(IPC.workspace.changed, cb),
   },
   data: {
-    export: (): Promise<unknown> => ipcRenderer.invoke(IPC.data.export),
-    import: (bundle: unknown): Promise<{ ok: boolean; restored: number; errors: string[] }> =>
-      ipcRenderer.invoke(IPC.data.import, { bundle }),
+    export: (opts?: { backupPassword?: string }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.data.export, opts),
+    import: (bundle: unknown, opts?: { backupPassword?: string; includeCode?: boolean }): Promise<{
+      ok: boolean
+      restored: number
+      errors: string[]
+      codeItemsSkipped: string[]
+      passwordStatus: 'not-present' | 'skipped-no-password' | 'wrong-password' | 'invalid-passphrase' | 'imported'
+      passwordImported: number
+      passwordUpdated: number
+      passwordSkippedRows: number
+    }> => ipcRenderer.invoke(IPC.data.import, { bundle, ...opts }),
+    // 가져오기 전 "코드 실행 항목"이 있는지 미리 본다(체크박스 없이 기본은 제외).
+    previewCode: (bundle: unknown): Promise<{ codeItems: string[] }> =>
+      ipcRenderer.invoke(IPC.data.previewCode, { bundle }),
   },
   tokens: {
     get: (): Promise<{

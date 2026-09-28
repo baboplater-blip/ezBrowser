@@ -512,6 +512,12 @@ function steps(outRoot) {
       script: 'perf-measure.mjs', outArg: true, result: (o) => path.join(o, 'perf', 'perf-results.json'),
       timeoutMs: 30 * 60000, desc: '게이트 4 성능 예산 실측',
     },
+    {
+      id: 'data-password', kind: 'harness', modes: ['full'],
+      script: 'verify-data-password-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'data-password', 'data-password-results.json'),
+      timeoutMs: 10 * 60000, desc: '데이터 백업(비밀번호 재암호화·코드항목 게이팅)·저장안함 영속화·CSV 왕복',
+    },
   ]
 }
 
