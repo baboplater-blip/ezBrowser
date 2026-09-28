@@ -358,8 +358,26 @@ export function getRuntimeRules(extId: string, scope: 'dynamic' | 'session'): Ra
 //
 // 한계: `updateSessionRules`(세션 룰)는 Chromium 이 **디스크에 쓰지 않는다** → 여전히 미지원.
 
-const DISK_POLL_MS = 2000
+// 대부분의 사용자는 동적 룰(chrome.declarativeNetRequest.updateDynamicRules)을 쓰는 확장을
+// 설치하지 않는다(정적 ruleset 만 쓰는 광고차단류가 대다수) — 그 경우 diskRaw 는 세션 내내 빈
+// 상태로 남는다. 그런 세션에서 매 2초마다 깨어 빈 디렉터리를 훑는 비용을 줄이되, "확장이 막
+// 동적 룰을 등록한 순간"의 반영 지연(≤3.5s, X8/X9 가 요구)은 절대 깨지 않아야 한다.
+//
+// 그래서 시점 기반 2단 전략을 쓴다 — 대상 유무만으로 즉시 늦춰지는(임무 6 최초 설계) 방식은
+// "부팅 뒤 처음으로 동적 룰이 등장하는 그 순간"을 아직 감지하기 전이라 반드시 최소 한 번은
+// 느린 주기에 걸려 3.5s 를 넘긴다(실제로 X8 을 깨뜨려 확인됨) — 감지로 전환을 트리거하는 설계는
+// "첫 등장"을 검증하는 시나리오와 근본적으로 안 맞는다.
+//   1) 부팅 직후 DISK_POLL_SETTLE_MS(2분) 동안은 항상 빠른 주기(2초) — 확장이 설치 직후 바로
+//      동적 룰을 등록하는 흔한 경우(막 설치·업데이트된 광고차단 확장 등)를 놓치지 않는다.
+//   2) 그 뒤에도 diskRaw 가 계속 비어 있으면(동적 룰 쓰는 확장이 정말 없다는 뜻) 느린 주기(15초)로
+//      물러난다 — 세션 대부분의 시간(설정 창을 오래 켜 두는 경우 등)의 idle 비용을 줄인다.
+//   3) 언제든 diskRaw 가 채워지면(느린 주기라도 15초 안에는 잡힌다) 그 뒤로는 계속 빠른 주기.
+const DISK_POLL_FAST_MS = 2000
+const DISK_POLL_IDLE_MS = 15000
+const DISK_POLL_SETTLE_MS = 120_000
 let diskTimer: NodeJS.Timeout | null = null
+let diskPollFast = false
+let diskWatchStartedAt = 0
 const diskRaw = new Map<string, RawRule[]>()   // "<파티션>/<확장ID>" -> 룰
 
 function dnrStoreDirs(): string[] {
@@ -413,18 +431,34 @@ function syncDiskRules(): boolean {
   return changed
 }
 
+// 폴링 주기를 재조정한다 — diskRaw 에 뭔가 있으면(한 번이라도 관측됐으면) 항상 빠르게,
+// 아직 비어 있으면 "부팅 후 settle 창 안"인 동안만 빠르게(대기 없이 첫 등장을 잡기 위해),
+// 그 창을 넘겼으면 느리게 물러난다. 이미 원하는 주기로 돌고 있으면 아무 것도 안 한다.
+function reconcileDiskPollInterval(): void {
+  const withinSettleWindow = Date.now() - diskWatchStartedAt < DISK_POLL_SETTLE_MS
+  const wantFast = diskRaw.size > 0 || withinSettleWindow
+  if (wantFast === diskPollFast && diskTimer) return
+  diskPollFast = wantFast
+  if (diskTimer) clearInterval(diskTimer)
+  diskTimer = setInterval(diskPollTick, wantFast ? DISK_POLL_FAST_MS : DISK_POLL_IDLE_MS)
+  if (typeof diskTimer.unref === 'function') diskTimer.unref()
+}
+
+function diskPollTick(): void {
+  try {
+    if (syncDiskRules()) {
+      console.log(`[dnr] 확장 동적 룰 갱신 — 매칭 목록 ${rules.length}개`)
+    }
+  } catch { /* 폴링 실패는 무시 */ }
+  reconcileDiskPollInterval()
+}
+
 /** 디스크 동적 룰 감시 시작 — 파일 이벤트는 놓칠 수 있어 폴링을 안전망으로 둔다. */
 export function watchDiskDynamicRules(): void {
   if (diskTimer) return
+  diskWatchStartedAt = Date.now()
   syncDiskRules()
-  diskTimer = setInterval(() => {
-    try {
-      if (syncDiskRules()) {
-        console.log(`[dnr] 확장 동적 룰 갱신 — 매칭 목록 ${rules.length}개`)
-      }
-    } catch { /* 폴링 실패는 무시 */ }
-  }, DISK_POLL_MS)
-  if (typeof diskTimer.unref === 'function') diskTimer.unref()
+  reconcileDiskPollInterval()
 }
 
 /** 확장이 제거되면 그 확장의 런타임 룰도 함께 버린다. */

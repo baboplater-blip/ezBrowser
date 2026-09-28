@@ -124,23 +124,23 @@ function sanitize(p: Partial<FeedCollector>, base?: FeedCollector): FeedCollecto
 export function addCollector(p: Partial<FeedCollector>): Omit<FeedCollector, 'seen'> & { seenCount: number } {
   const c = sanitize(p)
   collectors.push(c)
-  persist(); emitChanged()
+  persist(); emitChanged(); reconcileTimers()
   return summaryOf(c)
 }
 export function updateCollector(id: string, p: Partial<FeedCollector>): void {
   const i = collectors.findIndex((c) => c.id === id)
   if (i < 0) return
   collectors[i] = sanitize(p, collectors[i])
-  persist(); emitChanged()
+  persist(); emitChanged(); reconcileTimers()
 }
 export function removeCollector(id: string): void {
   collectors = collectors.filter((c) => c.id !== id)
   runs = runs.filter((r) => r.collectorId !== id)
-  persist(); persistRuns(); emitChanged()
+  persist(); persistRuns(); emitChanged(); reconcileTimers()
 }
 export function setCollectorEnabled(id: string, on: boolean): void {
   const c = collectors.find((x) => x.id === id)
-  if (c) { c.enabled = !!on; persist(); emitChanged() }
+  if (c) { c.enabled = !!on; persist(); emitChanged(); reconcileTimers() }
 }
 
 // ===== 수집 실행 =====
@@ -441,13 +441,39 @@ function intervalTick(): void {
 let dailyTimer: NodeJS.Timeout | null = null
 let intervalTimer: NodeJS.Timeout | null = null
 
+function hasEnabledDaily(): boolean {
+  return collectors.some((c) => c.enabled && c.scheduleType === 'daily' && c.time)
+}
+function hasEnabledInterval(): boolean {
+  return collectors.some((c) => c.enabled && c.scheduleType === 'interval')
+}
+// 대상(해당 스케줄의 활성 수집기) 0개면 타이머를 돌리지 않는다 — 수집기를 하나도 안 쓰는
+// 사용자는 30초·60초마다 깨는 비용이 0이다. 생기면 즉시 가동, 마지막 하나가 사라지면 즉시 정지.
+function reconcileTimers(): void {
+  if (hasEnabledDaily()) {
+    if (!dailyTimer) {
+      dailyTimer = setInterval(dailyTick, 30000)
+      if (typeof dailyTimer.unref === 'function') dailyTimer.unref()
+    }
+  } else if (dailyTimer) {
+    clearInterval(dailyTimer); dailyTimer = null
+  }
+  if (hasEnabledInterval()) {
+    if (!intervalTimer) {
+      intervalTimer = setInterval(intervalTick, 60000)
+      if (typeof intervalTimer.unref === 'function') intervalTimer.unref()
+    }
+  } else if (intervalTimer) {
+    clearInterval(intervalTimer); intervalTimer = null
+  }
+}
+
 export function initFeedCollectors(): void {
   try { if (existsSync(CFILE())) { const raw = JSON.parse(readFileSync(CFILE(), 'utf8')) as FeedCollector[]; if (Array.isArray(raw)) collectors = raw.map((c) => sanitize(c, c)) } }
   catch { collectors = [] }
   try { if (existsSync(RFILE())) { const raw = JSON.parse(readFileSync(RFILE(), 'utf8')) as CollectRun[]; if (Array.isArray(raw)) runs = raw.slice(0, RUNS_CAP) } }
   catch { runs = [] }
-  if (!dailyTimer) dailyTimer = setInterval(dailyTick, 30000)
-  if (!intervalTimer) intervalTimer = setInterval(intervalTick, 60000)
+  reconcileTimers()
   // 종료 시 디바운스 대기 중이던 상태(seen·lastFiredDay·lastRunAt)를 즉시 flush — 안 그러면 재시작 후
   // 같은 항목을 다시 수집하고 알림·웹훅을 중복 발화한다.
   app.on('before-quit', () => {

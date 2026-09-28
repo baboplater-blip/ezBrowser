@@ -22,9 +22,16 @@ const SCHEMA = [
 const SKIP_PROTOCOLS = ['browser:', 'chrome:', 'about:', 'devtools:', 'data:', 'javascript:', 'file:']
 const SKIP_HOSTS = new Set(['localhost', '127.0.0.1'])
 
+// 방문마다(페이지 이동마다) recordVisit 이 호출되는 가장 쓰기 빈도 높은 DB.
+// 기본 400ms 디바운스로도 정확하지만, 연속 탐색(여러 탭을 빠르게 넘나들 때) 중엔 매번
+// export()+디스크 쓰기가 일어나 불필요한 IO 가 쌓인다. 5s 로 늘려도 데이터 손실 위험은
+// 늘지 않는다 — before-quit/will-quit 이 종료 시 동기 flushSync 로 항상 반영하고,
+// 20s 강제 flush(변경 있을 때만)가 비정상 종료 손실창을 그대로 좁혀 둔다.
+const HISTORY_DEBOUNCE_MS = 5_000
+
 export async function initHistory(): Promise<void> {
   if (managed) return
-  managed = await openDb('history.db', SCHEMA)
+  managed = await openDb('history.db', SCHEMA, { debounceMs: HISTORY_DEBOUNCE_MS })
 }
 
 function getDb(): ManagedDb {
@@ -192,6 +199,35 @@ export function removeHistoryByUrl(url: string): void {
   stmt.free()
   scheduleFlush()
   emitChanged()
+}
+
+const RETENTION_MS: Record<string, number | null> = {
+  unlimited: null,
+  '1w': 7 * 24 * 60 * 60 * 1000,
+  '1m': 30 * 24 * 60 * 60 * 1000,
+  '3m': 90 * 24 * 60 * 60 * 1000,
+  '1y': 365 * 24 * 60 * 60 * 1000,
+}
+
+/**
+ * privacy.historyRetention 설정에 맞춰 그 기간보다 오래된 방문 기록을 지운다.
+ * 'unlimited' 면 아무 것도 지우지 않는다. 반환값 = 실제 삭제된 행 수(호출부 로그용).
+ */
+export function purgeExpiredHistory(retention: string): number {
+  const maxAge = RETENTION_MS[retention]
+  if (maxAge == null) return 0
+  if (!managed) return 0
+  const { db, scheduleFlush } = managed
+  const cutoff = Date.now() - maxAge
+  const stmt = db.prepare('DELETE FROM visits WHERE last_visit_at < ?')
+  stmt.run([cutoff])
+  stmt.free()
+  const n = db.getRowsModified()
+  if (n > 0) {
+    scheduleFlush()
+    emitChanged()
+  }
+  return n
 }
 
 export function clearHistory(opts?: { sinceMs?: number }): void {

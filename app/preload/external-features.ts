@@ -471,17 +471,18 @@ if (document.readyState === 'loading') {
   initVideoOverlay()
 }
 
-// 추가 polling — DOMContentLoaded 후에도 player.js 가 lazy 로 video 추가하는 케이스 대응
-// 1초 간격으로 15초간 scan. 광고 트래커 페이지엔 부담 없고, 비디오 사이트에서 결정적.
+// 추가 polling — DOMContentLoaded 후에도 player.js 가 lazy 로 video 추가하는 케이스 대응.
+// 이 스크립트는 페이지의 **모든 프레임**(광고 iframe 포함)에 로드되므로, MutationObserver 가
+// 이미 잡는 대부분의 경우(새 <video> 노드 삽입)에 겹쳐 1초마다 15번씩 깨는 건 낭비가 크다
+// (video 가 없는 iframe 이 훨씬 많다 — 광고 트래커 iframe 등). MutationObserver 는 놔두고,
+// observer 가 놓칠 수 있는 나머지 경우(속성만 바뀌는 lazy src 주입 등)만 듬성듬성한 안전망으로
+// 커버한다 — 15회 대신 4회(1s·3s·8s·15s), 같은 15초 꼬리를 지수적으로 성기게.
 window.addEventListener('load', () => {
   try { scanAllVideos() } catch { /* ignore */ }
 })
-let scanPollCount = 0
-const scanPollTimer = setInterval(() => {
-  try { scanAllVideos() } catch { /* ignore */ }
-  scanPollCount += 1
-  if (scanPollCount >= 15) clearInterval(scanPollTimer)
-}, 1000)
+;[1000, 3000, 8000, 15000].forEach((t) => {
+  setTimeout(() => { try { scanAllVideos() } catch { /* ignore */ } }, t)
+})
 // 사용자 ▶ 클릭 등 첫 사용자 인터랙션 후에도 한 번 더 scan
 document.addEventListener('click', () => {
   setTimeout(() => { try { scanAllVideos() } catch { /* ignore */ } }, 500)
@@ -493,6 +494,16 @@ document.addEventListener('click', () => {
 let hoverTransEl: HTMLElement | null = null
 let lastWord = ''
 const hoverTransCache = new Map<string, string>()
+// 긴 문서를 오래 훑으며 계속 호버하면(뉴스 기사 등) 무한정 쌓일 수 있다 — 상한 넘으면
+// 가장 오래된 항목부터 버린다(Map 은 삽입 순서를 보존하므로 FIFO 로 충분).
+const HOVER_TRANS_CACHE_MAX = 500
+function cacheHoverTranslation(key: string, value: string): void {
+  if (!hoverTransCache.has(key) && hoverTransCache.size >= HOVER_TRANS_CACHE_MAX) {
+    const oldestKey = hoverTransCache.keys().next().value
+    if (oldestKey !== undefined) hoverTransCache.delete(oldestKey)
+  }
+  hoverTransCache.set(key, value)
+}
 let hoverPending = false
 
 function hideHoverTrans(): void {
@@ -539,7 +550,7 @@ async function translateWord(word: string, target: string): Promise<string> {
       }
     }
     const out = combined || ''
-    hoverTransCache.set(key, out)
+    cacheHoverTranslation(key, out)
     return out
   } catch {
     return ''

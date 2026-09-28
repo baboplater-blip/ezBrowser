@@ -107,6 +107,21 @@ let forceTimer: NodeJS.Timeout | null = null
 let restoring = false
 let quitting = false
 
+// current.json 에 마지막으로 실제로 기록한 `windows` 내용(savedAt 제외 — 매번 바뀌는 타임스탬프까지
+// 비교하면 항상 "다름"이 되어 비교 자체가 무의미해진다). 30초 강제 저장은 이 값과 비교해 정말
+// 바뀐 게 없으면 디스크 쓰기를 생략한다 — 캡처(buildSnapshot/collectSession) 자체는 매번 그대로
+// 수행해 스크롤·폼 정착 저장(save-deadlines.ts 의 provisional 재저장) 의도를 깨지 않는다.
+let lastWrittenWindowsJson: string | null = null
+
+/** current.json 에 스냅샷을 쓴다. skipIfUnchanged 가 true 면 직전 기록과 내용이 같을 때 쓰기 자체를 생략한다. */
+function writeCurrentSnapshot(snap: SessionSnapshot, opts: { skipIfUnchanged?: boolean } = {}): boolean {
+  const windowsJson = JSON.stringify(snap.windows)
+  if (opts.skipIfUnchanged && windowsJson === lastWrittenWindowsJson) return true // 변경 없음 — 이미 최신
+  const ok = writeSnapshot(currentPath(), snap)
+  if (ok) lastWrittenWindowsJson = windowsJson
+  return ok
+}
+
 // 기한 계산은 save-deadlines.ts 의 순수 로직에 맡긴다(단독 시험 가능).
 const deadlines = new SaveDeadlines()
 
@@ -125,7 +140,7 @@ function runScheduledSave(): void {
   // 지금 도래한 기한만 소비한다 — 아직 오지 않은 "가라앉은 뒤의 저장" 은 그대로 둔다.
   deadlines.consumeDue(now)
   if (restoring || quitting) { deadlines.clear(); return }
-  writeSnapshot(currentPath(), buildSnapshot())
+  writeCurrentSnapshot(buildSnapshot())
   // 구조 변경으로 일찍 뜬 스냅샷은 탭 목록은 지키지만 스크롤·폼(pageState)이 아직 낡아 있을 수 있다
   // (Chromium 이 그 값을 내비게이션 항목에 반영하는 데 몇 초가 걸린다).
   // 그래서 **그 경우에만** 활동이 잦아든 뒤 한 번 더 뜬다 → 활동 묶음당 최대 두 번, 그 뒤엔 조용하다.
@@ -162,14 +177,15 @@ export function initSessionTracking(): void {
     // 파괴 전(close) 시점 — 탭이 아직 살아있을 때 동기 스냅샷. 종료 절차 중엔 금지.
     ctx.win.on('close', () => {
       if (restoring || quitting) return
-      writeSnapshot(currentPath(), buildSnapshot())
+      writeCurrentSnapshot(buildSnapshot())
     })
   })
 
-  // 30초 주기 강제 저장 (디바운스 무효화)
+  // 30초 주기 강제 저장 (디바운스 무효화) — 내용이 직전 기록과 같으면 디스크 쓰기는 생략한다
+  // (캡처 자체는 매번 수행 — 스크롤·폼이 정착됐는지 계속 확인해야 하므로).
   forceTimer = setInterval(() => {
     if (restoring || getAllWindows().length === 0) return
-    writeSnapshot(currentPath(), buildSnapshot())
+    writeCurrentSnapshot(buildSnapshot(), { skipIfUnchanged: true })
   }, FORCE_SAVE_MS)
   if (typeof forceTimer.unref === 'function') forceTimer.unref()
 
@@ -215,7 +231,7 @@ export function initSessionTracking(): void {
 function keepCurrentAsRecovery(snap: SessionSnapshot, why: string): void {
   if (existsSync(currentPath()) || existsSync(lastStablePath())) return // 이미 복구 자료가 있다
   if (snap.windows.length === 0) return
-  if (writeSnapshot(currentPath(), snap)) console.warn(`[session] 복구 자료 재기록 (${why})`)
+  if (writeCurrentSnapshot(snap)) console.warn(`[session] 복구 자료 재기록 (${why})`)
 }
 
 async function restoreSnapshot(snap: SessionSnapshot): Promise<boolean> {
