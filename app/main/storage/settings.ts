@@ -91,6 +91,7 @@ export interface AppSettings {
     fxBase: string
     fxSymbols: string
     readLaterEnabled: boolean
+    buddyEnabled: boolean
   }
   setup: {
     completed: boolean
@@ -210,6 +211,7 @@ const DEFAULTS: AppSettings = {
     fxBase: 'USD',
     fxSymbols: 'KRW,JPY,EUR,CNY',
     readLaterEnabled: true,
+    buddyEnabled: true,
   },
   setup: {
     completed: false,

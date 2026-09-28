@@ -861,6 +861,9 @@
         const w = settings.widgets || {}
         const manual = w.locationMode === 'manual'
         return '<h2>새 탭 위젯</h2>'
+          + '<div class="section"><h3>픽셀 친구</h3>'
+          + row('픽셀 친구 표시', '검색창 위에서 로고 새가 걸어다니고 인사해요 (밤엔 잠, 비 오면 우산). 끄면 불러오지 않습니다', toggleHtml('widgets.buddyEnabled', w.buddyEnabled !== false))
+          + '</div>'
           + '<div class="section"><h3>날씨</h3>'
           + row('날씨 카드 표시', '새 탭에 현재 날씨와 3일 예보 표시', toggleHtml('widgets.weatherEnabled', w.weatherEnabled !== false))
           + row('위치', '자동(IP 기반) 또는 수동 좌표', selectHtml('widgets.locationMode', w.locationMode || 'auto', [

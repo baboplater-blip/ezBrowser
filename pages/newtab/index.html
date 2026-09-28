@@ -276,6 +276,14 @@
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { transition-duration: 0.01ms !important; }
       }
+      /* ===== 픽셀 친구 (buddy.js) — 로고 마스코트 ===== */
+      .buddy-stage { position: relative; width: 360px; max-width: 100%; height: 84px; margin: 4px auto 6px; }
+      .buddy-stage canvas { display: block; width: 360px; height: 84px; image-rendering: pixelated; cursor: pointer; }
+      .buddy-bubble { position: absolute; bottom: 70px; transform: translateX(-50%) translateY(4px); white-space: nowrap;
+        background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 10px;
+        padding: 4px 10px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.08);
+        opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s cubic-bezier(0.23, 1, 0.32, 1); }
+      .buddy-bubble.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     </style>
   </head>
   <body>
@@ -283,6 +291,10 @@
       <h1 class="clock" id="clock">--:--</h1>
       <div class="date" id="date">불러오는 중…</div>
       <div class="greet" id="greet"></div>
+      <div class="buddy-stage" id="buddy-stage" style="display:none;" aria-label="픽셀 친구">
+        <canvas id="buddy-canvas"></canvas>
+        <div class="buddy-bubble" id="buddy-bubble"></div>
+      </div>
       <div class="workspace-bar" id="ws-bar" style="display:none;"></div>
 
       <form class="search" id="search-form">
@@ -513,6 +525,8 @@
       function renderWeather(w) {
         const body = document.getElementById('wx-body')
         if (!w) { body.innerHTML = '<div class="ph">날씨를 불러올 수 없습니다.</div>'; return }
+        window.__bbLastWeather = w
+        if (window.bbBuddy) window.bbBuddy.setWeather(w)
         const days = (w.daily || []).map((d) =>
           `<div class="wx-day"><span>${escape(d.label)}</span><span class="d-ico">${d.icon}</span>`
           + `<span class="d-t">${d.max}°/${d.min}°</span></div>`).join('')
@@ -641,10 +655,21 @@
         })
       }
 
+      // 픽셀 친구 — 켜져 있을 때만 스크립트를 불러온다(끄면 비용 0)
+      function loadBuddy() {
+        if (document.getElementById('buddy-script')) return
+        document.getElementById('buddy-stage').style.display = ''
+        const sc = document.createElement('script')
+        sc.id = 'buddy-script'
+        sc.src = 'buddy.js'
+        document.body.appendChild(sc)
+      }
+
       async function loadWidgets() {
         if (!window.internalAPI || !window.internalAPI.widgets) return
         let cfg = {}
         try { cfg = (await window.internalAPI.settings.get('widgets')) || {} } catch { /* defaults */ }
+        if (cfg.buddyEnabled !== false) loadBuddy()
         const showWx = cfg.weatherEnabled !== false
         const showNews = cfg.newsEnabled !== false
         if (showWx || showNews) {

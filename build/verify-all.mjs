@@ -335,6 +335,12 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: 'browser://memory 표시값 실측 대조 M1~M6',
     },
     {
+      id: 'newtab-buddy', kind: 'harness', modes: ['full'],
+      script: 'verify-newtab-buddy-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'newtab-buddy', 'newtab-buddy-results.json'),
+      timeoutMs: 5 * 60000, desc: '새 탭 픽셀 친구 B1~B5 (그림·애니메이션·클릭·숨김 정지·끄기)',
+    },
+    {
       id: 'settings-welcome', kind: 'harness', modes: ['full'],
       script: 'verify-settings-welcome-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'settings-welcome', 'settings-welcome-results.json'),
