@@ -168,7 +168,8 @@
       "open": "Site Policies"
     },
     "macros": {
-      "open": "Automation Macros"
+      "open": "Automation Macros",
+      "run": "Run Macro"
     },
     "mods": {
       "open": "Mods"

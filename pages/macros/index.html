@@ -36,6 +36,8 @@
       .chip { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 10px;
         background: var(--hover); color: var(--muted); margin-right: 4px; }
       .chip.on { background: var(--accent); color: white; }
+      .chip.warn { background: rgba(200, 42, 56, 0.12); color: var(--danger); }
+      .hint { font-size: 11px; color: var(--muted); margin: -4px 0 10px 130px; }
       main { padding: 20px 24px; overflow: auto; }
       h2 { font-size: 16px; margin: 0 0 14px; }
       .field { display: grid; grid-template-columns: 120px 1fr; gap: 10px; margin-bottom: 10px; align-items: center; }
@@ -107,12 +109,13 @@
           return
         }
         el.innerHTML = macros.map((m) => {
-          const trigName = m.trigger.type === 'url' ? 'URL' : m.trigger.type === 'startup' ? '시작' : '단축키'
+          const trigName = { url: 'URL', startup: '시작', interval: '주기', shortcut: '단축키' }[m.trigger.type] || m.trigger.type
           return '<div class="macro-card ' + (selected && selected.id === m.id ? 'active' : '') + '" data-id="' + m.id + '">'
             + '<div class="name">' + escape(m.name) + '</div>'
             + '<div class="meta"><span class="chip ' + (m.enabled ? 'on' : '') + '">' + (m.enabled ? '활성' : '꺼짐') + '</span>'
-            + '<span class="chip">' + trigName + ' ' + escape(m.trigger.value || '—') + '</span></div>'
-            + '</div>'
+            + '<span class="chip">' + trigName + ' ' + escape(m.trigger.value || '—') + '</span>'
+            + (m.shortcutConflict ? '<span class="chip warn">⚠ 단축키 충돌</span>' : '')
+            + '</div></div>'
         }).join('')
         el.querySelectorAll('.macro-card').forEach((card) => {
           card.addEventListener('click', async () => {
@@ -137,11 +140,13 @@
           + '<div class="field"><label>설명</label><input type="text" id="m-desc" value="' + escape(m.description) + '" /></div>'
           + '<div class="field"><label>활성</label><div class="toggle ' + (m.enabled ? 'on' : '') + '" id="m-enabled"></div></div>'
           + '<div class="field"><label>트리거</label><select id="m-trig-type">'
-          +   '<option value="shortcut"' + (m.trigger.type === 'shortcut' ? ' selected' : '') + '>단축키 (수동/팔레트 실행)</option>'
+          +   '<option value="shortcut"' + (m.trigger.type === 'shortcut' ? ' selected' : '') + '>단축키 (전역 키보드 + 팔레트)</option>'
           +   '<option value="url"' + (m.trigger.type === 'url' ? ' selected' : '') + '>URL 매칭 (* 와일드카드)</option>'
           +   '<option value="startup"' + (m.trigger.type === 'startup' ? ' selected' : '') + '>앱 시작 시</option>'
+          +   '<option value="interval"' + (m.trigger.type === 'interval' ? ' selected' : '') + '>주기 실행 (N분마다)</option>'
           + '</select></div>'
-          + '<div class="field"><label>트리거 값</label><input type="text" id="m-trig-val" value="' + escape(m.trigger.value) + '" placeholder="https://*.example.com/*" /></div>'
+          + '<div class="field"><label>트리거 값</label><input type="text" id="m-trig-val" value="' + escape(m.trigger.value) + '" placeholder="' + triggerPlaceholder(m.trigger.type) + '" /></div>'
+          + '<div class="hint">' + triggerHint(m.trigger.type) + '</div>'
           + '<div class="actions-section"><h2 style="font-size:14px;">실행할 액션</h2>'
           + (m.actions.length === 0 ? '<div class="empty-state" style="padding:20px;">액션이 없습니다. 아래 "+ 액션 추가" 로 시작하세요.</div>' : '')
           + '<div id="actions-list">'
@@ -155,6 +160,20 @@
           + '<button class="btn danger" id="delete-btn" style="margin-left:auto;">삭제</button>'
           + '</div>'
         bind()
+      }
+
+      function triggerPlaceholder(type) {
+        if (type === 'shortcut') return 'Ctrl+Shift+K'
+        if (type === 'interval') return '분 단위, 예: 30 (최소 1)'
+        if (type === 'startup') return '(값 불필요)'
+        return 'https://*.example.com/*'
+      }
+
+      function triggerHint(type) {
+        if (type === 'shortcut') return 'Ctrl / Alt / Shift 조합 + 키 형식(예: Ctrl+Shift+K). 전역 단축키로 실제 바인딩되며, 다른 매크로·시스템 단축키와 겹치면 좌측 목록에 ⚠ 경고가 뜹니다.'
+        if (type === 'interval') return '숫자(분)만 입력하세요. 최소 1분이며, 그보다 작거나 비어있으면 1분으로 처리됩니다.'
+        if (type === 'startup') return '브라우저가 켜질 때 한 번 실행됩니다.'
+        return '* 로 와일드카드 매칭. 매크로 자신이 다시 같은 URL 로 이동해도 10초 쿨다운으로 무한 반복을 막습니다.'
       }
 
       function actionRow(a, i) {
@@ -186,7 +205,7 @@
           enabledEl.classList.toggle('on', selected.enabled)
         })
         const trigType = document.getElementById('m-trig-type')
-        if (trigType) trigType.addEventListener('change', () => { selected.trigger.type = trigType.value })
+        if (trigType) trigType.addEventListener('change', () => { selected.trigger.type = trigType.value; renderEditor() })
         const trigVal = document.getElementById('m-trig-val')
         if (trigVal) trigVal.addEventListener('input', () => { selected.trigger.value = trigVal.value })
         document.querySelectorAll('[data-action-type]').forEach((el) => {

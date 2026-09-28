@@ -19,6 +19,11 @@ export function registerAction(action: Action): void {
   actions.set(action.id, action)
 }
 
+// 묶음 G: 매크로 등 동적으로 등록된 액션을 제거·수정 시 정리하기 위한 최소 추가.
+export function unregisterAction(id: string): void {
+  actions.delete(id)
+}
+
 export function getAction(id: string): Action | undefined {
   return actions.get(id)
 }
