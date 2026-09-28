@@ -330,6 +330,13 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: 'AI 대화·실행이력 재시작 영속화·상한·저장 경합·손상 복구 PS1~PS12',
     },
     {
+      // 묶음 B2: 권한 프롬프트(session-bootstrap.ts) · 서드파티 쿠키 차단 · 확장 DNR(adblock 무관).
+      id: 'permissions-network', kind: 'harness', modes: ['full'],
+      script: 'verify-permissions-network-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'permissions-network', 'permissions-network-results.json'),
+      timeoutMs: 8 * 60000, desc: '권한 프롬프트 허용/차단/타임아웃 · 서드파티 쿠키 · 확장 DNR P1~P5·C1~C2·D1',
+    },
+    {
       // 확장이 **로드만 되는 게 아니라 동작하는지**. scripting API 는 현재 알려진 공백(GAP)이다.
       id: 'extension-behavior', kind: 'harness', modes: ['full'],
       script: 'verify-extension-behavior-cdp.mjs', outArg: true,

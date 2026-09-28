@@ -301,6 +301,10 @@ export const IPC = {
     // 없을 때 — 메인이 이 채널로 외피에 프롬프트를 띄우고, 외피는 promptRespond 로 답한다.
     promptOpen: 'permissions:prompt-open',
     promptRespond: 'permissions:prompt-respond',
+    // 사용자 응답 없이(60초 타임아웃·탭 소멸) 메인이 스스로 거부를 확정했을 때 — 외피의 큐에
+    // 그 promptId 가 아직 남아 있으면(응답 안 한 상태) 지우라는 신호. 없으면 이미 사라진 탭에
+    // 대한 프롬프트 말풍선이 화면에 영원히 남는다(항목 B2).
+    promptClosed: 'permissions:prompt-closed',
   },
   readlater: {
     list: 'readlater:list',
