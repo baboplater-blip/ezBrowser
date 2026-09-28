@@ -337,6 +337,14 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: '확장 실동작(차단·주입·헤더·동적룰·저장소·SW) X1~X11',
     },
     {
+      // 묶음 J — 확장 팝업 UX(앵커된 창)·설치 전 동의 화면·접근성·DNR 세션 룰. blur/Esc 닫힘은
+      // CDP 합성 입력의 한계로 GAP 처리될 수 있다(코드는 표준 Electron API, 수동 확인 권장).
+      id: 'extension-ux', kind: 'harness', modes: ['full'],
+      script: 'verify-extension-ux-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'results.json'),
+      timeoutMs: 8 * 60000, desc: '확장 팝업 창·설치 동의·접근성·DNR 세션 룰 U1~U10',
+    },
+    {
       id: 'agent-triggers', kind: 'harness', modes: ['full'],
       script: 'verify-agent-triggers-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'agent-triggers', 'agent-triggers-results.json'),

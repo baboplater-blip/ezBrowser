@@ -268,6 +268,8 @@ export const IPC = {
     list: 'extensions:list',
     installFromCrx: 'extensions:install-from-crx',
     installFromUrl: 'extensions:install-from-url',
+    confirmInstall: 'extensions:confirm-install',
+    cancelInstall: 'extensions:cancel-install',
     remove: 'extensions:remove',
     setEnabled: 'extensions:set-enabled',
     openOptions: 'extensions:open-options',

@@ -104,6 +104,34 @@ function isActive(r: CompiledRule): boolean {
   return !activeIds || activeIds.has(r.extId)
 }
 
+// ===== 룰셋 활성/비활성 (chrome.declarativeNetRequest.updateEnabledRulesets, 묶음 J 항목 2) =====
+//
+// 확장이 자기 manifest 에 선언한 여러 룰셋 중 일부만 끄고 싶을 때 부르는 API. 메모리에만
+// 둔다(크롬도 이건 세션 동안만 유지 — 재시작하면 manifest 의 기본값으로 되돌아간다).
+const disabledRulesetIds = new Map<string, Set<string>>()
+// reloadDnrRules 가 마지막으로 받은 "꺼진 확장" 집합 — updateEnabledRulesets 가 정적 룰만
+// 다시 계산할 때 그 값을 몰라 모든 확장을 켠 것처럼 다시 읽어버리는 사고를 막기 위해 기억해 둔다.
+let lastDisabledExtIds: Set<string> = new Set()
+
+/** 이 확장이 스스로 꺼 둔 룰셋 id 목록 — `getEnabledRulesets` 보정과 화면 표시에 쓴다. */
+export function getDisabledRulesetIds(extId: string): string[] {
+  return Array.from(disabledRulesetIds.get(extId) ?? [])
+}
+
+/** 확장이 `chrome.declarativeNetRequest.updateEnabledRulesets` 를 불렀다. */
+export async function updateEnabledRulesets(
+  extId: string, opts: { enableRulesetIds?: string[]; disableRulesetIds?: string[] },
+): Promise<{ ok: boolean }> {
+  if (!extId) return { ok: false }
+  const set = disabledRulesetIds.get(extId) ?? new Set<string>()
+  for (const id of opts.disableRulesetIds ?? []) set.add(String(id))
+  for (const id of opts.enableRulesetIds ?? []) set.delete(String(id))
+  if (set.size > 0) disabledRulesetIds.set(extId, set)
+  else disabledRulesetIds.delete(extId)
+  await reloadDnrRules(lastDisabledExtIds)
+  return { ok: true }
+}
+
 function rebuildMerged(): void {
   rules = [...staticRules, ...dynamicCompiled, ...sessionCompiled, ...diskCompiled]
     .filter(isActive)
@@ -242,6 +270,7 @@ function toDnrResourceType(t: string): string {
  * 확장 설치·제거·활성 변경 뒤에 다시 부르면 된다(전체 재적재 — 개수가 적어 충분히 싸다).
  */
 export async function reloadDnrRules(disabledIds?: Set<string>): Promise<number> {
+  lastDisabledExtIds = disabledIds ?? new Set()
   const root = extensionsRoot()
   const next: CompiledRule[] = []
   const active = new Set<string>()
@@ -263,13 +292,16 @@ export async function reloadDnrRules(disabledIds?: Set<string>): Promise<number>
     // 룰셋이 없는 확장도 "켜져 있는 확장" 으로 세야 한다 — 정적 룰이 없을 뿐,
     // 런타임에 동적 룰을 넣을 수 있기 때문이다(그것까지 걸러 버리면 X8 이 죽는다).
     active.add(entry)
-    let manifest: { declarative_net_request?: { rule_resources?: Array<{ path?: string; enabled?: boolean }> } }
+    let manifest: { declarative_net_request?: { rule_resources?: Array<{ id?: string; path?: string; enabled?: boolean }> } }
     try { manifest = JSON.parse(await readFile(manifestPath, 'utf-8')) } catch { continue }
     const resources = manifest.declarative_net_request?.rule_resources
     if (!Array.isArray(resources)) continue
+    const disabledRulesets = disabledRulesetIds.get(entry)
 
     for (const res of resources) {
       if (res?.enabled === false) continue
+      // 확장이 chrome.declarativeNetRequest.updateEnabledRulesets 로 스스로 꺼 둔 룰셋.
+      if (disabledRulesets?.has(String(res?.id ?? ''))) continue
       const rel = String(res?.path ?? '')
       if (!rel) continue
       const rulePath = path.join(root, entry, rel)
@@ -465,6 +497,7 @@ export function watchDiskDynamicRules(): void {
 export function dropRuntimeRules(extId: string): void {
   dynamicRaw.delete(extId)
   sessionRaw.delete(extId)
+  disabledRulesetIds.delete(extId)
   recompileRuntime()
   scheduleSave()
 }

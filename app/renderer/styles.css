@@ -1615,6 +1615,10 @@ body.splitter-dragging .splitter { pointer-events: auto; }
 .ext-action-icon:hover {
   background: var(--color-bg-hover, rgba(255,255,255,.05));
 }
+.ext-action-icon:focus-visible {
+  outline: 2px solid var(--color-accent, #5A93F9);
+  outline-offset: 1px;
+}
 .ext-action-icon img {
   width: 18px;
   height: 18px;

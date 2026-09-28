@@ -3,7 +3,7 @@ import { IPC } from '../shared/ipc-channels'
 import './external-features'
 import type {
   ActionDescriptor, AdblockStats, AiConnectResult, AiProviderDetection, AiProviderKind, Bookmark, BookmarkFolder, BookmarkTree, DownloadItem,
-  ExtensionSummary, HistoryEntry, KeyBinding,
+  ExtensionInstallPreview, ExtensionSummary, HistoryEntry, KeyBinding,
   Macro, MacroSummary, ModSummary,
   PasswordSummary, PerfMilestones, PerfReport, PolicyRule, PolicyRuleSummary, ReadLaterItem, SearchEngine, TopSite,
   Userscript, UserscriptSummary, Workspace, WorkspaceState,
@@ -208,19 +208,25 @@ const api = {
   },
   extensions: {
     list: (): Promise<ExtensionSummary[]> => ipcRenderer.invoke(IPC.extensions.list),
-    installFromCrx: (filePath?: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    installFromCrx: (filePath?: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.installFromCrx, { path: filePath }),
-    installFromUrl: (url: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    installFromUrl: (url: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.installFromUrl, { url }),
+    confirmInstall: (token: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC.extensions.confirmInstall, { token }),
+    cancelInstall: (token: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC.extensions.cancelInstall, { token }),
     remove: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.remove, { id }),
     setEnabled: (id: string, enabled: boolean): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.setEnabled, { id, enabled }),
     openOptions: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.openOptions, { id }),
-    invokeAction: (id: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.extensions.invokeAction, { id }),
-    importLocal: (): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    invokeAction: (
+      id: string, anchorRect?: { x: number; y: number; width: number; height: number },
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.extensions.invokeAction, { id, anchorRect }),
+    importLocal: (): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.importLocal),
     onChanged: (cb: (list: ExtensionSummary[]) => void) => on(IPC.extensions.changed, cb),
   },

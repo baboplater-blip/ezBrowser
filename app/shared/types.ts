@@ -409,6 +409,24 @@ export interface ExtensionSessionLoad {
   reason?: string
 }
 
+/**
+ * 설치 전 동의 화면에 보여줄 미리보기 — 실제 설치(finalizeInstall)는 아직 일어나지 않은 상태다.
+ * `token` 으로 `extensions.confirmInstall`/`cancelInstall` 을 부른다(10분 방치되면 자동 정리).
+ */
+export interface ExtensionInstallPreview {
+  token: string
+  id: string
+  name: string
+  version: string
+  description?: string
+  iconDataUrl?: string
+  /** manifest.json 의 permissions(API 권한). */
+  permissions: string[]
+  /** manifest.json 의 host_permissions(MV3) — 접근 가능한 사이트 범위. */
+  hostPermissions: string[]
+  source: 'crx' | 'unpacked'
+}
+
 export interface ExtensionSummary {
   /** 이 확장의 declarativeNetRequest 정적 룰 중 우리가 적용 중인 개수(없으면 0). */
   dnrRules?: number
