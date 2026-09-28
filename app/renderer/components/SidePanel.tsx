@@ -1,7 +1,12 @@
-import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { Bookmark, BookmarkFolder, BookmarkTree, HistoryEntry, ReadLaterItem, TabSummary } from '../../shared/types'
-import { AiTab } from './AiTab'
 import { Icon } from './Icon'
+
+// AiTab(및 그 하위의 AiSocialPanel·AiWriteStudio)은 큰 하위 트리라 정적 import 하면 외피 초기
+// 번들에 항상 실린다. 사이드 패널을 아예 안 여는 사용자도 그 비용을 낸다 — lazy 로 실제로 AI 섹션이
+// 렌더될 때(사이드바를 처음 열 때)만 별도 청크를 받도록 분리한다(묶음 K).
+const AiTab = lazy(() => import('./AiTab').then((m) => ({ default: m.AiTab })))
+const AiTabFallback = () => <div className="ai-body ai-welcome dim">불러오는 중…</div>
 
 type Tab = 'ai' | 'bookmarks' | 'history' | 'notes' | 'readlater' | 'briefing'
 const TABS: Tab[] = ['ai', 'bookmarks', 'history', 'notes', 'readlater', 'briefing']
@@ -97,7 +102,9 @@ export const SidePanel = forwardRef<HTMLDivElement, Props>(function SidePanel(
       </div>
       <div className={`sidepanel-body ${tab === 'ai' ? 'sidepanel-body-ai' : ''}`}>
         {tab === 'ai' && (
-          <AiTab windowId={windowId} active={active} summarizeNonce={aiSummarizeNonce} writeNonce={aiWriteNonce} />
+          <Suspense fallback={<AiTabFallback />}>
+            <AiTab windowId={windowId} active={active} summarizeNonce={aiSummarizeNonce} writeNonce={aiWriteNonce} />
+          </Suspense>
         )}
         {tab === 'bookmarks' && (
           <BookmarksTab tree={tree} windowId={windowId} active={active} />
