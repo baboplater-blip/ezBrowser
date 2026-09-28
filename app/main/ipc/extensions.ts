@@ -28,7 +28,10 @@ function resolveWindowId(e: IpcMainInvokeEvent, fallback: string | null = null):
 }
 
 export function registerExtensionsIpc(): void {
-  ipcMain.handle(IPC.extensions.list, () => listExtensions())
+  ipcMain.handle(IPC.extensions.list, (e) => {
+    if (!isTrustedSender(e)) return []
+    return listExtensions()
+  })
 
   ipcMain.handle(IPC.extensions.installFromCrx, async (e, args: { path?: string } = {}) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }

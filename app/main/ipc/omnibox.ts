@@ -1,4 +1,5 @@
 import { ipcMain, net } from 'electron'
+import { handleTrusted } from './trust'
 import { IPC } from '../../shared/ipc-channels'
 import { SUGGEST_TIMEOUT_MS } from '../../shared/constants'
 import type { OmniboxSuggestion } from '../../shared/types'
@@ -199,10 +200,10 @@ function dedupe(arr: OmniboxSuggestion[]): OmniboxSuggestion[] {
 }
 
 export function registerOmniboxIpc(): void {
-  ipcMain.handle(IPC.omnibox.suggest, async (_e, { query, windowId }: { query: string; windowId?: string }) =>
+  handleTrusted(IPC.omnibox.suggest, async (_e, { query, windowId }: { query: string; windowId?: string }) =>
     combineSuggestions(query, windowId))
 
-  ipcMain.handle(IPC.omnibox.navigate, (_e, { windowId, tabId, input }: { windowId: string; tabId?: string; input: string }) => {
+  handleTrusted(IPC.omnibox.navigate, (_e, { windowId, tabId, input }: { windowId: string; tabId?: string; input: string }) => {
     const direct = normalizeUrl(input)
     let target = direct
     if (!target) {

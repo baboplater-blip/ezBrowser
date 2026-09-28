@@ -17,7 +17,10 @@ function broadcast(channel: string, payload?: unknown): void {
 }
 
 export function registerUpdateIpc(): void {
-  ipcMain.handle(IPC.update.status, () => getStatus())
+  ipcMain.handle(IPC.update.status, (e) => {
+    if (!isTrustedSender(e)) return null
+    return getStatus()
+  })
   ipcMain.handle(IPC.update.check, (e) => { if (!isTrustedSender(e)) return; return checkForUpdates(false) })
   ipcMain.handle(IPC.update.download, (e) => { if (!isTrustedSender(e)) return; return downloadUpdate() })
   ipcMain.handle(IPC.update.install, (e) => { if (!isTrustedSender(e)) return; quitAndInstall() })
