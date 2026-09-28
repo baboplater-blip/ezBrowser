@@ -120,17 +120,17 @@ async function main() {
 
       // I10: TabBar 의 "새 탭" 버튼 aria-label 이 en 문구인지(묶음 M1 — TabBar.tsx).
       const newTabAria = await evaluate(shell, `document.querySelector('.tab-new')?.getAttribute('aria-label') || ''`)
-      check('I10', '외피(en) — 탭바 새 탭 버튼 aria-label 이 "New tab"', newTabAria === 'New tab', `aria-label="${newTabAria}"`)
+      check('U10', '외피(en) — 탭바 새 탭 버튼 aria-label 이 "New tab"', newTabAria === 'New tab', `aria-label="${newTabAria}"`)
 
       // I11: Toolbar 다운로드 버튼 title 이 en 문구인지(묶음 M1 — Toolbar.tsx).
       const dlTitle = await evaluate(shell, `document.querySelector('.downloads-btn')?.getAttribute('title') || ''`)
-      check('I11', '외피(en) — 다운로드 버튼 title 이 "Downloads (Ctrl+J)…"', /^Downloads \(Ctrl\+J\)/.test(dlTitle), `title="${dlTitle}"`)
+      check('U11', '외피(en) — 다운로드 버튼 title 이 "Downloads (Ctrl+J)…"', /^Downloads \(Ctrl\+J\)/.test(dlTitle), `title="${dlTitle}"`)
 
       // I12: 명령 팔레트 placeholder 가 en 문구인지(묶음 M1 — CommandPalette.tsx).
       await evaluate(shell, `window.browserAPI.actions.run('action.palette.open', { windowId: ${JSON.stringify(windowId)} })`)
       await sleep(500)
       const paletteHolder = await evaluate(shell, `document.querySelector('.command-palette-input')?.getAttribute('placeholder') || ''`)
-      check('I12', '외피(en) — 명령 팔레트 placeholder 가 "Search commands…"', /^Search commands/.test(paletteHolder), `placeholder="${paletteHolder}"`)
+      check('U12', '외피(en) — 명령 팔레트 placeholder 가 "Search commands…"', /^Search commands/.test(paletteHolder), `placeholder="${paletteHolder}"`)
       await evaluate(shell, `document.querySelector('.command-palette-backdrop')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`)
 
       // I2: browser://settings 의 nav 라벨이 en 인지(data-i18n 정적 치환).
@@ -150,6 +150,24 @@ async function main() {
 
       const selValue = await evaluate(settingsSession, `document.querySelector('select[data-select="ui.language"]')?.value || null`)
       check('I4', 'browser://settings(en) — 언어 select 현재값이 en(설정 시드가 실제 반영)', selValue === 'en', `select.value="${selValue}"`)
+
+      // I10: 메인 프로세스 토스트(tMain 경유) 가 en 으로 뜨는가 — 워크스페이스 1개뿐인 기본 상태에서
+      // action.tab.move.next.workspace 를 돌리면 main.toast.workspaceOnlyOne 이 뜬다(register-defaults.ts
+      // 의 moveActiveTabTo). 탭이 없으면 그 이전에 return 하므로 탭이 있는 상태(외피 기본 탭)에서 실행.
+      await evaluate(shell, `window.browserAPI.actions.run('action.tab.move.next.workspace', { windowId: ${JSON.stringify(windowId)} })`)
+      await sleep(800)
+      const toastText = await evaluate(shell, `document.querySelector('.toast')?.textContent || ''`)
+      check('N10', '메인 프로세스 토스트(en) — main.toast.workspaceOnlyOne 이 영어',
+        toastText === 'Only one workspace exists', `toast="${toastText}"`)
+
+      // I11: 네이티브 메뉴 라벨(main.menu.*) 도 같은 사전 경로로 en 값을 돌려주는가.
+      // Electron 네이티브 Menu 는 CDP/DOM 으로 직접 읽을 수 없으므로(OS 위젯), 메뉴 라벨이 실제로
+      // 소비하는 동일한 사전 조회 경로(pages/shared/i18n.js 의 window.t(), main 의 tMain() 과 같은
+      // 평탄화 사전을 IPC 로 받아 온다)로 값을 대조한다 — build-menu.ts 의 M('top.file', '파일') 이
+      // 그 시점에 정확히 같은 키를 조회하므로, 여기서 en 값이 "File" 로 나오면 메뉴도 "File" 로 뜬다.
+      const menuLabel = await evaluate(settingsSession, `window.t('main.menu.top.file', '__MISSING__')`)
+      check('N11', '메뉴 라벨(en) — main.menu.top.file 이 "File"', menuLabel === 'File', `label="${menuLabel}"`)
+
       settingsSession.close()
 
       // I10~I13: 묶음 M4(내부 페이지) 이관분 — 정적 data-i18n 이 en 사전으로 실제 치환되는지
@@ -158,28 +176,28 @@ async function main() {
       const bmSession = await connectSession(bmTarget, 'bookmarks-en')
       await sleep(1200)
       const bmH1 = await evaluate(bmSession, `(document.querySelector('h1')?.textContent || '').trim()`)
-      check('I10', 'browser://bookmarks(en) — h1 이 "Bookmarks"', bmH1 === 'Bookmarks', `h1="${bmH1}"`)
+      check('P10', 'browser://bookmarks(en) — h1 이 "Bookmarks"', bmH1 === 'Bookmarks', `h1="${bmH1}"`)
       bmSession.close()
 
       const extTarget = await openInternalPage(args.port, shell, windowId, 'browser://extensions')
       const extSession = await connectSession(extTarget, 'extensions-en')
       await sleep(1200)
       const extH1 = await evaluate(extSession, `(document.querySelector('h1')?.textContent || '').trim()`)
-      check('I11', 'browser://extensions(en) — h1 이 "Extensions"', extH1 === 'Extensions', `h1="${extH1}"`)
+      check('P11', 'browser://extensions(en) — h1 이 "Extensions"', extH1 === 'Extensions', `h1="${extH1}"`)
       extSession.close()
 
       const pwTarget = await openInternalPage(args.port, shell, windowId, 'browser://passwords')
       const pwSession = await connectSession(pwTarget, 'passwords-en')
       await sleep(1200)
       const pwH1 = await evaluate(pwSession, `(document.querySelector('h1')?.textContent || '').trim()`)
-      check('I12', 'browser://passwords(en) — h1 이 "Password Manager"', pwH1 === 'Password Manager', `h1="${pwH1}"`)
+      check('P12', 'browser://passwords(en) — h1 이 "Password Manager"', pwH1 === 'Password Manager', `h1="${pwH1}"`)
       pwSession.close()
 
       const memTarget = await openInternalPage(args.port, shell, windowId, 'browser://ai-memory')
       const memSession = await connectSession(memTarget, 'ai-memory-en')
       await sleep(1200)
       const memSave = await evaluate(memSession, `(document.querySelector('[data-i18n="page.ai-memory.a3"]')?.textContent || '').trim()`)
-      check('I13', 'browser://ai-memory(en) — 저장 버튼이 "Save"', memSave === 'Save', `btn="${memSave}"`)
+      check('P13', 'browser://ai-memory(en) — 저장 버튼이 "Save"', memSave === 'Save', `btn="${memSave}"`)
       memSession.close()
     } catch (err) {
       check('FATAL-EN', 'en 시드 실행', false, err.message)
@@ -215,14 +233,14 @@ async function main() {
       const bmSessionVi = await connectSession(bmTargetVi, 'bookmarks-vi')
       await sleep(1200)
       const bmH1Vi = await evaluate(bmSessionVi, `(document.querySelector('h1')?.textContent || '').trim()`)
-      check('I14', 'browser://bookmarks(vi) — h1 이 "Dấu trang"', bmH1Vi === 'Dấu trang', `h1="${bmH1Vi}"`)
+      check('P14', 'browser://bookmarks(vi) — h1 이 "Dấu trang"', bmH1Vi === 'Dấu trang', `h1="${bmH1Vi}"`)
       bmSessionVi.close()
 
       const pwTargetVi = await openInternalPage(args.port, shell, windowId, 'browser://passwords')
       const pwSessionVi = await connectSession(pwTargetVi, 'passwords-vi')
       await sleep(1200)
       const pwH1Vi = await evaluate(pwSessionVi, `(document.querySelector('h1')?.textContent || '').trim()`)
-      check('I15', 'browser://passwords(vi) — h1 이 "Quản lý mật khẩu"', pwH1Vi === 'Quản lý mật khẩu', `h1="${pwH1Vi}"`)
+      check('P15', 'browser://passwords(vi) — h1 이 "Quản lý mật khẩu"', pwH1Vi === 'Quản lý mật khẩu', `h1="${pwH1Vi}"`)
       pwSessionVi.close()
     } catch (err) {
       check('FATAL-VI', 'vi 시드 실행', false, err.message)
@@ -245,16 +263,16 @@ async function main() {
 
       // I13~I15: 기본(ko) 렌더링이 이행 전 원문과 바이트 단위로 동일한지(묶음 M1 회귀 확인).
       const newTabAriaKo = await evaluate(shell, `document.querySelector('.tab-new')?.getAttribute('aria-label') || ''`)
-      check('I13', '외피(ko 기본) — 탭바 새 탭 버튼 aria-label 이 "새 탭"(원문 그대로)', newTabAriaKo === '새 탭', `aria-label="${newTabAriaKo}"`)
+      check('U13', '외피(ko 기본) — 탭바 새 탭 버튼 aria-label 이 "새 탭"(원문 그대로)', newTabAriaKo === '새 탭', `aria-label="${newTabAriaKo}"`)
 
       const dlTitleKo = await evaluate(shell, `document.querySelector('.downloads-btn')?.getAttribute('title') || ''`)
-      check('I14', '외피(ko 기본) — 다운로드 버튼 title 이 "다운로드 (Ctrl+J) — 사이드바 열기/닫기"(원문 그대로)',
+      check('U14', '외피(ko 기본) — 다운로드 버튼 title 이 "다운로드 (Ctrl+J) — 사이드바 열기/닫기"(원문 그대로)',
         dlTitleKo === '다운로드 (Ctrl+J) — 사이드바 열기/닫기', `title="${dlTitleKo}"`)
 
       await evaluate(shell, `window.browserAPI.actions.run('action.palette.open', { windowId: ${JSON.stringify(await evaluate(shell, `new URL(location.href).searchParams.get('windowId')`))} })`)
       await sleep(500)
       const paletteHolderKo = await evaluate(shell, `document.querySelector('.command-palette-input')?.getAttribute('placeholder') || ''`)
-      check('I15', '외피(ko 기본) — 명령 팔레트 placeholder 가 원문 그대로',
+      check('U15', '외피(ko 기본) — 명령 팔레트 placeholder 가 원문 그대로',
         paletteHolderKo === '명령 검색 — 이름을 입력하세요 (예: 다크, 설정, ㅂㅁㅋ)  ·  ? 누르면 도움말', `placeholder="${paletteHolderKo}"`)
       await evaluate(shell, `document.querySelector('.command-palette-backdrop')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))`)
 

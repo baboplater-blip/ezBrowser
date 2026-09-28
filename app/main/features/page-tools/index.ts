@@ -1,4 +1,5 @@
 import { app, dialog, type WebContents } from 'electron'
+import { tMain } from '../../i18n'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { createStore } from '../../storage/safe-store'
@@ -59,8 +60,8 @@ export async function savePageAs(tabId: string): Promise<{ ok: boolean; path?: s
   const defaultPath = path.join(app.getPath('downloads'), `${baseName}.html`)
   try {
     const result = win
-      ? await dialog.showSaveDialog(win, { defaultPath, filters: [{ name: '웹페이지', extensions: ['html', 'htm'] }] })
-      : await dialog.showSaveDialog({ defaultPath, filters: [{ name: '웹페이지', extensions: ['html', 'htm'] }] })
+      ? await dialog.showSaveDialog(win, { defaultPath, filters: [{ name: tMain('main.pageTools.webpageFilter', '웹페이지'), extensions: ['html', 'htm'] }] })
+      : await dialog.showSaveDialog({ defaultPath, filters: [{ name: tMain('main.pageTools.webpageFilter', '웹페이지'), extensions: ['html', 'htm'] }] })
     if (result.canceled || !result.filePath) return { ok: false, error: 'canceled' }
     await wc.savePage(result.filePath, 'HTMLComplete')
     return { ok: true, path: result.filePath }

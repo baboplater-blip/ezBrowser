@@ -1,6 +1,13 @@
 import { Menu, type MenuItemConstructorOptions } from 'electron'
 import { findKeyFor } from '../keymap/keymap-service'
 import { runAction } from '../actions/registry'
+import { tMain } from '../i18n'
+
+// 메뉴 라벨 번역 헬퍼 — key 는 항상 `main.menu.<suffix>`, fallback 은 원래 한국어 원문 그대로
+// (ko 출력이 이전과 동일해야 한다 — docs/i18n.md).
+function M(suffix: string, fallback: string): string {
+  return tMain(`main.menu.${suffix}`, fallback)
+}
 
 function item(label: string, actionId: string, getWindowId: () => string | undefined): MenuItemConstructorOptions {
   const accelerator = findKeyFor(actionId)
@@ -15,10 +22,12 @@ const sep: MenuItemConstructorOptions = { type: 'separator' }
 // 상단 네이티브 메뉴바 — 브라우저의 모든 기능을 Adobe 식으로 논리적 메뉴/하위메뉴에 정리해 발견성을 높인다.
 // 모든 항목은 actionId 로 연결(단축키 자동 표시). 새 기능을 추가하면 여기에도 배치할 것.
 export function buildAppMenu(getWindowId: () => string | undefined): Menu {
-  const I = (label: string, id: string) => item(label, id, getWindowId)
+  // I() 는 actionId 접미사(action. 제거)를 그대로 번역 키로 쓴다 — 같은 actionId 가 여러 메뉴에
+  // 중복 등장해도(예: bookmark.bar.toggle) 자동으로 같은 키를 재사용한다.
+  const I = (label: string, id: string) => item(M(id.replace(/^action\./, ''), label), id, getWindowId)
   const template: MenuItemConstructorOptions[] = [
     {
-      label: '파일',
+      label: M('top.file', '파일'),
       submenu: [
         I('새 탭', 'action.tab.new'),
         I('새 창', 'action.window.new'),
@@ -32,7 +41,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
         I('마지막 탭 복원', 'action.tab.restore'),
         sep,
         {
-          label: '워크스페이스',
+          label: M('group.workspace', '워크스페이스'),
           submenu: [
             I('새 워크스페이스', 'action.workspace.new'),
             I('다음 워크스페이스', 'action.workspace.next'),
@@ -50,15 +59,15 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '편집',
+      label: M('top.edit', '편집'),
       submenu: [
-        { role: 'undo', label: '실행 취소' },
-        { role: 'redo', label: '다시 실행' },
+        { role: 'undo', label: M('edit.undo', '실행 취소') },
+        { role: 'redo', label: M('edit.redo', '다시 실행') },
         sep,
-        { role: 'cut', label: '잘라내기' },
-        { role: 'copy', label: '복사' },
-        { role: 'paste', label: '붙여넣기' },
-        { role: 'selectAll', label: '모두 선택' },
+        { role: 'cut', label: M('edit.cut', '잘라내기') },
+        { role: 'copy', label: M('edit.copy', '복사') },
+        { role: 'paste', label: M('edit.paste', '붙여넣기') },
+        { role: 'selectAll', label: M('edit.selectAll', '모두 선택') },
         sep,
         I('페이지에서 찾기', 'action.find.toggle'),
         I('주소창', 'action.omnibox.focus'),
@@ -68,7 +77,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '보기',
+      label: M('top.view', '보기'),
       submenu: [
         I('새로고침', 'action.page.reload'),
         I('중지', 'action.page.stop'),
@@ -79,7 +88,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
         sep,
         I('리더 모드', 'action.tab.reader'),
         {
-          label: '다크 모드',
+          label: M('group.darkmode', '다크 모드'),
           submenu: [
             I('페이지 강제 다크 토글', 'action.darkmode.toggle'),
             I('이 사이트만 다크 토글', 'action.darkmode.toggleSite'),
@@ -88,7 +97,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
         },
         sep,
         {
-          label: '사이드 패널',
+          label: M('group.sidepanel', '사이드 패널'),
           submenu: [
             I('왼쪽 패널 토글', 'action.sidepanel.left.toggle'),
             I('오른쪽 패널 토글', 'action.sidepanel.right.toggle'),
@@ -96,12 +105,12 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
         },
         I('북마크 바 표시 / 숨김', 'action.bookmark.bar.toggle'),
         sep,
-        { role: 'togglefullscreen', label: '전체 화면' },
+        { role: 'togglefullscreen', label: M('view.fullscreen', '전체 화면') },
         I('개발자 도구', 'action.devtools.toggle'),
       ],
     },
     {
-      label: '탐색',
+      label: M('top.nav', '탐색'),
       submenu: [
         I('뒤로', 'action.nav.back'),
         I('앞으로', 'action.nav.forward'),
@@ -111,7 +120,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
         I('탭 검색', 'action.tab.search'),
         sep,
         {
-          label: '화면 분할 (타일링)',
+          label: M('group.split', '화면 분할 (타일링)'),
           submenu: [
             I('좌우 분할', 'action.pane.split.h'),
             I('상하 분할', 'action.pane.split.v'),
@@ -123,7 +132,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '북마크',
+      label: M('top.bookmarks', '북마크'),
       submenu: [
         I('이 페이지 북마크', 'action.bookmark.add'),
         I('북마크 관리', 'action.bookmark.list'),
@@ -149,7 +158,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '도구',
+      label: M('top.tools', '도구'),
       submenu: [
         I('명령 팔레트', 'action.palette.open'),
         sep,
@@ -161,7 +170,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
         I('확장 프로그램', 'action.extensions.open'),
         sep,
         {
-          label: '광고 차단',
+          label: M('group.adblock', '광고 차단'),
           submenu: [
             I('광고차단 통계', 'action.adblock.openPage'),
             I('이 사이트 광고차단 토글', 'action.adblock.toggleSite'),
@@ -171,7 +180,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '커스터마이즈',
+      label: M('top.customize', '커스터마이즈'),
       submenu: [
         I('userChrome.css 편집', 'action.userchrome.edit'),
         I('userChrome 재적용', 'action.userchrome.reload'),
@@ -186,7 +195,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '⚙ 설정',
+      label: M('top.settings', '⚙ 설정'),
       submenu: [
         I('설정 열기', 'action.settings.open'),
         sep,
@@ -199,7 +208,7 @@ export function buildAppMenu(getWindowId: () => string | undefined): Menu {
       ],
     },
     {
-      label: '도움말',
+      label: M('top.help', '도움말'),
       submenu: [
         I('업데이트 확인', 'action.update.check'),
         I('피드백 보내기', 'action.help.report'),

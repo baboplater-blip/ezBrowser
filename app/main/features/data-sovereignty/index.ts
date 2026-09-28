@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { tMain } from '../../i18n'
 import {
   exportPasswordsForBackup, importPasswordsFromBackup, MIN_BACKUP_PASSPHRASE_LENGTH,
   type EncryptedPayload,
@@ -186,11 +187,11 @@ export async function importAllData(bundle: ExportBundle, opts: ImportOptions = 
     passwordSkippedRows: 0,
   }
   if (!bundle || bundle.version !== 1 || typeof bundle.files !== 'object') {
-    return { ...result, ok: false, errors: ['bundle version 또는 형식 오류'] }
+    return { ...result, ok: false, errors: [tMain('main.dataSov.errorBundleFormat', 'bundle version 또는 형식 오류')] }
   }
   for (const [rel, item] of Object.entries(bundle.files)) {
     if (!isSafeRelativePath(rel) || !isWhitelisted(rel)) {
-      result.errors.push(`거부됨: ${rel}`)
+      result.errors.push(tMain('main.dataSov.errorRejected', `거부됨: ${rel}`, { path: rel }))
       continue
     }
     if (isCodeItem(rel) && opts.includeCode !== true) {
@@ -215,7 +216,7 @@ export async function importAllData(bundle: ExportBundle, opts: ImportOptions = 
     const backupPassword = typeof opts.backupPassword === 'string' ? opts.backupPassword.trim() : ''
     if (!backupPassword) {
       result.passwordStatus = 'skipped-no-password'
-      result.errors.push('비밀번호 데이터가 포함돼 있지만 백업 암호를 입력하지 않아 건너뛰었습니다.')
+      result.errors.push(tMain('main.dataSov.errorPassphraseMissing', '비밀번호 데이터가 포함돼 있지만 백업 암호를 입력하지 않아 건너뛰었습니다.'))
     } else {
       const r = importPasswordsFromBackup(bundle.passwordsEncrypted, backupPassword)
       result.passwordStatus = r.status === 'ok' ? 'imported' : r.status
@@ -224,9 +225,9 @@ export async function importAllData(bundle: ExportBundle, opts: ImportOptions = 
       result.passwordSkippedRows = r.skipped
       result.restored += r.imported + r.updated
       if (r.status === 'wrong-password') {
-        result.errors.push('백업 암호가 올바르지 않아 비밀번호를 복원하지 못했습니다.')
+        result.errors.push(tMain('main.dataSov.errorWrongPassphrase', '백업 암호가 올바르지 않아 비밀번호를 복원하지 못했습니다.'))
       } else if (r.status === 'invalid-passphrase') {
-        result.errors.push(`백업 암호는 최소 ${MIN_BACKUP_PASSPHRASE_LENGTH}자 이상이어야 합니다.`)
+        result.errors.push(tMain('main.dataSov.errorPassphraseTooShort', `백업 암호는 최소 ${MIN_BACKUP_PASSPHRASE_LENGTH}자 이상이어야 합니다.`, { min: MIN_BACKUP_PASSPHRASE_LENGTH }))
       }
     }
   }

@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { tMain } from '../../i18n'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { readFileSync, unlinkSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -288,15 +289,15 @@ function cliSpecFor(provider: AiProviderId): CliSpec | null {
 }
 
 function cliErrorMessage(spec: CliSpec, e: NodeJS.ErrnoException | null, stderr: string): string {
-  const hint = `\n\n(${spec.name} 이(가) 설치돼 있고 구독/계정으로 로그인됐는지 확인하세요. 설정 > AI 에서 실행 경로·모델을 지정할 수 있습니다.)`
-  if (e && e.code === 'ENOENT') return `${spec.name} CLI 를 찾을 수 없습니다.${hint}`
+  const hint = tMain('main.ai.error.cliHint', `\n\n(${spec.name} 이(가) 설치돼 있고 구독/계정으로 로그인됐는지 확인하세요. 설정 > AI 에서 실행 경로·모델을 지정할 수 있습니다.)`, { name: spec.name })
+  if (e && e.code === 'ENOENT') return tMain('main.ai.error.cliNotFound', `${spec.name} CLI 를 찾을 수 없습니다.${hint}`, { name: spec.name, hint })
   const detail = (stderr || (e ? e.message : '')).slice(0, 400).trim()
-  return `${spec.name} 실행 오류.${detail ? '\n' + detail : ''}${hint}`
+  return tMain('main.ai.error.cliRunError', `${spec.name} 실행 오류.${detail ? '\n' + detail : ''}${hint}`, { name: spec.name, detail, hint })
 }
 
 function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
   const spec = cliSpecFor(req.provider)
-  if (!spec) { handlers.onError('알 수 없는 CLI 제공자'); return { cancel() { /* noop */ } } }
+  if (!spec) { handlers.onError(tMain('main.ai.error.unknownCliProvider', '알 수 없는 CLI 제공자')); return { cancel() { /* noop */ } } }
   let finished = false
   let full = ''
   let stderr = ''
@@ -311,7 +312,7 @@ function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
   const timer = setTimeout(() => {
     try { child?.kill() } catch { /* ignore */ }
     cleanupFile()
-    finish(() => handlers.onError('시간 초과 (120초). 다시 시도하세요.'))
+    finish(() => handlers.onError(tMain('main.ai.error.timeout', '시간 초과 (120초). 다시 시도하세요.')))
   }, REQUEST_TIMEOUT_MS)
   try {
     const bin = (req.baseUrl && req.baseUrl.trim()) ? req.baseUrl.trim() : spec.defaultBin
@@ -345,7 +346,7 @@ function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
         try { msg = readFileSync(outFile, 'utf8') } catch { /* 파일 없음 = 실패 */ }
         cleanupFile()
         if (msg.trim()) { handlers.onDelta(msg); finish(() => handlers.onDone(msg)) }
-        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || `종료 코드 ${code}`)))
+        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || tMain('main.ai.error.exitCode', `종료 코드 ${code}`, { code: String(code) }))))
       } else if (spec.mode === 'json') {
         cleanupFile()
         // 한 줄 JSON. 파싱이 안 되면(구버전 CLI 등) 원문을 그대로 답으로 쓴다.
@@ -358,13 +359,13 @@ function runCli(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
           const u = usageFromClaude(j.usage)
           if (u && handlers.onUsage) handlers.onUsage(u)
           // is_error 면 텍스트가 있어도 오류다(한도 초과·권한 거부 안내문을 정상 답으로 쓰면 안 된다).
-          if (j.is_error === true) { finish(() => handlers.onError(`Claude Code 응답 오류(${String(j.subtype ?? 'error')})${text.trim() ? ': ' + text.trim().slice(0, 300) : ''}`)); return }
+          if (j.is_error === true) { finish(() => handlers.onError(tMain('main.ai.error.claudeCodeResponse', `Claude Code 응답 오류(${String(j.subtype ?? 'error')})${text.trim() ? ': ' + text.trim().slice(0, 300) : ''}`, { subtype: String(j.subtype ?? 'error'), detail: text.trim() ? ': ' + text.trim().slice(0, 300) : '' }))); return }
         } catch { /* 텍스트로 취급 */ }
         if (text.trim() || code === 0) { handlers.onDelta(text); finish(() => handlers.onDone(text)) }
-        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || `종료 코드 ${code}`)))
+        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || tMain('main.ai.error.exitCode', `종료 코드 ${code}`, { code: String(code) }))))
       } else {
         if (code === 0 || full.trim()) finish(() => handlers.onDone(full))
-        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || `종료 코드 ${code}`)))
+        else finish(() => handlers.onError(cliErrorMessage(spec, null, stderr || tMain('main.ai.error.exitCode', `종료 코드 ${code}`, { code: String(code) }))))
       }
     })
     try { child.stdin?.write(renderCliPrompt(req, imgFile || undefined)); child.stdin?.end() } catch { /* child.on('error') 가 처리 */ }
@@ -402,21 +403,21 @@ function friendlyError(provider: AiProviderId, status: number, body: string): st
     else if (obj.error?.message) detail = obj.error.message
   } catch { /* body 그대로 사용 */ }
   if (status === 401 || status === 403) {
-    return `인증 실패 (${status}). API 키가 올바른지 설정에서 확인하세요.\n${detail}`
+    return tMain('main.ai.error.auth', `인증 실패 (${status}). API 키가 올바른지 설정에서 확인하세요.\n${detail}`, { status, detail })
   }
   if (status === 404) {
-    return `모델을 찾을 수 없습니다 (404). 설정의 모델 이름을 확인하세요.\n${detail}`
+    return tMain('main.ai.error.modelNotFound', `모델을 찾을 수 없습니다 (404). 설정의 모델 이름을 확인하세요.\n${detail}`, { detail })
   }
   if (provider === 'google' && status === 400) {
-    return `요청 오류 (400). API 키 또는 모델 이름을 확인하세요.\n${detail}`
+    return tMain('main.ai.error.badRequest', `요청 오류 (400). API 키 또는 모델 이름을 확인하세요.\n${detail}`, { detail })
   }
   if (status === 429) {
-    return `요청 한도 초과 (429). 잠시 후 다시 시도하세요.\n${detail}`
+    return tMain('main.ai.error.rateLimit', `요청 한도 초과 (429). 잠시 후 다시 시도하세요.\n${detail}`, { detail })
   }
   if (provider === 'ollama' && (status === 0 || status >= 500)) {
-    return `로컬 Ollama 서버에 연결할 수 없습니다. Ollama 가 실행 중인지, 모델이 설치됐는지 확인하세요.\n${detail}`
+    return tMain('main.ai.error.ollamaUnreachable', `로컬 Ollama 서버에 연결할 수 없습니다. Ollama 가 실행 중인지, 모델이 설치됐는지 확인하세요.\n${detail}`, { detail })
   }
-  return `AI 요청 실패 (${status}).\n${detail}`
+  return tMain('main.ai.error.generic', `AI 요청 실패 (${status}).\n${detail}`, { status, detail })
 }
 
 export function streamChat(req: AiRequest, handlers: AiStreamHandlers): AiStreamHandle {
@@ -438,7 +439,7 @@ export function streamChat(req: AiRequest, handlers: AiStreamHandlers): AiStream
   const timer = setTimeout(() => {
     if (finished) return
     try { request?.abort() } catch { /* ignore */ }
-    finish(() => handlers.onError('시간 초과 (120초). 다시 시도하세요.'))
+    finish(() => handlers.onError(tMain('main.ai.error.timeout', '시간 초과 (120초). 다시 시도하세요.')))
   }, REQUEST_TIMEOUT_MS)
 
   try {
@@ -503,7 +504,7 @@ export function streamChat(req: AiRequest, handlers: AiStreamHandlers): AiStream
       if (cancelled) return
       finish(() => handlers.onError(
         req.provider === 'ollama'
-          ? `로컬 Ollama 서버 연결 실패. 실행 중인지 확인하세요.\n${err.message}`
+          ? tMain('main.ai.error.ollamaConnectFailed', `로컬 Ollama 서버 연결 실패. 실행 중인지 확인하세요.\n${err.message}`, { detail: err.message })
           : err.message,
       ))
     })
@@ -690,7 +691,7 @@ export function chatWithTools(req: AiRequest, tools: ToolSpec[]): { promise: Pro
   const promise = new Promise<ToolChatResult>((resolve, reject) => {
     let settled = false
     const done = (fn: () => void): void => { if (settled) return; settled = true; clearTimeout(timer); fn() }
-    const timer = setTimeout(() => { try { request?.abort() } catch { /* ignore */ }; done(() => reject(new Error('시간 초과 (120초). 다시 시도하세요.'))) }, REQUEST_TIMEOUT_MS)
+    const timer = setTimeout(() => { try { request?.abort() } catch { /* ignore */ }; done(() => reject(new Error(tMain('main.ai.error.timeout', '시간 초과 (120초). 다시 시도하세요.')))) }, REQUEST_TIMEOUT_MS)
     settleCancel = () => done(() => resolve({ toolCalls: [], text: '' }))
     try {
       request = net.request({ url: ep.url, method: 'POST' })
@@ -822,7 +823,7 @@ class ClaudeStreamSession implements CliSession {
     this.child.on('error', (e) => { this.alive = false; this.failPending(new CliSessionDead(cliErrorMessage(cliSpecFor('claude-code')!, e as NodeJS.ErrnoException, this.stderr))) })
     this.child.on('close', (code) => {
       this.alive = false
-      this.failPending(new CliSessionDead(`Claude Code 세션이 종료됐습니다(코드 ${code}).${this.stderr ? '\n' + this.stderr.slice(-400).trim() : ''}`))
+      this.failPending(new CliSessionDead(tMain('main.ai.error.claudeCodeSessionEnded', `Claude Code 세션이 종료됐습니다(코드 ${code}).${this.stderr ? '\n' + this.stderr.slice(-400).trim() : ''}`, { code: String(code), detail: this.stderr ? '\n' + this.stderr.slice(-400).trim() : '' })))
     })
   }
 
@@ -869,7 +870,7 @@ class ClaudeStreamSession implements CliSession {
         // 텍스트가 있어도 오류로 전파 — 한도 초과·권한 거부 안내문을 행동 응답으로 파싱하면 "이해 못함" 으로 오진된다.
         const errs = Array.isArray(j.errors) ? (j.errors as unknown[]).map(String).join('; ') : ''
         const detail = errs || (resultText || p.text).trim().slice(0, 300)
-        p.reject(new Error(`Claude Code 응답 오류(${String(j.subtype ?? 'error')})${detail ? ': ' + detail : ''}`))
+        p.reject(new Error(tMain('main.ai.error.claudeCodeResponse', `Claude Code 응답 오류(${String(j.subtype ?? 'error')})${detail ? ': ' + detail : ''}`, { subtype: String(j.subtype ?? 'error'), detail: detail ? ': ' + detail : '' })))
         return
       }
       p.resolve({ text: resultText || p.text, usage: usageFromClaude(j.usage), sessionId: this.sessionId })
@@ -878,10 +879,10 @@ class ClaudeStreamSession implements CliSession {
 
   send(input: CliTurnInput): { promise: Promise<CliTurnResult>; cancel(): void } {
     if (!this.alive || !this.child || this.closed) {
-      return { promise: Promise.reject(new CliSessionDead('Claude Code 세션이 살아 있지 않습니다.')), cancel() { /* noop */ } }
+      return { promise: Promise.reject(new CliSessionDead(tMain('main.ai.error.claudeCodeSessionDead', 'Claude Code 세션이 살아 있지 않습니다.'))), cancel() { /* noop */ } }
     }
     if (this.pending) {
-      return { promise: Promise.reject(new Error('이전 턴이 아직 진행 중입니다.')), cancel() { /* noop */ } }
+      return { promise: Promise.reject(new Error(tMain('main.ai.error.turnInProgress', '이전 턴이 아직 진행 중입니다.'))), cancel() { /* noop */ } }
     }
     let imgPath: string | undefined
     if (input.image) {
@@ -894,7 +895,7 @@ class ClaudeStreamSession implements CliSession {
         this.pending = null
         this.alive = false
         killTree(this.child)
-        reject(new CliSessionDead('시간 초과 (120초). 세션을 다시 엽니다.'))
+        reject(new CliSessionDead(tMain('main.ai.error.timeoutReopen', '시간 초과 (120초). 세션을 다시 엽니다.')))
       }, REQUEST_TIMEOUT_MS)
       this.pending = { resolve, reject, text: '', timer }
       const payload = JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: renderTurnText(input, imgPath) }] } }) + '\n'
@@ -921,7 +922,7 @@ class ClaudeStreamSession implements CliSession {
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.failPending(new CliSessionDead('세션이 닫혔습니다.'))
+    this.failPending(new CliSessionDead(tMain('main.ai.error.sessionClosed', '세션이 닫혔습니다.')))
     const child = this.child
     try { child?.stdin?.end() } catch { /* ignore */ }
     // 우아한 종료를 3초 주고, 안 죽으면 트리째.
@@ -947,8 +948,8 @@ class CodexResumeSession implements CliSession {
   }
 
   send(input: CliTurnInput): { promise: Promise<CliTurnResult>; cancel(): void } {
-    if (this.closed) return { promise: Promise.reject(new CliSessionDead('Codex 세션이 닫혔습니다.')), cancel() { /* noop */ } }
-    if (this.child) return { promise: Promise.reject(new Error('이전 턴이 아직 진행 중입니다.')), cancel() { /* noop */ } }
+    if (this.closed) return { promise: Promise.reject(new CliSessionDead(tMain('main.ai.error.codexSessionClosed', 'Codex 세션이 닫혔습니다.'))), cancel() { /* noop */ } }
+    if (this.child) return { promise: Promise.reject(new Error(tMain('main.ai.error.turnInProgress', '이전 턴이 아직 진행 중입니다.'))), cancel() { /* noop */ } }
     const bin = (this.opts.bin && this.opts.bin.trim()) ? this.opts.bin.trim() : 'codex'
     const model = (this.opts.model ?? '').trim()
     const outFile = join(this.dir, `out-${this.turns + 1}.txt`)
@@ -967,7 +968,7 @@ class CodexResumeSession implements CliSession {
     let finished = false
     const promise = new Promise<CliTurnResult>((resolve, reject) => {
       const finish = (fn: () => void): void => { if (finished) return; finished = true; clearTimeout(timer); this.child = null; fn() }
-      const timer = setTimeout(() => { killTree(this.child); finish(() => reject(new CliSessionDead('시간 초과 (120초).'))) }, REQUEST_TIMEOUT_MS)
+      const timer = setTimeout(() => { killTree(this.child); finish(() => reject(new CliSessionDead(tMain('main.ai.error.timeoutPlain', '시간 초과 (120초).')))) }, REQUEST_TIMEOUT_MS)
       const spawnOpts: Parameters<typeof spawn>[2] = { stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32', cwd: this.dir, windowsHide: true }
       try { this.child = spawn(bin, args, spawnOpts) } catch (err) { finish(() => reject(new CliSessionDead(err instanceof Error ? err.message : String(err)))); return }
       const onLine = (line: string): void => {
@@ -995,8 +996,8 @@ class CodexResumeSession implements CliSession {
         let text = ''
         try { text = readFileSync(outFile, 'utf8') } catch { /* 없음 = 실패 */ }
         if (text.trim()) { this.turns++; finish(() => resolve({ text, usage, sessionId: this.sessionId })) }
-        else if (failMsg) finish(() => reject(new Error(`Codex 응답 오류: ${failMsg.slice(0, 400)}`)))
-        else finish(() => reject(new CliSessionDead(cliErrorMessage(cliSpecFor('codex')!, null, stderr || `종료 코드 ${code}`))))
+        else if (failMsg) finish(() => reject(new Error(tMain('main.ai.error.codexResponse', `Codex 응답 오류: ${failMsg.slice(0, 400)}`, { detail: failMsg.slice(0, 400) }))))
+        else finish(() => reject(new CliSessionDead(cliErrorMessage(cliSpecFor('codex')!, null, stderr || tMain('main.ai.error.exitCode', `종료 코드 ${code}`, { code: String(code) })))))
       })
       try { this.child.stdin?.write(renderTurnText(input)); this.child.stdin?.end() } catch { /* error 이벤트가 처리 */ }
     })

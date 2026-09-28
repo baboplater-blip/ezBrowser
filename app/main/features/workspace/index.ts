@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { tMain } from '../../i18n'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -38,8 +39,9 @@ function nextColor(): WorkspaceColor {
 function nextName(): string {
   let n = workspaces.size + 1
   const used = new Set<string>(Array.from(workspaces.values()).map((w) => w.name))
-  while (used.has(`스페이스 ${n}`)) n += 1
-  return `스페이스 ${n}`
+  const nameFor = (num: number): string => tMain('main.workspace.defaultName', `스페이스 ${num}`, { n: num })
+  while (used.has(nameFor(n))) n += 1
+  return nameFor(n)
 }
 
 // ===== 저장소 =====
@@ -74,7 +76,7 @@ function normalize(w: Partial<Workspace>): Workspace {
   const id = w.id ?? nextId()
   return {
     id,
-    name: (w.name ?? '').trim() || '이름 없는 스페이스',
+    name: (w.name ?? '').trim() || tMain('main.workspace.unnamed', '이름 없는 스페이스'),
     color: (COLORS as readonly string[]).includes(w.color as string) ? (w.color as WorkspaceColor) : 'gray',
     homeUrl: w.homeUrl ?? NEW_TAB_URL,
     partition: w.partition ?? partitionOf(id),
@@ -110,7 +112,7 @@ export async function initWorkspaces(): Promise<void> {
   if (workspaces.size === 0) {
     const id = nextId()
     const ws: Workspace = {
-      id, name: '기본', color: 'gray', homeUrl: NEW_TAB_URL,
+      id, name: tMain('main.workspace.defaultFirst', '기본'), color: 'gray', homeUrl: NEW_TAB_URL,
       partition: partitionOf(id),
       createdAt: Date.now(), updatedAt: Date.now(), position: 0,
     }

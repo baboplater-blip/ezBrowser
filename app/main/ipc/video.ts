@@ -7,6 +7,7 @@ import {
 import { getAllWindows, getWindow } from '../windows/window-service'
 import { getTab } from '../tabs/tab-service'
 import { handleTrusted } from './trust'
+import { tMain } from '../i18n'
 
 // tabId 가 있으면 그 탭이 속한 창을 우선 — 없거나 못 찾으면 첫 창으로 폴백.
 function notifyDownloadStarted(message: string, tabId?: string): void {
@@ -28,7 +29,7 @@ export function registerVideoIpc(): void {
     const title = tab?.title ?? ''
     // site 후보(YouTube 등 지원 호스트 · MSE blob 감지) → 페이지 URL 로 yt-dlp 직행.
     if (candidate.kind === 'site') {
-      notifyDownloadStarted('동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)', candidate.tabId)
+      notifyDownloadStarted(tMain('main.video.extractingYtdlpShort', '동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)'), candidate.tabId)
       await downloadWithYtDlp(candidate.url || pageUrl, pageUrl, { title, tabId: candidate.tabId })
       return { ok: true, kind: 'ytdlp' as const }
     }
@@ -44,7 +45,7 @@ export function registerVideoIpc(): void {
       await downloadMedia(candidate.url, pageUrl, candidate.tabId, title)
       return { ok: true, kind: 'direct' as const }
     }
-    notifyDownloadStarted('동영상 다운로드 준비 중…', candidate.tabId)
+    notifyDownloadStarted(tMain('main.video.preparingDownload', '동영상 다운로드 준비 중…'), candidate.tabId)
     await downloadMedia(pageUrl, pageUrl, candidate.tabId, title)
     return { ok: true, kind: 'direct' as const }
   })

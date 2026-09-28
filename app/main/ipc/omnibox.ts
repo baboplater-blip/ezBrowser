@@ -1,4 +1,5 @@
 import { ipcMain, net } from 'electron'
+import { tMain } from '../i18n'
 import { handleTrusted } from './trust'
 import { IPC } from '../../shared/ipc-channels'
 import { SUGGEST_TIMEOUT_MS } from '../../shared/constants'
@@ -173,7 +174,7 @@ async function combineSuggestions(query: string, windowId?: string): Promise<Omn
   const engine = getDefaultEngine()
   out.push({
     id: `default-${engine.id}`, source: 'search',
-    text: `${engine.name} 검색: ${q}`,
+    text: tMain('main.omnibox.searchWith', `${engine.name} 검색: ${q}`, { engine: engine.name, query: q }),
     detail: engine.name, score: 0.4,
     url: buildSearchUrl(q),
   })

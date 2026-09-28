@@ -2,6 +2,7 @@ import { getAllWindows } from '../../windows/window-service'
 import { resumeHlsDownload, resumeVideoDownload } from '../video-download'
 import { resumeAccelPending } from './index'
 import { installPendingQuitHook, listPending, removePending } from './pending-store'
+import { tMain } from '../../i18n'
 
 /**
  * 부팅 시 호출 — 지난 세션에서 진행 중이던(완료되지 않은) 다운로드를 이어받는다.
@@ -16,7 +17,8 @@ export async function resumePendingDownloads(): Promise<void> {
   const ctx = getAllWindows()[0]
   if (ctx) {
     ctx.chrome.webContents.send('toast:show', {
-      message: `이전 다운로드 ${pending.length}건 이어받기 ⬇`, ts: Date.now(),
+      message: tMain('main.download.resuming', `이전 다운로드 ${pending.length}건 이어받기 ⬇`, { count: pending.length }),
+      ts: Date.now(),
     })
     ctx.chrome.webContents.send('panel:open', { panel: 'downloads' })
   }

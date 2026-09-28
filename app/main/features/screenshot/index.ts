@@ -1,4 +1,5 @@
 import { app, clipboard, dialog, nativeImage } from 'electron'
+import { tMain } from '../../i18n'
 import { writeFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { getWebContentsByTabId } from '../../tabs/tab-service'
@@ -49,7 +50,7 @@ export async function captureToClipboardOnly(tabId: string): Promise<boolean> {
 export async function pickAndSaveScreenshot(dataUrl: string): Promise<string | null> {
   const img = nativeImage.createFromDataURL(dataUrl)
   const result = await dialog.showSaveDialog({
-    title: '스크린샷 저장',
+    title: tMain('main.screenshot.saveTitle', '스크린샷 저장'),
     defaultPath: path.join(app.getPath('pictures'), `screenshot-${timestamp()}.png`),
     filters: [{ name: 'PNG', extensions: ['png'] }],
   })

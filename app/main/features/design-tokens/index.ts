@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { TokenOverrides } from '../../../shared/types'
+import { tMain } from '../../i18n'
 
 // 사용자가 수정 가능한 토큰 화이트리스트.
 // CSS 변수 이름은 build/gen-tokens.mjs 의 규칙과 동일 — '.' → '-'.
@@ -30,6 +31,11 @@ export const EDITABLE_TOKENS: ReadonlyArray<{
   { key: 'density.font-size', cssVar: '--density-font-size', label: '기본 글자 크기', type: 'size', defaultValue: '13px' },
   { key: 'motion.normal', cssVar: '--motion-normal', label: '애니메이션 속도', type: 'duration', defaultValue: '180ms' },
 ]
+
+// key(점 표기) → main.designTokens.* 번역 키 접미사('.'→'-' 등 변환 없이 그대로 dot-path 로 씀).
+function tokenLabel(key: string, fallback: string): string {
+  return tMain(`main.designTokens.label.${key}`, fallback)
+}
 
 const cssVarByKey = new Map(EDITABLE_TOKENS.map((t) => [t.key, t.cssVar]))
 const defaultByKey = new Map(EDITABLE_TOKENS.map((t) => [t.key, t.defaultValue]))
@@ -135,8 +141,8 @@ export async function resetTokens(): Promise<void> {
   tokenEvents.emit('changed', getOverrides())
 }
 
-export function listEditableTokens(): typeof EDITABLE_TOKENS {
-  return EDITABLE_TOKENS
+export function listEditableTokens(): Array<{ key: string; cssVar: string; label: string; type: 'color' | 'size' | 'duration' | 'text'; defaultValue: string }> {
+  return EDITABLE_TOKENS.map((t) => ({ ...t, label: tokenLabel(t.key, t.label) }))
 }
 
 export function defaultsAsCssVars(): Record<string, string> {

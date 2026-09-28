@@ -208,12 +208,622 @@
   },
   "main": {
     "toast": {
-      "bookmarkAdded": "북마크에 추가됨 ★"
+      "bookmarkAdded": "북마크에 추가됨 ★",
+      "webOnly": "웹 페이지에서만 사용할 수 있습니다",
+      "profileEmpty": "내 정보가 비어 있습니다 — 설정 > AI 에서 입력하세요",
+      "autofillDone": "자동 채우기: {count}개 필드 ✍️",
+      "autofillNone": "채울 폼 필드를 못 찾았습니다",
+      "pageSaveOk": "페이지 저장 완료 💾",
+      "pageSaveFail": "페이지 저장 실패",
+      "readLaterRemoved": "읽기 목록에서 제거됨",
+      "readLaterAdded": "읽기 목록에 추가됨 📚",
+      "pdfSaveOk": "PDF 저장 완료 📄",
+      "pdfSaveFail": "PDF 저장 실패",
+      "readerOn": "리더 모드 📖",
+      "readerOff": "원본 보기",
+      "translating": "번역 중… ⏳",
+      "translateRestored": "원본 복원",
+      "translateDone": "번역 완료 🌐",
+      "translateFail": "번역 실패",
+      "updateAvailable": "새 버전 {version} 발견",
+      "updateLatest": "최신 버전입니다 ✓",
+      "updateReady": "업데이트 준비 완료 — 재시작 시 적용",
+      "updateDisabled": "자동 업데이트 비활성",
+      "updateCheckFail": "업데이트 확인 실패: {error}",
+      "noTabUrl": "현재 탭 URL 을 확인할 수 없습니다",
+      "adblockNotApplicable": "이 페이지에 광고차단을 적용할 수 없습니다",
+      "adblockOffReload": "🛡️ {host} — 광고차단 꺼짐 · 새로고침 중…",
+      "adblockOnReload": "🛡️ {host} — 광고차단 켜짐 · 새로고침 중…",
+      "workspaceSwitched": "스페이스: {name}",
+      "workspaceCreated": "새 스페이스 {name} 생성됨",
+      "workspaceOnlyOne": "스페이스가 하나뿐입니다",
+      "tabMoveFail": "탭 이동 실패",
+      "reloadSuffix": " · 페이지 재로드",
+      "tabMoved": "탭 이동 → {name}{suffix}",
+      "darkForceOn": "강제 다크 모드 켜짐 🌙",
+      "darkForceOff": "강제 다크 모드 꺼짐 ☀",
+      "darkSiteNotApplicable": "이 페이지에는 사이트별 다크 모드를 적용할 수 없습니다",
+      "siteDarkOn": "사이트 다크 켜짐 🌙 ({origin})",
+      "siteDarkOff": "사이트 다크 꺼짐 ☀ ({origin})",
+      "siteDarkDefault": "사이트 다크 기본값 따름 ({origin})",
+      "followSystemOn": "OS 다크 모드 따라가기 켜짐 🌓",
+      "followSystemOff": "OS 다크 모드 따라가기 꺼짐",
+      "splitH": "좌우 분할 ⫾",
+      "splitV": "상하 분할 ⫿",
+      "unsplit": "분할 해제",
+      "muteOthersDone": "다른 탭 {count}개 음소거됨 🔇",
+      "muteOthersNone": "음소거할 다른 탭이 없습니다",
+      "unmuteAllDone": "{count}개 탭 음소거 해제 🔊",
+      "unmuteAllNone": "음소거된 탭이 없습니다",
+      "siteDataNotApplicable": "이 페이지의 사이트 데이터는 지울 수 없습니다",
+      "siteDataCleared": "사이트 데이터 삭제됨 · 새로고침 중… 🗑"
     },
     "download": {
       "completeTitle": "다운로드 완료",
       "completeToast": "✓ {filename} 다운로드 완료",
-      "failedToast": "✗ {filename} 다운로드 실패"
+      "failedToast": "✗ {filename} 다운로드 실패",
+      "resuming": "이전 다운로드 {count}건 이어받기 ⬇"
+    },
+    "menu": {
+      "tab": {
+        "new": "새 탭",
+        "duplicate": "탭 복제",
+        "pin": "탭 고정 / 해제",
+        "close": "탭 닫기",
+        "recentClosed": "최근 닫은 탭",
+        "restore": "마지막 탭 복원",
+        "move": {
+          "next": {
+            "workspace": "탭을 다음 스페이스로"
+          },
+          "prev": {
+            "workspace": "탭을 이전 스페이스로"
+          }
+        },
+        "reader": "리더 모드",
+        "next": "다음 탭",
+        "prev": "이전 탭",
+        "search": "탭 검색"
+      },
+      "window": {
+        "new": "새 창",
+        "incognito": "새 시크릿 창"
+      },
+      "workspace": {
+        "new": "새 워크스페이스",
+        "next": "다음 워크스페이스",
+        "prev": "이전 워크스페이스"
+      },
+      "page": {
+        "print": "인쇄",
+        "printPdf": "PDF로 저장",
+        "reload": "새로고침",
+        "stop": "중지",
+        "zoom": {
+          "in": "확대",
+          "out": "축소",
+          "reset": "기본 배율"
+        }
+      },
+      "app": {
+        "quit": "종료"
+      },
+      "find": {
+        "toggle": "페이지에서 찾기"
+      },
+      "omnibox": {
+        "focus": "주소창"
+      },
+      "autofill": {
+        "page": "폼 자동 채우기 (내 정보)"
+      },
+      "password": {
+        "open": "비밀번호 관리자"
+      },
+      "darkmode": {
+        "toggle": "페이지 강제 다크 토글",
+        "toggleSite": "이 사이트만 다크 토글",
+        "followSystem": "OS 설정 따라가기"
+      },
+      "sidepanel": {
+        "left": {
+          "toggle": "왼쪽 패널 토글"
+        },
+        "right": {
+          "toggle": "오른쪽 패널 토글"
+        }
+      },
+      "bookmark": {
+        "bar": {
+          "toggle": "북마크 바 표시 / 숨김"
+        },
+        "add": "이 페이지 북마크",
+        "list": "북마크 관리"
+      },
+      "devtools": {
+        "toggle": "개발자 도구"
+      },
+      "nav": {
+        "back": "뒤로",
+        "forward": "앞으로"
+      },
+      "pane": {
+        "split": {
+          "h": "좌우 분할",
+          "v": "상하 분할"
+        },
+        "unsplit": "분할 해제",
+        "focus": {
+          "next": "다음 분할창 포커스"
+        }
+      },
+      "tabbar": {
+        "cycle": "탭바 위치 순환 (상/좌/우)"
+      },
+      "readlater": {
+        "add": "읽기 목록에 추가",
+        "open": "읽기 목록 열기"
+      },
+      "history": {
+        "open": "방문 기록",
+        "clear": "방문 기록 삭제"
+      },
+      "ai": {
+        "open": "AI 어시스턴트 열기",
+        "summarize": "이 페이지 요약",
+        "write": "✍️  블로그 글쓰기 스튜디오",
+        "collectors": "📥  매일 자동 수집 (피드 수집기)"
+      },
+      "memory": {
+        "open": "🧠  AI 기억 관리"
+      },
+      "palette": {
+        "open": "명령 팔레트"
+      },
+      "translate": {
+        "page": "페이지 번역"
+      },
+      "screenshot": {
+        "viewport": "화면 캡처"
+      },
+      "qrcode": {
+        "show": "QR 코드"
+      },
+      "downloads": {
+        "openPage": "다운로드"
+      },
+      "extensions": {
+        "open": "확장 프로그램"
+      },
+      "adblock": {
+        "openPage": "광고 차단 통계",
+        "toggleSite": "이 사이트 광고차단 토글"
+      },
+      "sitedata": {
+        "clear": "이 사이트 데이터 삭제"
+      },
+      "userchrome": {
+        "edit": "userChrome.css 편집",
+        "reload": "userChrome 재적용"
+      },
+      "userscript": {
+        "toggle": "유저스크립트"
+      },
+      "policy": {
+        "open": "사이트 정책 엔진"
+      },
+      "macros": {
+        "open": "자동화 매크로"
+      },
+      "mods": {
+        "open": "확장형 Mod"
+      },
+      "keymap": {
+        "open": "단축키 편집"
+      },
+      "perf": {
+        "open": "성능 게이트"
+      },
+      "settings": {
+        "open": "설정 열기"
+      },
+      "update": {
+        "check": "업데이트 확인"
+      },
+      "help": {
+        "report": "피드백 보내기"
+      },
+      "top": {
+        "file": "파일",
+        "edit": "편집",
+        "view": "보기",
+        "nav": "탐색",
+        "bookmarks": "북마크",
+        "tools": "도구",
+        "customize": "커스터마이즈",
+        "settings": "⚙ 설정",
+        "help": "도움말"
+      },
+      "group": {
+        "workspace": "워크스페이스",
+        "darkmode": "다크 모드",
+        "sidepanel": "사이드 패널",
+        "split": "화면 분할 (타일링)",
+        "adblock": "광고 차단"
+      },
+      "edit": {
+        "undo": "실행 취소",
+        "redo": "다시 실행",
+        "cut": "잘라내기",
+        "copy": "복사",
+        "paste": "붙여넣기",
+        "selectAll": "모두 선택"
+      },
+      "view": {
+        "fullscreen": "전체 화면"
+      }
+    },
+    "extensions": {
+      "sessionDefault": "기본",
+      "sessionIncognito": "시크릿",
+      "sessionWorkspace": "워크스페이스: {name}",
+      "sessionWorkspaceUnnamed": "워크스페이스({id})",
+      "partitionUnknown": "(알 수 없음)",
+      "sessionUnknown": "알 수 없는 세션",
+      "reasonManifest": "manifest.json 을 읽을 수 없거나 형식이 잘못됐습니다.",
+      "reasonVersion": "확장의 버전 표기가 올바르지 않습니다.",
+      "reasonNotFound": "확장 파일을 찾을 수 없습니다.",
+      "reasonPermission": "파일 권한 때문에 읽지 못했습니다.",
+      "reasonLocale": "번역(_locales) 파일에 문제가 있습니다.",
+      "reasonUnknown": "이 세션에서 확장을 불러오지 못했습니다.",
+      "errorUnknown": "알 수 없는 오류",
+      "errorLoadFailed": "로드 실패",
+      "errorManifestRead": "manifest.json 을 읽을 수 없습니다: {detail}",
+      "errorInstallExpired": "설치 요청이 만료되었거나 없습니다. 다시 시도해 주세요.",
+      "errorUnzipFailed": "압축 해제 실패: {detail}",
+      "errorManifestUnreadable": "manifest.json 을 읽을 수 없습니다.",
+      "errorUnsupportedUrl": "지원하지 않는 URL — 웹스토어 detail URL 또는 .crx 직접 링크여야 합니다.",
+      "errorDownloadFailed": "다운로드 실패 ({status})",
+      "errorNetwork": "네트워크 오류: {detail}",
+      "errorNoOptionsPage": "옵션 페이지 없음",
+      "errorManifestMissing": "manifest.json 없음 (unpacked 디렉터리가 맞나요?)",
+      "errorCopyFailed": "복사 실패: {detail}",
+      "pickCrxTitle": "확장(.crx) 선택",
+      "pickUnpackedTitle": "unpacked 확장 폴더 선택"
+    },
+    "pageError": {
+      "net": {
+        "ERR_NAME_NOT_RESOLVED": "주소를 찾을 수 없습니다",
+        "ERR_CONNECTION_REFUSED": "연결이 거부되었습니다",
+        "ERR_CONNECTION_RESET": "연결이 재설정되었습니다",
+        "ERR_CONNECTION_CLOSED": "연결이 끊어졌습니다",
+        "ERR_CONNECTION_TIMED_OUT": "연결 시간이 초과되었습니다",
+        "ERR_INTERNET_DISCONNECTED": "인터넷에 연결되어 있지 않습니다",
+        "ERR_ADDRESS_UNREACHABLE": "주소에 접속할 수 없습니다",
+        "ERR_EMPTY_RESPONSE": "서버가 응답하지 않았습니다",
+        "ERR_SSL_PROTOCOL_ERROR": "SSL 연결 오류",
+        "ERR_NETWORK_CHANGED": "네트워크가 변경되었습니다",
+        "ERR_FILE_NOT_FOUND": "파일을 찾을 수 없습니다",
+        "ERR_TOO_MANY_REDIRECTS": "리디렉션이 너무 많습니다",
+        "ERR_BLOCKED_BY_CLIENT": "이 브라우저가 요청을 차단했습니다"
+      },
+      "crash": {
+        "crashed": "충돌",
+        "oom": "메모리 부족",
+        "launch-failed": "실행 실패",
+        "killed": "강제 종료",
+        "integrity-failure": "무결성 오류"
+      },
+      "unknown": "알 수 없는 오류",
+      "crashDesc": "탭이 멈췄습니다 ({label})",
+      "certUntrusted": "이 사이트의 보안 인증서를 신뢰할 수 없습니다",
+      "auth": {
+        "title": "로그인 필요",
+        "heading": "{host} 에서 인증을 요구합니다",
+        "username": "아이디",
+        "password": "비밀번호",
+        "cancel": "취소",
+        "submit": "로그인"
+      }
+    },
+    "contextMenu": {
+      "link": {
+        "openNewTab": "새 탭에서 링크 열기",
+        "openNewWindow": "새 창에서 링크 열기",
+        "openIncognito": "시크릿 창에서 링크 열기",
+        "copyAddress": "링크 주소 복사",
+        "copyText": "링크 텍스트 복사"
+      },
+      "image": {
+        "openNewTab": "새 탭에서 이미지 열기",
+        "copy": "이미지 복사",
+        "copyAddress": "이미지 주소 복사",
+        "download": "이미지 다운로드"
+      },
+      "media": {
+        "download": "동영상 다운로드",
+        "copyAddress": "미디어 주소 복사"
+      },
+      "selection": {
+        "copy": "복사",
+        "searchWith": "{engine}에서 \"{query}\" 검색",
+        "findInPage": "선택 영역에서 찾기"
+      },
+      "spelling": {
+        "none": "맞춤법 제안 없음",
+        "addToDictionary": "사전에 추가"
+      },
+      "edit": {
+        "undo": "실행 취소",
+        "redo": "다시 실행",
+        "cut": "잘라내기",
+        "copy": "복사",
+        "paste": "붙여넣기",
+        "selectAll": "모두 선택"
+      },
+      "page": {
+        "back": "뒤로",
+        "forward": "앞으로",
+        "reload": "새로고침",
+        "addBookmark": "이 페이지 북마크 추가 ★"
+      },
+      "mods": "모드",
+      "viewSource": "페이지 소스 보기",
+      "inspect": "검사"
+    },
+    "video": {
+      "extractingYtdlp": "동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)",
+      "downloadStarted": "다운로드를 시작했습니다 ⬇ (다운로드 패널 Ctrl+J)",
+      "extractingYtdlpShort": "동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)",
+      "startFailed": "다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류",
+      "downloadingDash": "동영상 다운로드 중… (DASH, 진행률은 다운로드 패널 Ctrl+J)",
+      "downloadingHls": "동영상 다운로드 중… (HLS, 진행률은 다운로드 패널 Ctrl+J)",
+      "extractingYtdlpFallback": "동영상 추출 중… (yt-dlp 폴백, 진행률은 다운로드 패널)",
+      "ytdlpConsent": {
+        "get": "받기",
+        "cancel": "취소",
+        "title": "yt-dlp 가 필요합니다",
+        "message": "동영상 다운로드를 위해 yt-dlp 를 다운로드합니다.",
+        "detail": "약 15 MB. GitHub yt-dlp/yt-dlp 공식 릴리즈(최신)에서 받습니다. 이후 자동으로 최신 유지됩니다."
+      },
+      "ytdlpDownloadFailed": "yt-dlp 다운로드 실패",
+      "ytdlpStarting": "yt-dlp 시작 중…",
+      "preparingDownload": "동영상 다운로드 준비 중…"
+    },
+    "torrent": {
+      "consent": {
+        "accept": "동의하고 받기",
+        "cancel": "취소",
+        "title": "토렌트 다운로드 안내",
+        "message": "저작권을 준수해 주세요.",
+        "detail": "권리자 동의가 있거나 자유 라이선스 콘텐츠(Creative Commons, public domain, Linux ISO 등) 에만 사용하세요. 책임은 사용자에게 있습니다.\n\n계속하면 WebTorrent(분산 BitTorrent) 가 활성화됩니다. 첫 가동 시 Windows 방화벽이 권한을 물어볼 수 있습니다."
+      },
+      "notInstalled": {
+        "ok": "확인",
+        "title": "토렌트 모듈 미설치",
+        "message": "webtorrent 패키지가 설치되어 있지 않습니다.",
+        "detail": "\"npm install webtorrent\" 로 설치 후 다시 시도하세요. (optional dependency)"
+      },
+      "loadingMetadata": "메타데이터 로드 중…"
+    },
+    "session": {
+      "restorePrompt": {
+        "restore": "세션 복원",
+        "newTab": "새 탭으로 시작",
+        "title": "지난 세션 복원",
+        "message": "브라우저가 비정상 종료된 것 같습니다.",
+        "detail": "직전 세션의 탭 {count}개를 복원하시겠습니까?"
+      }
+    },
+    "modApi": {
+      "nodeGrant": {
+        "deny": "거부",
+        "allow": "Node 권한 허용",
+        "title": "Node 권한 요청",
+        "message": "모드 \"{name}\" 가 Node.js 시스템 접근을 요청합니다.",
+        "detail": "이 권한은 파일 시스템·프로세스 등 컴퓨터 전체에 접근할 수 있어 확장보다 강력하고 위험합니다. 신뢰하는 모드에만 허용하세요. (이 결정은 저장되며 모드 페이지에서 변경할 수 있습니다)"
+      }
+    },
+    "password": {
+      "writeError": {
+        "unavailable": "이 컴퓨터에서 OS 암호화(safeStorage)를 쓸 수 없어 비밀번호를 저장하지 않았습니다. 평문으로는 저장하지 않습니다.",
+        "invalid-origin": "사이트 주소가 올바르지 않습니다. https 주소여야 합니다 (예: https://example.com).",
+        "invalid": "사용자명과 비밀번호를 모두 입력해 주세요.",
+        "duplicate": "같은 사이트에 같은 사용자명이 이미 등록돼 있습니다. 기존 항목을 수정해 주세요.",
+        "not-found": "해당 계정을 찾을 수 없습니다."
+      }
+    },
+    "screenshot": {
+      "saveTitle": "스크린샷 저장"
+    },
+    "pageTools": {
+      "webpageFilter": "웹페이지"
+    },
+    "downloads": {
+      "pickFolderTitle": "기본 다운로드 폴더 선택"
+    },
+    "reader": {
+      "badge": "리더 모드",
+      "originalView": "원본 보기"
+    },
+    "omnibox": {
+      "searchWith": "{engine} 검색: {query}"
+    },
+    "workspace": {
+      "defaultName": "스페이스 {n}",
+      "unnamed": "이름 없는 스페이스",
+      "defaultFirst": "기본"
+    },
+    "automation": {
+      "screenshotNoTab": "스크린샷 실패 — 대상 탭이 없습니다",
+      "screenshotTabGone": "스크린샷 실패 — 탭을 찾을 수 없습니다",
+      "screenshotSaved": "스크린샷 저장됨 📸 ({path})",
+      "screenshotFailed": "스크린샷 실패"
+    },
+    "designTokens": {
+      "label": {
+        "color": {
+          "accent": {
+            "primary": "액센트",
+            "hover": "액센트 호버"
+          },
+          "bg": {
+            "base": "배경",
+            "elevated": "카드 배경"
+          },
+          "text": {
+            "primary": "본문",
+            "secondary": "보조 글자"
+          },
+          "border": {
+            "subtle": "경계선"
+          }
+        },
+        "radius": {
+          "sm": "작은 라운드",
+          "md": "중간 라운드",
+          "lg": "큰 라운드",
+          "tab": "탭 라운드"
+        },
+        "density": {
+          "tabbar-h": "탭바 높이",
+          "toolbar-h": "툴바 높이",
+          "font-size": "기본 글자 크기"
+        },
+        "motion": {
+          "normal": "애니메이션 속도"
+        }
+      }
+    },
+    "profile": {
+      "field": {
+        "fullName": "이름(전체)",
+        "firstName": "이름",
+        "lastName": "성",
+        "email": "이메일",
+        "phone": "전화번호",
+        "postalCode": "우편번호",
+        "address": "주소",
+        "addressDetail": "상세주소",
+        "city": "도시",
+        "country": "국가",
+        "birthday": "생년월일(YYYY-MM-DD)",
+        "organization": "회사/소속",
+        "username": "아이디",
+        "cardNumber": "카드번호",
+        "cardExp": "카드 만료(MM/YY)",
+        "cardCVC": "카드 CVC"
+      }
+    },
+    "ai": {
+      "error": {
+        "auth": "인증 실패 ({status}). API 키가 올바른지 설정에서 확인하세요.\n{detail}",
+        "modelNotFound": "모델을 찾을 수 없습니다 (404). 설정의 모델 이름을 확인하세요.\n{detail}",
+        "badRequest": "요청 오류 (400). API 키 또는 모델 이름을 확인하세요.\n{detail}",
+        "rateLimit": "요청 한도 초과 (429). 잠시 후 다시 시도하세요.\n{detail}",
+        "ollamaUnreachable": "로컬 Ollama 서버에 연결할 수 없습니다. Ollama 가 실행 중인지, 모델이 설치됐는지 확인하세요.\n{detail}",
+        "generic": "AI 요청 실패 ({status}).\n{detail}",
+        "unknownCliProvider": "알 수 없는 CLI 제공자",
+        "timeout": "시간 초과 (120초). 다시 시도하세요.",
+        "ollamaConnectFailed": "로컬 Ollama 서버 연결 실패. 실행 중인지 확인하세요.\n{detail}",
+        "claudeCodeResponse": "Claude Code 응답 오류({subtype}){detail}",
+        "claudeCodeSessionEnded": "Claude Code 세션이 종료됐습니다(코드 {code}).{detail}",
+        "claudeCodeSessionDead": "Claude Code 세션이 살아 있지 않습니다.",
+        "turnInProgress": "이전 턴이 아직 진행 중입니다.",
+        "timeoutReopen": "시간 초과 (120초). 세션을 다시 엽니다.",
+        "codexSessionClosed": "Codex 세션이 닫혔습니다.",
+        "timeoutPlain": "시간 초과 (120초).",
+        "codexResponse": "Codex 응답 오류: {detail}",
+        "cliHint": "\n\n({name} 이(가) 설치돼 있고 구독/계정으로 로그인됐는지 확인하세요. 설정 > AI 에서 실행 경로·모델을 지정할 수 있습니다.)",
+        "cliNotFound": "{name} CLI 를 찾을 수 없습니다.{hint}",
+        "cliRunError": "{name} 실행 오류.{detail}{hint}",
+        "sessionClosed": "세션이 닫혔습니다.",
+        "exitCode": "종료 코드 {code}"
+      },
+      "diag": {
+        "cliMissing": {
+          "message": "'{bin}' 명령을 찾을 수 없습니다.",
+          "fix": "{bin} CLI 를 설치하고 PATH 에 추가하세요. 설정 > AI 에서 실행 경로를 직접 지정할 수도 있습니다."
+        },
+        "notLoggedIn": {
+          "cliMessage": "'{bin}' 로그인이 필요합니다.",
+          "cliFix": "터미널에서 '{bin}' 를 한 번 실행해 로그인(구독 계정 연결)하세요.",
+          "message": "인증에 실패했습니다.",
+          "fix": "설정 > AI 에서 API 키를 다시 확인하세요."
+        },
+        "modelDefault": "(기본)",
+        "modelMissing": {
+          "message": "모델 '{model}' 을(를) 사용할 수 없습니다.",
+          "fix": "설정 > AI 에서 계정·설치에 맞는 모델 이름으로 바꾸세요."
+        },
+        "notConnected": {
+          "message": "AI 서버에 연결하지 못했습니다.",
+          "fix": "인터넷 연결 또는 로컬 서버(Ollama) 실행 상태를 확인하세요."
+        },
+        "genericError": {
+          "message": "오류가 발생했습니다.",
+          "fix": "잠시 후 다시 시도하거나 다른 제공자로 바꿔 보세요."
+        },
+        "noKey": {
+          "message": "{label} API 키가 없습니다.",
+          "fix": "설정 > AI 에서 API 키를 입력하세요."
+        },
+        "empty": {
+          "message": "응답이 비어 있습니다.",
+          "fix": "다른 모델로 바꾸거나 잠시 후 다시 시도하세요."
+        },
+        "ok": {
+          "message": "정상 — 응답을 받았습니다 ({seconds}초)."
+        },
+        "disabled": {
+          "message": "AI 기능이 꺼져 있습니다.",
+          "fix": "설정 > AI 에서 AI 를 켜세요."
+        },
+        "ollamaNotConnected": {
+          "message": "Ollama 에 연결하지 못했습니다.",
+          "detail": "{url} 응답 없음",
+          "fix": "Ollama 앱을 켜거나 터미널에서 `ollama serve` 를 실행하세요. 주소가 다르면 설정 > AI 에서 Ollama 주소를 확인하세요."
+        },
+        "ollamaModelMissing": {
+          "message": "설정한 모델 '{model}' 이(가) 설치돼 있지 않습니다.",
+          "fix": "아래 설치된 모델 중 하나로 바꾸거나, 터미널에서 `ollama pull {model}` 로 설치하세요."
+        }
+      },
+      "ipc": {
+        "diagCheckError": "점검 중 오류",
+        "unknownProvider": "알 수 없는 제공자",
+        "pickAgentFilesFolder": "에이전트 자료 폴더 선택",
+        "memoryAdded": "🧠 기억에 추가됨: {text}{more}",
+        "reportSaved": "보고서 저장됨 ⤓ {filename}",
+        "webhookUrlMissing": "웹훅 URL 이 설정되지 않았습니다(설정 > AI).",
+        "webhookTimeout": "시간 초과",
+        "webhookResponseError": "응답 오류",
+        "topicRequired": "주제를 입력하세요.",
+        "bodyInstructionRequired": "본문과 지시가 필요합니다.",
+        "unknownChoice": "알 수 없는 선택입니다.",
+        "conversationExported": "대화 내보냄 ⤓ {filename}",
+        "conversationsExported": "대화 {count}개 내보냄 ⤓ {filename}",
+        "taskNotFound": "작업을 찾을 수 없습니다(이미 삭제되었을 수 있습니다).",
+        "taskWrongWindow": "이 작업을 시작한 창에서만 조작할 수 있습니다."
+      }
+    },
+    "dataSov": {
+      "errorBundleFormat": "bundle version 또는 형식 오류",
+      "errorRejected": "거부됨: {path}",
+      "errorPassphraseMissing": "비밀번호 데이터가 포함돼 있지만 백업 암호를 입력하지 않아 건너뛰었습니다.",
+      "errorWrongPassphrase": "백업 암호가 올바르지 않아 비밀번호를 복원하지 못했습니다.",
+      "errorPassphraseTooShort": "백업 암호는 최소 {min}자 이상이어야 합니다."
+    },
+    "import": {
+      "unnamedFolder": "폴더",
+      "bookmarksReadFailed": "북마크 파일을 읽지 못했습니다: {detail}",
+      "rootFolderName": "{browser}에서 가져온 북마크",
+      "otherBookmarks": "기타 북마크",
+      "mobileBookmarks": "모바일 북마크",
+      "historyCopyFailed": "방문 기록을 복사하지 못했습니다. 해당 브라우저를 완전히 종료하고 다시 시도하세요. ({detail})",
+      "historyReadFailed": "방문 기록을 읽지 못했습니다: {detail}",
+      "profileNotFound": "가져올 프로필을 찾을 수 없습니다.",
+      "bookmarksImportFailed": "북마크 가져오기 실패: {detail}"
     }
   },
   "settings": {
