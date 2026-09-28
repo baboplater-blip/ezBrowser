@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>Userscripts</title>
     <style>
       :root { color-scheme: light dark;
@@ -79,16 +81,16 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>Userscripts <span style="color:var(--muted);font-size:11px;margin-left:8px;">Tampermonkey 호환</span></h1>
-        <button id="new-btn" class="btn primary">+ 새 스크립트</button>
+        <h1>Userscripts <span style="color:var(--muted);font-size:11px;margin-left:8px;" data-i18n="page.userscripts.a1">Tampermonkey 호환</span></h1>
+        <button id="new-btn" class="btn primary" data-i18n="page.userscripts.a2">+ 새 스크립트</button>
       </header>
       <main>
         <aside id="list-aside">
-          <div class="empty-side">로딩 중…</div>
+          <div class="empty-side" data-i18n="page.userscripts.a3">로딩 중…</div>
         </aside>
         <section class="editor" id="editor-section">
           <div class="stub" id="stub">
-            <div>왼쪽 목록에서 스크립트를 선택하거나 새로 만드세요.</div>
+            <div data-i18n="page.userscripts.a4">왼쪽 목록에서 스크립트를 선택하거나 새로 만드세요.</div>
             <div>유저스크립트는 <code>// ==UserScript==</code> 메타데이터 블록 + 본문 코드입니다.</div>
           </div>
           <div id="editor-content" style="display:none;flex:1;display:none;flex-direction:column;min-height:0;">
@@ -96,7 +98,7 @@
               <span class="name" id="editor-name">새 스크립트</span>
               <button id="enabled-btn" class="btn">활성</button>
               <button id="save-btn" class="btn primary">저장</button>
-              <button id="delete-btn" class="btn danger">삭제</button>
+              <button id="delete-btn" class="btn danger" data-i18n="page.userscripts.a8">삭제</button>
             </div>
             <div class="meta-panel" id="meta-panel"></div>
             <textarea id="source-area" spellcheck="false" placeholder="// ==UserScript==&#10;// @name        예시 스크립트&#10;// @match       https://example.com/*&#10;// @description 무엇을 하는지&#10;// @version     1.0&#10;// @grant       none&#10;// ==/UserScript==&#10;&#10;(function() {&#10;  'use strict'&#10;  console.log('Hello from userscript')&#10;})()"></textarea>
@@ -105,6 +107,7 @@
       </main>
     </div>
     <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
       const listAside = document.getElementById('list-aside')
       const stub = document.getElementById('stub')
       const editorContent = document.getElementById('editor-content')
@@ -200,9 +203,9 @@
       newBtn.addEventListener('click', function() {
         currentId = null
         currentEnabled = true
-        editorName.textContent = '새 스크립트'
+        editorName.textContent = trSafe('page.userscripts.t3', '새 스크립트')
         sourceArea.value = STARTER
-        enabledBtn.textContent = '활성 ✓'
+        enabledBtn.textContent = trSafe('page.userscripts.t4', '활성 ✓')
         enabledBtn.classList.add('primary')
         renderMeta(null)
         showEditor()
@@ -212,9 +215,9 @@
 
       saveBtn.addEventListener('click', async function() {
         const source = sourceArea.value
-        if (!source.trim()) return alert('빈 스크립트는 저장 안 됩니다.')
+        if (!source.trim()) return alert(trSafe('page.userscripts.d1', '빈 스크립트는 저장 안 됩니다.'))
         saveBtn.disabled = true
-        saveBtn.textContent = '저장 중… (@require 확인)'
+        saveBtn.textContent = trSafe('page.userscripts.t5', '저장 중… (@require 확인)')
         try {
           const saved = await window.internalAPI.userscript.save({ id: currentId || undefined, source })
           currentId = saved.id
@@ -222,13 +225,13 @@
           renderMeta(saved)
         } finally {
           saveBtn.disabled = false
-          saveBtn.textContent = '저장'
+          saveBtn.textContent = trSafe('page.userscripts.t6', '저장')
         }
       })
 
       deleteBtn.addEventListener('click', async function() {
         if (!currentId) { sourceArea.value = ''; showStub(); return }
-        if (!confirm('이 스크립트를 삭제할까요?')) return
+        if (!confirm(trSafe('page.userscripts.d2', '이 스크립트를 삭제할까요?'))) return
         await window.internalAPI.userscript.remove(currentId)
         currentId = null
         showStub()

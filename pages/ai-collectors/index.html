@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="ko">
 <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
 <meta charset="utf-8">
 <title>매일 자동 수집</title>
 <style>
@@ -34,42 +37,42 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📥 매일 자동 수집</h1>
-  <p class="sub">지정한 사이트를 매일(또는 주기적으로) 조용히 열어 새 글·항목만 골라 모으고, AI 가 요약 브리핑을 만들어 알림으로 전해줍니다. 재시작해도 유지됩니다. (숨은 창에서 실행 — 작업을 방해하지 않아요.)</p>
+  <h1 data-i18n="page.ai-collectors.a1">📥 매일 자동 수집</h1>
+  <p class="sub" data-i18n="page.ai-collectors.a2">지정한 사이트를 매일(또는 주기적으로) 조용히 열어 새 글·항목만 골라 모으고, AI 가 요약 브리핑을 만들어 알림으로 전해줍니다. 재시작해도 유지됩니다. (숨은 창에서 실행 — 작업을 방해하지 않아요.)</p>
 
   <div class="card">
-    <div class="row between"><b>＋ 새 수집기</b></div>
-    <label>이름</label>
-    <input type="text" id="f-name" placeholder="예: 오늘의 IT 뉴스">
-    <label>소스 URL (한 줄에 하나)</label>
+    <div class="row between"><b data-i18n="page.ai-collectors.a3">＋ 새 수집기</b></div>
+    <label data-i18n="page.ai-collectors.a4">이름</label>
+    <input type="text" id="f-name" placeholder="예: 오늘의 IT 뉴스" data-i18n-attr="placeholder:page.ai-collectors.a18">
+    <label data-i18n="page.ai-collectors.a5">소스 URL (한 줄에 하나)</label>
     <textarea id="f-sources" placeholder="https://news.example.com/tech&#10;https://blog.example.com/feed"></textarea>
     <div class="grid2">
       <div>
-        <label>스케줄</label>
+        <label data-i18n="page.ai-collectors.a6">스케줄</label>
         <select id="f-sched">
-          <option value="daily">매일 정해진 시각</option>
-          <option value="interval">주기적으로 (분)</option>
+          <option value="daily" data-i18n="page.ai-collectors.a7">매일 정해진 시각</option>
+          <option value="interval" data-i18n="page.ai-collectors.a8">주기적으로 (분)</option>
         </select>
       </div>
       <div id="wrap-time">
-        <label>시각 (HH:MM, 24시간)</label>
+        <label data-i18n="page.ai-collectors.a9">시각 (HH:MM, 24시간)</label>
         <input type="text" id="f-time" placeholder="09:00">
       </div>
       <div id="wrap-interval" class="hidden">
-        <label>주기 (분)</label>
+        <label data-i18n="page.ai-collectors.a10">주기 (분)</label>
         <input type="text" id="f-interval" placeholder="60">
       </div>
     </div>
-    <label>키워드 필터 (선택, 쉼표 — 이 단어가 든 항목만)</label>
-    <input type="text" id="f-keyword" placeholder="예: AI, 반도체, 삼성">
+    <label data-i18n="page.ai-collectors.a11">키워드 필터 (선택, 쉼표 — 이 단어가 든 항목만)</label>
+    <input type="text" id="f-keyword" placeholder="예: AI, 반도체, 삼성" data-i18n-attr="placeholder:page.ai-collectors.a19">
 
-    <span class="adv" id="adv-toggle">▸ 고급 (추출 선택자)</span>
+    <span class="adv" id="adv-toggle" data-i18n="page.ai-collectors.a12">▸ 고급 (추출 선택자)</span>
     <div id="adv" class="hidden">
       <div class="grid2">
-        <div><label>반복 항목 CSS 선택자 (비우면 자동: 제목+링크)</label><input type="text" id="f-rowsel" placeholder=".article-item"></div>
-        <div><label>소스당 최대 수집 수</label><input type="text" id="f-max" placeholder="40"></div>
+        <div><label data-i18n="page.ai-collectors.a13">반복 항목 CSS 선택자 (비우면 자동: 제목+링크)</label><input type="text" id="f-rowsel" placeholder=".article-item"></div>
+        <div><label data-i18n="page.ai-collectors.a14">소스당 최대 수집 수</label><input type="text" id="f-max" placeholder="40"></div>
       </div>
-      <label>필드 매핑 (JSON, 선택 — 예 {"제목":".title","링크":"a@href"})</label>
+      <label data-i18n="page.ai-collectors.a15">필드 매핑 (JSON, 선택 — 예 {"제목":".title","링크":"a@href"})</label>
       <input type="text" id="f-fields" placeholder='{"제목":".title","링크":"a@href"}'>
     </div>
 
@@ -78,15 +81,16 @@
       <label class="inline"><input type="checkbox" id="f-notify" checked> 새 항목 시 알림</label>
       <label class="inline"><input type="checkbox" id="f-webhook"> 웹훅 전송</label>
       <span style="flex:1"></span>
-      <button class="primary" id="btn-add">추가</button>
+      <button class="primary" id="btn-add" data-i18n="page.ai-collectors.a16">추가</button>
     </div>
-    <div class="tmeta" style="margin-top:6px;">웹훅은 설정 &gt; AI 의 연동 URL 로 JSON 을 보냅니다(구글시트·노션·메일 등).</div>
+    <div class="tmeta" style="margin-top:6px;" data-i18n="page.ai-collectors.a17">웹훅은 설정 &gt; AI 의 연동 URL 로 JSON 을 보냅니다(구글시트·노션·메일 등).</div>
   </div>
 
   <div id="list"></div>
 </div>
 
 <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
   var api = window.internalAPI && window.internalAPI.ai;
   function el(id){ return document.getElementById(id); }
   function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -120,12 +124,12 @@
         '<div class="tmeta">소스 ' + (c.sources ? c.sources.length : 0) + '개' + (c.keyword ? ' · 필터: ' + escapeHtml(c.keyword) : '') + '</div>' +
         '<div class="tmeta">최근 실행: ' + rel(c.lastRunAt) + (c.lastCount != null ? ' · 새 ' + c.lastCount + '건' : '') + '</div>';
       var right = document.createElement('div'); right.className = 'row';
-      var runBtn = document.createElement('button'); runBtn.textContent = '지금 수집'; runBtn.className='primary';
-      runBtn.onclick = function(){ runBtn.disabled = true; runBtn.textContent = '수집 중…'; api.collectorRun(c.id).then(function(){ runBtn.disabled=false; runBtn.textContent='지금 수집'; }); };
+      var runBtn = document.createElement('button'); runBtn.textContent = trSafe('page.ai-collectors.t5', '지금 수집'); runBtn.className='primary';
+      runBtn.onclick = function(){ runBtn.disabled = true; runBtn.textContent = trSafe('page.ai-collectors.t6', '수집 중…'); api.collectorRun(c.id).then(function(){ runBtn.disabled=false; runBtn.textContent=trSafe('page.ai-collectors.t7', '지금 수집'); }); };
       var toggle = document.createElement('button'); toggle.className = 'chip' + (c.enabled ? ' on' : ''); toggle.textContent = c.enabled ? '켜짐' : '꺼짐';
       toggle.onclick = function(){ api.collectorSetEnabled(c.id, !c.enabled); };
-      var del = document.createElement('button'); del.className = 'danger'; del.textContent = '삭제';
-      del.onclick = function(){ if (confirm('이 수집기를 삭제할까요?')) api.collectorRemove(c.id); };
+      var del = document.createElement('button'); del.className = 'danger'; del.textContent = trSafe('page.ai-collectors.t8', '삭제');
+      del.onclick = function(){ if (confirm(trSafe('page.ai-collectors.d1', '이 수집기를 삭제할까요?'))) api.collectorRemove(c.id); };
       right.appendChild(runBtn); right.appendChild(toggle); right.appendChild(del);
       head.appendChild(left); head.appendChild(right);
       card.appendChild(head);
@@ -140,7 +144,7 @@
   el('btn-add').addEventListener('click', function(){
     var sched = el('f-sched').value;
     var sources = el('f-sources').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
-    if (!sources.length){ alert('소스 URL 을 최소 하나 입력하세요.'); return; }
+    if (!sources.length){ alert(trSafe('page.ai-collectors.d2', '소스 URL 을 최소 하나 입력하세요.')); return; }
     var p = {
       name: el('f-name').value.trim() || '수집기',
       sources: sources,
@@ -152,11 +156,11 @@
       webhook: el('f-webhook').checked,
       enabled: true,
     };
-    if (sched === 'daily'){ p.time = el('f-time').value.trim(); if(!/^\d{1,2}:\d{2}$/.test(p.time)){ alert('시각을 HH:MM 형식으로 입력하세요.'); return; } }
+    if (sched === 'daily'){ p.time = el('f-time').value.trim(); if(!/^\d{1,2}:\d{2}$/.test(p.time)){ alert(trSafe('page.ai-collectors.d3', '시각을 HH:MM 형식으로 입력하세요.')); return; } }
     else { p.intervalMinutes = parseInt(el('f-interval').value,10) || 60; }
     var mx = parseInt(el('f-max').value,10); if (mx) p.maxItems = mx;
     var fj = el('f-fields').value.trim();
-    if (fj){ try { p.fields = JSON.parse(fj); } catch(e){ alert('필드 매핑 JSON 형식이 올바르지 않습니다.'); return; } }
+    if (fj){ try { p.fields = JSON.parse(fj); } catch(e){ alert(trSafe('page.ai-collectors.d4', '필드 매핑 JSON 형식이 올바르지 않습니다.')); return; } }
     api.collectorAdd(p);
     el('f-name').value=''; el('f-sources').value=''; el('f-time').value=''; el('f-interval').value=''; el('f-keyword').value=''; el('f-rowsel').value=''; el('f-max').value=''; el('f-fields').value='';
   });

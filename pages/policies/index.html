@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>사이트 정책</title>
     <style>
       :root { color-scheme: light dark;
@@ -122,28 +124,28 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>사이트 정책</h1>
-        <span class="hint">사이트별 UA · 헤더 · CSP · 쿠키 · 권한 · JS 후킹</span>
-        <button id="export-btn" class="btn" title="모든 룰을 JSON 으로 내보내기">내보내기</button>
-        <button id="import-btn" class="btn" title="JSON 파일에서 룰 가져오기">가져오기</button>
+        <h1 data-i18n="page.policies.a1">사이트 정책</h1>
+        <span class="hint" data-i18n="page.policies.a2">사이트별 UA · 헤더 · CSP · 쿠키 · 권한 · JS 후킹</span>
+        <button id="export-btn" class="btn" title="모든 룰을 JSON 으로 내보내기" data-i18n="page.policies.a3">내보내기</button>
+        <button id="import-btn" class="btn" title="JSON 파일에서 룰 가져오기" data-i18n="page.policies.a4">가져오기</button>
         <input id="import-file" type="file" accept="application/json" style="display:none;" />
-        <button id="new-btn" class="btn primary">+ 새 룰</button>
+        <button id="new-btn" class="btn primary" data-i18n="page.policies.a5">+ 새 룰</button>
       </header>
       <main>
         <aside id="list-aside">
-          <div class="empty-side">로딩 중…</div>
+          <div class="empty-side" data-i18n="page.policies.a6">로딩 중…</div>
         </aside>
         <section class="editor" id="editor-section">
           <div class="stub" id="stub">
-            <div>왼쪽 목록에서 룰을 선택하거나 새로 만드세요.</div>
+            <div data-i18n="page.policies.a7">왼쪽 목록에서 룰을 선택하거나 새로 만드세요.</div>
             <div>각 룰은 <code>@match</code>(URL 패턴) 와 적용할 변경 사항으로 구성됩니다.</div>
           </div>
           <div id="editor-content" style="display:none;flex-direction:column;min-height:0;">
             <div class="editor-bar">
               <input id="name-input" class="name-input" placeholder="룰 이름 (예: 콕콕 사이트 UA 변경)" />
               <button id="enabled-btn" class="btn">활성</button>
-              <button id="save-btn" class="btn primary">저장</button>
-              <button id="delete-btn" class="btn danger">삭제</button>
+              <button id="save-btn" class="btn primary" data-i18n="page.policies.a9">저장</button>
+              <button id="delete-btn" class="btn danger" data-i18n="page.policies.a10">삭제</button>
             </div>
 
             <div class="field">
@@ -153,59 +155,60 @@
             </div>
 
             <div class="field">
-              <label>User-Agent 덮어쓰기 (비우면 OFF)</label>
+              <label data-i18n="page.policies.a11">User-Agent 덮어쓰기 (비우면 OFF)</label>
               <input id="ua-input" type="text" placeholder="Mozilla/5.0 (X11; Linux x86_64) ..." />
             </div>
 
             <div class="field">
-              <label>요청 헤더 설정 (set/overwrite)</label>
+              <label data-i18n="page.policies.a12">요청 헤더 설정 (set/overwrite)</label>
               <div id="req-set-list"></div>
-              <div class="add-row"><button id="req-set-add">+ 헤더 추가</button></div>
+              <div class="add-row"><button id="req-set-add" data-i18n="page.policies.a13">+ 헤더 추가</button></div>
             </div>
 
             <div class="field">
-              <label>요청 헤더 제거 (헤더 이름, 한 줄에 하나)</label>
+              <label data-i18n="page.policies.a14">요청 헤더 제거 (헤더 이름, 한 줄에 하나)</label>
               <textarea id="req-remove-area" placeholder="Referer&#10;Accept-Language"></textarea>
             </div>
 
             <div class="field">
-              <label>응답 헤더 설정 (set/overwrite)</label>
+              <label data-i18n="page.policies.a15">응답 헤더 설정 (set/overwrite)</label>
               <div id="res-set-list"></div>
-              <div class="add-row"><button id="res-set-add">+ 헤더 추가</button></div>
+              <div class="add-row"><button id="res-set-add" data-i18n="page.policies.a16">+ 헤더 추가</button></div>
             </div>
 
             <div class="field">
-              <label>응답 헤더 제거</label>
+              <label data-i18n="page.policies.a17">응답 헤더 제거</label>
               <textarea id="res-remove-area" placeholder="X-Frame-Options&#10;Content-Security-Policy"></textarea>
             </div>
 
             <div class="field">
-              <label>빠른 토글</label>
+              <label data-i18n="page.policies.a18">빠른 토글</label>
               <div class="toggle-row">
                 <label class="toggle-chip" id="chip-csp"><input type="checkbox" id="chk-csp" /> CSP 완전 제거</label>
                 <label class="toggle-chip" id="chip-cookies"><input type="checkbox" id="chk-cookies" /> 쿠키 차단</label>
                 <label class="toggle-chip" id="chip-js"><input type="checkbox" id="chk-js" /> JS 차단</label>
                 <label class="toggle-chip" id="chip-images"><input type="checkbox" id="chk-images" /> 이미지 차단</label>
               </div>
-              <div class="hint">CSP 제거는 외부 스크립트가 막힐 때 우회용. 쿠키 차단은 요청 Cookie · 응답 Set-Cookie 둘 다 제거.</div>
+              <div class="hint" data-i18n="page.policies.a19">CSP 제거는 외부 스크립트가 막힐 때 우회용. 쿠키 차단은 요청 Cookie · 응답 Set-Cookie 둘 다 제거.</div>
             </div>
 
             <div class="field">
-              <label>사이트별 권한 (기본 → 허용/거부 명시)</label>
+              <label data-i18n="page.policies.a20">사이트별 권한 (기본 → 허용/거부 명시)</label>
               <div id="permissions-grid"></div>
-              <div class="hint">'기본' 은 전역 화이트리스트 (media · geolocation · notifications · clipboard-read · fullscreen · pointerLock) 적용. 한 룰이라도 '거부' 면 즉시 거부.</div>
+              <div class="hint" data-i18n="page.policies.a21">'기본' 은 전역 화이트리스트 (media · geolocation · notifications · clipboard-read · fullscreen · pointerLock) 적용. 한 룰이라도 '거부' 면 즉시 거부.</div>
             </div>
 
             <div class="field">
-              <label>고급: 페이지 컨텍스트 JS (dom-ready 시 실행, escape hatch)</label>
-              <div class="danger-zone">⚠ 이 JS 는 매칭된 모든 사이트에서 실행됩니다. 신중히 작성하세요.</div>
-              <textarea id="js-area" style="min-height: 100px;" placeholder="// 예) document.querySelectorAll('.ad').forEach(el => el.remove())"></textarea>
+              <label data-i18n="page.policies.a22">고급: 페이지 컨텍스트 JS (dom-ready 시 실행, escape hatch)</label>
+              <div class="danger-zone" data-i18n="page.policies.a23">⚠ 이 JS 는 매칭된 모든 사이트에서 실행됩니다. 신중히 작성하세요.</div>
+              <textarea id="js-area" style="min-height: 100px;" placeholder="// 예) document.querySelectorAll('.ad').forEach(el => el.remove())" data-i18n-attr="placeholder:page.policies.a25"></textarea>
             </div>
           </div>
         </section>
       </main>
     </div>
     <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
       const listAside = document.getElementById('list-aside')
       const stub = document.getElementById('stub')
       const editorContent = document.getElementById('editor-content')
@@ -459,7 +462,7 @@
           const text = await file.text()
           const data = JSON.parse(text)
           const rules = Array.isArray(data) ? data : (Array.isArray(data.rules) ? data.rules : null)
-          if (!rules) { alert('JSON 형식이 올바르지 않습니다. {rules:[...]} 또는 배열이어야 합니다.'); return }
+          if (!rules) { alert(trSafe('page.policies.d1', 'JSON 형식이 올바르지 않습니다. {rules:[...]} 또는 배열이어야 합니다.')); return }
           const overwrite = confirm(rules.length + '개 룰을 가져옵니다.\n\n[확인] 기존 룰은 유지하고 추가\n[취소] 가져오기 취소')
           if (!overwrite) { importFile.value = ''; return }
           let okCount = 0
@@ -481,7 +484,7 @@
 
       saveBtn.addEventListener('click', async function() {
         const payload = collectFromForm()
-        if (payload.match.length === 0) return alert('URL 패턴을 한 줄 이상 입력하세요.')
+        if (payload.match.length === 0) return alert(trSafe('page.policies.d2', 'URL 패턴을 한 줄 이상 입력하세요.'))
         const saved = await window.internalAPI.policy.save(payload)
         currentId = saved.id
         currentCreatedAt = saved.createdAt
@@ -489,7 +492,7 @@
 
       deleteBtn.addEventListener('click', async function() {
         if (!currentId) { showStub(); return }
-        if (!confirm('이 룰을 삭제할까요?')) return
+        if (!confirm(trSafe('page.policies.d3', '이 룰을 삭제할까요?'))) return
         await window.internalAPI.policy.remove(currentId)
         currentId = null
         showStub()

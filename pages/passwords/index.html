@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>비밀번호 관리</title>
     <style>
       :root { color-scheme: light dark;
@@ -150,18 +152,18 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>비밀번호 관리</h1>
-        <span class="hint">safeStorage 로 OS 단위 암호화 (Windows DPAPI · macOS Keychain · Linux libsecret)</span>
+        <h1 data-i18n="page.passwords.a1">비밀번호 관리</h1>
+        <span class="hint" data-i18n="page.passwords.a2">safeStorage 로 OS 단위 암호화 (Windows DPAPI · macOS Keychain · Linux libsecret)</span>
       </header>
-      <div class="hero-desc">여기에 미리 등록한 계정으로 에이전트가 로그인 화면을 스스로 통과할 수 있습니다. 비밀번호는 OS 암호화(safeStorage)로만 저장되고, AI 모델이나 페이지 스크립트에 전달되지 않습니다.</div>
+      <div class="hero-desc" data-i18n="page.passwords.a3">여기에 미리 등록한 계정으로 에이전트가 로그인 화면을 스스로 통과할 수 있습니다. 비밀번호는 OS 암호화(safeStorage)로만 저장되고, AI 모델이나 페이지 스크립트에 전달되지 않습니다.</div>
       <div id="alert"></div>
 
       <div class="add-account">
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn primary" id="addToggleBtn" type="button">＋ 계정 추가</button>
-          <button class="btn" id="genToggleBtn" type="button">🎲 비밀번호 생성</button>
-          <button class="btn" id="csvExportBtn" type="button">⬇ CSV로 내보내기</button>
-          <button class="btn" id="csvImportBtn" type="button">⬆ CSV 가져오기</button>
+          <button class="btn primary" id="addToggleBtn" type="button" data-i18n="page.passwords.a4">＋ 계정 추가</button>
+          <button class="btn" id="genToggleBtn" type="button" data-i18n="page.passwords.a5">🎲 비밀번호 생성</button>
+          <button class="btn" id="csvExportBtn" type="button" data-i18n="page.passwords.a6">⬇ CSV로 내보내기</button>
+          <button class="btn" id="csvImportBtn" type="button" data-i18n="page.passwords.a7">⬆ CSV 가져오기</button>
         </div>
         <div id="csvResult" class="add-hint" style="margin-top:6px;"></div>
 
@@ -170,31 +172,31 @@
             <label>길이: <span id="genLenLabel">16</span>자</label>
             <input type="range" id="genLen" min="8" max="64" value="16" />
           </div>
-          <label class="add-checkbox-row"><input type="checkbox" id="genUpper" checked /> <span>대문자 (A-Z)</span></label>
-          <label class="add-checkbox-row"><input type="checkbox" id="genLower" checked /> <span>소문자 (a-z)</span></label>
-          <label class="add-checkbox-row"><input type="checkbox" id="genNumbers" checked /> <span>숫자 (0-9)</span></label>
-          <label class="add-checkbox-row"><input type="checkbox" id="genSymbols" checked /> <span>기호 (!@#$…)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genUpper" checked /> <span data-i18n="page.passwords.a8">대문자 (A-Z)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genLower" checked /> <span data-i18n="page.passwords.a9">소문자 (a-z)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genNumbers" checked /> <span data-i18n="page.passwords.a10">숫자 (0-9)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genSymbols" checked /> <span data-i18n="page.passwords.a11">기호 (!@#$…)</span></label>
           <div class="pw-input-row">
             <input type="text" id="genOutput" readonly autocomplete="off" style="font-family:'Consolas','Monaco','Courier New',monospace;" />
-            <button class="btn" id="genRegenBtn" type="button">다시 생성</button>
+            <button class="btn" id="genRegenBtn" type="button" data-i18n="page.passwords.a12">다시 생성</button>
             <button class="btn" id="genCopyBtn" type="button">복사</button>
           </div>
           <div class="add-error" id="genError" style="display:none;"></div>
-          <div class="add-hint">브라우저 내장 암호학적 난수(Web Crypto)로 생성합니다 — 서버로 전송되지 않습니다.</div>
+          <div class="add-hint" data-i18n="page.passwords.a14">브라우저 내장 암호학적 난수(Web Crypto)로 생성합니다 — 서버로 전송되지 않습니다.</div>
         </div>
 
         <div class="add-form" id="addForm" style="display:none;">
           <div class="add-field">
-            <label>사이트 주소</label>
+            <label data-i18n="page.passwords.a15">사이트 주소</label>
             <input type="text" id="addOrigin" placeholder="https://example.com" autocomplete="off" />
-            <div class="add-hint">https 사이트만 등록할 수 있습니다.</div>
+            <div class="add-hint" data-i18n="page.passwords.a16">https 사이트만 등록할 수 있습니다.</div>
           </div>
           <div class="add-field">
-            <label>사용자명(아이디)</label>
+            <label data-i18n="page.passwords.a17">사용자명(아이디)</label>
             <input type="text" id="addUsername" autocomplete="off" />
           </div>
           <div class="add-field">
-            <label>비밀번호</label>
+            <label data-i18n="page.passwords.a18">비밀번호</label>
             <div class="pw-input-row">
               <input type="password" id="addPassword" autocomplete="new-password" />
               <button class="btn" id="addPwToggle" type="button">보기</button>
@@ -202,27 +204,28 @@
           </div>
           <label class="add-checkbox-row">
             <input type="checkbox" id="addAutoLogin" />
-            <span>이 계정으로 자동 로그인 허용</span>
+            <span data-i18n="page.passwords.a20">이 계정으로 자동 로그인 허용</span>
           </label>
-          <div class="add-hint">켜면 에이전트가 이 사이트의 로그인 화면에서 이 계정으로 직접 입력하고 로그인 버튼까지 누릅니다. 비밀번호는 AI 모델에게 전달되지 않습니다. 기본은 꺼짐이며, 저장만으로는 켜지지 않습니다.</div>
+          <div class="add-hint" data-i18n="page.passwords.a21">켜면 에이전트가 이 사이트의 로그인 화면에서 이 계정으로 직접 입력하고 로그인 버튼까지 누릅니다. 비밀번호는 AI 모델에게 전달되지 않습니다. 기본은 꺼짐이며, 저장만으로는 켜지지 않습니다.</div>
           <div class="add-error" id="addError" style="display:none;"></div>
           <div class="add-form-actions">
-            <button class="btn primary" id="addSaveBtn" type="button">저장</button>
-            <button class="btn" id="addCancelBtn" type="button">취소</button>
+            <button class="btn primary" id="addSaveBtn" type="button" data-i18n="page.passwords.a22">저장</button>
+            <button class="btn" id="addCancelBtn" type="button" data-i18n="page.passwords.a23">취소</button>
           </div>
         </div>
       </div>
 
-      <input class="search-box" id="search" placeholder="도메인 또는 사용자명 검색…" />
-      <div id="list" class="list"><div class="empty">로딩 중…</div></div>
+      <input class="search-box" id="search" placeholder="도메인 또는 사용자명 검색…" data-i18n-attr="placeholder:page.passwords.a27" />
+      <div id="list" class="list"><div class="empty" data-i18n="page.passwords.a24">로딩 중…</div></div>
 
       <div class="never-section" id="neverSection" style="display:none;">
-        <h3 style="font-size:13px;margin:20px 0 8px;color:var(--muted);">저장 제안을 끈 사이트</h3>
-        <div class="add-hint" style="margin-bottom:8px;">"이 사이트는 안 함"을 선택한 사이트입니다. 여기서 해제하면 다음 방문 때 다시 저장을 제안합니다.</div>
+        <h3 style="font-size:13px;margin:20px 0 8px;color:var(--muted);" data-i18n="page.passwords.a25">저장 제안을 끈 사이트</h3>
+        <div class="add-hint" style="margin-bottom:8px;" data-i18n="page.passwords.a26">"이 사이트는 안 함"을 선택한 사이트입니다. 여기서 해제하면 다음 방문 때 다시 저장을 제안합니다.</div>
         <div id="neverList" class="list"></div>
       </div>
     </div>
     <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
       let entries = []
       let neverEntries = []
       let revealed = new Set()
@@ -372,7 +375,7 @@
             }
             const plain = await window.internalAPI.password.reveal(id)
             if (plain === null) {
-              alert('복호화에 실패했습니다.')
+              alert(trSafe('page.passwords.d1', '복호화에 실패했습니다.'))
               return
             }
             revealed.add(id)
@@ -385,14 +388,14 @@
           btn.addEventListener('click', async function() {
             const id = btn.dataset.copy
             const plain = await window.internalAPI.password.reveal(id)
-            if (plain === null) { alert('복호화 실패'); return }
+            if (plain === null) { alert(trSafe('page.passwords.d2', '복호화 실패')); return }
             try {
               await navigator.clipboard.writeText(plain)
               const orig = btn.textContent
-              btn.textContent = '복사됨 ✓'
+              btn.textContent = trSafe('page.passwords.t6', '복사됨 ✓')
               setTimeout(function() { btn.textContent = orig }, 1200)
             } catch (e) {
-              alert('클립보드 접근 실패')
+              alert(trSafe('page.passwords.d3', '클립보드 접근 실패'))
             }
           })
         })
@@ -445,7 +448,7 @@
             if (!input) return
             const password = input.value
             if (!password) {
-              if (errEl) { errEl.textContent = '비밀번호를 입력하세요.'; errEl.style.display = '' }
+              if (errEl) { errEl.textContent = trSafe('page.passwords.t7', '비밀번호를 입력하세요.'); errEl.style.display = '' }
               return
             }
             btn.disabled = true
@@ -483,7 +486,7 @@
           usernameInput.value = ''
           passwordInput.value = ''
           passwordInput.type = 'password'
-          pwToggleBtn.textContent = '보기'
+          pwToggleBtn.textContent = trSafe('page.passwords.t8', '보기')
           autoLoginCheckbox.checked = false
           errorEl.style.display = 'none'
           errorEl.textContent = ''
@@ -513,7 +516,7 @@
           const password = passwordInput.value
           errorEl.style.display = 'none'
           if (!origin || !username || !password) {
-            errorEl.textContent = '사이트 주소·사용자명·비밀번호를 모두 입력하세요.'
+            errorEl.textContent = trSafe('page.passwords.t9', '사이트 주소·사용자명·비밀번호를 모두 입력하세요.')
             errorEl.style.display = ''
             return
           }
@@ -587,7 +590,7 @@
           const length = Number(lenInput.value) || 16
           const pw = generatePassword(length, upper.checked, lower.checked, numbers.checked, symbols.checked)
           if (pw === null) {
-            errorEl.textContent = '최소 한 종류는 선택해야 합니다.'
+            errorEl.textContent = trSafe('page.passwords.t10', '최소 한 종류는 선택해야 합니다.')
             errorEl.style.display = ''
             output.value = ''
             return
@@ -614,9 +617,9 @@
           try {
             await navigator.clipboard.writeText(output.value)
             const orig = copyBtn.textContent
-            copyBtn.textContent = '복사됨 ✓'
+            copyBtn.textContent = trSafe('page.passwords.t11', '복사됨 ✓')
             setTimeout(function() { copyBtn.textContent = orig }, 1200)
-          } catch (e) { alert('클립보드 접근 실패') }
+          } catch (e) { alert(trSafe('page.passwords.d4', '클립보드 접근 실패')) }
         })
       }
 
@@ -639,7 +642,7 @@
 
         importBtn.addEventListener('click', async function() {
           resultEl.textContent = ''
-          if (!confirm('CSV 파일의 계정을 가져올까요? 같은 사이트·사용자명이 이미 있으면 CSV 값으로 덮어씁니다.')) return
+          if (!confirm(trSafe('page.passwords.d5', 'CSV 파일의 계정을 가져올까요? 같은 사이트·사용자명이 이미 있으면 CSV 값으로 덮어씁니다.'))) return
           const r = await window.internalAPI.password.csvImport()
           if (r.canceled) return
           if (!r.ok) {

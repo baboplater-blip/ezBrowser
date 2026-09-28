@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>확장</title>
     <style>
       :root { color-scheme: light dark;
@@ -118,19 +120,19 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>확장</h1>
+      <h1 data-i18n="page.extensions.a1">확장</h1>
       <div class="lead">크롬 확장(.crx) 호환 — 드래그하거나 URL 로 설치하세요. (MV2/MV3 핵심 API 지원)<br>
-        확장은 <strong>워크스페이스마다 다른 세션</strong>에 각각 올라갑니다. 카드의 배지가 세션별로 실제 로드됐는지 보여 줍니다.
+        확장은 <strong data-i18n="page.extensions.a2">워크스페이스마다 다른 세션</strong>에 각각 올라갑니다. 카드의 배지가 세션별로 실제 로드됐는지 보여 줍니다.
         시크릿 창에서는 확장이 동작하지 않습니다(크롬과 같습니다).<br>
-        확장을 끄면 <strong>그 뒤에 여는 페이지</strong>부터 적용됩니다 — 이미 열려 있는 탭에 확장이 이미 바꿔 놓은 내용은
+        확장을 끄면 <strong data-i18n="page.extensions.a3">그 뒤에 여는 페이지</strong>부터 적용됩니다 — 이미 열려 있는 탭에 확장이 이미 바꿔 놓은 내용은
         되돌아가지 않습니다(크롬과 같습니다). 지금 보고 있는 페이지에 바로 반영하려면 새로고침하세요.</div>
 
       <div class="install-bar">
-        <button class="btn primary" id="btn-crx">.crx 파일 선택…</button>
-        <button class="btn" id="btn-unpacked">unpacked 폴더 추가</button>
+        <button class="btn primary" id="btn-crx" data-i18n="page.extensions.a4">.crx 파일 선택…</button>
+        <button class="btn" id="btn-unpacked" data-i18n="page.extensions.a5">unpacked 폴더 추가</button>
         <div class="url-row">
           <input id="url-input" type="text" placeholder="https://chromewebstore.google.com/detail/...  또는  https://.../foo.crx" />
-          <button class="btn" id="btn-url">URL 설치</button>
+          <button class="btn" id="btn-url" data-i18n="page.extensions.a6">URL 설치</button>
         </div>
       </div>
 
@@ -152,13 +154,13 @@
           </div>
         </div>
         <div class="consent-desc" id="consent-desc"></div>
-        <div class="consent-section-title">이 확장이 요청하는 권한</div>
+        <div class="consent-section-title" data-i18n="page.extensions.a7">이 확장이 요청하는 권한</div>
         <div id="consent-perms"></div>
-        <div class="consent-section-title">접근 가능한 사이트</div>
+        <div class="consent-section-title" data-i18n="page.extensions.a8">접근 가능한 사이트</div>
         <div id="consent-hosts"></div>
         <div class="consent-actions">
-          <button class="btn" id="consent-cancel">취소</button>
-          <button class="btn primary" id="consent-install">설치</button>
+          <button class="btn" id="consent-cancel" data-i18n="page.extensions.a9">취소</button>
+          <button class="btn primary" id="consent-install" data-i18n="page.extensions.a10">설치</button>
         </div>
       </div>
     </div>
