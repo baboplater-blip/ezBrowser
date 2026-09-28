@@ -6,6 +6,7 @@ import os from 'node:os'
 import { openExternalSqlite } from '../../storage/db'
 import { addBookmark, createFolder } from '../../storage/bookmarks'
 import { importVisits, type ImportVisit } from '../../storage/history'
+import { tMain } from '../../i18n'
 
 /** 렌더러로 넘기는 안전한 소스 정보 (경로는 노출하지 않는다). */
 export interface ImportSourcePublic {
@@ -129,7 +130,7 @@ function importBookmarkChildren(
   const children = node.children ?? []
   for (const child of children) {
     if (child.type === 'folder') {
-      const folder = createFolder({ name: child.name || '폴더', parentId: parentFolderId })
+      const folder = createFolder({ name: child.name || tMain('main.import.unnamedFolder', '폴더'), parentId: parentFolderId })
       counts.folders += 1
       importBookmarkChildren(child, folder.id, counts)
     } else if (child.type === 'url' && child.url && /^https?:|^ftp:|^file:/i.test(child.url)) {
@@ -145,24 +146,24 @@ function importBookmarks(src: ImportSource, result: ImportResult): void {
   try {
     json = JSON.parse(readFileSync(file, 'utf-8')) as { roots?: Record<string, ChromeNode> }
   } catch (err) {
-    result.errors.push(`북마크 파일을 읽지 못했습니다: ${(err as Error).message}`)
+    result.errors.push(tMain('main.import.bookmarksReadFailed', `북마크 파일을 읽지 못했습니다: ${(err as Error).message}`, { detail: (err as Error).message }))
     return
   }
   const roots = json.roots
   if (!roots) return
   const counts = { folders: 0, bookmarks: 0 }
-  const rootFolder = createFolder({ name: `${src.browser}에서 가져온 북마크`, parentId: null })
+  const rootFolder = createFolder({ name: tMain('main.import.rootFolderName', `${src.browser}에서 가져온 북마크`, { browser: src.browser }), parentId: null })
   counts.folders += 1
   // 북마크 바 — 가져오기 루트 폴더 바로 아래에 평면 배치
   if (roots.bookmark_bar) importBookmarkChildren(roots.bookmark_bar, rootFolder.id, counts)
   // 기타 북마크 / 모바일 북마크 — 하위 폴더로
   if (roots.other?.children?.length) {
-    const f = createFolder({ name: '기타 북마크', parentId: rootFolder.id })
+    const f = createFolder({ name: tMain('main.import.otherBookmarks', '기타 북마크'), parentId: rootFolder.id })
     counts.folders += 1
     importBookmarkChildren(roots.other, f.id, counts)
   }
   if (roots.synced?.children?.length) {
-    const f = createFolder({ name: '모바일 북마크', parentId: rootFolder.id })
+    const f = createFolder({ name: tMain('main.import.mobileBookmarks', '모바일 북마크'), parentId: rootFolder.id })
     counts.folders += 1
     importBookmarkChildren(roots.synced, f.id, counts)
   }
@@ -178,7 +179,7 @@ async function importHistory(src: ImportSource, result: ImportResult): Promise<v
   try {
     await copyFile(srcFile, tmp)
   } catch (err) {
-    result.errors.push(`방문 기록을 복사하지 못했습니다. 해당 브라우저를 완전히 종료하고 다시 시도하세요. (${(err as Error).message})`)
+    result.errors.push(tMain('main.import.historyCopyFailed', `방문 기록을 복사하지 못했습니다. 해당 브라우저를 완전히 종료하고 다시 시도하세요. (${(err as Error).message})`, { detail: (err as Error).message }))
     return
   }
   try {
@@ -205,7 +206,7 @@ async function importHistory(src: ImportSource, result: ImportResult): Promise<v
     }
     result.history += importVisits(entries)
   } catch (err) {
-    result.errors.push(`방문 기록을 읽지 못했습니다: ${(err as Error).message}`)
+    result.errors.push(tMain('main.import.historyReadFailed', `방문 기록을 읽지 못했습니다: ${(err as Error).message}`, { detail: (err as Error).message }))
   } finally {
     await unlink(tmp).catch(() => { /* 임시 파일 정리 실패는 무시 */ })
   }
@@ -217,12 +218,12 @@ export async function runImport(sourceId: string, opts: ImportOptions): Promise<
   const sources = await detectAll()
   const src = sources.find((s) => s.id === sourceId)
   if (!src) {
-    result.errors.push('가져올 프로필을 찾을 수 없습니다.')
+    result.errors.push(tMain('main.import.profileNotFound', '가져올 프로필을 찾을 수 없습니다.'))
     return result
   }
   if (opts.bookmarks && src.hasBookmarks) {
     try { importBookmarks(src, result) } catch (err) {
-      result.errors.push(`북마크 가져오기 실패: ${(err as Error).message}`)
+      result.errors.push(tMain('main.import.bookmarksImportFailed', `북마크 가져오기 실패: ${(err as Error).message}`, { detail: (err as Error).message }))
     }
   }
   if (opts.history && src.hasHistory) {

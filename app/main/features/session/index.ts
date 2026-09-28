@@ -12,6 +12,7 @@ import { createBrowserWindow, getAllWindows, windowEvents } from '../../windows/
 import { getActiveWorkspaceId, getWorkspace } from '../workspace'
 import { forEachInstalledSession } from '../../session-bootstrap'
 import { getSetting } from '../../storage/settings'
+import { tMain } from '../../i18n'
 
 const SCHEMA_VERSION = 1
 const SAVE_DEBOUNCE_MS = 5_000
@@ -364,12 +365,12 @@ export async function maybeRestoreSession(): Promise<boolean> {
     const tabCount = current.windows.reduce((n, w) => n + w.tabs.length, 0)
     const result = await dialog.showMessageBox({
       type: 'question',
-      buttons: ['세션 복원', '새 탭으로 시작'],
+      buttons: [tMain('main.session.restorePrompt.restore', '세션 복원'), tMain('main.session.restorePrompt.newTab', '새 탭으로 시작')],
       defaultId: 0,
       cancelId: 1,
-      title: '지난 세션 복원',
-      message: '브라우저가 비정상 종료된 것 같습니다.',
-      detail: `직전 세션의 탭 ${tabCount}개를 복원하시겠습니까?`,
+      title: tMain('main.session.restorePrompt.title', '지난 세션 복원'),
+      message: tMain('main.session.restorePrompt.message', '브라우저가 비정상 종료된 것 같습니다.'),
+      detail: tMain('main.session.restorePrompt.detail', `직전 세션의 탭 ${tabCount}개를 복원하시겠습니까?`, { count: tabCount }),
     })
     if (result.response === 0) {
       const ok = await restoreSnapshot(current)

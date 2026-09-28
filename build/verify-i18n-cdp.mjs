@@ -136,6 +136,23 @@ async function main() {
       const selValue = await evaluate(settingsSession, `document.querySelector('select[data-select="ui.language"]')?.value || null`)
       check('I4', 'browser://settings(en) — 언어 select 현재값이 en(설정 시드가 실제 반영)', selValue === 'en', `select.value="${selValue}"`)
 
+      // I10: 메인 프로세스 토스트(tMain 경유) 가 en 으로 뜨는가 — 워크스페이스 1개뿐인 기본 상태에서
+      // action.tab.move.next.workspace 를 돌리면 main.toast.workspaceOnlyOne 이 뜬다(register-defaults.ts
+      // 의 moveActiveTabTo). 탭이 없으면 그 이전에 return 하므로 탭이 있는 상태(외피 기본 탭)에서 실행.
+      await evaluate(shell, `window.browserAPI.actions.run('action.tab.move.next.workspace', { windowId: ${JSON.stringify(windowId)} })`)
+      await sleep(800)
+      const toastText = await evaluate(shell, `document.querySelector('.toast')?.textContent || ''`)
+      check('I10', '메인 프로세스 토스트(en) — main.toast.workspaceOnlyOne 이 영어',
+        toastText === 'Only one workspace exists', `toast="${toastText}"`)
+
+      // I11: 네이티브 메뉴 라벨(main.menu.*) 도 같은 사전 경로로 en 값을 돌려주는가.
+      // Electron 네이티브 Menu 는 CDP/DOM 으로 직접 읽을 수 없으므로(OS 위젯), 메뉴 라벨이 실제로
+      // 소비하는 동일한 사전 조회 경로(pages/shared/i18n.js 의 window.t(), main 의 tMain() 과 같은
+      // 평탄화 사전을 IPC 로 받아 온다)로 값을 대조한다 — build-menu.ts 의 M('top.file', '파일') 이
+      // 그 시점에 정확히 같은 키를 조회하므로, 여기서 en 값이 "File" 로 나오면 메뉴도 "File" 로 뜬다.
+      const menuLabel = await evaluate(settingsSession, `window.t('main.menu.top.file', '__MISSING__')`)
+      check('I11', '메뉴 라벨(en) — main.menu.top.file 이 "File"', menuLabel === 'File', `label="${menuLabel}"`)
+
       settingsSession.close()
     } catch (err) {
       check('FATAL-EN', 'en 시드 실행', false, err.message)

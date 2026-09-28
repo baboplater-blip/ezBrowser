@@ -1,4 +1,5 @@
 import { app, type WebContents } from 'electron'
+import { tMain } from '../../i18n'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -202,11 +203,11 @@ async function runAction(action: MacroAction, ctx: MacroContext): Promise<void> 
       // 묶음 G: 실제 캡처를 연결한다 — features/screenshot 이 뷰포트 캡처+저장(클립보드도)까지 담당.
       // MacroContext 에 tabId 를 따로 안 두고, webContents 로 역조회해 자급자족으로 만든다
       // (호출부 전부를 건드리지 않기 위해).
-      if (!ctx.webContents) { ctx.toast('스크린샷 실패 — 대상 탭이 없습니다'); return }
+      if (!ctx.webContents) { ctx.toast(tMain('main.automation.screenshotNoTab', '스크린샷 실패 — 대상 탭이 없습니다')); return }
       const found = findTabIdByWebContentsId(ctx.webContents.id)
-      if (!found) { ctx.toast('스크린샷 실패 — 탭을 찾을 수 없습니다'); return }
+      if (!found) { ctx.toast(tMain('main.automation.screenshotTabGone', '스크린샷 실패 — 탭을 찾을 수 없습니다')); return }
       const savedPath = await captureViewport(found.tabId)
-      ctx.toast(savedPath ? `스크린샷 저장됨 📸 (${savedPath})` : '스크린샷 실패')
+      ctx.toast(savedPath ? tMain('main.automation.screenshotSaved', `스크린샷 저장됨 📸 (${savedPath})`, { path: savedPath }) : tMain('main.automation.screenshotFailed', '스크린샷 실패'))
       return
     }
   }

@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import type {
   AuthInfo, AuthenticationResponseDetails, Certificate, Event as ElectronEvent, NativeImage, WebContents,
 } from 'electron'
+import { tMain } from '../../i18n'
 
 // ===== 오류 페이지(browser://error) 연결 =====
 // tab-service 는 이 모듈에만 의존하고, 이 모듈은 tab/window 모델을 모른다(순환 의존 방지).
@@ -10,6 +11,8 @@ import type {
 
 export type ErrorPageKind = 'load-fail' | 'crash' | 'cert'
 
+// 값은 tMain 의 fallback(= ko 원문) — 실제 표시는 friendlyDesc()/RENDER_GONE_LABELS 조회 시점에
+// currentMainLocale() 기준으로 번역된다.
 const FAIL_LOAD_KO: Record<string, string> = {
   ERR_NAME_NOT_RESOLVED: '주소를 찾을 수 없습니다',
   ERR_CONNECTION_REFUSED: '연결이 거부되었습니다',
@@ -35,7 +38,15 @@ const RENDER_GONE_LABELS: Record<string, string> = {
 }
 
 function friendlyDesc(desc: string): string {
-  return FAIL_LOAD_KO[desc] ?? desc
+  const fallback = FAIL_LOAD_KO[desc]
+  if (!fallback) return desc
+  return tMain(`main.pageError.net.${desc}`, fallback)
+}
+
+function renderGoneLabel(reason: string): string {
+  const fallback = RENDER_GONE_LABELS[reason]
+  if (!fallback) return reason
+  return tMain(`main.pageError.crash.${reason}`, fallback)
 }
 
 function buildErrorUrl(opts: {
@@ -83,7 +94,7 @@ export function trackPageErrors(wc: WebContents, hooks: PageErrorHooks = {}): vo
     if (validatedURL.startsWith('browser://error')) return // 무한 루프 방지
     if (wc.isDestroyed()) return
     void wc.loadURL(buildErrorUrl({
-      kind: 'load-fail', code: errorCode, desc: friendlyDesc(errorDescription || '알 수 없는 오류'), url: validatedURL,
+      kind: 'load-fail', code: errorCode, desc: friendlyDesc(errorDescription || tMain('main.pageError.unknown', '알 수 없는 오류')), url: validatedURL,
     }))
   })
 
@@ -92,12 +103,12 @@ export function trackPageErrors(wc: WebContents, hooks: PageErrorHooks = {}): vo
     if (wc.isDestroyed()) return
     let url = ''
     try { url = wc.getURL() } catch { /* ignore */ }
-    const label = RENDER_GONE_LABELS[details.reason] ?? details.reason
+    const label = renderGoneLabel(details.reason)
     // 렌더러가 막 죽은 직후엔 즉시 loadURL 이 불안정할 수 있어 한 틱 늦춘다.
     setTimeout(() => {
       if (wc.isDestroyed()) return
       void wc.loadURL(buildErrorUrl({
-        kind: 'crash', code: details.exitCode, desc: `탭이 멈췄습니다 (${label})`, url: url || 'about:blank',
+        kind: 'crash', code: details.exitCode, desc: tMain('main.pageError.crashDesc', `탭이 멈췄습니다 (${label})`, { label }), url: url || 'about:blank',
       }))
     }, 50)
   })
@@ -143,7 +154,7 @@ export function initGlobalPageErrorHandlers(): void {
     event.preventDefault()
     callback(false)
     if (!isMainFrame || wc.isDestroyed()) return
-    void wc.loadURL(buildErrorUrl({ kind: 'cert', code: error, desc: '이 사이트의 보안 인증서를 신뢰할 수 없습니다', url, host }))
+    void wc.loadURL(buildErrorUrl({ kind: 'cert', code: error, desc: tMain('main.pageError.certUntrusted', '이 사이트의 보안 인증서를 신뢰할 수 없습니다'), url, host }))
   })
 
   app.on('login', (event: ElectronEvent, wc: WebContents, details: AuthenticationResponseDetails, authInfo: AuthInfo, callback: (username?: string, password?: string) => void) => {
@@ -183,7 +194,7 @@ function openLoginPrompt(
     modal: !!ownerWin,
     show: false,
     autoHideMenuBar: true,
-    title: '로그인 필요',
+    title: tMain('main.pageError.auth.title', '로그인 필요'),
     webPreferences: {
       sandbox: true,
       contextIsolation: true,
@@ -223,14 +234,14 @@ function openLoginPrompt(
       button.primary{background:#3478F6;color:#fff;border-color:#3478F6}
     </style></head>
     <body>
-      <h1>${host} 에서 인증을 요구합니다</h1>
+      <h1>${tMain('main.pageError.auth.heading', '{host} 에서 인증을 요구합니다', { host })}</h1>
       <p>${realm ? realm + ' · ' : ''}${urlLabel}</p>
       <form id="f">
-        <label>아이디</label><input id="u" autofocus>
-        <label>비밀번호</label><input id="p" type="password">
+        <label>${tMain('main.pageError.auth.username', '아이디')}</label><input id="u" autofocus>
+        <label>${tMain('main.pageError.auth.password', '비밀번호')}</label><input id="p" type="password">
         <div class="row">
-          <button type="button" id="cancel">취소</button>
-          <button type="submit" class="primary">로그인</button>
+          <button type="button" id="cancel">${tMain('main.pageError.auth.cancel', '취소')}</button>
+          <button type="submit" class="primary">${tMain('main.pageError.auth.submit', '로그인')}</button>
         </div>
       </form>
       <script>

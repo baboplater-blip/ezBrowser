@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { PasswordEntry, PasswordSummary } from '../../../shared/types'
 import { decryptWithPassphrase, encryptWithPassphrase, type EncryptedPayload } from './backup-crypto'
+import { tMain } from '../../i18n'
 
 export type { EncryptedPayload } from './backup-crypto'
 
@@ -201,7 +202,7 @@ export interface PasswordWriteResult {
   message?: string
 }
 
-const WRITE_MESSAGE: Record<PasswordWriteReason, string> = {
+const WRITE_MESSAGE_FALLBACK: Record<PasswordWriteReason, string> = {
   unavailable: '이 컴퓨터에서 OS 암호화(safeStorage)를 쓸 수 없어 비밀번호를 저장하지 않았습니다. 평문으로는 저장하지 않습니다.',
   'invalid-origin': '사이트 주소가 올바르지 않습니다. https 주소여야 합니다 (예: https://example.com).',
   invalid: '사용자명과 비밀번호를 모두 입력해 주세요.',
@@ -210,7 +211,7 @@ const WRITE_MESSAGE: Record<PasswordWriteReason, string> = {
 }
 
 function fail(reason: PasswordWriteReason): PasswordWriteResult {
-  return { ok: false, reason, message: WRITE_MESSAGE[reason] }
+  return { ok: false, reason, message: tMain(`main.password.writeError.${reason}`, WRITE_MESSAGE_FALLBACK[reason]) }
 }
 
 function findByOriginUser(origin: string, username: string): PasswordEntry | undefined {

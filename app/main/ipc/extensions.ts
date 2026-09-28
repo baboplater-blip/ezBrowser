@@ -1,4 +1,5 @@
 import { ipcMain, dialog, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { tMain } from '../i18n'
 import { IPC } from '../../shared/ipc-channels'
 import {
   extensionEvents, importLocalUnpackedDir, installFromCrx, installFromUrl,
@@ -39,7 +40,7 @@ export function registerExtensionsIpc(): void {
     if (!filePath) {
       const win = BrowserWindow.fromWebContents(e.sender)
       const r = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
-        title: '확장(.crx) 선택',
+        title: tMain('main.extensions.pickCrxTitle', '확장(.crx) 선택'),
         filters: [{ name: 'Chrome Extension', extensions: ['crx', 'zip'] }],
         properties: ['openFile'],
       })
@@ -100,7 +101,7 @@ export function registerExtensionsIpc(): void {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     const win = BrowserWindow.fromWebContents(e.sender)
     const r = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
-      title: 'unpacked 확장 폴더 선택',
+      title: tMain('main.extensions.pickUnpackedTitle', 'unpacked 확장 폴더 선택'),
       properties: ['openDirectory'],
     })
     if (r.canceled || r.filePaths.length === 0) return { ok: false, error: 'canceled' }

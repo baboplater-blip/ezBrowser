@@ -15,7 +15,7 @@ import { runAgentTask, confirmAgentStep, replyAgentAsk, cancelAgentTask, resetAg
 import { startRepeat, stopRepeat, removeRepeat, listRepeats, repeatEvents, resumeRepeat, type RepeatSummary } from '../features/ai/agent-schedule'
 import { getMemoryText, setMemoryText, clearMemory, memoryEvents } from '../features/ai/memory'
 import { listTriggers, addTrigger, updateTrigger, removeTrigger, setTriggerEnabled, triggerEvents, type AgentTrigger } from '../features/ai/agent-triggers'
-import { getProfile, setProfile, storageAvailable, PROFILE_FIELDS, profileEvents } from '../features/ai/profile'
+import { getProfile, setProfile, storageAvailable, translatedProfileFields, profileEvents } from '../features/ai/profile'
 import { generateBlogDraft, generateSeriesPlan, refineBlogBody, type BlogDraftParams, type SeriesPlanParams, type RefineParams } from '../features/ai/blog-writer'
 import { buildBlogTask, NAVER_WRITE_URL, type BlogTaskParams } from '../features/ai/blog-publish'
 import { buildSnsTask, type SnsTaskParams } from '../features/ai/sns-publish'
@@ -61,6 +61,7 @@ import {
   type PersistentTask, type TaskSummary, type TaskBudget, type TaskTargetList,
 } from '../features/ai/task-runtime'
 import { getAllWindows, getWindow, broadcastToInternalPages } from '../windows/window-service'
+import { tMain } from '../i18n'
 
 interface SendArgs {
   reqId: string
@@ -90,7 +91,7 @@ export function registerAiIpc(): void {
   ipcMain.handle(IPC.ai.diagnose, async (e) => {
     if (!isTrustedSender(e)) return null
     try { return await diagnoseAi() } catch (err) {
-      return { ok: false, status: 'error', message: '점검 중 오류', detail: err instanceof Error ? err.message : String(err) }
+      return { ok: false, status: 'error', message: tMain('main.ai.ipc.diagCheckError', '점검 중 오류'), detail: err instanceof Error ? err.message : String(err) }
     }
   })
 
@@ -106,7 +107,7 @@ export function registerAiIpc(): void {
   ipcMain.handle(IPC.ai.connectProvider, async (e, args: { provider: AiProviderId; model?: string }) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     const allowed: AiProviderId[] = ['anthropic', 'openai', 'google', 'ollama', 'claude-code', 'codex', 'gemini-cli']
-    if (!args || !allowed.includes(args.provider)) return { ok: false, error: '알 수 없는 제공자' }
+    if (!args || !allowed.includes(args.provider)) return { ok: false, error: tMain('main.ai.ipc.unknownProvider', '알 수 없는 제공자') }
     try { return await connectProvider(args.provider, args.model) } catch (err) {
       return { ok: false, provider: args.provider, error: err instanceof Error ? err.message : String(err) }
     }
@@ -131,7 +132,7 @@ export function registerAiIpc(): void {
   // 에이전트 자료 폴더 — 폴더 선택(네이티브) + 현재 폴더/파일 정보
   ipcMain.handle(IPC.ai.pickAgentDir, async (e) => {
     if (!isTrustedSender(e)) return { ok: false }
-    const res = await dialog.showOpenDialog({ title: '에이전트 자료 폴더 선택', properties: ['openDirectory'] })
+    const res = await dialog.showOpenDialog({ title: tMain('main.ai.ipc.pickAgentFilesFolder', '에이전트 자료 폴더 선택'), properties: ['openDirectory'] })
     if (res.canceled || !res.filePaths[0]) return { ok: false, dir: agentFilesDir(), count: listAgentFiles().length }
     setSetting('ai', { ...getSetting('ai'), agentFilesDir: res.filePaths[0] })
     return { ok: true, dir: res.filePaths[0], count: listAgentFiles().length }
@@ -168,7 +169,7 @@ export function registerAiIpc(): void {
           void maybeAutoRemember([...args.messages, { role: 'assistant', content: text }]).then((added) => {
             if (added.length && !sender.isDestroyed()) {
               const more = added.length > 1 ? ` 외 ${added.length - 1}건` : ''
-              sender.send('toast:show', { message: `🧠 기억에 추가됨: ${(added[0] ?? '').slice(0, 24)}${more}`, ts: Date.now() })
+              sender.send('toast:show', { message: tMain('main.ai.ipc.memoryAdded', `🧠 기억에 추가됨: ${(added[0] ?? '').slice(0, 24)}${more}`, { text: (added[0] ?? '').slice(0, 24), more }), ts: Date.now() })
             }
           })
         },
@@ -207,7 +208,7 @@ export function registerAiIpc(): void {
       recordAgentEvent(args.reqId, task, evt) // 실행 이력 영속화(메인 측 — UI 닫혀도 기록)
       // 보고서 자동 저장 알림(대화 내보내기 토스트와 동일 패턴).
       if ((evt as { type?: string }).type === 'report' && typeof (evt as { path?: string }).path === 'string' && !sender.isDestroyed()) {
-        sender.send('toast:show', { message: `보고서 저장됨 ⤓ ${path.basename(String((evt as { path?: string }).path))}`, ts: Date.now() })
+        sender.send('toast:show', { message: tMain('main.ai.ipc.reportSaved', `보고서 저장됨 ⤓ ${path.basename(String((evt as { path?: string }).path))}`, { filename: path.basename(String((evt as { path?: string }).path)) }), ts: Date.now() })
       }
       if (!sender.isDestroyed()) sender.send(IPC.ai.agentEvent, { reqId: args.reqId, ...evt })
     }
@@ -318,8 +319,8 @@ export function registerAiIpc(): void {
 
   // ===== 스마트 폼필 프로필 (내 정보) =====
   ipcMain.handle(IPC.ai.profileGet, (e) => {
-    if (!isTrustedSender(e)) return { fields: PROFILE_FIELDS, values: {}, storageAvailable: false }
-    return { fields: PROFILE_FIELDS, values: getProfile(), storageAvailable: storageAvailable() }
+    if (!isTrustedSender(e)) return { fields: translatedProfileFields(), values: {}, storageAvailable: false }
+    return { fields: translatedProfileFields(), values: getProfile(), storageAvailable: storageAvailable() }
   })
   ipcMain.handle(IPC.ai.profileSet, (e, values: Record<string, string>) => {
     if (!isTrustedSender(e)) return { ok: false }
@@ -332,19 +333,19 @@ export function registerAiIpc(): void {
   ipcMain.handle(IPC.ai.exportWebhook, async (e, args: { rows: unknown[]; url?: string }) => {
     if (!isTrustedSender(e)) return { ok: false, detail: '권한 없음' }
     const url = (args?.url || getSetting('ai').webhookUrl || '').trim()
-    if (!/^https?:\/\//i.test(url)) return { ok: false, detail: '웹훅 URL 이 설정되지 않았습니다(설정 > AI).' }
+    if (!/^https?:\/\//i.test(url)) return { ok: false, detail: tMain('main.ai.ipc.webhookUrlMissing', '웹훅 URL 이 설정되지 않았습니다(설정 > AI).') }
     const rows = Array.isArray(args?.rows) ? args.rows.slice(0, 5000) : []
     const body = JSON.stringify({ source: 'ezBrowser', count: rows.length, rows, at: Date.now() })
     return await new Promise<{ ok: boolean; detail: string }>((resolve) => {
       try {
         const req = net.request({ url, method: 'POST' })
         req.setHeader('content-type', 'application/json')
-        const timer = setTimeout(() => { try { req.abort() } catch { /* ignore */ }; resolve({ ok: false, detail: '시간 초과' }) }, 20000)
+        const timer = setTimeout(() => { try { req.abort() } catch { /* ignore */ }; resolve({ ok: false, detail: tMain('main.ai.ipc.webhookTimeout', '시간 초과') }) }, 20000)
         req.on('response', (resp) => {
           const status = resp.statusCode ?? 0
           resp.on('data', () => { /* drain */ })
           resp.on('end', () => { clearTimeout(timer); resolve(status >= 200 && status < 400 ? { ok: true, detail: `전송됨 (${status})` } : { ok: false, detail: `실패 (${status})` }) })
-          resp.on('error', () => { clearTimeout(timer); resolve({ ok: false, detail: '응답 오류' }) })
+          resp.on('error', () => { clearTimeout(timer); resolve({ ok: false, detail: tMain('main.ai.ipc.webhookResponseError', '응답 오류') }) })
         })
         req.on('error', (err) => { clearTimeout(timer); resolve({ ok: false, detail: err.message }) })
         req.write(body); req.end()
@@ -355,7 +356,7 @@ export function registerAiIpc(): void {
   // ===== 블로그 글쓰기 스튜디오 — 주제·옵션 → 구조화 초안 생성(발행은 사용자가 트리거) =====
   ipcMain.handle(IPC.ai.blogGenerate, async (e, params: BlogDraftParams) => {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
-    if (!params?.topic?.trim()) return { ok: false, error: '주제를 입력하세요.' }
+    if (!params?.topic?.trim()) return { ok: false, error: tMain('main.ai.ipc.topicRequired', '주제를 입력하세요.') }
     try {
       const draft = await generateBlogDraft(params)
       return { ok: true, draft }
@@ -404,7 +405,7 @@ export function registerAiIpc(): void {
     const base = safeFileName(String(p?.title ?? '보고서') || '보고서')
     const res = await writeDownloadMd(base, md)
     if (res.ok && res.path && !e.sender.isDestroyed()) {
-      e.sender.send('toast:show', { message: `보고서 저장됨 ⤓ ${path.basename(res.path)}`, ts: Date.now() })
+      e.sender.send('toast:show', { message: tMain('main.ai.ipc.reportSaved', `보고서 저장됨 ⤓ ${path.basename(res.path)}`, { filename: path.basename(res.path) }), ts: Date.now() })
     }
     return res
   })
@@ -412,7 +413,7 @@ export function registerAiIpc(): void {
   // 블로그 글 다듬기(부분 개선)
   ipcMain.handle(IPC.ai.blogRefine, async (e, params: RefineParams) => {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
-    if (!params?.body?.trim() || !params?.instruction?.trim()) return { ok: false, error: '본문과 지시가 필요합니다.' }
+    if (!params?.body?.trim() || !params?.instruction?.trim()) return { ok: false, error: tMain('main.ai.ipc.bodyInstructionRequired', '본문과 지시가 필요합니다.') }
     try { return { ok: true, body: await refineBlogBody(params) } }
     catch (err) { return { ok: false, error: err instanceof Error ? err.message : String(err) } }
   })
@@ -420,7 +421,7 @@ export function registerAiIpc(): void {
   // 블로그 시리즈 연재 기획
   ipcMain.handle(IPC.ai.blogSeriesPlan, async (e, params: SeriesPlanParams) => {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
-    if (!params?.topic?.trim()) return { ok: false, error: '주제를 입력하세요.' }
+    if (!params?.topic?.trim()) return { ok: false, error: tMain('main.ai.ipc.topicRequired', '주제를 입력하세요.') }
     try { return { ok: true, plan: await generateSeriesPlan(params) } }
     catch (err) { return { ok: false, error: err instanceof Error ? err.message : String(err) } }
   })
@@ -526,7 +527,7 @@ export function registerAiIpc(): void {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
     const raw = String(args?.choice ?? '')
     if (raw !== 'verify' && raw !== 'published' && raw !== 'not-published') {
-      return { ok: false, error: '알 수 없는 선택입니다.' }
+      return { ok: false, error: tMain('main.ai.ipc.unknownChoice', '알 수 없는 선택입니다.') }
     }
     return resolvePublishUncertainty(String(args?.id ?? ''), raw)
   })
@@ -690,7 +691,7 @@ export function registerAiIpc(): void {
     if (!conv) return { ok: false }
     const res = await writeDownloadMd(safeFileName(conv.title || 'conversation'), conversationToMarkdown(conv))
     if (res.ok && res.path && !e.sender.isDestroyed()) {
-      e.sender.send('toast:show', { message: `대화 내보냄 ⤓ ${path.basename(res.path)}`, ts: Date.now() })
+      e.sender.send('toast:show', { message: tMain('main.ai.ipc.conversationExported', `대화 내보냄 ⤓ ${path.basename(res.path)}`, { filename: path.basename(res.path) }), ts: Date.now() })
     }
     return res
   })
@@ -703,7 +704,7 @@ export function registerAiIpc(): void {
     if (convs.length === 0) return { ok: false, count: 0 }
     const res = await writeDownloadMd(safeFileName(`대화모음 ${convs.length}개`), conversationsToMarkdown(convs))
     if (res.ok && res.path && !e.sender.isDestroyed()) {
-      e.sender.send('toast:show', { message: `대화 ${convs.length}개 내보냄 ⤓ ${path.basename(res.path)}`, ts: Date.now() })
+      e.sender.send('toast:show', { message: tMain('main.ai.ipc.conversationsExported', `대화 ${convs.length}개 내보냄 ⤓ ${path.basename(res.path)}`, { count: convs.length, filename: path.basename(res.path) }), ts: Date.now() })
     }
     return { ...res, count: convs.length }
   })
@@ -811,11 +812,11 @@ function ownsTask(e: IpcMainInvokeEvent, task: PersistentTask): boolean {
 }
 
 function taskNotFound(): { ok: false; error: string } {
-  return { ok: false, error: '작업을 찾을 수 없습니다(이미 삭제되었을 수 있습니다).' }
+  return { ok: false, error: tMain('main.ai.ipc.taskNotFound', '작업을 찾을 수 없습니다(이미 삭제되었을 수 있습니다).') }
 }
 
 function taskOwnershipDenied(): { ok: false; error: string } {
-  return { ok: false, error: '이 작업을 시작한 창에서만 조작할 수 있습니다.' }
+  return { ok: false, error: tMain('main.ai.ipc.taskWrongWindow', '이 작업을 시작한 창에서만 조작할 수 있습니다.') }
 }
 
 const MAX_TASK_INSTRUCTION_LEN = 4000

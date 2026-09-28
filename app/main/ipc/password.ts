@@ -11,6 +11,7 @@ import { buildCsv, parseCsv } from '../features/password/csv'
 import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
 import { findTabIdByWebContentsId, getTabPartition } from '../tabs/tab-service'
 import { isTrustedSender } from './trust'
+import { tMain } from '../i18n'
 
 // CSV 가져오기 파일 크기 상한 — 사용자가 직접 네이티브 다이얼로그로 고른 로컬 파일이라 위험은
 // 낮지만, 엉뚱한 대용량 파일을 고른 실수까지 방어한다.
@@ -93,12 +94,12 @@ export function registerPasswordIpc(): void {
   ipcMain.handle(IPC.password.add, (e, args: unknown) => {
     if (!isTrustedSender(e)) throw new Error('untrusted')
     const o = asObject(args)
-    if (!o) return { ok: false, reason: 'invalid', message: '입력 형식이 올바르지 않습니다.' }
+    if (!o) return { ok: false, reason: 'invalid', message: tMain('main.password.ipcInvalidShape', '입력 형식이 올바르지 않습니다.') }
     const origin = optString(o.origin)
     const username = optString(o.username)
     const password = optString(o.password)
     if (origin === undefined || username === undefined || password === undefined) {
-      return { ok: false, reason: 'invalid', message: '사이트 주소·사용자명·비밀번호를 모두 입력해 주세요.' }
+      return { ok: false, reason: 'invalid', message: tMain('main.password.ipcMissingFields', '사이트 주소·사용자명·비밀번호를 모두 입력해 주세요.') }
     }
     return addPassword({ origin, username, password, autoLoginAllowed: optBool(o.autoLoginAllowed) === true })
   })
@@ -107,7 +108,7 @@ export function registerPasswordIpc(): void {
     if (!isTrustedSender(e)) throw new Error('untrusted')
     const o = asObject(args)
     const id = optString(o?.id)
-    if (!o || !id) return { ok: false, reason: 'invalid', message: '입력 형식이 올바르지 않습니다.' }
+    if (!o || !id) return { ok: false, reason: 'invalid', message: tMain('main.password.ipcInvalidShape', '입력 형식이 올바르지 않습니다.') }
     return updatePassword({
       id,
       username: optString(o.username),
@@ -162,7 +163,7 @@ export function registerPasswordIpc(): void {
     const win = BrowserWindow.fromWebContents(e.sender)
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
     const r = await dialog.showSaveDialog(win ?? new BrowserWindow({ show: false }), {
-      title: '비밀번호를 CSV로 내보내기',
+      title: tMain('main.password.csvExportTitle', '비밀번호를 CSV로 내보내기'),
       defaultPath: `ezbrowser-passwords-${ts}.csv`,
       filters: [{ name: 'CSV', extensions: ['csv'] }],
     })
@@ -181,7 +182,7 @@ export function registerPasswordIpc(): void {
     if (!isTrustedSender(e)) throw new Error('untrusted')
     const win = BrowserWindow.fromWebContents(e.sender)
     const r = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
-      title: '비밀번호 CSV 가져오기',
+      title: tMain('main.password.csvImportTitle', '비밀번호 CSV 가져오기'),
       filters: [{ name: 'CSV', extensions: ['csv'] }],
       properties: ['openFile'],
     })
@@ -194,7 +195,7 @@ export function registerPasswordIpc(): void {
       if (buf.byteLength > MAX_CSV_BYTES) {
         return {
           ok: false, canceled: false, imported: 0, updated: 0, skipped: 0, parsed: 0,
-          error: 'CSV 파일이 너무 큽니다 (5MB 초과).',
+          error: tMain('main.password.csvTooLarge', 'CSV 파일이 너무 큽니다 (5MB 초과).'),
         }
       }
       const rows = parseCsv(buf.toString('utf-8'))

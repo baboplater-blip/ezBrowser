@@ -208,12 +208,622 @@
   },
   "main": {
     "toast": {
-      "bookmarkAdded": "Bookmark added ★"
+      "bookmarkAdded": "Bookmark added ★",
+      "webOnly": "Only available on web pages",
+      "profileEmpty": "Your info is empty — enter it in Settings > AI",
+      "autofillDone": "Autofilled {count} field(s) ✍️",
+      "autofillNone": "No form fields found to fill",
+      "pageSaveOk": "Page saved 💾",
+      "pageSaveFail": "Failed to save page",
+      "readLaterRemoved": "Removed from reading list",
+      "readLaterAdded": "Added to reading list 📚",
+      "pdfSaveOk": "PDF saved 📄",
+      "pdfSaveFail": "Failed to save PDF",
+      "readerOn": "Reader mode 📖",
+      "readerOff": "Original view",
+      "translating": "Translating… ⏳",
+      "translateRestored": "Original restored",
+      "translateDone": "Translation complete 🌐",
+      "translateFail": "Translation failed",
+      "updateAvailable": "New version {version} found",
+      "updateLatest": "You're up to date ✓",
+      "updateReady": "Update ready — applies on restart",
+      "updateDisabled": "Auto-update disabled",
+      "updateCheckFail": "Update check failed: {error}",
+      "noTabUrl": "Can't determine the current tab's URL",
+      "adblockNotApplicable": "Ad blocking cannot be applied to this page",
+      "adblockOffReload": "🛡️ {host} — Ad blocker off · reloading…",
+      "adblockOnReload": "🛡️ {host} — Ad blocker on · reloading…",
+      "workspaceSwitched": "Workspace: {name}",
+      "workspaceCreated": "New workspace \"{name}\" created",
+      "workspaceOnlyOne": "Only one workspace exists",
+      "tabMoveFail": "Failed to move tab",
+      "reloadSuffix": " · page reloaded",
+      "tabMoved": "Tab moved → {name}{suffix}",
+      "darkForceOn": "Forced dark mode on 🌙",
+      "darkForceOff": "Forced dark mode off ☀",
+      "darkSiteNotApplicable": "Per-site dark mode cannot be applied to this page",
+      "siteDarkOn": "Site dark mode on 🌙 ({origin})",
+      "siteDarkOff": "Site dark mode off ☀ ({origin})",
+      "siteDarkDefault": "Site dark mode follows default ({origin})",
+      "followSystemOn": "Follow OS dark mode on 🌓",
+      "followSystemOff": "Follow OS dark mode off",
+      "splitH": "Split left/right ⫾",
+      "splitV": "Split top/bottom ⫿",
+      "unsplit": "Unsplit",
+      "muteOthersDone": "Muted {count} other tab(s) 🔇",
+      "muteOthersNone": "No other tabs to mute",
+      "unmuteAllDone": "Unmuted {count} tab(s) 🔊",
+      "unmuteAllNone": "No muted tabs",
+      "siteDataNotApplicable": "This page's site data can't be cleared",
+      "siteDataCleared": "Site data cleared · reloading… 🗑"
     },
     "download": {
       "completeTitle": "Download complete",
       "completeToast": "✓ {filename} download complete",
-      "failedToast": "✗ {filename} download failed"
+      "failedToast": "✗ {filename} download failed",
+      "resuming": "Resuming {count} previous download(s) ⬇"
+    },
+    "menu": {
+      "tab": {
+        "new": "New Tab",
+        "duplicate": "Duplicate Tab",
+        "pin": "Pin / Unpin Tab",
+        "close": "Close Tab",
+        "recentClosed": "Recently Closed Tabs",
+        "restore": "Reopen Last Closed Tab",
+        "move": {
+          "next": {
+            "workspace": "Move Tab to Next Workspace"
+          },
+          "prev": {
+            "workspace": "Move Tab to Previous Workspace"
+          }
+        },
+        "reader": "Reader Mode",
+        "next": "Next Tab",
+        "prev": "Previous Tab",
+        "search": "Search Tabs"
+      },
+      "window": {
+        "new": "New Window",
+        "incognito": "New Incognito Window"
+      },
+      "workspace": {
+        "new": "New Workspace",
+        "next": "Next Workspace",
+        "prev": "Previous Workspace"
+      },
+      "page": {
+        "print": "Print",
+        "printPdf": "Save as PDF",
+        "reload": "Reload",
+        "stop": "Stop",
+        "zoom": {
+          "in": "Zoom In",
+          "out": "Zoom Out",
+          "reset": "Reset Zoom"
+        }
+      },
+      "app": {
+        "quit": "Quit"
+      },
+      "find": {
+        "toggle": "Find on Page"
+      },
+      "omnibox": {
+        "focus": "Address Bar"
+      },
+      "autofill": {
+        "page": "Autofill Form (My Info)"
+      },
+      "password": {
+        "open": "Password Manager"
+      },
+      "darkmode": {
+        "toggle": "Toggle Forced Dark Mode",
+        "toggleSite": "Toggle Dark Mode for This Site",
+        "followSystem": "Follow OS Setting"
+      },
+      "sidepanel": {
+        "left": {
+          "toggle": "Toggle Left Panel"
+        },
+        "right": {
+          "toggle": "Toggle Right Panel"
+        }
+      },
+      "bookmark": {
+        "bar": {
+          "toggle": "Show / Hide Bookmarks Bar"
+        },
+        "add": "Bookmark This Page",
+        "list": "Manage Bookmarks"
+      },
+      "devtools": {
+        "toggle": "Developer Tools"
+      },
+      "nav": {
+        "back": "Back",
+        "forward": "Forward"
+      },
+      "pane": {
+        "split": {
+          "h": "Split Left / Right",
+          "v": "Split Top / Bottom"
+        },
+        "unsplit": "Unsplit",
+        "focus": {
+          "next": "Focus Next Pane"
+        }
+      },
+      "tabbar": {
+        "cycle": "Cycle Tab Bar Position (Top/Left/Right)"
+      },
+      "readlater": {
+        "add": "Add to Reading List",
+        "open": "Open Reading List"
+      },
+      "history": {
+        "open": "History",
+        "clear": "Clear Browsing History"
+      },
+      "ai": {
+        "open": "Open AI Assistant",
+        "summarize": "Summarize This Page",
+        "write": "✍️  Blog Writing Studio",
+        "collectors": "📥  Daily Auto-Collect (Feed Collectors)"
+      },
+      "memory": {
+        "open": "🧠  Manage AI Memory"
+      },
+      "palette": {
+        "open": "Command Palette"
+      },
+      "translate": {
+        "page": "Translate Page"
+      },
+      "screenshot": {
+        "viewport": "Take Screenshot"
+      },
+      "qrcode": {
+        "show": "QR Code"
+      },
+      "downloads": {
+        "openPage": "Downloads"
+      },
+      "extensions": {
+        "open": "Extensions"
+      },
+      "adblock": {
+        "openPage": "Ad Blocker Stats",
+        "toggleSite": "Toggle Ad Blocker for This Site"
+      },
+      "sitedata": {
+        "clear": "Clear Data for This Site"
+      },
+      "userchrome": {
+        "edit": "Edit userChrome.css",
+        "reload": "Reapply userChrome"
+      },
+      "userscript": {
+        "toggle": "Userscripts"
+      },
+      "policy": {
+        "open": "Site Policy Engine"
+      },
+      "macros": {
+        "open": "Automation Macros"
+      },
+      "mods": {
+        "open": "Extended Mods"
+      },
+      "keymap": {
+        "open": "Edit Shortcuts"
+      },
+      "perf": {
+        "open": "Performance Gate"
+      },
+      "settings": {
+        "open": "Open Settings"
+      },
+      "update": {
+        "check": "Check for Updates"
+      },
+      "help": {
+        "report": "Send Feedback"
+      },
+      "top": {
+        "file": "File",
+        "edit": "Edit",
+        "view": "View",
+        "nav": "Navigate",
+        "bookmarks": "Bookmarks",
+        "tools": "Tools",
+        "customize": "Customize",
+        "settings": "⚙ Settings",
+        "help": "Help"
+      },
+      "group": {
+        "workspace": "Workspace",
+        "darkmode": "Dark Mode",
+        "sidepanel": "Side Panel",
+        "split": "Split View (Tiling)",
+        "adblock": "Ad Blocking"
+      },
+      "edit": {
+        "undo": "Undo",
+        "redo": "Redo",
+        "cut": "Cut",
+        "copy": "Copy",
+        "paste": "Paste",
+        "selectAll": "Select All"
+      },
+      "view": {
+        "fullscreen": "Fullscreen"
+      }
+    },
+    "extensions": {
+      "sessionDefault": "Default",
+      "sessionIncognito": "Incognito",
+      "sessionWorkspace": "Workspace: {name}",
+      "sessionWorkspaceUnnamed": "Workspace ({id})",
+      "partitionUnknown": "(unknown)",
+      "sessionUnknown": "Unknown session",
+      "reasonManifest": "manifest.json could not be read or is malformed.",
+      "reasonVersion": "The extension's version format is invalid.",
+      "reasonNotFound": "Extension files could not be found.",
+      "reasonPermission": "Could not read due to file permissions.",
+      "reasonLocale": "There is a problem with the translation (_locales) files.",
+      "reasonUnknown": "Failed to load the extension in this session.",
+      "errorUnknown": "Unknown error",
+      "errorLoadFailed": "Failed to load",
+      "errorManifestRead": "Could not read manifest.json: {detail}",
+      "errorInstallExpired": "The install request expired or is missing. Please try again.",
+      "errorUnzipFailed": "Failed to unzip: {detail}",
+      "errorManifestUnreadable": "manifest.json could not be read.",
+      "errorUnsupportedUrl": "Unsupported URL — must be a Web Store detail URL or a direct .crx link.",
+      "errorDownloadFailed": "Download failed ({status})",
+      "errorNetwork": "Network error: {detail}",
+      "errorNoOptionsPage": "No options page",
+      "errorManifestMissing": "manifest.json missing (is this an unpacked directory?)",
+      "errorCopyFailed": "Copy failed: {detail}",
+      "pickCrxTitle": "Select Extension (.crx)",
+      "pickUnpackedTitle": "Select Unpacked Extension Folder"
+    },
+    "pageError": {
+      "net": {
+        "ERR_NAME_NOT_RESOLVED": "The address couldn't be found",
+        "ERR_CONNECTION_REFUSED": "The connection was refused",
+        "ERR_CONNECTION_RESET": "The connection was reset",
+        "ERR_CONNECTION_CLOSED": "The connection was closed",
+        "ERR_CONNECTION_TIMED_OUT": "The connection timed out",
+        "ERR_INTERNET_DISCONNECTED": "No internet connection",
+        "ERR_ADDRESS_UNREACHABLE": "The address is unreachable",
+        "ERR_EMPTY_RESPONSE": "The server did not respond",
+        "ERR_SSL_PROTOCOL_ERROR": "SSL connection error",
+        "ERR_NETWORK_CHANGED": "The network changed",
+        "ERR_FILE_NOT_FOUND": "The file could not be found",
+        "ERR_TOO_MANY_REDIRECTS": "Too many redirects",
+        "ERR_BLOCKED_BY_CLIENT": "This browser blocked the request"
+      },
+      "crash": {
+        "crashed": "Crashed",
+        "oom": "Out of memory",
+        "launch-failed": "Launch failed",
+        "killed": "Killed",
+        "integrity-failure": "Integrity failure"
+      },
+      "unknown": "Unknown error",
+      "crashDesc": "The tab stopped working ({label})",
+      "certUntrusted": "This site's security certificate is not trusted",
+      "auth": {
+        "title": "Sign in required",
+        "heading": "{host} requires authentication",
+        "username": "Username",
+        "password": "Password",
+        "cancel": "Cancel",
+        "submit": "Sign in"
+      }
+    },
+    "contextMenu": {
+      "link": {
+        "openNewTab": "Open Link in New Tab",
+        "openNewWindow": "Open Link in New Window",
+        "openIncognito": "Open Link in Incognito Window",
+        "copyAddress": "Copy Link Address",
+        "copyText": "Copy Link Text"
+      },
+      "image": {
+        "openNewTab": "Open Image in New Tab",
+        "copy": "Copy Image",
+        "copyAddress": "Copy Image Address",
+        "download": "Download Image"
+      },
+      "media": {
+        "download": "Download Video",
+        "copyAddress": "Copy Media Address"
+      },
+      "selection": {
+        "copy": "Copy",
+        "searchWith": "Search {engine} for \"{query}\"",
+        "findInPage": "Find Selection on Page"
+      },
+      "spelling": {
+        "none": "No Spelling Suggestions",
+        "addToDictionary": "Add to Dictionary"
+      },
+      "edit": {
+        "undo": "Undo",
+        "redo": "Redo",
+        "cut": "Cut",
+        "copy": "Copy",
+        "paste": "Paste",
+        "selectAll": "Select All"
+      },
+      "page": {
+        "back": "Back",
+        "forward": "Forward",
+        "reload": "Reload",
+        "addBookmark": "Bookmark This Page ★"
+      },
+      "mods": "Mods",
+      "viewSource": "View Page Source",
+      "inspect": "Inspect"
+    },
+    "video": {
+      "extractingYtdlp": "Extracting video… (yt-dlp, see progress in Downloads Ctrl+J)",
+      "downloadStarted": "Download started ⬇ (see Downloads panel Ctrl+J)",
+      "extractingYtdlpShort": "Extracting video… (yt-dlp, see progress in Downloads)",
+      "startFailed": "Failed to start download — declined yt-dlp install or an error occurred",
+      "downloadingDash": "Downloading video… (DASH, see progress in Downloads Ctrl+J)",
+      "downloadingHls": "Downloading video… (HLS, see progress in Downloads Ctrl+J)",
+      "extractingYtdlpFallback": "Extracting video… (yt-dlp fallback, see progress in Downloads)",
+      "ytdlpConsent": {
+        "get": "Download",
+        "cancel": "Cancel",
+        "title": "yt-dlp is required",
+        "message": "yt-dlp will be downloaded to enable video downloads.",
+        "detail": "About 15 MB. Downloaded from the official GitHub yt-dlp/yt-dlp release (latest). It will be kept up to date automatically afterward."
+      },
+      "ytdlpDownloadFailed": "Failed to download yt-dlp",
+      "ytdlpStarting": "Starting yt-dlp…",
+      "preparingDownload": "Preparing video download…"
+    },
+    "torrent": {
+      "consent": {
+        "accept": "Agree & Download",
+        "cancel": "Cancel",
+        "title": "Torrent Download Notice",
+        "message": "Please respect copyright.",
+        "detail": "Only use this for content you have rights to, or freely-licensed content (Creative Commons, public domain, Linux ISOs, etc). You are responsible for what you download.\n\nContinuing will enable WebTorrent (distributed BitTorrent). Windows Firewall may prompt for permission on first use."
+      },
+      "notInstalled": {
+        "ok": "OK",
+        "title": "Torrent module not installed",
+        "message": "The webtorrent package is not installed.",
+        "detail": "Install it with \"npm install webtorrent\" and try again. (optional dependency)"
+      },
+      "loadingMetadata": "Loading metadata…"
+    },
+    "session": {
+      "restorePrompt": {
+        "restore": "Restore Session",
+        "newTab": "Start with New Tab",
+        "title": "Restore Previous Session",
+        "message": "The browser appears to have closed unexpectedly.",
+        "detail": "Restore {count} tab(s) from the previous session?"
+      }
+    },
+    "modApi": {
+      "nodeGrant": {
+        "deny": "Deny",
+        "allow": "Allow Node Access",
+        "title": "Node Permission Request",
+        "message": "Mod \"{name}\" is requesting Node.js system access.",
+        "detail": "This permission can access your entire computer — filesystem, processes, and more — and is more powerful and risky than an extension. Only allow it for mods you trust. (This choice is saved and can be changed on the Mods page)"
+      }
+    },
+    "password": {
+      "writeError": {
+        "unavailable": "This computer cannot use OS encryption (safeStorage), so the password was not saved. It is never stored in plain text.",
+        "invalid-origin": "The site address is invalid. It must be an https address (e.g. https://example.com).",
+        "invalid": "Please enter both a username and password.",
+        "duplicate": "The same username is already registered for this site. Please edit the existing entry.",
+        "not-found": "That account could not be found."
+      }
+    },
+    "screenshot": {
+      "saveTitle": "Save Screenshot"
+    },
+    "pageTools": {
+      "webpageFilter": "Webpage"
+    },
+    "downloads": {
+      "pickFolderTitle": "Choose Default Download Folder"
+    },
+    "reader": {
+      "badge": "Reader Mode",
+      "originalView": "Original view"
+    },
+    "omnibox": {
+      "searchWith": "Search {engine}: {query}"
+    },
+    "workspace": {
+      "defaultName": "Space {n}",
+      "unnamed": "Unnamed Space",
+      "defaultFirst": "Default"
+    },
+    "automation": {
+      "screenshotNoTab": "Screenshot failed — no target tab",
+      "screenshotTabGone": "Screenshot failed — tab not found",
+      "screenshotSaved": "Screenshot saved 📸 ({path})",
+      "screenshotFailed": "Screenshot failed"
+    },
+    "designTokens": {
+      "label": {
+        "color": {
+          "accent": {
+            "primary": "Accent",
+            "hover": "Accent Hover"
+          },
+          "bg": {
+            "base": "Background",
+            "elevated": "Card Background"
+          },
+          "text": {
+            "primary": "Body Text",
+            "secondary": "Secondary Text"
+          },
+          "border": {
+            "subtle": "Border"
+          }
+        },
+        "radius": {
+          "sm": "Small Radius",
+          "md": "Medium Radius",
+          "lg": "Large Radius",
+          "tab": "Tab Radius"
+        },
+        "density": {
+          "tabbar-h": "Tab Bar Height",
+          "toolbar-h": "Toolbar Height",
+          "font-size": "Base Font Size"
+        },
+        "motion": {
+          "normal": "Animation Speed"
+        }
+      }
+    },
+    "profile": {
+      "field": {
+        "fullName": "Full Name",
+        "firstName": "First Name",
+        "lastName": "Last Name",
+        "email": "Email",
+        "phone": "Phone Number",
+        "postalCode": "Postal Code",
+        "address": "Address",
+        "addressDetail": "Address Line 2",
+        "city": "City",
+        "country": "Country",
+        "birthday": "Date of Birth (YYYY-MM-DD)",
+        "organization": "Company / Organization",
+        "username": "Username",
+        "cardNumber": "Card Number",
+        "cardExp": "Card Expiry (MM/YY)",
+        "cardCVC": "Card CVC"
+      }
+    },
+    "ai": {
+      "error": {
+        "auth": "Authentication failed ({status}). Check that your API key is correct in Settings.\n{detail}",
+        "modelNotFound": "Model not found (404). Check the model name in Settings.\n{detail}",
+        "badRequest": "Request error (400). Check your API key or model name.\n{detail}",
+        "rateLimit": "Rate limit exceeded (429). Please try again shortly.\n{detail}",
+        "ollamaUnreachable": "Could not connect to the local Ollama server. Check that Ollama is running and the model is installed.\n{detail}",
+        "generic": "AI request failed ({status}).\n{detail}",
+        "unknownCliProvider": "Unknown CLI provider",
+        "timeout": "Timed out (120s). Please try again.",
+        "ollamaConnectFailed": "Failed to connect to the local Ollama server. Check that it is running.\n{detail}",
+        "claudeCodeResponse": "Claude Code response error ({subtype}){detail}",
+        "claudeCodeSessionEnded": "The Claude Code session ended (code {code}).{detail}",
+        "claudeCodeSessionDead": "The Claude Code session is not alive.",
+        "turnInProgress": "The previous turn is still in progress.",
+        "timeoutReopen": "Timed out (120s). Reopening the session.",
+        "codexSessionClosed": "The Codex session was closed.",
+        "timeoutPlain": "Timed out (120s).",
+        "codexResponse": "Codex response error: {detail}",
+        "cliHint": "\n\n(Check that {name} is installed and signed in with your subscription/account. You can set the executable path and model in Settings > AI.)",
+        "cliNotFound": "The {name} CLI could not be found.{hint}",
+        "cliRunError": "{name} run error.{detail}{hint}",
+        "sessionClosed": "The session was closed.",
+        "exitCode": "exit code {code}"
+      },
+      "diag": {
+        "cliMissing": {
+          "message": "The '{bin}' command could not be found.",
+          "fix": "Install the {bin} CLI and add it to your PATH. You can also set the executable path directly in Settings > AI."
+        },
+        "notLoggedIn": {
+          "cliMessage": "Sign-in required for '{bin}'.",
+          "cliFix": "Run '{bin}' once in a terminal to sign in (link your subscription account).",
+          "message": "Authentication failed.",
+          "fix": "Check your API key again in Settings > AI."
+        },
+        "modelDefault": "(default)",
+        "modelMissing": {
+          "message": "The model '{model}' is not available.",
+          "fix": "Change the model name in Settings > AI to one that matches your account or install."
+        },
+        "notConnected": {
+          "message": "Could not connect to the AI server.",
+          "fix": "Check your internet connection or whether the local server (Ollama) is running."
+        },
+        "genericError": {
+          "message": "An error occurred.",
+          "fix": "Try again shortly, or switch to a different provider."
+        },
+        "noKey": {
+          "message": "No API key for {label}.",
+          "fix": "Enter an API key in Settings > AI."
+        },
+        "empty": {
+          "message": "The response was empty.",
+          "fix": "Try a different model, or try again shortly."
+        },
+        "ok": {
+          "message": "OK — got a response ({seconds}s)."
+        },
+        "disabled": {
+          "message": "The AI feature is turned off.",
+          "fix": "Turn on AI in Settings > AI."
+        },
+        "ollamaNotConnected": {
+          "message": "Could not connect to Ollama.",
+          "detail": "No response from {url}",
+          "fix": "Start the Ollama app or run `ollama serve` in a terminal. If the address differs, check the Ollama URL in Settings > AI."
+        },
+        "ollamaModelMissing": {
+          "message": "The configured model '{model}' is not installed.",
+          "fix": "Switch to one of the installed models below, or install it with `ollama pull {model}` in a terminal."
+        }
+      },
+      "ipc": {
+        "diagCheckError": "Error during check",
+        "unknownProvider": "Unknown provider",
+        "pickAgentFilesFolder": "Select Agent Files Folder",
+        "memoryAdded": "🧠 Added to memory: {text}{more}",
+        "reportSaved": "Report saved ⤓ {filename}",
+        "webhookUrlMissing": "No webhook URL is set (Settings > AI).",
+        "webhookTimeout": "Timed out",
+        "webhookResponseError": "Response error",
+        "topicRequired": "Please enter a topic.",
+        "bodyInstructionRequired": "Body text and instructions are required.",
+        "unknownChoice": "Unknown choice.",
+        "conversationExported": "Conversation exported ⤓ {filename}",
+        "conversationsExported": "Exported {count} conversation(s) ⤓ {filename}",
+        "taskNotFound": "Task not found (it may have already been deleted).",
+        "taskWrongWindow": "This task can only be controlled from the window that started it."
+      }
+    },
+    "dataSov": {
+      "errorBundleFormat": "Invalid bundle version or format",
+      "errorRejected": "Rejected: {path}",
+      "errorPassphraseMissing": "Password data was included but no backup passphrase was entered, so it was skipped.",
+      "errorWrongPassphrase": "The backup passphrase was incorrect, so passwords could not be restored.",
+      "errorPassphraseTooShort": "The backup passphrase must be at least {min} characters."
+    },
+    "import": {
+      "unnamedFolder": "Folder",
+      "bookmarksReadFailed": "Could not read the bookmarks file: {detail}",
+      "rootFolderName": "Bookmarks imported from {browser}",
+      "otherBookmarks": "Other Bookmarks",
+      "mobileBookmarks": "Mobile Bookmarks",
+      "historyCopyFailed": "Could not copy browsing history. Please fully close that browser and try again. ({detail})",
+      "historyReadFailed": "Could not read browsing history: {detail}",
+      "profileNotFound": "The profile to import could not be found.",
+      "bookmarksImportFailed": "Failed to import bookmarks: {detail}"
     }
   },
   "settings": {

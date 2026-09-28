@@ -10,6 +10,7 @@ import {
   createTab, closeTab, navigateTab, listTabs, getAllTabs,
 } from '../../tabs/tab-service'
 import type { ModManifest, ModPermission, ModSummary } from '../../../shared/types'
+import { tMain } from '../../i18n'
 
 interface LoadedMod {
   id: string
@@ -613,13 +614,16 @@ async function ensureNodeGrant(mod: LoadedMod): Promise<boolean> {
   if (typeof grants[mod.id] === 'boolean') return grants[mod.id]!
   const result = await dialog.showMessageBox({
     type: 'warning',
-    buttons: ['거부', 'Node 권한 허용'],
+    buttons: [tMain('main.modApi.nodeGrant.deny', '거부'), tMain('main.modApi.nodeGrant.allow', 'Node 권한 허용')],
     defaultId: 0,
     cancelId: 0,
-    title: 'Node 권한 요청',
-    message: `모드 "${mod.manifest.name}" 가 Node.js 시스템 접근을 요청합니다.`,
-    detail: '이 권한은 파일 시스템·프로세스 등 컴퓨터 전체에 접근할 수 있어 확장보다 강력하고 위험합니다. '
+    title: tMain('main.modApi.nodeGrant.title', 'Node 권한 요청'),
+    message: tMain('main.modApi.nodeGrant.message', `모드 "${mod.manifest.name}" 가 Node.js 시스템 접근을 요청합니다.`, { name: mod.manifest.name }),
+    detail: tMain(
+      'main.modApi.nodeGrant.detail',
+      '이 권한은 파일 시스템·프로세스 등 컴퓨터 전체에 접근할 수 있어 확장보다 강력하고 위험합니다. '
       + '신뢰하는 모드에만 허용하세요. (이 결정은 저장되며 모드 페이지에서 변경할 수 있습니다)',
+    ),
   })
   const granted = result.response === 1
   await writeNodeGrant(mod.id, granted)

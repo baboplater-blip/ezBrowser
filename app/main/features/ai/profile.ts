@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron'
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
+import { tMain } from '../../i18n'
 
 // 스마트 폼필용 개인 프로필 — 이름·주소·이메일·카드 등. safeStorage(OS 키체인)로 암호화 저장.
 // 값은 자동 채우기 시 메인 → 페이지로만 흐르고 AI(LLM)로는 절대 전송되지 않는다(자동 채우기는 결정적).
@@ -32,6 +33,11 @@ export const PROFILE_FIELDS: ProfileFieldDef[] = [
   { key: 'cardCVC', label: '카드 CVC', sensitive: true },
 ]
 const VALID_KEYS = new Set(PROFILE_FIELDS.map((f) => f.key))
+
+/** IPC 응답 직전에 호출 — 라벨을 현재 언어로 번역한 사본을 돌려준다(원본 PROFILE_FIELDS 는 불변). */
+export function translatedProfileFields(): ProfileFieldDef[] {
+  return PROFILE_FIELDS.map((f) => ({ ...f, label: tMain(`main.profile.field.${f.key}`, f.label) }))
+}
 
 function load(): void {
   if (loaded) return

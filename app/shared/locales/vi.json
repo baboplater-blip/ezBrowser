@@ -208,12 +208,622 @@
   },
   "main": {
     "toast": {
-      "bookmarkAdded": "Đã thêm dấu trang ★"
+      "bookmarkAdded": "Đã thêm dấu trang ★",
+      "webOnly": "Chỉ khả dụng trên trang web",
+      "profileEmpty": "Chưa có thông tin cá nhân — nhập trong Cài đặt > AI",
+      "autofillDone": "Đã tự động điền {count} trường ✍️",
+      "autofillNone": "Không tìm thấy trường biểu mẫu để điền",
+      "pageSaveOk": "Đã lưu trang 💾",
+      "pageSaveFail": "Lưu trang thất bại",
+      "readLaterRemoved": "Đã xóa khỏi danh sách đọc",
+      "readLaterAdded": "Đã thêm vào danh sách đọc 📚",
+      "pdfSaveOk": "Đã lưu PDF 📄",
+      "pdfSaveFail": "Lưu PDF thất bại",
+      "readerOn": "Chế độ đọc 📖",
+      "readerOff": "Xem bản gốc",
+      "translating": "Đang dịch… ⏳",
+      "translateRestored": "Đã khôi phục bản gốc",
+      "translateDone": "Dịch xong 🌐",
+      "translateFail": "Dịch thất bại",
+      "updateAvailable": "Đã tìm thấy phiên bản mới {version}",
+      "updateLatest": "Bạn đang dùng bản mới nhất ✓",
+      "updateReady": "Cập nhật đã sẵn sàng — áp dụng khi khởi động lại",
+      "updateDisabled": "Tự động cập nhật đã tắt",
+      "updateCheckFail": "Kiểm tra cập nhật thất bại: {error}",
+      "noTabUrl": "Không xác định được URL của thẻ hiện tại",
+      "adblockNotApplicable": "Không thể chặn quảng cáo trên trang này",
+      "adblockOffReload": "🛡️ {host} — Đã tắt chặn quảng cáo · đang tải lại…",
+      "adblockOnReload": "🛡️ {host} — Đã bật chặn quảng cáo · đang tải lại…",
+      "workspaceSwitched": "Không gian làm việc: {name}",
+      "workspaceCreated": "Đã tạo không gian làm việc mới \"{name}\"",
+      "workspaceOnlyOne": "Chỉ có một không gian làm việc",
+      "tabMoveFail": "Di chuyển thẻ thất bại",
+      "reloadSuffix": " · trang đã tải lại",
+      "tabMoved": "Đã chuyển thẻ → {name}{suffix}",
+      "darkForceOn": "Đã bật chế độ tối cưỡng bức 🌙",
+      "darkForceOff": "Đã tắt chế độ tối cưỡng bức ☀",
+      "darkSiteNotApplicable": "Không thể áp dụng chế độ tối riêng cho trang này",
+      "siteDarkOn": "Đã bật chế độ tối cho trang 🌙 ({origin})",
+      "siteDarkOff": "Đã tắt chế độ tối cho trang ☀ ({origin})",
+      "siteDarkDefault": "Trang theo mặc định chế độ tối ({origin})",
+      "followSystemOn": "Đã bật theo chế độ tối hệ điều hành 🌓",
+      "followSystemOff": "Đã tắt theo chế độ tối hệ điều hành",
+      "splitH": "Chia trái/phải ⫾",
+      "splitV": "Chia trên/dưới ⫿",
+      "unsplit": "Bỏ chia màn hình",
+      "muteOthersDone": "Đã tắt tiếng {count} thẻ khác 🔇",
+      "muteOthersNone": "Không có thẻ nào khác để tắt tiếng",
+      "unmuteAllDone": "Đã bật tiếng {count} thẻ 🔊",
+      "unmuteAllNone": "Không có thẻ nào bị tắt tiếng",
+      "siteDataNotApplicable": "Không thể xóa dữ liệu của trang này",
+      "siteDataCleared": "Đã xóa dữ liệu trang · đang tải lại… 🗑"
     },
     "download": {
       "completeTitle": "Tải xuống hoàn tất",
       "completeToast": "✓ Đã tải xong {filename}",
-      "failedToast": "✗ Tải {filename} thất bại"
+      "failedToast": "✗ Tải {filename} thất bại",
+      "resuming": "Đang tiếp tục {count} lượt tải trước đó ⬇"
+    },
+    "menu": {
+      "tab": {
+        "new": "Thẻ mới",
+        "duplicate": "Nhân đôi thẻ",
+        "pin": "Ghim / Bỏ ghim thẻ",
+        "close": "Đóng thẻ",
+        "recentClosed": "Thẻ vừa đóng",
+        "restore": "Mở lại thẻ vừa đóng",
+        "move": {
+          "next": {
+            "workspace": "Chuyển thẻ sang không gian tiếp theo"
+          },
+          "prev": {
+            "workspace": "Chuyển thẻ sang không gian trước"
+          }
+        },
+        "reader": "Chế độ đọc",
+        "next": "Thẻ tiếp theo",
+        "prev": "Thẻ trước",
+        "search": "Tìm kiếm thẻ"
+      },
+      "window": {
+        "new": "Cửa sổ mới",
+        "incognito": "Cửa sổ ẩn danh mới"
+      },
+      "workspace": {
+        "new": "Không gian làm việc mới",
+        "next": "Không gian làm việc tiếp theo",
+        "prev": "Không gian làm việc trước"
+      },
+      "page": {
+        "print": "In",
+        "printPdf": "Lưu dưới dạng PDF",
+        "reload": "Tải lại",
+        "stop": "Dừng",
+        "zoom": {
+          "in": "Phóng to",
+          "out": "Thu nhỏ",
+          "reset": "Đặt lại thu phóng"
+        }
+      },
+      "app": {
+        "quit": "Thoát"
+      },
+      "find": {
+        "toggle": "Tìm trên trang"
+      },
+      "omnibox": {
+        "focus": "Thanh địa chỉ"
+      },
+      "autofill": {
+        "page": "Tự động điền biểu mẫu (thông tin của tôi)"
+      },
+      "password": {
+        "open": "Trình quản lý mật khẩu"
+      },
+      "darkmode": {
+        "toggle": "Bật/tắt chế độ tối cưỡng bức",
+        "toggleSite": "Bật/tắt chế độ tối cho trang này",
+        "followSystem": "Theo cài đặt hệ điều hành"
+      },
+      "sidepanel": {
+        "left": {
+          "toggle": "Bật/tắt bảng trái"
+        },
+        "right": {
+          "toggle": "Bật/tắt bảng phải"
+        }
+      },
+      "bookmark": {
+        "bar": {
+          "toggle": "Hiện / Ẩn thanh dấu trang"
+        },
+        "add": "Đánh dấu trang này",
+        "list": "Quản lý dấu trang"
+      },
+      "devtools": {
+        "toggle": "Công cụ nhà phát triển"
+      },
+      "nav": {
+        "back": "Quay lại",
+        "forward": "Tiến tới"
+      },
+      "pane": {
+        "split": {
+          "h": "Chia trái / phải",
+          "v": "Chia trên / dưới"
+        },
+        "unsplit": "Bỏ chia màn hình",
+        "focus": {
+          "next": "Chuyển tiêu điểm sang ô tiếp theo"
+        }
+      },
+      "tabbar": {
+        "cycle": "Đổi vị trí thanh thẻ (trên/trái/phải)"
+      },
+      "readlater": {
+        "add": "Thêm vào danh sách đọc",
+        "open": "Mở danh sách đọc"
+      },
+      "history": {
+        "open": "Lịch sử",
+        "clear": "Xóa lịch sử duyệt web"
+      },
+      "ai": {
+        "open": "Mở trợ lý AI",
+        "summarize": "Tóm tắt trang này",
+        "write": "✍️  Xưởng viết blog",
+        "collectors": "📥  Tự động thu thập hằng ngày"
+      },
+      "memory": {
+        "open": "🧠  Quản lý bộ nhớ AI"
+      },
+      "palette": {
+        "open": "Bảng lệnh"
+      },
+      "translate": {
+        "page": "Dịch trang"
+      },
+      "screenshot": {
+        "viewport": "Chụp màn hình"
+      },
+      "qrcode": {
+        "show": "Mã QR"
+      },
+      "downloads": {
+        "openPage": "Tải xuống"
+      },
+      "extensions": {
+        "open": "Tiện ích mở rộng"
+      },
+      "adblock": {
+        "openPage": "Thống kê chặn quảng cáo",
+        "toggleSite": "Bật/tắt chặn quảng cáo cho trang này"
+      },
+      "sitedata": {
+        "clear": "Xóa dữ liệu trang này"
+      },
+      "userchrome": {
+        "edit": "Chỉnh sửa userChrome.css",
+        "reload": "Áp dụng lại userChrome"
+      },
+      "userscript": {
+        "toggle": "Userscript"
+      },
+      "policy": {
+        "open": "Công cụ chính sách trang"
+      },
+      "macros": {
+        "open": "Macro tự động hóa"
+      },
+      "mods": {
+        "open": "Mod mở rộng"
+      },
+      "keymap": {
+        "open": "Chỉnh sửa phím tắt"
+      },
+      "perf": {
+        "open": "Cổng hiệu năng"
+      },
+      "settings": {
+        "open": "Mở cài đặt"
+      },
+      "update": {
+        "check": "Kiểm tra cập nhật"
+      },
+      "help": {
+        "report": "Gửi phản hồi"
+      },
+      "top": {
+        "file": "Tệp",
+        "edit": "Chỉnh sửa",
+        "view": "Xem",
+        "nav": "Điều hướng",
+        "bookmarks": "Dấu trang",
+        "tools": "Công cụ",
+        "customize": "Tùy chỉnh",
+        "settings": "⚙ Cài đặt",
+        "help": "Trợ giúp"
+      },
+      "group": {
+        "workspace": "Không gian làm việc",
+        "darkmode": "Chế độ tối",
+        "sidepanel": "Bảng bên",
+        "split": "Chia màn hình (Tiling)",
+        "adblock": "Chặn quảng cáo"
+      },
+      "edit": {
+        "undo": "Hoàn tác",
+        "redo": "Làm lại",
+        "cut": "Cắt",
+        "copy": "Sao chép",
+        "paste": "Dán",
+        "selectAll": "Chọn tất cả"
+      },
+      "view": {
+        "fullscreen": "Toàn màn hình"
+      }
+    },
+    "extensions": {
+      "sessionDefault": "Mặc định",
+      "sessionIncognito": "Ẩn danh",
+      "sessionWorkspace": "Không gian làm việc: {name}",
+      "sessionWorkspaceUnnamed": "Không gian làm việc ({id})",
+      "partitionUnknown": "(không rõ)",
+      "sessionUnknown": "Phiên không xác định",
+      "reasonManifest": "Không thể đọc manifest.json hoặc định dạng sai.",
+      "reasonVersion": "Định dạng phiên bản của tiện ích không hợp lệ.",
+      "reasonNotFound": "Không tìm thấy tệp tiện ích.",
+      "reasonPermission": "Không thể đọc do quyền tệp.",
+      "reasonLocale": "Có vấn đề với tệp bản dịch (_locales).",
+      "reasonUnknown": "Không thể tải tiện ích trong phiên này.",
+      "errorUnknown": "Lỗi không xác định",
+      "errorLoadFailed": "Tải thất bại",
+      "errorManifestRead": "Không thể đọc manifest.json: {detail}",
+      "errorInstallExpired": "Yêu cầu cài đặt đã hết hạn hoặc không tồn tại. Vui lòng thử lại.",
+      "errorUnzipFailed": "Giải nén thất bại: {detail}",
+      "errorManifestUnreadable": "Không thể đọc manifest.json.",
+      "errorUnsupportedUrl": "URL không được hỗ trợ — phải là URL chi tiết Web Store hoặc liên kết .crx trực tiếp.",
+      "errorDownloadFailed": "Tải xuống thất bại ({status})",
+      "errorNetwork": "Lỗi mạng: {detail}",
+      "errorNoOptionsPage": "Không có trang tùy chọn",
+      "errorManifestMissing": "Thiếu manifest.json (đây có phải thư mục chưa nén?)",
+      "errorCopyFailed": "Sao chép thất bại: {detail}",
+      "pickCrxTitle": "Chọn tiện ích (.crx)",
+      "pickUnpackedTitle": "Chọn thư mục tiện ích chưa nén"
+    },
+    "pageError": {
+      "net": {
+        "ERR_NAME_NOT_RESOLVED": "Không tìm thấy địa chỉ",
+        "ERR_CONNECTION_REFUSED": "Kết nối bị từ chối",
+        "ERR_CONNECTION_RESET": "Kết nối đã được đặt lại",
+        "ERR_CONNECTION_CLOSED": "Kết nối đã bị ngắt",
+        "ERR_CONNECTION_TIMED_OUT": "Kết nối đã hết thời gian chờ",
+        "ERR_INTERNET_DISCONNECTED": "Không có kết nối internet",
+        "ERR_ADDRESS_UNREACHABLE": "Không thể truy cập địa chỉ",
+        "ERR_EMPTY_RESPONSE": "Máy chủ không phản hồi",
+        "ERR_SSL_PROTOCOL_ERROR": "Lỗi kết nối SSL",
+        "ERR_NETWORK_CHANGED": "Mạng đã thay đổi",
+        "ERR_FILE_NOT_FOUND": "Không tìm thấy tệp",
+        "ERR_TOO_MANY_REDIRECTS": "Quá nhiều lượt chuyển hướng",
+        "ERR_BLOCKED_BY_CLIENT": "Trình duyệt này đã chặn yêu cầu"
+      },
+      "crash": {
+        "crashed": "Sự cố",
+        "oom": "Hết bộ nhớ",
+        "launch-failed": "Khởi chạy thất bại",
+        "killed": "Đã bị buộc dừng",
+        "integrity-failure": "Lỗi toàn vẹn"
+      },
+      "unknown": "Lỗi không xác định",
+      "crashDesc": "Thẻ đã ngừng hoạt động ({label})",
+      "certUntrusted": "Chứng chỉ bảo mật của trang này không đáng tin cậy",
+      "auth": {
+        "title": "Cần đăng nhập",
+        "heading": "{host} yêu cầu xác thực",
+        "username": "Tên đăng nhập",
+        "password": "Mật khẩu",
+        "cancel": "Hủy",
+        "submit": "Đăng nhập"
+      }
+    },
+    "contextMenu": {
+      "link": {
+        "openNewTab": "Mở liên kết trong thẻ mới",
+        "openNewWindow": "Mở liên kết trong cửa sổ mới",
+        "openIncognito": "Mở liên kết trong cửa sổ ẩn danh",
+        "copyAddress": "Sao chép địa chỉ liên kết",
+        "copyText": "Sao chép văn bản liên kết"
+      },
+      "image": {
+        "openNewTab": "Mở hình ảnh trong thẻ mới",
+        "copy": "Sao chép hình ảnh",
+        "copyAddress": "Sao chép địa chỉ hình ảnh",
+        "download": "Tải hình ảnh xuống"
+      },
+      "media": {
+        "download": "Tải video xuống",
+        "copyAddress": "Sao chép địa chỉ phương tiện"
+      },
+      "selection": {
+        "copy": "Sao chép",
+        "searchWith": "Tìm \"{query}\" trên {engine}",
+        "findInPage": "Tìm trong lựa chọn"
+      },
+      "spelling": {
+        "none": "Không có gợi ý chính tả",
+        "addToDictionary": "Thêm vào từ điển"
+      },
+      "edit": {
+        "undo": "Hoàn tác",
+        "redo": "Làm lại",
+        "cut": "Cắt",
+        "copy": "Sao chép",
+        "paste": "Dán",
+        "selectAll": "Chọn tất cả"
+      },
+      "page": {
+        "back": "Quay lại",
+        "forward": "Tiến tới",
+        "reload": "Tải lại",
+        "addBookmark": "Đánh dấu trang này ★"
+      },
+      "mods": "Mod",
+      "viewSource": "Xem mã nguồn trang",
+      "inspect": "Kiểm tra"
+    },
+    "video": {
+      "extractingYtdlp": "Đang trích xuất video… (yt-dlp, xem tiến trình tại Tải xuống Ctrl+J)",
+      "downloadStarted": "Đã bắt đầu tải xuống ⬇ (xem bảng Tải xuống Ctrl+J)",
+      "extractingYtdlpShort": "Đang trích xuất video… (yt-dlp, xem tiến trình tại Tải xuống)",
+      "startFailed": "Không thể bắt đầu tải xuống — đã từ chối cài yt-dlp hoặc có lỗi",
+      "downloadingDash": "Đang tải video… (DASH, xem tiến trình tại Tải xuống Ctrl+J)",
+      "downloadingHls": "Đang tải video… (HLS, xem tiến trình tại Tải xuống Ctrl+J)",
+      "extractingYtdlpFallback": "Đang trích xuất video… (dự phòng yt-dlp, xem tiến trình tại Tải xuống)",
+      "ytdlpConsent": {
+        "get": "Tải",
+        "cancel": "Hủy",
+        "title": "Cần có yt-dlp",
+        "message": "yt-dlp sẽ được tải xuống để hỗ trợ tải video.",
+        "detail": "Khoảng 15 MB. Tải từ bản phát hành chính thức GitHub yt-dlp/yt-dlp (mới nhất). Sau đó sẽ tự động cập nhật."
+      },
+      "ytdlpDownloadFailed": "Tải yt-dlp thất bại",
+      "ytdlpStarting": "Đang khởi động yt-dlp…",
+      "preparingDownload": "Đang chuẩn bị tải video…"
+    },
+    "torrent": {
+      "consent": {
+        "accept": "Đồng ý & Tải xuống",
+        "cancel": "Hủy",
+        "title": "Thông báo tải torrent",
+        "message": "Vui lòng tôn trọng bản quyền.",
+        "detail": "Chỉ sử dụng cho nội dung bạn có quyền, hoặc nội dung cấp phép tự do (Creative Commons, public domain, ISO Linux, v.v). Bạn chịu trách nhiệm về những gì bạn tải xuống.\n\nTiếp tục sẽ kích hoạt WebTorrent (BitTorrent phân tán). Windows Firewall có thể hỏi quyền trong lần sử dụng đầu tiên."
+      },
+      "notInstalled": {
+        "ok": "Đồng ý",
+        "title": "Chưa cài mô-đun torrent",
+        "message": "Gói webtorrent chưa được cài đặt.",
+        "detail": "Cài đặt bằng \"npm install webtorrent\" rồi thử lại. (phụ thuộc tùy chọn)"
+      },
+      "loadingMetadata": "Đang tải siêu dữ liệu…"
+    },
+    "session": {
+      "restorePrompt": {
+        "restore": "Khôi phục phiên",
+        "newTab": "Bắt đầu với thẻ mới",
+        "title": "Khôi phục phiên trước",
+        "message": "Trình duyệt dường như đã đóng đột ngột.",
+        "detail": "Khôi phục {count} thẻ từ phiên trước?"
+      }
+    },
+    "modApi": {
+      "nodeGrant": {
+        "deny": "Từ chối",
+        "allow": "Cho phép quyền Node",
+        "title": "Yêu cầu quyền Node",
+        "message": "Mod \"{name}\" đang yêu cầu quyền truy cập hệ thống Node.js.",
+        "detail": "Quyền này có thể truy cập toàn bộ máy tính — tệp hệ thống, tiến trình, v.v — mạnh và rủi ro hơn tiện ích mở rộng. Chỉ cho phép với mod bạn tin tưởng. (Lựa chọn này được lưu và có thể thay đổi trên trang Mod)"
+      }
+    },
+    "password": {
+      "writeError": {
+        "unavailable": "Máy tính này không thể dùng mã hóa hệ điều hành (safeStorage), nên mật khẩu chưa được lưu. Không bao giờ lưu ở dạng văn bản thô.",
+        "invalid-origin": "Địa chỉ trang không hợp lệ. Phải là địa chỉ https (ví dụ: https://example.com).",
+        "invalid": "Vui lòng nhập cả tên đăng nhập và mật khẩu.",
+        "duplicate": "Tên đăng nhập này đã được đăng ký cho trang này. Vui lòng sửa mục hiện có.",
+        "not-found": "Không tìm thấy tài khoản đó."
+      }
+    },
+    "screenshot": {
+      "saveTitle": "Lưu ảnh chụp màn hình"
+    },
+    "pageTools": {
+      "webpageFilter": "Trang web"
+    },
+    "downloads": {
+      "pickFolderTitle": "Chọn thư mục tải xuống mặc định"
+    },
+    "reader": {
+      "badge": "Chế độ đọc",
+      "originalView": "Xem bản gốc"
+    },
+    "omnibox": {
+      "searchWith": "Tìm kiếm {engine}: {query}"
+    },
+    "workspace": {
+      "defaultName": "Không gian {n}",
+      "unnamed": "Không gian chưa đặt tên",
+      "defaultFirst": "Mặc định"
+    },
+    "automation": {
+      "screenshotNoTab": "Chụp màn hình thất bại — không có thẻ mục tiêu",
+      "screenshotTabGone": "Chụp màn hình thất bại — không tìm thấy thẻ",
+      "screenshotSaved": "Đã lưu ảnh chụp màn hình 📸 ({path})",
+      "screenshotFailed": "Chụp màn hình thất bại"
+    },
+    "designTokens": {
+      "label": {
+        "color": {
+          "accent": {
+            "primary": "Điểm nhấn",
+            "hover": "Điểm nhấn khi hover"
+          },
+          "bg": {
+            "base": "Nền",
+            "elevated": "Nền thẻ"
+          },
+          "text": {
+            "primary": "Văn bản chính",
+            "secondary": "Văn bản phụ"
+          },
+          "border": {
+            "subtle": "Đường viền"
+          }
+        },
+        "radius": {
+          "sm": "Bo góc nhỏ",
+          "md": "Bo góc vừa",
+          "lg": "Bo góc lớn",
+          "tab": "Bo góc thẻ"
+        },
+        "density": {
+          "tabbar-h": "Chiều cao thanh thẻ",
+          "toolbar-h": "Chiều cao thanh công cụ",
+          "font-size": "Cỡ chữ cơ bản"
+        },
+        "motion": {
+          "normal": "Tốc độ hoạt ảnh"
+        }
+      }
+    },
+    "profile": {
+      "field": {
+        "fullName": "Họ và tên",
+        "firstName": "Tên",
+        "lastName": "Họ",
+        "email": "Email",
+        "phone": "Số điện thoại",
+        "postalCode": "Mã bưu chính",
+        "address": "Địa chỉ",
+        "addressDetail": "Địa chỉ chi tiết",
+        "city": "Thành phố",
+        "country": "Quốc gia",
+        "birthday": "Ngày sinh (YYYY-MM-DD)",
+        "organization": "Công ty / Tổ chức",
+        "username": "Tên đăng nhập",
+        "cardNumber": "Số thẻ",
+        "cardExp": "Ngày hết hạn thẻ (MM/YY)",
+        "cardCVC": "Mã CVC thẻ"
+      }
+    },
+    "ai": {
+      "error": {
+        "auth": "Xác thực thất bại ({status}). Kiểm tra khóa API trong Cài đặt.\n{detail}",
+        "modelNotFound": "Không tìm thấy mô hình (404). Kiểm tra tên mô hình trong Cài đặt.\n{detail}",
+        "badRequest": "Lỗi yêu cầu (400). Kiểm tra khóa API hoặc tên mô hình.\n{detail}",
+        "rateLimit": "Vượt quá giới hạn yêu cầu (429). Vui lòng thử lại sau.\n{detail}",
+        "ollamaUnreachable": "Không thể kết nối đến máy chủ Ollama cục bộ. Kiểm tra Ollama đang chạy và đã cài mô hình.\n{detail}",
+        "generic": "Yêu cầu AI thất bại ({status}).\n{detail}",
+        "unknownCliProvider": "Nhà cung cấp CLI không xác định",
+        "timeout": "Hết thời gian chờ (120s). Vui lòng thử lại.",
+        "ollamaConnectFailed": "Kết nối đến máy chủ Ollama cục bộ thất bại. Kiểm tra nó đang chạy.\n{detail}",
+        "claudeCodeResponse": "Lỗi phản hồi Claude Code ({subtype}){detail}",
+        "claudeCodeSessionEnded": "Phiên Claude Code đã kết thúc (mã {code}).{detail}",
+        "claudeCodeSessionDead": "Phiên Claude Code không còn hoạt động.",
+        "turnInProgress": "Lượt trước vẫn đang xử lý.",
+        "timeoutReopen": "Hết thời gian chờ (120s). Đang mở lại phiên.",
+        "codexSessionClosed": "Phiên Codex đã đóng.",
+        "timeoutPlain": "Hết thời gian chờ (120s).",
+        "codexResponse": "Lỗi phản hồi Codex: {detail}",
+        "cliHint": "\n\n(Kiểm tra {name} đã được cài đặt và đăng nhập bằng tài khoản/gói đăng ký. Bạn có thể đặt đường dẫn thực thi và mô hình trong Cài đặt > AI.)",
+        "cliNotFound": "Không tìm thấy CLI {name}.{hint}",
+        "cliRunError": "Lỗi chạy {name}.{detail}{hint}",
+        "sessionClosed": "Phiên đã đóng.",
+        "exitCode": "mã thoát {code}"
+      },
+      "diag": {
+        "cliMissing": {
+          "message": "Không tìm thấy lệnh '{bin}'.",
+          "fix": "Cài đặt CLI {bin} và thêm vào PATH. Bạn cũng có thể đặt đường dẫn thực thi trực tiếp trong Cài đặt > AI."
+        },
+        "notLoggedIn": {
+          "cliMessage": "Cần đăng nhập cho '{bin}'.",
+          "cliFix": "Chạy '{bin}' một lần trong terminal để đăng nhập (liên kết tài khoản đăng ký).",
+          "message": "Xác thực thất bại.",
+          "fix": "Kiểm tra lại khóa API trong Cài đặt > AI."
+        },
+        "modelDefault": "(mặc định)",
+        "modelMissing": {
+          "message": "Mô hình '{model}' không khả dụng.",
+          "fix": "Đổi tên mô hình trong Cài đặt > AI cho khớp với tài khoản hoặc bản cài đặt của bạn."
+        },
+        "notConnected": {
+          "message": "Không thể kết nối đến máy chủ AI.",
+          "fix": "Kiểm tra kết nối internet hoặc máy chủ cục bộ (Ollama) có đang chạy không."
+        },
+        "genericError": {
+          "message": "Đã xảy ra lỗi.",
+          "fix": "Thử lại sau, hoặc chuyển sang nhà cung cấp khác."
+        },
+        "noKey": {
+          "message": "Không có khóa API cho {label}.",
+          "fix": "Nhập khóa API trong Cài đặt > AI."
+        },
+        "empty": {
+          "message": "Phản hồi trống.",
+          "fix": "Thử mô hình khác, hoặc thử lại sau."
+        },
+        "ok": {
+          "message": "Bình thường — đã nhận phản hồi ({seconds}s)."
+        },
+        "disabled": {
+          "message": "Tính năng AI đang tắt.",
+          "fix": "Bật AI trong Cài đặt > AI."
+        },
+        "ollamaNotConnected": {
+          "message": "Không thể kết nối đến Ollama.",
+          "detail": "Không có phản hồi từ {url}",
+          "fix": "Khởi động ứng dụng Ollama hoặc chạy `ollama serve` trong terminal. Nếu địa chỉ khác, kiểm tra URL Ollama trong Cài đặt > AI."
+        },
+        "ollamaModelMissing": {
+          "message": "Mô hình đã đặt '{model}' chưa được cài đặt.",
+          "fix": "Chuyển sang một trong các mô hình đã cài bên dưới, hoặc cài bằng `ollama pull {model}` trong terminal."
+        }
+      },
+      "ipc": {
+        "diagCheckError": "Lỗi khi kiểm tra",
+        "unknownProvider": "Nhà cung cấp không xác định",
+        "pickAgentFilesFolder": "Chọn thư mục tệp của trợ lý",
+        "memoryAdded": "🧠 Đã thêm vào bộ nhớ: {text}{more}",
+        "reportSaved": "Đã lưu báo cáo ⤓ {filename}",
+        "webhookUrlMissing": "Chưa đặt URL webhook (Cài đặt > AI).",
+        "webhookTimeout": "Hết thời gian chờ",
+        "webhookResponseError": "Lỗi phản hồi",
+        "topicRequired": "Vui lòng nhập chủ đề.",
+        "bodyInstructionRequired": "Cần có nội dung và hướng dẫn.",
+        "unknownChoice": "Lựa chọn không xác định.",
+        "conversationExported": "Đã xuất hội thoại ⤓ {filename}",
+        "conversationsExported": "Đã xuất {count} hội thoại ⤓ {filename}",
+        "taskNotFound": "Không tìm thấy tác vụ (có thể đã bị xóa).",
+        "taskWrongWindow": "Tác vụ này chỉ có thể được điều khiển từ cửa sổ đã khởi tạo nó."
+      }
+    },
+    "dataSov": {
+      "errorBundleFormat": "Phiên bản hoặc định dạng gói dữ liệu không hợp lệ",
+      "errorRejected": "Đã từ chối: {path}",
+      "errorPassphraseMissing": "Có dữ liệu mật khẩu nhưng chưa nhập mật khẩu sao lưu nên đã bỏ qua.",
+      "errorWrongPassphrase": "Mật khẩu sao lưu không đúng nên không thể khôi phục mật khẩu.",
+      "errorPassphraseTooShort": "Mật khẩu sao lưu phải có ít nhất {min} ký tự."
+    },
+    "import": {
+      "unnamedFolder": "Thư mục",
+      "bookmarksReadFailed": "Không thể đọc tệp dấu trang: {detail}",
+      "rootFolderName": "Dấu trang nhập từ {browser}",
+      "otherBookmarks": "Dấu trang khác",
+      "mobileBookmarks": "Dấu trang di động",
+      "historyCopyFailed": "Không thể sao chép lịch sử duyệt web. Vui lòng đóng hoàn toàn trình duyệt đó rồi thử lại. ({detail})",
+      "historyReadFailed": "Không thể đọc lịch sử duyệt web: {detail}",
+      "profileNotFound": "Không tìm thấy hồ sơ để nhập.",
+      "bookmarksImportFailed": "Nhập dấu trang thất bại: {detail}"
     }
   },
   "settings": {

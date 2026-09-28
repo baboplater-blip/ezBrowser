@@ -9,6 +9,7 @@ import {
 } from '../downloads'
 import { onResponseStarted } from '../response-hooks'
 import type { DownloadItem } from '../../../shared/types'
+import { tMain } from '../../i18n'
 
 interface WebTorrentInstance {
   add: (uri: string | Buffer, opts: { path: string }) => WebTorrentHandle
@@ -62,13 +63,15 @@ async function showLicenseDialog(): Promise<boolean> {
   if (licenseAcknowledged) return true
   const ok = await dialog.showMessageBox({
     type: 'warning',
-    buttons: ['동의하고 받기', '취소'],
+    buttons: [tMain('main.torrent.consent.accept', '동의하고 받기'), tMain('main.torrent.consent.cancel', '취소')],
     defaultId: 0, cancelId: 1,
-    title: '토렌트 다운로드 안내',
-    message: '저작권을 준수해 주세요.',
-    detail:
+    title: tMain('main.torrent.consent.title', '토렌트 다운로드 안내'),
+    message: tMain('main.torrent.consent.message', '저작권을 준수해 주세요.'),
+    detail: tMain(
+      'main.torrent.consent.detail',
       '권리자 동의가 있거나 자유 라이선스 콘텐츠(Creative Commons, public domain, Linux ISO 등) 에만 사용하세요. 책임은 사용자에게 있습니다.\n\n' +
       '계속하면 WebTorrent(분산 BitTorrent) 가 활성화됩니다. 첫 가동 시 Windows 방화벽이 권한을 물어볼 수 있습니다.',
+    ),
   })
   if (ok.response !== 0) return false
   licenseAcknowledged = true
@@ -122,10 +125,10 @@ export async function addTorrent(uri: string | Buffer, opts?: { silent?: boolean
       consentShown.value = true
       void dialog.showMessageBox({
         type: 'info',
-        buttons: ['확인'],
-        title: '토렌트 모듈 미설치',
-        message: 'webtorrent 패키지가 설치되어 있지 않습니다.',
-        detail: '"npm install webtorrent" 로 설치 후 다시 시도하세요. (optional dependency)',
+        buttons: [tMain('main.torrent.notInstalled.ok', '확인')],
+        title: tMain('main.torrent.notInstalled.title', '토렌트 모듈 미설치'),
+        message: tMain('main.torrent.notInstalled.message', 'webtorrent 패키지가 설치되어 있지 않습니다.'),
+        detail: tMain('main.torrent.notInstalled.detail', '"npm install webtorrent" 로 설치 후 다시 시도하세요. (optional dependency)'),
       })
     }
     return null
@@ -141,7 +144,7 @@ export async function addTorrent(uri: string | Buffer, opts?: { silent?: boolean
     id,
     kind: 'torrent',
     url: displayUri,
-    filename: '메타데이터 로드 중…',
+    filename: tMain('main.torrent.loadingMetadata', '메타데이터 로드 중…'),
     savePath,
     totalBytes: 0,
     receivedBytes: 0,

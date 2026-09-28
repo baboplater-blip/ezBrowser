@@ -12,6 +12,7 @@ import {
 import { getAllWindows, getWindow } from '../windows/window-service'
 import { addSessionInitHook, forEachInstalledSession, partitionOfSession } from '../session-bootstrap'
 import { listWorkspaces } from '../features/workspace'
+import { tMain } from '../i18n'
 import { DEFAULT_SESSION } from '../../shared/constants'
 import type { ExtensionSessionLoad, ExtensionSummary, ExtensionInstallPreview } from '../../shared/types'
 import {
@@ -187,11 +188,11 @@ function kindOfPartition(p: string): SessionKind {
 
 function labelOfPartition(p: string): string {
   switch (kindOfPartition(p)) {
-    case 'default': return '기본'
-    case 'incognito': return '시크릿'
+    case 'default': return tMain('main.extensions.sessionDefault', '기본')
+    case 'incognito': return tMain('main.extensions.sessionIncognito', '시크릿')
     case 'workspace': {
       const ws = listWorkspaces().find((w) => w.partition === p)
-      return ws ? `워크스페이스: ${ws.name}` : `워크스페이스(${p.slice('persist:ws-'.length)})`
+      return ws ? tMain('main.extensions.sessionWorkspace', `워크스페이스: ${ws.name}`, { name: ws.name }) : tMain('main.extensions.sessionWorkspaceUnnamed', `워크스페이스(${p.slice('persist:ws-'.length)})`, { id: p.slice('persist:ws-'.length) })
     }
     default: return p
   }
@@ -202,7 +203,7 @@ function describeSession(ses: Session): SessionDesc {
   const p = partitionOfSession(ses)
   if (p === undefined) {
     // 우리가 만들지 않은 세션(있어선 안 되지만) — partition 을 되찾을 방법이 없다.
-    return { partition: '(알 수 없음)', label: '알 수 없는 세션', kind: 'other' }
+    return { partition: tMain('main.extensions.partitionUnknown', '(알 수 없음)'), label: tMain('main.extensions.sessionUnknown', '알 수 없는 세션'), kind: 'other' }
   }
   return { partition: p, label: labelOfPartition(p), kind: kindOfPartition(p) }
 }
@@ -276,12 +277,12 @@ const loadFailures = new Map<string, Map<string, LoadFailure>>()
 /** 영문 오류를 사용자가 이해할 수 있는 한 줄로. 못 알아보면 원문을 접어서 보여줄 뿐 지어내지 않는다. */
 function koReason(raw: string): string {
   const s = raw.toLowerCase()
-  if (s.includes('manifest')) return 'manifest.json 을 읽을 수 없거나 형식이 잘못됐습니다.'
-  if (s.includes('version')) return '확장의 버전 표기가 올바르지 않습니다.'
-  if (s.includes('enoent') || s.includes('no such file')) return '확장 파일을 찾을 수 없습니다.'
-  if (s.includes('eacces') || s.includes('permission')) return '파일 권한 때문에 읽지 못했습니다.'
-  if (s.includes('locale') || s.includes('_locales')) return '번역(_locales) 파일에 문제가 있습니다.'
-  return '이 세션에서 확장을 불러오지 못했습니다.'
+  if (s.includes('manifest')) return tMain('main.extensions.reasonManifest', 'manifest.json 을 읽을 수 없거나 형식이 잘못됐습니다.')
+  if (s.includes('version')) return tMain('main.extensions.reasonVersion', '확장의 버전 표기가 올바르지 않습니다.')
+  if (s.includes('enoent') || s.includes('no such file')) return tMain('main.extensions.reasonNotFound', '확장 파일을 찾을 수 없습니다.')
+  if (s.includes('eacces') || s.includes('permission')) return tMain('main.extensions.reasonPermission', '파일 권한 때문에 읽지 못했습니다.')
+  if (s.includes('locale') || s.includes('_locales')) return tMain('main.extensions.reasonLocale', '번역(_locales) 파일에 문제가 있습니다.')
+  return tMain('main.extensions.reasonUnknown', '이 세션에서 확장을 불러오지 못했습니다.')
 }
 
 function recordLoadResult(extId: string, ses: Session, ok: boolean, err?: unknown): void {
@@ -289,7 +290,7 @@ function recordLoadResult(extId: string, ses: Session, ok: boolean, err?: unknow
   let m = loadFailures.get(extId)
   if (ok) { m?.delete(key); return }
   if (!m) { m = new Map(); loadFailures.set(extId, m) }
-  const error = String((err as Error)?.message ?? err ?? '알 수 없는 오류')
+  const error = String((err as Error)?.message ?? err ?? tMain('main.extensions.errorUnknown', '알 수 없는 오류'))
   m.set(key, { error, reason: koReason(error) })
 }
 
@@ -862,7 +863,7 @@ async function finalizeInstall(preparedDir: string, computedId: string): Promise
   })
 
   const loaded = await loadExtensionInAll(finalDir)
-  if (!loaded) return { ok: false, error: '로드 실패' }
+  if (!loaded) return { ok: false, error: tMain('main.extensions.errorLoadFailed', '로드 실패') }
 
   let finalId = loaded.id
   if (loaded.id !== computedId) {
@@ -917,7 +918,7 @@ async function stageForConsent(
     manifest = JSON.parse(await fsp.readFile(path.join(preparedDir, 'manifest.json'), 'utf-8'))
   } catch (err) {
     await fsp.rm(preparedDir, { recursive: true, force: true }).catch(() => undefined)
-    return { ok: false, error: `manifest.json 을 읽을 수 없습니다: ${(err as Error).message}` }
+    return { ok: false, error: tMain('main.extensions.errorManifestRead', `manifest.json 을 읽을 수 없습니다: ${(err as Error).message}`, { detail: (err as Error).message }) }
   }
   const messages = await loadLocaleMessages(preparedDir, manifest.default_locale || 'en')
   const iconDataUrl = await readBestIcon(preparedDir, manifest).catch(() => undefined)
@@ -943,7 +944,7 @@ async function stageForConsent(
 /** 사용자가 동의 화면에서 "설치"를 눌렀다 — 이제 실제로 세션에 로드한다. */
 export async function confirmPendingInstall(token: string): Promise<{ ok: boolean; id?: string; error?: string }> {
   const p = pendingInstalls.get(token)
-  if (!p) return { ok: false, error: '설치 요청이 만료되었거나 없습니다. 다시 시도해 주세요.' }
+  if (!p) return { ok: false, error: tMain('main.extensions.errorInstallExpired', '설치 요청이 만료되었거나 없습니다. 다시 시도해 주세요.') }
   pendingInstalls.delete(token)
   return finalizeInstall(p.dir, p.id)
 }
@@ -972,13 +973,13 @@ export async function installFromCrx(crxPath: string): Promise<{ ok: boolean; pe
     pubKey = await unpackCrx(crxPath, tmpDir)
   } catch (err) {
     await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
-    return { ok: false, error: `압축 해제 실패: ${(err as Error).message}` }
+    return { ok: false, error: tMain('main.extensions.errorUnzipFailed', `압축 해제 실패: ${(err as Error).message}`, { detail: (err as Error).message }) }
   }
 
   const computedId = await ensureManifestKey(tmpDir, pubKey)
   if (!computedId) {
     await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
-    return { ok: false, error: 'manifest.json 을 읽을 수 없습니다.' }
+    return { ok: false, error: tMain('main.extensions.errorManifestUnreadable', 'manifest.json 을 읽을 수 없습니다.') }
   }
 
   const staged = await stageForConsent(tmpDir, computedId, 'crx')
@@ -1021,19 +1022,19 @@ export async function installFromUrl(url: string): Promise<{ ok: boolean; pendin
   } else if (/^https?:\/\/.+\.crx(\?.*)?$/i.test(url)) {
     downloadUrl = url
   } else {
-    return { ok: false, error: '지원하지 않는 URL — 웹스토어 detail URL 또는 .crx 직접 링크여야 합니다.' }
+    return { ok: false, error: tMain('main.extensions.errorUnsupportedUrl', '지원하지 않는 URL — 웹스토어 detail URL 또는 .crx 직접 링크여야 합니다.') }
   }
 
   const tmpCrx = path.join(app.getPath('temp'), `browserbuild-dl-${Date.now()}.crx`)
   try {
     const res = await fetch(downloadUrl, { redirect: 'follow' })
     if (!res.ok || !res.body) {
-      return { ok: false, error: `다운로드 실패 (${res.status})` }
+      return { ok: false, error: tMain('main.extensions.errorDownloadFailed', `다운로드 실패 (${res.status})`, { status: String(res.status) }) }
     }
     const ws = createWriteStream(tmpCrx)
     await pipeline(Readable.fromWeb(res.body as unknown as import('node:stream/web').ReadableStream), ws)
   } catch (err) {
-    return { ok: false, error: `네트워크 오류: ${(err as Error).message}` }
+    return { ok: false, error: tMain('main.extensions.errorNetwork', `네트워크 오류: ${(err as Error).message}`, { detail: (err as Error).message }) }
   }
 
   try {
@@ -1091,7 +1092,7 @@ export async function openExtensionOptions(id: string, windowId: string): Promis
     return { ok: false, error: (err as Error).message }
   }
   const page = manifest.options_ui?.page ?? manifest.options_page
-  if (!page) return { ok: false, error: '옵션 페이지 없음' }
+  if (!page) return { ok: false, error: tMain('main.extensions.errorNoOptionsPage', '옵션 페이지 없음') }
   createTab({ windowId, url: `chrome-extension://${id}/${page}` })
   return { ok: true }
 }
@@ -1119,7 +1120,7 @@ export async function invokeExtensionAction(
 /** unpacked 폴더를 준비하고 동의 화면용 미리보기를 만든다(아직 설치되지 않는다). */
 export async function importLocalUnpackedDir(srcDir: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> {
   if (!existsSync(path.join(srcDir, 'manifest.json'))) {
-    return { ok: false, error: 'manifest.json 없음 (unpacked 디렉터리가 맞나요?)' }
+    return { ok: false, error: tMain('main.extensions.errorManifestMissing', 'manifest.json 없음 (unpacked 디렉터리가 맞나요?)') }
   }
   // srcDir 은 사용자 소유 임의 경로일 수 있으므로 직접 수정하지 않고 임시 복사본에 key 주입.
   // 폴더 드래그(unpacked) 는 CRX 헤더가 없어 pubKeyFromCrx=null → manifest 에 기존 key 가
@@ -1130,13 +1131,13 @@ export async function importLocalUnpackedDir(srcDir: string): Promise<{ ok: bool
     await copyDir(srcDir, tmpDir)
   } catch (err) {
     await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
-    return { ok: false, error: `복사 실패: ${(err as Error).message}` }
+    return { ok: false, error: tMain('main.extensions.errorCopyFailed', `복사 실패: ${(err as Error).message}`, { detail: (err as Error).message }) }
   }
 
   const computedId = await ensureManifestKey(tmpDir, null)
   if (!computedId) {
     await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined)
-    return { ok: false, error: 'manifest.json 을 읽을 수 없습니다.' }
+    return { ok: false, error: tMain('main.extensions.errorManifestUnreadable', 'manifest.json 을 읽을 수 없습니다.') }
   }
 
   const staged = await stageForConsent(tmpDir, computedId, 'unpacked')

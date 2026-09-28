@@ -17,6 +17,7 @@ import { onResponseStarted } from '../response-hooks'
 import { getTab, getTabPartition, getWebContentsByTabId } from '../../tabs/tab-service'
 import { putPending, removePending, type HlsPending, type VideoPending } from '../downloads/pending-store'
 import { getSetting } from '../../storage/settings'
+import { tMain } from '../../i18n'
 
 const VIDEO_MIME = [/^video\//i, /application\/vnd\.apple\.mpegurl/i, /application\/dash\+xml/i, /application\/x-mpegurl/i]
 const VIDEO_EXT = /\.(m3u8|mpd|mp4|webm|mkv|mov)(\?|$)/i
@@ -191,7 +192,7 @@ export async function handleOverlayDownload(args: { videoSrc: string; pageUrl: s
   // 6) 그 외 → 가진 URL 로 downloadMedia, 없으면 페이지 URL 로 yt-dlp
 
   if (host && isYtDlpHost(host)) {
-    notifyStarted('동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)', tabId)
+    notifyStarted(tMain('main.video.extractingYtdlp', '동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)'), tabId)
     void downloadWithYtDlp(pageUrl, pageUrl, { title, tabId })
     return
   }
@@ -222,7 +223,7 @@ export async function handleOverlayDownload(args: { videoSrc: string; pageUrl: s
   if (videoSrc) {
     void downloadMedia(videoSrc, pageUrl, tabId, title)
   } else if (pageUrl) {
-    notifyStarted('동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)', tabId)
+    notifyStarted(tMain('main.video.extractingYtdlp', '동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)'), tabId)
     void downloadWithYtDlp(pageUrl, pageUrl, { title, tabId })
   }
 }
@@ -420,11 +421,11 @@ export async function ensureYtDlp(opts?: { silent?: boolean }): Promise<string |
   if (!opts?.silent) {
     const ok = await dialog.showMessageBox({
       type: 'question',
-      buttons: ['받기', '취소'],
+      buttons: [tMain('main.video.ytdlpConsent.get', '받기'), tMain('main.video.ytdlpConsent.cancel', '취소')],
       defaultId: 0, cancelId: 1,
-      title: 'yt-dlp 가 필요합니다',
-      message: '동영상 다운로드를 위해 yt-dlp 를 다운로드합니다.',
-      detail: '약 15 MB. GitHub yt-dlp/yt-dlp 공식 릴리즈(최신)에서 받습니다. 이후 자동으로 최신 유지됩니다.',
+      title: tMain('main.video.ytdlpConsent.title', 'yt-dlp 가 필요합니다'),
+      message: tMain('main.video.ytdlpConsent.message', '동영상 다운로드를 위해 yt-dlp 를 다운로드합니다.'),
+      detail: tMain('main.video.ytdlpConsent.detail', '약 15 MB. GitHub yt-dlp/yt-dlp 공식 릴리즈(최신)에서 받습니다. 이후 자동으로 최신 유지됩니다.'),
     })
     if (ok.response !== 0) return null
   }
@@ -438,7 +439,7 @@ export async function ensureYtDlp(opts?: { silent?: boolean }): Promise<string |
     console.error('[video] yt-dlp download failed', err)
     void dialog.showMessageBox({
       type: 'error',
-      message: 'yt-dlp 다운로드 실패',
+      message: tMain('main.video.ytdlpDownloadFailed', 'yt-dlp 다운로드 실패'),
       detail: (err as Error).message,
     })
     return null
@@ -515,7 +516,7 @@ export async function downloadWithYtDlp(url: string, pageUrl: string, opts: { fo
   // 진행 중 작업을 영속화 — 브라우저가 닫혀도 다음 실행 때 같은 outputTpl 로 이어받음.
   const pending: VideoPending = {
     kind: 'video', id, url, pageUrl, title: opts.title ?? '',
-    format, outputTpl, filename: 'yt-dlp 시작 중…', startedAt: Date.now(),
+    format, outputTpl, filename: tMain('main.video.ytdlpStarting', 'yt-dlp 시작 중…'), startedAt: Date.now(),
   }
   putPending(pending)
 
@@ -590,7 +591,7 @@ function runYtDlpProcess(bin: string, p: VideoPending, cookiesPath?: string): vo
     id,
     kind: 'video',
     url,
-    filename: p.filename || 'yt-dlp 시작 중…',
+    filename: p.filename || tMain('main.video.ytdlpStarting', 'yt-dlp 시작 중…'),
     savePath: path.dirname(outputTpl),
     totalBytes: 0,
     receivedBytes: 0,
@@ -731,14 +732,14 @@ export async function downloadMedia(url: string, pageUrl: string, tabId?: string
     }
   }
   if (started) {
-    notifyStarted('다운로드를 시작했습니다 ⬇ (다운로드 패널 Ctrl+J)', tabId)
+    notifyStarted(tMain('main.video.downloadStarted', '다운로드를 시작했습니다 ⬇ (다운로드 패널 Ctrl+J)'), tabId)
     return
   }
   // 직접 받기 불가(HTML 페이지·임베드·스트림) → yt-dlp 범용 추출기로 폴백
-  notifyStarted('동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)', tabId)
+  notifyStarted(tMain('main.video.extractingYtdlpShort', '동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)'), tabId)
   const id = await downloadWithYtDlp(url || pageUrl, pageUrl, { title, tabId })
   if (!id) {
-    notifyToast('다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류', tabId)
+    notifyToast(tMain('main.video.startFailed', '다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류'), tabId)
   }
 }
 
@@ -767,7 +768,7 @@ export async function downloadStream(
   const isDash = kindHint ? kindHint === 'dash' : (/\.mpd(\?|$)/i.test(url) || /[?&]type=mpd/i.test(url))
   if (!isHls && !isDash) {
     // 그 외 → yt-dlp
-    notifyStarted('동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)', tabId)
+    notifyStarted(tMain('main.video.extractingYtdlp', '동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널 Ctrl+J)'), tabId)
     await downloadWithYtDlp(url || pageUrl, pageUrl, { title, tabId })
     return
   }
@@ -788,7 +789,7 @@ export async function downloadStream(
       totalBytes: 0, receivedBytes: 0, state: 'active', startedAt: Date.now(), sourceTabUrl: pageUrl,
     }
     registerExternalDownload(meta)
-    notifyStarted('동영상 다운로드 중… (DASH, 진행률은 다운로드 패널 Ctrl+J)', tabId)
+    notifyStarted(tMain('main.video.downloadingDash', '동영상 다운로드 중… (DASH, 진행률은 다운로드 패널 Ctrl+J)'), tabId)
     await runDashJob({ id, manifestUrl: url, pageUrl, title, session: ses, headers, outPathNoExt, tabId })
     return
   }
@@ -808,7 +809,7 @@ export async function downloadStream(
     totalBytes: 0, receivedBytes: 0, state: 'active', startedAt: Date.now(), sourceTabUrl: pageUrl,
   }
   registerExternalDownload(meta)
-  notifyStarted('동영상 다운로드 중… (HLS, 진행률은 다운로드 패널 Ctrl+J)', tabId)
+  notifyStarted(tMain('main.video.downloadingHls', '동영상 다운로드 중… (HLS, 진행률은 다운로드 패널 Ctrl+J)'), tabId)
 
   await runHlsJob({
     id, playlistUrl: url, pageUrl, title, session: ses, partition, headers,
@@ -899,7 +900,7 @@ async function runHlsJob(args: {
       // 네이티브 HLS 실패 → yt-dlp 폴백. yt-dlp 항목을 먼저 등록한 뒤 HLS 항목을 제거.
       console.warn('[video] native HLS failed, falling back to yt-dlp:', msg)
       removePending(id)
-      notifyStarted('동영상 추출 중… (yt-dlp 폴백, 진행률은 다운로드 패널)', tabId)
+      notifyStarted(tMain('main.video.extractingYtdlpFallback', '동영상 추출 중… (yt-dlp 폴백, 진행률은 다운로드 패널)'), tabId)
       // yt-dlp 가 throw 해도 HLS 임시 항목이 UI 에 남지 않도록 finally 로 항상 제거.
       let ytId: string | null = null
       try {
@@ -907,7 +908,7 @@ async function runHlsJob(args: {
       } finally {
         removeExternalDownload(id)
       }
-      if (!ytId) notifyToast('다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류', tabId)
+      if (!ytId) notifyToast(tMain('main.video.startFailed', '다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류'), tabId)
     }
   } finally {
     downloadEvents.off('cancel-external', onCancel)
@@ -952,14 +953,14 @@ async function runDashJob(args: {
       // 분리 음성(muxing 불가) 또는 파싱·세그먼트 실패 → yt-dlp 폴백
       const why = err instanceof DashSeparateAvError ? '음성/영상 분리' : msg
       console.warn('[video] native DASH fallback to yt-dlp:', why)
-      notifyStarted('동영상 추출 중… (yt-dlp 폴백, 진행률은 다운로드 패널)', tabId)
+      notifyStarted(tMain('main.video.extractingYtdlpFallback', '동영상 추출 중… (yt-dlp 폴백, 진행률은 다운로드 패널)'), tabId)
       let ytId: string | null = null
       try {
         ytId = await downloadWithYtDlp(manifestUrl, pageUrl, { title, tabId })
       } finally {
         removeExternalDownload(id)
       }
-      if (!ytId) notifyToast('다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류', tabId)
+      if (!ytId) notifyToast(tMain('main.video.startFailed', '다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류'), tabId)
     }
   } finally {
     downloadEvents.off('cancel-external', onCancel)
