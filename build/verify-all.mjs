@@ -401,6 +401,12 @@ function steps(outRoot) {
       timeoutMs: 8 * 60000, desc: '사용자 입력을 파일에 쓰는 5경로가 잘못된 입력을 거부하는가 G1~G6',
     },
     {
+      id: 'mod-macro', kind: 'harness', modes: ['full'],
+      script: 'verify-mod-macro-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'mod-macro', 'mod-macro-results.json'),
+      timeoutMs: 8 * 60000, desc: 'Mod API 샌드박스 탈출 차단(M1)·기능(M2~M5)·SSRF 차단(M6) + URL/단축키 매크로 트리거(S1~S3)',
+    },
+    {
       id: 'fingerprint', kind: 'harness', modes: ['full'],
       script: 'probe-fingerprint-cdp.mjs', outArg: false, result: () => fixed('fingerprint-report.json'),
       timeoutMs: 8 * 60000, desc: '자동화 지문 노출 진단',

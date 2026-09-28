@@ -308,7 +308,7 @@ export interface UserChromeState {
   lastError?: string
 }
 
-export type MacroTriggerType = 'shortcut' | 'url' | 'startup'
+export type MacroTriggerType = 'shortcut' | 'url' | 'startup' | 'interval'
 
 export interface MacroAction {
   type: 'navigate' | 'wait' | 'js' | 'click' | 'screenshot' | 'toast'
@@ -333,6 +333,8 @@ export interface MacroSummary {
   enabled: boolean
   trigger: { type: MacroTriggerType; value: string }
   updatedAt: number
+  // 묶음 G: 단축키 트리거가 다른 매크로·시스템 키맵과 겹치면 true — 매크로 목록 UI 경고 배지용.
+  shortcutConflict?: boolean
 }
 
 export type ModPermission = 'tabs' | 'menu' | 'storage' | 'network' | 'node'
