@@ -28,7 +28,8 @@ import {
 } from './extensions/adapter'
 import { buildAppMenu } from './menu/build-menu'
 import { initBookmarks } from './storage/bookmarks'
-import { initHistory, recordVisit, updateVisitTitle } from './storage/history'
+import { initHistory, recordVisit, updateVisitTitle, purgeExpiredHistory } from './storage/history'
+import { getSetting } from './storage/settings'
 import { DEFAULT_SESSION } from '../shared/constants'
 import { bindNativeTheme, trackWebContents as trackDarkMode } from './features/dark-mode'
 import { trackWebContents as trackPasskey } from './features/passkey'
@@ -153,21 +154,32 @@ if (!app.requestSingleInstanceLock()) {
         createTab({ windowId, url, background: opts?.background === true })
       })
       setMagnetHandler((url) => { void addTorrent(url) })
-      await initBookmarks()
-      await initHistory()
-      await initWorkspaces()
+      // 부팅 초기화 중 서로 무관한 것들을 Promise.all 로 병렬 실행 — 전부 자기 소유 파일만 읽고
+      // 쓰며, 서로의 완료를 기다릴 필요가 없다(각 init* 함수 본문 확인 완료: 다른 모듈의 상태를
+      // 읽거나 등록에 의존하지 않음). 실제 순서 의존은 이 Promise.all *뒤에* 있다 —
+      // ① 워크스페이스 partition 세션 설정(listWorkspaces 필요) ② 정책 webRequest 룰이
+      // 비어있지 않은 상태로 첫 페이지 로드 전 준비돼야 함(첫 탭은 이 전체 체인의 끝에서
+      // createBrowserWindow/세션 복원으로 생성되므로 안전) ③ 키맵은 창 생성(accelerator 바인딩)
+      // 전에 로드 완료. 이 세 조건 모두 Promise.all 완료 이후에 이어지는 코드가 지킨다.
+      await Promise.all([
+        initBookmarks(),
+        initHistory(),
+        initWorkspaces(),
+        initUserscripts(),
+        initPolicies(),
+        initPasswords(),
+        initDesignTokens(),
+        initAutomation(),
+        initModApi(),
+        loadKeymap(),
+        initUserChrome(),
+      ])
       // 모든 워크스페이스 partition 에 핸들러 install
       for (const ws of listWorkspaces()) setupSessionByPartition(ws.partition)
       // 새 워크스페이스 생성 시 자동 install
       workspaceEvents.on('created', (ws: { partition: string }) => {
         setupSessionByPartition(ws.partition)
       })
-      await initUserscripts()
-      await initPolicies()
-      await initPasswords()
-      await initDesignTokens()
-      await initAutomation()
-      await initModApi()
       registerAllIpc()
       registerDefaultActions()
       initDownloads()
@@ -238,8 +250,7 @@ if (!app.requestSingleInstanceLock()) {
         if (!isIncognitoTab(id)) updateVisitTitle(url, title)
       })
 
-      await loadKeymap()
-      await initUserChrome()
+      // loadKeymap()·initUserChrome() 은 위 Promise.all 에서 이미 완료됨
 
       windowEvents.on('created', (ctx: BrowserWindowContext) => {
         attachAcceleratorsToWindow(ctx)
@@ -307,6 +318,21 @@ if (!app.requestSingleInstanceLock()) {
 
       // 백그라운드 탭 슬립 루프 — 매 60초마다 비활성 탭 검사
       startTabSleepLoop()
+
+      // privacy.historyRetention 설정 반영 — 창 표시 후 지연 1회 + 이후 하루(24h) 주기로
+      // 보관 기간을 넘은 방문 기록을 삭제. 'unlimited' 면 purgeExpiredHistory 가 즉시 0 반환.
+      const runHistoryPurge = (): void => {
+        try {
+          const removed = purgeExpiredHistory(getSetting('privacy').historyRetention)
+          if (removed > 0) console.info(`[history] retention purge removed ${removed} row(s)`)
+        } catch (err) {
+          console.warn('[main] history retention purge failed', err)
+        }
+      }
+      setTimeout(runHistoryPurge, 5_000)
+      const HISTORY_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000
+      const historyPurgeInterval = setInterval(runHistoryPurge, HISTORY_PURGE_INTERVAL_MS)
+      if (typeof historyPurgeInterval.unref === 'function') historyPurgeInterval.unref()
 
       // 지난 세션에서 진행 중이던 다운로드 이어받기 (렌더러 마운트 후 토스트·패널이 보이도록 약간 지연)
       setTimeout(() => {

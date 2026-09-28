@@ -89,22 +89,22 @@ function sanitize(p: Partial<AgentTrigger>, base?: AgentTrigger): AgentTrigger {
 export function addTrigger(p: Partial<AgentTrigger>): AgentTrigger {
   const t = sanitize(p)
   triggers.push(t)
-  persist(); emitChanged()
+  persist(); emitChanged(); reconcileTimers()
   return clone(t)
 }
 export function updateTrigger(id: string, p: Partial<AgentTrigger>): void {
   const i = triggers.findIndex((t) => t.id === id)
   if (i < 0) return
   triggers[i] = sanitize(p, triggers[i])
-  persist(); emitChanged()
+  persist(); emitChanged(); reconcileTimers()
 }
 export function removeTrigger(id: string): void {
   triggers = triggers.filter((t) => t.id !== id)
-  persist(); emitChanged()
+  persist(); emitChanged(); reconcileTimers()
 }
 export function setTriggerEnabled(id: string, on: boolean): void {
   const t = triggers.find((x) => x.id === id)
-  if (t) { t.enabled = !!on; persist(); emitChanged() }
+  if (t) { t.enabled = !!on; persist(); emitChanged(); reconcileTimers() }
 }
 
 // ===== 매칭·유틸 =====
@@ -277,6 +277,34 @@ async function runWatch(t: AgentTrigger): Promise<void> {
 let dailyTimer: NodeJS.Timeout | null = null
 let watchTimer: NodeJS.Timeout | null = null
 
+function hasEnabledDaily(): boolean {
+  return triggers.some((t) => t.enabled && t.type === 'daily' && t.time)
+}
+function hasEnabledWatch(): boolean {
+  return triggers.some((t) => t.enabled && t.type === 'watch' && t.openUrl)
+}
+// 대상(해당 타입의 활성 트리거)이 0개면 타이머를 아예 돌리지 않는다 — 트리거를 안 쓰는
+// 사용자는 유휴 시 30초·60초마다 깨는 비용이 0이다. 트리거가 생기면(추가·활성화) 즉시 가동,
+// 마지막 트리거가 사라지면(삭제·비활성화) 즉시 정지. unref 로 이 타이머가 앱 종료를 막지 않게.
+function reconcileTimers(): void {
+  if (hasEnabledDaily()) {
+    if (!dailyTimer) {
+      dailyTimer = setInterval(dailyTick, 30000)
+      if (typeof dailyTimer.unref === 'function') dailyTimer.unref()
+    }
+  } else if (dailyTimer) {
+    clearInterval(dailyTimer); dailyTimer = null
+  }
+  if (hasEnabledWatch()) {
+    if (!watchTimer) {
+      watchTimer = setInterval(watchTick, 60000)
+      if (typeof watchTimer.unref === 'function') watchTimer.unref()
+    }
+  } else if (watchTimer) {
+    clearInterval(watchTimer); watchTimer = null
+  }
+}
+
 export function initAgentTriggers(): void {
   try {
     if (existsSync(FILE())) {
@@ -284,8 +312,7 @@ export function initAgentTriggers(): void {
       if (Array.isArray(raw)) triggers = raw.map((t) => sanitize(t, t))
     }
   } catch { triggers = [] }
-  if (!dailyTimer) dailyTimer = setInterval(dailyTick, 30000)
-  if (!watchTimer) watchTimer = setInterval(watchTick, 60000)
+  reconcileTimers()
   // 종료 시 디바운스 대기 중이던 상태(lastValue·lastFiredDay·lastRun)를 즉시 flush — 안 그러면 재시작 후
   // watch 가 "변경됨" 을 다시 알리거나 daily 가 중복 발화한다.
   app.on('before-quit', () => {

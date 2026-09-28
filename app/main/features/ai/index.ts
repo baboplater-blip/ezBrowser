@@ -108,6 +108,10 @@ export async function getAiPageInfo(tabId?: string): Promise<{ url: string; titl
 interface PageCacheEntry { url: string; at: number; page: PageContent }
 const pageCache = new Map<number, PageCacheEntry>()
 const PAGE_CACHE_TTL_MS = 20_000
+// 탭을 닫아도(webContents 파괴) pageCache 엔트리가 그대로 남으면, 탭을 많이 여닫는 긴 세션에서
+// 본문 텍스트(최대 maxChars) 를 계속 들고 있는 누수가 된다. wc.id 당 한 번만 'destroyed' 를
+// 걸어 그 순간 캐시 항목을 지운다(중복 리스너 방지용 추적 셋).
+const pageCacheDestroyHooked = new Set<number>()
 
 async function extractPageContentCached(wc: Electron.WebContents, maxChars: number): Promise<PageContent | null> {
   let url = ''
@@ -118,7 +122,17 @@ async function extractPageContentCached(wc: Electron.WebContents, maxChars: numb
     return { ...hit.page, selection: sel }
   }
   const page = await extractPageContent(wc, maxChars)
-  if (page && url) pageCache.set(wc.id, { url, at: Date.now(), page })
+  if (page && url) {
+    pageCache.set(wc.id, { url, at: Date.now(), page })
+    if (!pageCacheDestroyHooked.has(wc.id)) {
+      pageCacheDestroyHooked.add(wc.id)
+      const wcId = wc.id
+      wc.once('destroyed', () => {
+        pageCache.delete(wcId)
+        pageCacheDestroyHooked.delete(wcId)
+      })
+    }
+  }
   return page
 }
 
