@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ActionDescriptor, MacroSummary, TabSummary } from '../../shared/types'
 import { chosung, scoreFuzzy } from '../utils/fuzzy'
+import { useI18nT } from '../i18n'
 
 interface ItemBase {
   id: string
@@ -52,6 +53,7 @@ const PREFIXES: Record<string, { category: string | null; label: string }> = {
 }
 
 export function CommandPalette({ windowId, open, onClose, actions, tabs, macros, labels, activeTabId }: Props) {
+  const tr = useI18nT()
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -81,7 +83,7 @@ export function CommandPalette({ windowId, open, onClose, actions, tabs, macros,
     for (const t of tabs) {
       items.push({
         id: `tab-${t.id}`, kind: 'tab', tabId: t.id,
-        label: t.title || t.url || '새 탭',
+        label: t.title || t.url || tr('ui.tabbar.newTab', '새 탭'),
         category: 'tab',
       })
     }
@@ -225,35 +227,35 @@ export function CommandPalette({ windowId, open, onClose, actions, tabs, macros,
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="명령 검색 — 이름을 입력하세요 (예: 다크, 설정, ㅂㅁㅋ)  ·  ? 누르면 도움말"
+          placeholder={tr('ui.palette.placeholder', '명령 검색 — 이름을 입력하세요 (예: 다크, 설정, ㅂㅁㅋ)  ·  ? 누르면 도움말')}
           role="combobox"
           aria-expanded={open}
           aria-controls="cp-listbox"
           aria-autocomplete="list"
           aria-activedescendant={!isHelp && filtered.length > 0 ? `cp-opt-${highlight}` : undefined}
-          aria-label="명령 팔레트"
+          aria-label={tr('ui.toolbar.palette.label', '명령 팔레트')}
         />
         <div className="command-palette-list" ref={listRef} role="listbox" id="cp-listbox">
           {isHelp && (
             <div className="command-palette-help">
-              <div className="cp-help-title">명령 팔레트 사용법</div>
-              <div className="cp-help-row"><kbd>↑</kbd><kbd>↓</kbd> 항목 이동 · <kbd>Enter</kbd> 실행 · <kbd>Esc</kbd> 닫기</div>
-              <div className="cp-help-section">검색 범위 좁히기</div>
-              <div className="cp-help-row"><kbd>&gt;</kbd> 액션만 (예: <em>&gt;다크</em>)</div>
-              <div className="cp-help-row"><kbd>#</kbd> 열린 탭만 (예: <em>#github</em>)</div>
-              <div className="cp-help-row"><kbd>@</kbd> 저장된 매크로</div>
-              <div className="cp-help-section">검색 팁</div>
-              <div className="cp-help-row">한글 초성으로도 검색됩니다 — <em>ㅂㅁㅋ</em> → 북마크</div>
-              <div className="cp-help-row">자주 쓴 명령은 자동으로 위로 정렬됩니다 (MRU)</div>
+              <div className="cp-help-title">{tr('ui.palette.help.title', '명령 팔레트 사용법')}</div>
+              <div className="cp-help-row"><kbd>↑</kbd><kbd>↓</kbd> {tr('ui.palette.help.move', '항목 이동')} · <kbd>Enter</kbd> {tr('ui.palette.help.run', '실행')} · <kbd>Esc</kbd> {tr('ui.palette.help.close', '닫기')}</div>
+              <div className="cp-help-section">{tr('ui.palette.help.narrowSection', '검색 범위 좁히기')}</div>
+              <div className="cp-help-row"><kbd>&gt;</kbd> {tr('ui.palette.help.actionsOnlyLabel', '액션만 (예: ')}<em>{tr('ui.palette.help.actionsOnlyExample', '>다크')}</em>)</div>
+              <div className="cp-help-row"><kbd>#</kbd> {tr('ui.palette.help.tabsOnlyLabel', '열린 탭만 (예: ')}<em>{tr('ui.palette.help.tabsOnlyExample', '#github')}</em>)</div>
+              <div className="cp-help-row"><kbd>@</kbd> {tr('ui.palette.help.savedMacros', '저장된 매크로')}</div>
+              <div className="cp-help-section">{tr('ui.palette.help.tipsSection', '검색 팁')}</div>
+              <div className="cp-help-row">{tr('ui.palette.help.chosungTip', '한글 초성으로도 검색됩니다 — ')}<em>{tr('ui.palette.help.chosungExample', 'ㅂㅁㅋ')}</em> → {tr('ui.palette.help.chosungResult', '북마크')}</div>
+              <div className="cp-help-row">{tr('ui.palette.help.mruTip', '자주 쓴 명령은 자동으로 위로 정렬됩니다 (MRU)')}</div>
             </div>
           )}
           {!isHelp && showHint && (
             <div className="command-palette-hint">
-              자주 사용하는 명령 · 이름을 입력하면 전체에서 검색됩니다 (<kbd>?</kbd> 사용법)
+              {tr('ui.palette.hintPrefix', '자주 사용하는 명령 · 이름을 입력하면 전체에서 검색됩니다 (')}<kbd>?</kbd> {tr('ui.palette.hintSuffix', '사용법)')}
             </div>
           )}
           {!isHelp && filtered.length === 0 && (
-            <div className="command-palette-empty">결과 없음 — 다른 키워드를 시도하거나 <kbd>?</kbd>로 사용법을 확인하세요</div>
+            <div className="command-palette-empty">{tr('ui.palette.emptyPrefix', '결과 없음 — 다른 키워드를 시도하거나 ')}<kbd>?</kbd>{tr('ui.palette.emptySuffix', '로 사용법을 확인하세요')}</div>
           )}
           {!isHelp && filtered.map((item, i) => (
             <div

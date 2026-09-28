@@ -29,7 +29,7 @@ import { useDownloads } from './hooks/useDownloads'
 import { useBookmarks } from './hooks/useBookmarks'
 import { useVideoCandidates } from './hooks/useVideoCandidates'
 import { useChromeOverlay } from './hooks/useChromeOverlay'
-import { useI18nDict, setLocale } from './i18n'
+import { useI18nDict, useI18nT, setLocale } from './i18n'
 import type { SupportedLocale } from '../shared/i18n-core'
 import { NEW_TAB_URL } from '../shared/constants'
 
@@ -78,6 +78,7 @@ export function App() {
   // 언어 사전(반응형) — 쿼리 `?lang=` 으로 초기값이 이미 맞게 들어와 있고(무깜빡임),
   // 아래 useEffect 가 설정 변경(browser://settings 의 언어 select)을 구독해 재로드 없이 갱신한다.
   const labels = useI18nDict()
+  const t = useI18nT()
   const [windowId, setWindowId] = useState<string | null>(() => readWindowIdFromQuery())
   const [incognito] = useState<boolean>(() => readIncognitoFromQuery())
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -510,7 +511,7 @@ export function App() {
             {tabbarOrientation === 'left' && (
               <TabBar windowId={windowId} tabs={tabs} orientation="left" />
             )}
-            <ErrorBoundary scope="사이드 패널" compact>
+            <ErrorBoundary scope="ui.errorBoundary.scope.sidePanel" compact>
               <SidePanel
                 side="left"
                 open={leftPanelOpen}
@@ -525,7 +526,7 @@ export function App() {
               />
             </ErrorBoundary>
             <PaneStage windowId={windowId} layout={paneLayout} tabs={tabs} />
-            <ErrorBoundary scope="사이드 패널" compact>
+            <ErrorBoundary scope="ui.errorBoundary.scope.sidePanel" compact>
               <SidePanel
                 side="right"
                 open={rightPanelOpen}
@@ -542,7 +543,7 @@ export function App() {
             {tabbarOrientation === 'right' && (
               <TabBar windowId={windowId} tabs={tabs} orientation="right" />
             )}
-            <ErrorBoundary scope="동영상 패널" compact>
+            <ErrorBoundary scope="ui.errorBoundary.scope.videoPanel" compact>
               <VideoCandidatePanel
                 open={videoOpen && videoCandidates.length > 0}
                 candidates={videoCandidates}
@@ -550,7 +551,7 @@ export function App() {
                 onClose={() => setVideoOpen(false)}
               />
             </ErrorBoundary>
-            <ErrorBoundary scope="다운로드 패널" compact>
+            <ErrorBoundary scope="ui.errorBoundary.scope.downloadPanel" compact>
               <DownloadsPanel
                 open={downloadsOpen}
                 width={DOWNLOADS_PANEL_WIDTH}
@@ -562,7 +563,7 @@ export function App() {
             <button
               className="dl-badge"
               onClick={() => setDownloadsOpen(true)}
-              title={`다운로드 ${activeDownloads}개 진행 중`}
+              title={t('ui.app.downloadsBadge', '다운로드 {count}개 진행 중', { count: activeDownloads })}
             >
               ⬇ {activeDownloads}
             </button>

@@ -261,6 +261,462 @@
       "palette": {
         "label": "Command Palette",
         "title": "Command Palette (Ctrl+Shift+P)"
+      },
+      "workspaceRail": {
+        "collapse": "Collapse workspace rail",
+        "expand": "Expand workspace rail",
+        "title": "Workspace rail (left) — switch spaces by color chip, + to add a new space"
+      },
+      "nav": {
+        "back": "Back",
+        "forward": "Forward",
+        "stop": "Stop",
+        "reload": "Reload"
+      },
+      "incognito": {
+        "title": "Incognito window — history and passwords are not saved",
+        "label": "🕶 Incognito"
+      },
+      "siteInfo": {
+        "label": "Site info",
+        "title": "Site info · permissions"
+      },
+      "omnibox": {
+        "placeholder": "Search or type a URL · command (e.g. !yt search term)"
+      },
+      "zoom": {
+        "label": "Zoom {percent}% — click to reset to 100%",
+        "title": "Zoom {percent}% — click to reset to default"
+      },
+      "sidepanel": {
+        "leftOpen": "Open left side panel",
+        "leftClose": "Close left side panel",
+        "leftTitle": "Left side panel (Ctrl+B) — bookmarks · history · notes",
+        "rightOpen": "Open right side panel",
+        "rightClose": "Close right side panel",
+        "rightTitle": "Right side panel (Ctrl+Alt+B) — bookmarks · history · notes"
+      },
+      "bookmark": {
+        "add": "Add bookmark",
+        "edit": "Edit bookmark",
+        "addTitle": "Add bookmark (Ctrl+D)",
+        "editTitle": "Edit bookmark (Ctrl+D)"
+      },
+      "readlater": {
+        "add": "Add to reading list",
+        "remove": "Remove from reading list",
+        "addTitle": "Add to reading list — read later"
+      },
+      "video": {
+        "open": "Open video sidebar",
+        "close": "Close video sidebar",
+        "title": "{count} videos detected — open/close sidebar"
+      }
+    },
+    "app": {
+      "downloadsBadge": "{count} downloads in progress"
+    },
+    "errorBoundary": {
+      "title": "An error occurred in {where}",
+      "retry": "Try again",
+      "reload": "Reload shell",
+      "hint": "Your open tabs and pages are still there.",
+      "scope": {
+        "default": "the shell",
+        "sidePanel": "the side panel",
+        "videoPanel": "the video panel",
+        "downloadPanel": "the download panel"
+      }
+    },
+    "tabbar": {
+      "newTab": "New tab",
+      "closeTab": "Close tab",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "mutedHint": "Muted — click to unmute",
+      "audibleHint": "Playing audio — click to mute",
+      "pinnedSuffix": " (pinned)",
+      "mutedSuffix": " (muted)",
+      "discardedBadge": "Sleeping tab",
+      "discardedTitle": "{url}\n(Sleeping tab — click to reload)",
+      "group": {
+        "expand": "Expand",
+        "collapse": "Collapse",
+        "headerTitle": "{title} — click to {action}, right-click for menu",
+        "color": {
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "blue": "Blue",
+          "purple": "Purple",
+          "pink": "Pink",
+          "gray": "Gray"
+        }
+      },
+      "ctx": {
+        "selectedCount": "{count} tabs selected",
+        "groupSelected": "Group selected tabs",
+        "moveToGroup": "Move to {title}",
+        "addBookmark": "Add to bookmarks",
+        "addReadLater": "Add to reading list",
+        "closeCount": "Close {count} tabs",
+        "clearSelection": "Clear selection",
+        "reload": "Reload",
+        "duplicate": "Duplicate tab",
+        "addThisBookmark": "Bookmark this tab",
+        "pin": "Pin tab",
+        "unpin": "Unpin tab",
+        "muteTab": "Mute tab",
+        "muteOthers": "Mute all other tabs",
+        "unmuteAll": "Unmute all tabs",
+        "moveToNewGroup": "Move to new group",
+        "removeFromGroup": "Remove from group",
+        "reopenClosed": "Reopen closed tab",
+        "closeOthers": "Close other tabs",
+        "closeRight": "Close tabs to the right",
+        "groupNameLabel": "Group name",
+        "rename": "Rename",
+        "ungroup": "Ungroup"
+      },
+      "preview": {
+        "capturing": "Capturing…",
+        "none": "No preview"
+      }
+    },
+    "sidepanel": {
+      "loading": "Loading…",
+      "close": "Close",
+      "closeAria": "Close side panel",
+      "tab": {
+        "bookmarks": "Bookmarks",
+        "history": "History",
+        "notes": "Notes",
+        "readlater": "Reading list",
+        "briefing": "Daily briefing"
+      },
+      "bookmarks": {
+        "empty": "No bookmarks yet. Press Ctrl+D to add one.",
+        "searchPlaceholder": "Search title · URL"
+      },
+      "history": {
+        "searchPlaceholder": "Search history",
+        "noResults": "No results",
+        "empty": "No browsing history yet.",
+        "removeItem": "Remove this item"
+      },
+      "readlater": {
+        "empty": "Your reading list is empty. Save a page with the 📖 button next to the address bar.",
+        "countLine": "{unread} unread · {total} total",
+        "toggleTitle": "Toggle read items",
+        "unreadOnly": "Unread only",
+        "showAll": "Show all",
+        "clearReadTitle": "Clear all read items",
+        "clearRead": "Clear read items",
+        "noUnread": "No unread items.",
+        "markUnread": "Mark as unread",
+        "markRead": "Mark as read",
+        "removeTitle": "Remove from list"
+      },
+      "notes": {
+        "placeholder": "Jot down anything here. It saves as you type."
+      },
+      "briefing": {
+        "empty": "No collectors yet.",
+        "createLink": "+ Create a daily collector",
+        "off": "Off",
+        "runNowTitle": "Run now",
+        "runNow": "Run now",
+        "running": "Collecting…",
+        "neverRun": "Never run",
+        "newCount": " · {count} new",
+        "filterLabel": " · filter: {keyword}",
+        "noDigest": "No briefing yet. Try “Run now”.",
+        "collapseItems": "▾ Hide items",
+        "expandItems": "▸ Show collected items",
+        "noItems": "No items."
+      },
+      "relTime": {
+        "justNow": "just now",
+        "minutesAgo": "{n}m ago",
+        "hoursAgo": "{n}h ago",
+        "daysAgo": "{n}d ago"
+      }
+    },
+    "siteinfo": {
+      "internalPage": "Internal page",
+      "secure": "Secure connection",
+      "insecure": "Not a secure connection",
+      "internalEmpty": "This page has no site permissions.",
+      "permissionsTitle": "Permissions",
+      "permDefault": "Default",
+      "permAllow": "Allow",
+      "permDeny": "Block",
+      "adblockSite": "Block ads on this site",
+      "dataTitle": "Site data",
+      "dataCleared": "Cleared",
+      "dataChecking": "Checking…",
+      "cookieCount": "{count} cookies",
+      "clearDataTitle": "Clear this site's cookies, local storage, and cache",
+      "clearing": "Clearing…",
+      "clearedDone": "✓ Done",
+      "clearDataBtn": "Clear data",
+      "clearHint": "Clears cookies, local storage, IndexedDB, service workers, and cache, then reloads the page. You may be signed out.",
+      "manageAll": "Manage all site permissions →",
+      "perm": {
+        "media": "Camera · microphone",
+        "geolocation": "Location",
+        "notifications": "Notifications",
+        "clipboard-read": "Clipboard",
+        "passkey": "Passkey sign-in prompt"
+      }
+    },
+    "downloads": {
+      "header": "Downloads",
+      "closeAria": "Close",
+      "closeTitle": "Close downloads sidebar",
+      "addPlaceholder": "magnet:?xt=... or a .torrent URL",
+      "addTorrent": "Add torrent",
+      "searchPlaceholder": "Search filename · URL",
+      "searchClearAria": "Clear search",
+      "clearFinishedTitle": "Remove all completed, failed, and cancelled items",
+      "clearFinished": "Clear finished",
+      "emptyNone": "No downloads yet.",
+      "emptyFiltered": "No results.",
+      "accelBadge": "{count} connections",
+      "etaSuffix": "⏱ {eta} left",
+      "peers": "{n} peers",
+      "ratio": "ratio {n}",
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel",
+      "remove": "Remove",
+      "removeWithFiles": "Remove + delete files",
+      "openFolder": "Open folder",
+      "hideFiles": "Hide files",
+      "showFiles": "Files ({count})",
+      "eta": {
+        "seconds": "{n}s",
+        "minutesSeconds": "{m}m {s}s",
+        "hoursMinutes": "{h}h {m}m"
+      },
+      "state": {
+        "active": "In progress",
+        "paused": "Paused",
+        "metadata": "Metadata",
+        "done": "Done",
+        "seeding": "Seeding",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "queued": "Queued"
+      },
+      "filter": {
+        "all": "All",
+        "active": "In progress",
+        "done": "Done",
+        "failed": "Failed"
+      },
+      "ctx": {
+        "openFile": "📂 Open file",
+        "retry": "↻ Retry",
+        "showInFolder": "🗂 Show in folder",
+        "copyPath": "📋 Copy path",
+        "removeFromList": "🗑 Remove from list"
+      }
+    },
+    "palette": {
+      "placeholder": "Search commands — type a name (e.g. dark, settings)  ·  press ? for help",
+      "hintPrefix": "Frequently used commands · type a name to search everything (",
+      "hintSuffix": "help)",
+      "emptyPrefix": "No results — try another keyword or ",
+      "emptySuffix": " for help",
+      "help": {
+        "title": "Command palette help",
+        "move": "Move",
+        "run": "Run",
+        "close": "Close",
+        "narrowSection": "Narrow the search",
+        "actionsOnlyLabel": "Actions only (e.g. ",
+        "actionsOnlyExample": ">dark",
+        "tabsOnlyLabel": "Open tabs only (e.g. ",
+        "tabsOnlyExample": "#github",
+        "savedMacros": "Saved macros",
+        "tipsSection": "Search tips",
+        "chosungTip": "You can also search by Korean initials — ",
+        "chosungExample": "ㅂㅁㅋ",
+        "chosungResult": "bookmark",
+        "mruTip": "Frequently used commands are sorted to the top automatically (MRU)"
+      }
+    },
+    "workspaceRail": {
+      "activeSuffix": " (active)",
+      "chipHint": "\nRight-click = menu, double-click = rename",
+      "chipAria": "Workspace {name}",
+      "newTitle": "New space (Ctrl+Alt+N)",
+      "newAria": "New workspace",
+      "alertLastSpace": "You can't delete the last space.",
+      "confirmDelete": "Delete space \"{name}\"?\n(All tabs and sessions in this space will be lost.)",
+      "color": {
+        "red": "Red",
+        "orange": "Orange",
+        "yellow": "Yellow",
+        "green": "Green",
+        "blue": "Blue",
+        "purple": "Purple",
+        "pink": "Pink",
+        "gray": "Gray"
+      },
+      "menu": {
+        "rename": "Rename…",
+        "setHome": "Set home page…",
+        "colorSection": "Color",
+        "delete": "Delete",
+        "namePlaceholder": "Space name",
+        "homePlaceholder": "https://… (leave blank for new tab)",
+        "confirm": "OK",
+        "cancel": "Cancel"
+      }
+    },
+    "paneStage": {
+      "dropHint": "Split here",
+      "emptyPane": "Empty pane",
+      "newTabHere": "New tab in this pane",
+      "unsplit": "Unsplit (Ctrl+Alt+0)",
+      "left": "Left",
+      "right": "Right",
+      "top": "Top",
+      "bottom": "Bottom",
+      "splitterTitle": "Drag = resize · double-click = 50:50"
+    },
+    "permPrompt": {
+      "requestSuffix": " wants to {label}",
+      "remember": "Remember this choice",
+      "queueMore": "{count} more request(s) pending",
+      "allow": "Allow",
+      "deny": "Block",
+      "perm": {
+        "media": "use your camera & microphone",
+        "geolocation": "use your location",
+        "notifications": "show notifications",
+        "clipboard-read": "read the clipboard"
+      }
+    },
+    "video": {
+      "downloadFailed": "Couldn't start the video download — yt-dlp install was declined or failed.",
+      "detected": "{count} video(s) detected",
+      "none": "No videos detected.",
+      "ytdlpHint": "HLS/DASH/site candidates are handled automatically by yt-dlp (about 15MB downloaded on first use, after consent).",
+      "kind": {
+        "video": "Video",
+        "site": "Site"
+      }
+    },
+    "extActions": {
+      "overflowTitle": "{count} more extensions",
+      "overflowAria": "Show {count} more extensions",
+      "hiddenGroupAria": "Hidden extension icons",
+      "menuAria": "{name} menu",
+      "options": "Options",
+      "manage": "Manage extensions",
+      "confirmRemove": "Remove extension \"{name}\"?",
+      "remove": "Remove"
+    },
+    "tabSearch": {
+      "placeholder": "Search {count} open tabs — title · URL · initials  ·  Enter to switch, Ctrl+Enter/Del to close",
+      "noMatch": "No matching tabs",
+      "pinned": "Pinned",
+      "groupTitle": "Group: {name}",
+      "current": "Current"
+    },
+    "findBar": {
+      "noResults": "No results",
+      "searching": "Searching…",
+      "placeholder": "Find in page",
+      "matchCase": "Match case",
+      "prev": "Previous (Shift+Enter)",
+      "next": "Next (Enter)",
+      "close": "Close (Esc)"
+    },
+    "bookmarkBar": {
+      "empty": "No bookmarks yet. Add one with Ctrl+D on any site.",
+      "manage": "Manage",
+      "emptyFolder": "Empty folder"
+    },
+    "pwPrompt": {
+      "updateTitle": "Update this password?",
+      "saveTitle": "Save this password?",
+      "update": "Update",
+      "save": "Save",
+      "discard": "Not now",
+      "never": "Never for this site",
+      "queueMore": "{count} more request(s) waiting"
+    },
+    "clearData": {
+      "title": "Clear browsing data",
+      "done": "✓ Browsing history cleared.",
+      "range": "Time range",
+      "note": "History from the selected range will be deleted. This can't be undone.",
+      "cancel": "Cancel",
+      "clearing": "Clearing…",
+      "clear": "Clear",
+      "ranges": {
+        "lastHour": "Last hour",
+        "last24h": "Last 24 hours",
+        "last7d": "Last 7 days",
+        "last4w": "Last 4 weeks",
+        "allTime": "All time"
+      }
+    },
+    "bookmarkBubble": {
+      "added": "Bookmark added",
+      "saving": "Saving…",
+      "name": "Name",
+      "folder": "Folder",
+      "bookmarkBar": "Bookmarks bar",
+      "remove": "Remove",
+      "done": "Done"
+    },
+    "updateBanner": {
+      "availablePrefix": "New version ",
+      "availableSuffix": " available (current v{current})",
+      "downloading": "Downloading update… ",
+      "readyPrefix": "Update ",
+      "readySuffix": " is ready — it will apply on restart",
+      "download": "Download",
+      "install": "Restart & install",
+      "dismiss": "Dismiss"
+    },
+    "qrModal": {
+      "title": "QR code for this page",
+      "generating": "Generating…",
+      "close": "Close"
+    },
+    "userChrome": {
+      "close": "Close",
+      "enabled": "Enabled",
+      "openExternal": "Open in external editor",
+      "hotReload": "Hot reload",
+      "saveApply": "Save + apply",
+      "hintSummary": "Available safe selectors · variables"
+    },
+    "recentlyClosed": {
+      "justNow": "just now",
+      "secondsAgo": "{n}s ago",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago",
+      "title": "Recently closed tabs",
+      "clearAll": "Clear all",
+      "empty": "No recently closed tabs"
+    },
+    "omnibox": {
+      "source": {
+        "url": "URL",
+        "history": "History",
+        "bookmark": "Bookmark",
+        "tab": "Open tab",
+        "search": "Search",
+        "action": "Command"
       }
     }
   },

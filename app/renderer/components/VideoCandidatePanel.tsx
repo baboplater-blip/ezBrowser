@@ -1,4 +1,5 @@
 import type { MediaCandidate } from '../../shared/types'
+import { useI18nT } from '../i18n'
 
 interface Props {
   open: boolean
@@ -27,12 +28,13 @@ function shortUrl(url: string): string {
 }
 
 export function VideoCandidatePanel({ open, candidates, onClose, width = 320 }: Props) {
+  const tr = useI18nT()
   if (!open) return null
 
   async function download(c: MediaCandidate) {
     const result = await window.browserAPI.video.download(c)
     if (!result.ok) {
-      alert('동영상 다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류가 났습니다.')
+      alert(tr('ui.video.downloadFailed', '동영상 다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류가 났습니다.'))
     }
     // 다운로드가 시작되면 메인이 다운로드 사이드바를 자동으로 엽니다(panel:open downloads).
   }
@@ -40,11 +42,11 @@ export function VideoCandidatePanel({ open, candidates, onClose, width = 320 }: 
   return (
     <aside className="sidepanel sidepanel-right video-dock" style={{ width }}>
       <div className="sidepanel-header">
-        <span>감지된 동영상 ({candidates.length})</span>
-        <button className="icon-btn" onClick={onClose} aria-label="닫기" title="동영상 사이드바 닫기">×</button>
+        <span>{tr('ui.video.detected', '감지된 동영상 ({count})', { count: candidates.length })}</span>
+        <button className="icon-btn" onClick={onClose} aria-label={tr('ui.sidepanel.close', '닫기')} title={tr('ui.toolbar.video.close', '동영상 사이드바 닫기')}>×</button>
       </div>
       <div className="sidepanel-body video-dock-body">
-        {candidates.length === 0 && <div className="empty">감지된 동영상이 없습니다.</div>}
+        {candidates.length === 0 && <div className="empty">{tr('ui.video.none', '감지된 동영상이 없습니다.')}</div>}
         {candidates.map((c) => (
           <button
             key={c.url}
@@ -52,13 +54,13 @@ export function VideoCandidatePanel({ open, candidates, onClose, width = 320 }: 
             onClick={() => download(c)}
             title={c.url}
           >
-            <span className={`vc-kind k-${c.kind}`}>{KIND_LABEL[c.kind]}</span>
+            <span className={`vc-kind k-${c.kind}`}>{tr(`ui.video.kind.${c.kind}`, KIND_LABEL[c.kind])}</span>
             <span className="vc-text">{shortUrl(c.url)}</span>
             {c.sizeBytes && <span className="vc-size">{formatBytes(c.sizeBytes)}</span>}
           </button>
         ))}
         <div className="video-popover-hint">
-          HLS/DASH/사이트 후보는 yt-dlp 가 자동 처리합니다 (첫 사용 시 동의 후 약 15MB 받음).
+          {tr('ui.video.ytdlpHint', 'HLS/DASH/사이트 후보는 yt-dlp 가 자동 처리합니다 (첫 사용 시 동의 후 약 15MB 받음).')}
         </div>
       </div>
     </aside>

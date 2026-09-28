@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TabSummary } from '../../shared/types'
 import { NEW_TAB_URL } from '../../shared/constants'
 import { acquireChromeOverlay, releaseChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 export interface PaneLayout {
   split: 'h' | 'v' | null
@@ -19,6 +20,7 @@ interface Props {
 type DropZone = 'left' | 'right' | 'top' | 'bottom' | null
 
 export function PaneStage({ windowId, layout, tabs }: Props) {
+  const tr = useI18nT()
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -67,7 +69,7 @@ export function PaneStage({ windowId, layout, tabs }: Props) {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        {dropZone && <div className={`pane-dropzone-overlay zone-${dropZone}`}>여기에 분할</div>}
+        {dropZone && <div className={`pane-dropzone-overlay zone-${dropZone}`}>{tr('ui.paneStage.dropHint', '여기에 분할')}</div>}
       </div>
     )
   }
@@ -103,6 +105,7 @@ function Pane({ idx, active, flex, tabId, tabs, windowId, split }: {
   idx: number; active: boolean; flex: number; tabId: string | null
   tabs: TabSummary[]; windowId: string; split: 'h' | 'v'
 }) {
+  const tr = useI18nT()
   const tab = tabs.find((t) => t.id === tabId)
   const handleClick = useCallback(() => {
     if (!active) void window.browserAPI.windows.focusPane(windowId, idx)
@@ -127,19 +130,19 @@ function Pane({ idx, active, flex, tabId, tabs, windowId, split }: {
     >
       <div className="pane-header">
         {tab?.favicon && <img className="pane-header-favicon" src={tab.favicon} alt="" />}
-        <span className="pane-header-title">{tab?.title || tab?.url || '빈 분할창'}</span>
-        <span className="pane-header-pos">{positionLabel(split, idx)}</span>
+        <span className="pane-header-title">{tab?.title || tab?.url || tr('ui.paneStage.emptyPane', '빈 분할창')}</span>
+        <span className="pane-header-pos">{positionLabel(split, idx, tr)}</span>
         {!tab && (
           <button
             className="pane-header-btn"
-            title="이 분할창에 새 탭"
+            title={tr('ui.paneStage.newTabHere', '이 분할창에 새 탭')}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={addNewTab}
           >＋</button>
         )}
         <button
           className="pane-header-btn pane-header-close"
-          title="분할 해제 (Ctrl+Alt+0)"
+          title={tr('ui.paneStage.unsplit', '분할 해제 (Ctrl+Alt+0)')}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={closeSplit}
         >✕</button>
@@ -148,12 +151,13 @@ function Pane({ idx, active, flex, tabId, tabs, windowId, split }: {
   )
 }
 
-function positionLabel(split: 'h' | 'v', idx: number): string {
-  if (split === 'h') return idx === 0 ? '왼쪽' : '오른쪽'
-  return idx === 0 ? '위' : '아래'
+function positionLabel(split: 'h' | 'v', idx: number, tr: (key: string, fallback?: string) => string): string {
+  if (split === 'h') return idx === 0 ? tr('ui.paneStage.left', '왼쪽') : tr('ui.paneStage.right', '오른쪽')
+  return idx === 0 ? tr('ui.paneStage.top', '위') : tr('ui.paneStage.bottom', '아래')
 }
 
 function Splitter({ split, windowId }: { split: 'h' | 'v'; windowId: string }) {
+  const tr = useI18nT()
   const draggingRef = useRef(false)
   const [doubleHint, setDoubleHint] = useState(false)
 
@@ -206,7 +210,7 @@ function Splitter({ split, windowId }: { split: 'h' | 'v'; windowId: string }) {
       className={`splitter splitter-${split} ${doubleHint ? 'hint' : ''}`}
       onMouseDown={onMouseDown}
       onDoubleClick={onDoubleClick}
-      title="드래그 = 비율 조정 · 더블클릭 = 50:50"
+      title={tr('ui.paneStage.splitterTitle', '드래그 = 비율 조정 · 더블클릭 = 50:50')}
     />
   )
 }

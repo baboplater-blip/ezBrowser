@@ -1,4 +1,5 @@
 import type { OmniboxSuggestion } from '../../shared/types'
+import { useI18nT } from '../i18n'
 
 interface Props {
   items: OmniboxSuggestion[]
@@ -16,6 +17,7 @@ const SOURCE_LABEL: Record<OmniboxSuggestion['source'], string> = {
 }
 
 export function OmniboxSuggestions({ items, highlight, onSelect }: Props) {
+  const tr = useI18nT()
   return (
     <div className="omnibox-suggestions" role="listbox">
       {items.map((item, i) => (
@@ -26,7 +28,7 @@ export function OmniboxSuggestions({ items, highlight, onSelect }: Props) {
           className={`omnibox-suggestion ${i === highlight ? 'active' : ''}`}
           onMouseDown={(e) => { e.preventDefault(); onSelect(item) }}
         >
-          <span className={`source source-${item.source}`}>{SOURCE_LABEL[item.source]}</span>
+          <span className={`source source-${item.source}`}>{tr(`ui.omnibox.source.${item.source}`, SOURCE_LABEL[item.source])}</span>
           <span className="text">{item.text}</span>
           {item.detail && <span className="detail">{item.detail}</span>}
         </button>

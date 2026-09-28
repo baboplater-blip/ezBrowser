@@ -261,6 +261,462 @@
       "palette": {
         "label": "명령 팔레트",
         "title": "명령 팔레트 (Ctrl+Shift+P)"
+      },
+      "workspaceRail": {
+        "collapse": "워크스페이스 사이드바 접기",
+        "expand": "워크스페이스 사이드바 펼치기",
+        "title": "워크스페이스 사이드바 (좌측) — 색 칩으로 스페이스 전환, + 로 새 스페이스 추가"
+      },
+      "nav": {
+        "back": "뒤로",
+        "forward": "앞으로",
+        "stop": "중지",
+        "reload": "새로고침"
+      },
+      "incognito": {
+        "title": "시크릿 창 — 방문 기록·비밀번호 자동 저장을 남기지 않습니다",
+        "label": "🕶 시크릿"
+      },
+      "siteInfo": {
+        "label": "사이트 정보",
+        "title": "사이트 정보 · 권한"
+      },
+      "omnibox": {
+        "placeholder": "검색하거나 URL · 명령 입력 (예: !yt 검색어)"
+      },
+      "zoom": {
+        "label": "배율 {percent}% — 클릭해서 100%로",
+        "title": "배율 {percent}% — 클릭해서 기본 배율로"
+      },
+      "sidepanel": {
+        "leftOpen": "좌측 사이드 패널 열기",
+        "leftClose": "좌측 사이드 패널 닫기",
+        "leftTitle": "좌측 사이드 패널 (Ctrl+B) — 북마크·이력·메모",
+        "rightOpen": "우측 사이드 패널 열기",
+        "rightClose": "우측 사이드 패널 닫기",
+        "rightTitle": "우측 사이드 패널 (Ctrl+Alt+B) — 북마크·이력·메모"
+      },
+      "bookmark": {
+        "add": "북마크 추가",
+        "edit": "북마크 편집",
+        "addTitle": "북마크에 추가 (Ctrl+D)",
+        "editTitle": "북마크 편집 (Ctrl+D)"
+      },
+      "readlater": {
+        "add": "읽기 목록에 추가",
+        "remove": "읽기 목록에서 제거",
+        "addTitle": "읽기 목록에 추가 — 나중에 보기"
+      },
+      "video": {
+        "open": "동영상 사이드바 열기",
+        "close": "동영상 사이드바 닫기",
+        "title": "감지된 동영상 {count}개 — 사이드바 열기/닫기"
+      }
+    },
+    "app": {
+      "downloadsBadge": "다운로드 {count}개 진행 중"
+    },
+    "errorBoundary": {
+      "title": "{where}에 오류가 발생했습니다",
+      "retry": "다시 시도",
+      "reload": "외피 새로고침",
+      "hint": "열린 탭과 페이지는 그대로 있습니다.",
+      "scope": {
+        "default": "외피",
+        "sidePanel": "사이드 패널",
+        "videoPanel": "동영상 패널",
+        "downloadPanel": "다운로드 패널"
+      }
+    },
+    "tabbar": {
+      "newTab": "새 탭",
+      "closeTab": "탭 닫기",
+      "mute": "음소거",
+      "unmute": "음소거 해제",
+      "mutedHint": "음소거됨 — 클릭하여 해제",
+      "audibleHint": "소리 재생 중 — 클릭하여 음소거",
+      "pinnedSuffix": " (고정됨)",
+      "mutedSuffix": " (음소거)",
+      "discardedBadge": "잠자는 탭",
+      "discardedTitle": "{url}\n(잠자는 탭 — 클릭하면 다시 로드)",
+      "group": {
+        "expand": "펼치기",
+        "collapse": "접기",
+        "headerTitle": "{title} — 클릭하면 {action}, 우클릭 메뉴",
+        "color": {
+          "red": "빨강",
+          "orange": "주황",
+          "yellow": "노랑",
+          "green": "초록",
+          "blue": "파랑",
+          "purple": "보라",
+          "pink": "분홍",
+          "gray": "회색"
+        }
+      },
+      "ctx": {
+        "selectedCount": "{count}개 탭 선택됨",
+        "groupSelected": "새 그룹으로 묶기",
+        "moveToGroup": "{title} 그룹으로",
+        "addBookmark": "북마크에 추가",
+        "addReadLater": "읽기 목록에 추가",
+        "closeCount": "{count}개 탭 닫기",
+        "clearSelection": "선택 해제",
+        "reload": "새로고침",
+        "duplicate": "탭 복제",
+        "addThisBookmark": "이 탭 북마크에 추가",
+        "pin": "핀 고정",
+        "unpin": "핀 고정 해제",
+        "muteTab": "탭 음소거",
+        "muteOthers": "다른 탭 모두 음소거",
+        "unmuteAll": "전체 탭 음소거 해제",
+        "moveToNewGroup": "새 그룹으로 이동",
+        "removeFromGroup": "그룹에서 빼기",
+        "reopenClosed": "닫은 탭 다시 열기",
+        "closeOthers": "다른 탭 모두 닫기",
+        "closeRight": "오른쪽 탭 모두 닫기",
+        "groupNameLabel": "그룹 이름",
+        "rename": "이름 변경",
+        "ungroup": "그룹 해제"
+      },
+      "preview": {
+        "capturing": "캡처 중…",
+        "none": "미리보기 없음"
+      }
+    },
+    "sidepanel": {
+      "loading": "불러오는 중…",
+      "close": "닫기",
+      "closeAria": "사이드 패널 닫기",
+      "tab": {
+        "bookmarks": "북마크",
+        "history": "방문 기록",
+        "notes": "메모",
+        "readlater": "읽기 목록",
+        "briefing": "자동 수집 브리핑"
+      },
+      "bookmarks": {
+        "empty": "북마크가 비어 있습니다. Ctrl+D 로 추가하세요.",
+        "searchPlaceholder": "제목·URL 검색"
+      },
+      "history": {
+        "searchPlaceholder": "이력 검색",
+        "noResults": "검색 결과 없음",
+        "empty": "아직 방문 기록이 없습니다.",
+        "removeItem": "이 항목 삭제"
+      },
+      "readlater": {
+        "empty": "읽기 목록이 비어 있습니다. 주소창 옆 📖 버튼으로 페이지를 저장하세요.",
+        "countLine": "{unread}개 안 읽음 · 총 {total}개",
+        "toggleTitle": "읽은 항목 표시 전환",
+        "unreadOnly": "안 읽은 것만",
+        "showAll": "전체 보기",
+        "clearReadTitle": "읽은 항목 모두 삭제",
+        "clearRead": "읽은 항목 비우기",
+        "noUnread": "안 읽은 항목이 없습니다.",
+        "markUnread": "안 읽음으로 표시",
+        "markRead": "읽음으로 표시",
+        "removeTitle": "목록에서 삭제"
+      },
+      "notes": {
+        "placeholder": "여기에 자유롭게 메모하세요. 입력 즉시 저장됩니다."
+      },
+      "briefing": {
+        "empty": "아직 수집기가 없습니다.",
+        "createLink": "+ 매일 자동 수집 만들기",
+        "off": "꺼짐",
+        "runNowTitle": "지금 수집",
+        "runNow": "지금 수집",
+        "running": "수집 중…",
+        "neverRun": "아직 실행 안 됨",
+        "newCount": " · 새 {count}건",
+        "filterLabel": " · 필터: {keyword}",
+        "noDigest": "브리핑이 아직 없습니다. “지금 수집”을 눌러보세요.",
+        "collapseItems": "▾ 항목 접기",
+        "expandItems": "▸ 수집한 항목 보기",
+        "noItems": "항목이 없습니다."
+      },
+      "relTime": {
+        "justNow": "방금",
+        "minutesAgo": "{n}분 전",
+        "hoursAgo": "{n}시간 전",
+        "daysAgo": "{n}일 전"
+      }
+    },
+    "siteinfo": {
+      "internalPage": "내부 페이지",
+      "secure": "보안 연결",
+      "insecure": "보안되지 않은 연결",
+      "internalEmpty": "이 페이지에는 사이트 권한 설정이 없습니다.",
+      "permissionsTitle": "권한",
+      "permDefault": "기본",
+      "permAllow": "허용",
+      "permDeny": "차단",
+      "adblockSite": "이 사이트 광고 차단",
+      "dataTitle": "사이트 데이터",
+      "dataCleared": "삭제됨",
+      "dataChecking": "확인 중…",
+      "cookieCount": "쿠키 {count}개",
+      "clearDataTitle": "이 사이트의 쿠키·로컬 저장소·캐시를 삭제합니다",
+      "clearing": "삭제 중…",
+      "clearedDone": "✓ 완료",
+      "clearDataBtn": "데이터 삭제",
+      "clearHint": "쿠키·로컬스토리지·IndexedDB·서비스워커·캐시를 모두 지우고 페이지를 새로고침합니다. 로그인이 풀릴 수 있습니다.",
+      "manageAll": "사이트 권한 전체 관리 →",
+      "perm": {
+        "media": "카메라·마이크",
+        "geolocation": "위치",
+        "notifications": "알림",
+        "clipboard-read": "클립보드",
+        "passkey": "패스키 로그인 창"
+      }
+    },
+    "downloads": {
+      "header": "다운로드",
+      "closeAria": "닫기",
+      "closeTitle": "다운로드 사이드바 닫기",
+      "addPlaceholder": "magnet:?xt=... 또는 .torrent URL",
+      "addTorrent": "토렌트 추가",
+      "searchPlaceholder": "파일명·URL 검색",
+      "searchClearAria": "검색 지우기",
+      "clearFinishedTitle": "완료·실패·취소된 항목 모두 목록에서 제거",
+      "clearFinished": "완료 비우기",
+      "emptyNone": "받은 파일이 없습니다.",
+      "emptyFiltered": "검색 결과가 없습니다.",
+      "accelBadge": "멀티 커넥션 {count}개",
+      "etaSuffix": "⏱ {eta} 남음",
+      "peers": "피어 {n}",
+      "ratio": "비율 {n}",
+      "pause": "일시정지",
+      "resume": "재개",
+      "cancel": "취소",
+      "remove": "제거",
+      "removeWithFiles": "제거 + 파일 삭제",
+      "openFolder": "폴더 열기",
+      "hideFiles": "파일 숨기기",
+      "showFiles": "파일 ({count})",
+      "eta": {
+        "seconds": "{n}초",
+        "minutesSeconds": "{m}분 {s}초",
+        "hoursMinutes": "{h}시간 {m}분"
+      },
+      "state": {
+        "active": "진행 중",
+        "paused": "일시정지",
+        "metadata": "메타데이터",
+        "done": "완료",
+        "seeding": "시드 중",
+        "failed": "실패",
+        "cancelled": "취소",
+        "queued": "대기"
+      },
+      "filter": {
+        "all": "전체",
+        "active": "진행 중",
+        "done": "완료",
+        "failed": "실패"
+      },
+      "ctx": {
+        "openFile": "📂 파일 열기",
+        "retry": "↻ 다시 시도",
+        "showInFolder": "🗂 폴더에서 보기",
+        "copyPath": "📋 경로 복사",
+        "removeFromList": "🗑 목록에서 제거"
+      }
+    },
+    "palette": {
+      "placeholder": "명령 검색 — 이름을 입력하세요 (예: 다크, 설정, ㅂㅁㅋ)  ·  ? 누르면 도움말",
+      "hintPrefix": "자주 사용하는 명령 · 이름을 입력하면 전체에서 검색됩니다 (",
+      "hintSuffix": "사용법)",
+      "emptyPrefix": "결과 없음 — 다른 키워드를 시도하거나 ",
+      "emptySuffix": "로 사용법을 확인하세요",
+      "help": {
+        "title": "명령 팔레트 사용법",
+        "move": "항목 이동",
+        "run": "실행",
+        "close": "닫기",
+        "narrowSection": "검색 범위 좁히기",
+        "actionsOnlyLabel": "액션만 (예: ",
+        "actionsOnlyExample": ">다크",
+        "tabsOnlyLabel": "열린 탭만 (예: ",
+        "tabsOnlyExample": "#github",
+        "savedMacros": "저장된 매크로",
+        "tipsSection": "검색 팁",
+        "chosungTip": "한글 초성으로도 검색됩니다 — ",
+        "chosungExample": "ㅂㅁㅋ",
+        "chosungResult": "북마크",
+        "mruTip": "자주 쓴 명령은 자동으로 위로 정렬됩니다 (MRU)"
+      }
+    },
+    "workspaceRail": {
+      "activeSuffix": " (활성)",
+      "chipHint": "\n우클릭 = 메뉴, 더블클릭 = 이름",
+      "chipAria": "워크스페이스 {name}",
+      "newTitle": "새 스페이스 (Ctrl+Alt+N)",
+      "newAria": "새 워크스페이스",
+      "alertLastSpace": "마지막 스페이스는 삭제할 수 없습니다.",
+      "confirmDelete": "스페이스 \"{name}\" 를 삭제할까요?\n(이 스페이스의 모든 탭과 세션이 사라집니다.)",
+      "color": {
+        "red": "빨강",
+        "orange": "주황",
+        "yellow": "노랑",
+        "green": "초록",
+        "blue": "파랑",
+        "purple": "보라",
+        "pink": "핑크",
+        "gray": "회색"
+      },
+      "menu": {
+        "rename": "이름 변경…",
+        "setHome": "시작 페이지 지정…",
+        "colorSection": "색상",
+        "delete": "삭제",
+        "namePlaceholder": "스페이스 이름",
+        "homePlaceholder": "https://… (비우면 새 탭)",
+        "confirm": "확인",
+        "cancel": "취소"
+      }
+    },
+    "paneStage": {
+      "dropHint": "여기에 분할",
+      "emptyPane": "빈 분할창",
+      "newTabHere": "이 분할창에 새 탭",
+      "unsplit": "분할 해제 (Ctrl+Alt+0)",
+      "left": "왼쪽",
+      "right": "오른쪽",
+      "top": "위",
+      "bottom": "아래",
+      "splitterTitle": "드래그 = 비율 조정 · 더블클릭 = 50:50"
+    },
+    "permPrompt": {
+      "requestSuffix": "이(가) {label}을(를) 요청합니다",
+      "remember": "이 선택 기억",
+      "queueMore": "대기 중인 요청 {count}건 더",
+      "allow": "허용",
+      "deny": "차단",
+      "perm": {
+        "media": "카메라·마이크 사용",
+        "geolocation": "위치 정보 사용",
+        "notifications": "알림 표시",
+        "clipboard-read": "클립보드 읽기"
+      }
+    },
+    "video": {
+      "downloadFailed": "동영상 다운로드 시작 실패 — yt-dlp 설치를 거절했거나 오류가 났습니다.",
+      "detected": "감지된 동영상 ({count})",
+      "none": "감지된 동영상이 없습니다.",
+      "ytdlpHint": "HLS/DASH/사이트 후보는 yt-dlp 가 자동 처리합니다 (첫 사용 시 동의 후 약 15MB 받음).",
+      "kind": {
+        "video": "비디오",
+        "site": "사이트"
+      }
+    },
+    "extActions": {
+      "overflowTitle": "확장 {count}개 더",
+      "overflowAria": "확장 {count}개 더 보기",
+      "hiddenGroupAria": "숨겨진 확장 아이콘",
+      "menuAria": "{name} 메뉴",
+      "options": "옵션",
+      "manage": "확장 관리",
+      "confirmRemove": "\"{name}\" 확장을 제거할까요?",
+      "remove": "제거"
+    },
+    "tabSearch": {
+      "placeholder": "열린 탭 {count}개 검색 — 제목·주소·초성  ·  Enter 이동, Ctrl+Enter/Del 닫기",
+      "noMatch": "일치하는 탭이 없습니다",
+      "pinned": "고정됨",
+      "groupTitle": "그룹: {name}",
+      "current": "현재"
+    },
+    "findBar": {
+      "noResults": "결과 없음",
+      "searching": "검색 중…",
+      "placeholder": "페이지에서 찾기",
+      "matchCase": "대소문자 구분",
+      "prev": "이전 (Shift+Enter)",
+      "next": "다음 (Enter)",
+      "close": "닫기 (Esc)"
+    },
+    "bookmarkBar": {
+      "empty": "북마크가 비어 있습니다. 사이트에서 Ctrl+D 로 추가하세요.",
+      "manage": "관리",
+      "emptyFolder": "빈 폴더"
+    },
+    "pwPrompt": {
+      "updateTitle": "비밀번호를 업데이트할까요?",
+      "saveTitle": "비밀번호를 저장할까요?",
+      "update": "업데이트",
+      "save": "저장",
+      "discard": "이번엔 안 함",
+      "never": "이 사이트는 안 함",
+      "queueMore": "대기 {count}건 더 있음"
+    },
+    "clearData": {
+      "title": "방문 기록 삭제",
+      "done": "✓ 방문 기록을 삭제했습니다.",
+      "range": "기간",
+      "note": "선택한 기간의 방문 기록이 삭제됩니다. 되돌릴 수 없습니다.",
+      "cancel": "취소",
+      "clearing": "삭제 중…",
+      "clear": "삭제",
+      "ranges": {
+        "lastHour": "지난 1시간",
+        "last24h": "지난 24시간",
+        "last7d": "지난 7일",
+        "last4w": "지난 4주",
+        "allTime": "전체 기간"
+      }
+    },
+    "bookmarkBubble": {
+      "added": "북마크가 추가됨",
+      "saving": "저장 중…",
+      "name": "이름",
+      "folder": "폴더",
+      "bookmarkBar": "북마크 바",
+      "remove": "삭제",
+      "done": "완료"
+    },
+    "updateBanner": {
+      "availablePrefix": "새 버전 ",
+      "availableSuffix": " 사용 가능 (현재 v{current})",
+      "downloading": "업데이트 다운로드 중… ",
+      "readyPrefix": "업데이트 ",
+      "readySuffix": " 준비 완료 — 재시작 시 적용됩니다",
+      "download": "다운로드",
+      "install": "재시작 후 설치",
+      "dismiss": "알림 닫기"
+    },
+    "qrModal": {
+      "title": "현재 페이지 QR 코드",
+      "generating": "생성 중…",
+      "close": "닫기"
+    },
+    "userChrome": {
+      "close": "닫기",
+      "enabled": "활성화",
+      "openExternal": "외부 에디터로 열기",
+      "hotReload": "핫리로드",
+      "saveApply": "저장 + 적용",
+      "hintSummary": "사용 가능한 안전 셀렉터·변수"
+    },
+    "recentlyClosed": {
+      "justNow": "방금",
+      "secondsAgo": "{n}초 전",
+      "minutesAgo": "{n}분 전",
+      "hoursAgo": "{n}시간 전",
+      "daysAgo": "{n}일 전",
+      "title": "최근 닫은 탭",
+      "clearAll": "전체 비우기",
+      "empty": "최근에 닫은 탭이 없습니다"
+    },
+    "omnibox": {
+      "source": {
+        "url": "URL",
+        "history": "이력",
+        "bookmark": "북마크",
+        "tab": "열린 탭",
+        "search": "검색",
+        "action": "명령"
       }
     }
   },

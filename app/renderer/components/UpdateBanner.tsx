@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 type UpdateState =
   | 'idle' | 'checking' | 'available' | 'not-available'
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function UpdateBanner({ windowId }: Props) {
+  const tr = useI18nT()
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [dismissedFor, setDismissedFor] = useState<string>(() => {
     try { return localStorage.getItem(BANNER_DISMISSED_KEY) ?? '' } catch { return '' }
@@ -57,27 +59,27 @@ export function UpdateBanner({ windowId }: Props) {
       <div className="update-banner-icon">⤴</div>
       <div className="update-banner-text">
         {status.state === 'available' && (
-          <>새 버전 <b>{status.available}</b> 사용 가능 (현재 v{status.current})</>
+          <>{tr('ui.updateBanner.availablePrefix', '새 버전 ')}<b>{status.available}</b>{tr('ui.updateBanner.availableSuffix', ' 사용 가능 (현재 v{current})', { current: status.current })}</>
         )}
         {status.state === 'downloading' && (
-          <>업데이트 다운로드 중… {status.progress != null ? `${Math.round(status.progress * 100)}%` : ''}</>
+          <>{tr('ui.updateBanner.downloading', '업데이트 다운로드 중… ')}{status.progress != null ? `${Math.round(status.progress * 100)}%` : ''}</>
         )}
         {status.state === 'downloaded' && (
-          <>업데이트 <b>{status.available}</b> 준비 완료 — 재시작 시 적용됩니다</>
+          <>{tr('ui.updateBanner.readyPrefix', '업데이트 ')}<b>{status.available}</b>{tr('ui.updateBanner.readySuffix', ' 준비 완료 — 재시작 시 적용됩니다')}</>
         )}
       </div>
       <div className="update-banner-actions">
         {status.state === 'available' && (
           <button className="ub-btn primary" onClick={() => window.browserAPI.update.download()}>
-            다운로드
+            {tr('ui.updateBanner.download', '다운로드')}
           </button>
         )}
         {status.state === 'downloaded' && (
           <button className="ub-btn primary" onClick={() => window.browserAPI.update.install()}>
-            재시작 후 설치
+            {tr('ui.updateBanner.install', '재시작 후 설치')}
           </button>
         )}
-        <button className="ub-btn" onClick={dismiss} aria-label="알림 닫기">✕</button>
+        <button className="ub-btn" onClick={dismiss} aria-label={tr('ui.updateBanner.dismiss', '알림 닫기')}>✕</button>
       </div>
     </div>
   )

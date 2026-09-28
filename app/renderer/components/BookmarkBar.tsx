@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Bookmark, BookmarkFolder, BookmarkTree, TabSummary } from '../../shared/types'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 interface Props {
   windowId: string
@@ -22,6 +23,7 @@ function navigateOrOpen(active: TabSummary | null, windowId: string, url: string
 }
 
 export function BookmarkBar({ windowId, active, tree }: Props) {
+  const tr = useI18nT()
   const rootFolders = tree.folders.filter((f) => f.parentId === null)
                                    .sort((a, b) => a.position - b.position)
   const rootBookmarks = tree.bookmarks.filter((b) => b.folderId === null)
@@ -31,7 +33,7 @@ export function BookmarkBar({ windowId, active, tree }: Props) {
     return (
       <div className="bookmark-bar">
         <span className="bookmark-bar-empty">
-          북마크가 비어 있습니다. 사이트에서 Ctrl+D 로 추가하세요.
+          {tr('ui.bookmarkBar.empty', '북마크가 비어 있습니다. 사이트에서 Ctrl+D 로 추가하세요.')}
         </span>
         <a
           className="bookmark-bar-manage"
@@ -41,7 +43,7 @@ export function BookmarkBar({ windowId, active, tree }: Props) {
             void window.browserAPI.tabs.create(windowId, 'browser://bookmarks')
           }}
         >
-          관리
+          {tr('ui.bookmarkBar.manage', '관리')}
         </a>
       </div>
     )
@@ -93,6 +95,7 @@ function BookmarkFolderItem({ folder, tree, windowId, active }: {
   windowId: string
   active: TabSummary | null
 }) {
+  const tr = useI18nT()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -129,7 +132,7 @@ function BookmarkFolderItem({ folder, tree, windowId, active }: {
       {open && (
         <div className="bookmark-folder-menu">
           {children.length === 0 && subFolders.length === 0 ? (
-            <div className="bookmark-folder-empty">빈 폴더</div>
+            <div className="bookmark-folder-empty">{tr('ui.bookmarkBar.emptyFolder', '빈 폴더')}</div>
           ) : (
             <>
               {subFolders.map((sub) => (

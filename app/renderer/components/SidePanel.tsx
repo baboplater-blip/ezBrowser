@@ -1,12 +1,16 @@
 import { forwardRef, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { Bookmark, BookmarkFolder, BookmarkTree, HistoryEntry, ReadLaterItem, TabSummary } from '../../shared/types'
 import { Icon } from './Icon'
+import { t, useI18nLocale, useI18nT } from '../i18n'
+import type { SupportedLocale } from '../../shared/i18n-core'
 
 // AiTab(및 그 하위의 AiSocialPanel·AiWriteStudio)은 큰 하위 트리라 정적 import 하면 외피 초기
 // 번들에 항상 실린다. 사이드 패널을 아예 안 여는 사용자도 그 비용을 낸다 — lazy 로 실제로 AI 섹션이
 // 렌더될 때(사이드바를 처음 열 때)만 별도 청크를 받도록 분리한다(묶음 K).
 const AiTab = lazy(() => import('./AiTab').then((m) => ({ default: m.AiTab })))
-const AiTabFallback = () => <div className="ai-body ai-welcome dim">불러오는 중…</div>
+const AiTabFallback = () => <div className="ai-body ai-welcome dim">{t('ui.sidepanel.loading', '불러오는 중…')}</div>
+
+const INTL_LOCALE: Record<SupportedLocale, string> = { ko: 'ko-KR', en: 'en-US', vi: 'vi-VN' }
 
 type Tab = 'ai' | 'bookmarks' | 'history' | 'notes' | 'readlater' | 'briefing'
 const TABS: Tab[] = ['ai', 'bookmarks', 'history', 'notes', 'readlater', 'briefing']
@@ -46,6 +50,7 @@ function openLink(active: TabSummary | null, windowId: string, url: string, ev: 
 export const SidePanel = forwardRef<HTMLDivElement, Props>(function SidePanel(
   { side, open, width, onClose, windowId, active, tree, requestTab, aiSummarizeNonce, aiWriteNonce }, ref,
 ) {
+  const tr = useI18nT()
   const tabKey = `${STORAGE_TAB_PREFIX}${side}`
   const [tab, setTab] = useState<Tab>(() => {
     try {
@@ -75,30 +80,30 @@ export const SidePanel = forwardRef<HTMLDivElement, Props>(function SidePanel(
         <div className="sidepanel-tabs">
           <button
             className={`sidepanel-tab ${tab === 'ai' ? 'active' : ''}`}
-            onClick={() => setTab('ai')} title="AI 어시스턴트" aria-label="AI 어시스턴트" aria-pressed={tab === 'ai'}
+            onClick={() => setTab('ai')} title={tr('ui.toolbar.ai.label', 'AI 어시스턴트')} aria-label={tr('ui.toolbar.ai.label', 'AI 어시스턴트')} aria-pressed={tab === 'ai'}
           ><Icon name="sparkle" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'bookmarks' ? 'active' : ''}`}
-            onClick={() => setTab('bookmarks')} title="북마크" aria-label="북마크" aria-pressed={tab === 'bookmarks'}
+            onClick={() => setTab('bookmarks')} title={tr('ui.sidepanel.tab.bookmarks', '북마크')} aria-label={tr('ui.sidepanel.tab.bookmarks', '북마크')} aria-pressed={tab === 'bookmarks'}
           ><Icon name="star" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'history' ? 'active' : ''}`}
-            onClick={() => setTab('history')} title="방문 기록" aria-label="방문 기록" aria-pressed={tab === 'history'}
+            onClick={() => setTab('history')} title={tr('ui.sidepanel.tab.history', '방문 기록')} aria-label={tr('ui.sidepanel.tab.history', '방문 기록')} aria-pressed={tab === 'history'}
           ><Icon name="clock" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'notes' ? 'active' : ''}`}
-            onClick={() => setTab('notes')} title="메모" aria-label="메모" aria-pressed={tab === 'notes'}
+            onClick={() => setTab('notes')} title={tr('ui.sidepanel.tab.notes', '메모')} aria-label={tr('ui.sidepanel.tab.notes', '메모')} aria-pressed={tab === 'notes'}
           ><Icon name="note" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'readlater' ? 'active' : ''}`}
-            onClick={() => setTab('readlater')} title="읽기 목록" aria-label="읽기 목록" aria-pressed={tab === 'readlater'}
+            onClick={() => setTab('readlater')} title={tr('ui.sidepanel.tab.readlater', '읽기 목록')} aria-label={tr('ui.sidepanel.tab.readlater', '읽기 목록')} aria-pressed={tab === 'readlater'}
           ><Icon name="book" size={15} /></button>
           <button
             className={`sidepanel-tab ${tab === 'briefing' ? 'active' : ''}`}
-            onClick={() => setTab('briefing')} title="자동 수집 브리핑" aria-label="자동 수집 브리핑" aria-pressed={tab === 'briefing'}
+            onClick={() => setTab('briefing')} title={tr('ui.sidepanel.tab.briefing', '자동 수집 브리핑')} aria-label={tr('ui.sidepanel.tab.briefing', '자동 수집 브리핑')} aria-pressed={tab === 'briefing'}
           ><Icon name="inbox" size={15} /></button>
         </div>
-        <button className="sidepanel-close" onClick={onClose} title="닫기" aria-label="사이드 패널 닫기"><Icon name="close" size={13} /></button>
+        <button className="sidepanel-close" onClick={onClose} title={tr('ui.sidepanel.close', '닫기')} aria-label={tr('ui.sidepanel.closeAria', '사이드 패널 닫기')}><Icon name="close" size={13} /></button>
       </div>
       <div className={`sidepanel-body ${tab === 'ai' ? 'sidepanel-body-ai' : ''}`}>
         {tab === 'ai' && (
@@ -129,6 +134,7 @@ export const SidePanel = forwardRef<HTMLDivElement, Props>(function SidePanel(
 function BookmarksTab({ tree, windowId, active }: {
   tree: BookmarkTree; windowId: string; active: TabSummary | null
 }) {
+  const tr = useI18nT()
   const [filter, setFilter] = useState('')
   const rootFolders = tree.folders.filter((f) => f.parentId === null)
                                    .sort((a, b) => a.position - b.position)
@@ -142,7 +148,7 @@ function BookmarksTab({ tree, windowId, active }: {
   }
 
   if (tree.folders.length === 0 && tree.bookmarks.length === 0) {
-    return <div className="sidepanel-empty">북마크가 비어 있습니다. Ctrl+D 로 추가하세요.</div>
+    return <div className="sidepanel-empty">{tr('ui.sidepanel.bookmarks.empty', '북마크가 비어 있습니다. Ctrl+D 로 추가하세요.')}</div>
   }
 
   return (
@@ -151,7 +157,7 @@ function BookmarksTab({ tree, windowId, active }: {
         <Icon name="search" size={13} className="sidepanel-filter-ic" />
         <input
           className="sidepanel-filter"
-          placeholder="제목·URL 검색"
+          placeholder={tr('ui.sidepanel.bookmarks.searchPlaceholder', '제목·URL 검색')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
@@ -243,6 +249,8 @@ function BookmarkRow({ bookmark, depth, windowId, active }: {
 }
 
 function HistoryTab({ windowId, active }: { windowId: string; active: TabSummary | null }) {
+  const tr = useI18nT()
+  const locale = useI18nLocale()
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<HistoryEntry[]>([])
   const queryRef = useRef(query)
@@ -276,7 +284,7 @@ function HistoryTab({ windowId, active }: { windowId: string; active: TabSummary
     return () => { cancelled = true; off() }
   }, [])
 
-  const groups = useMemo(() => groupByDay(items), [items])
+  const groups = useMemo(() => groupByDay(items, locale), [items, locale])
 
   return (
     <>
@@ -284,14 +292,14 @@ function HistoryTab({ windowId, active }: { windowId: string; active: TabSummary
         <Icon name="search" size={13} className="sidepanel-filter-ic" />
         <input
           className="sidepanel-filter"
-          placeholder="이력 검색"
+          placeholder={tr('ui.sidepanel.history.searchPlaceholder', '이력 검색')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
       <div className="sidepanel-history">
         {items.length === 0 ? (
-          <div className="sidepanel-empty">{query ? '검색 결과 없음' : '아직 방문 기록이 없습니다.'}</div>
+          <div className="sidepanel-empty">{query ? tr('ui.sidepanel.history.noResults', '검색 결과 없음') : tr('ui.sidepanel.history.empty', '아직 방문 기록이 없습니다.')}</div>
         ) : groups.map(([day, list]) => (
           <div key={day} className="sidepanel-history-group">
             <div className="sidepanel-history-day">{day}</div>
@@ -308,7 +316,7 @@ function HistoryTab({ windowId, active }: { windowId: string; active: TabSummary
                 <span className="sidepanel-label">{h.title || h.url}</span>
                 <button
                   className="sidepanel-history-rm"
-                  title="이 항목 삭제"
+                  title={tr('ui.sidepanel.history.removeItem', '이 항목 삭제')}
                   onClick={(ev) => {
                     ev.preventDefault(); ev.stopPropagation()
                     void window.browserAPI.history.remove({ id: h.id })
@@ -323,10 +331,10 @@ function HistoryTab({ windowId, active }: { windowId: string; active: TabSummary
   )
 }
 
-function groupByDay(items: HistoryEntry[]): Array<[string, HistoryEntry[]]> {
+function groupByDay(items: HistoryEntry[], locale: SupportedLocale): Array<[string, HistoryEntry[]]> {
   const map = new Map<string, HistoryEntry[]>()
   for (const e of items) {
-    const day = new Date(e.lastVisitAt).toLocaleDateString('ko-KR', {
+    const day = new Date(e.lastVisitAt).toLocaleDateString(INTL_LOCALE[locale], {
       year: 'numeric', month: 'short', day: 'numeric', weekday: 'short',
     })
     const bucket = map.get(day)
@@ -337,6 +345,7 @@ function groupByDay(items: HistoryEntry[]): Array<[string, HistoryEntry[]]> {
 }
 
 function ReadLaterTab({ windowId, active }: { windowId: string; active: TabSummary | null }) {
+  const tr = useI18nT()
   const [items, setItems] = useState<ReadLaterItem[]>([])
   const [showRead, setShowRead] = useState(true)
 
@@ -358,27 +367,27 @@ function ReadLaterTab({ windowId, active }: { windowId: string; active: TabSumma
   }
 
   if (items.length === 0) {
-    return <div className="sidepanel-empty">읽기 목록이 비어 있습니다. 주소창 옆 📖 버튼으로 페이지를 저장하세요.</div>
+    return <div className="sidepanel-empty">{tr('ui.sidepanel.readlater.empty', '읽기 목록이 비어 있습니다. 주소창 옆 📖 버튼으로 페이지를 저장하세요.')}</div>
   }
 
   return (
     <>
       <div className="rl-bar">
-        <span className="rl-count">{unreadCount}개 안 읽음 · 총 {items.length}개</span>
+        <span className="rl-count">{tr('ui.sidepanel.readlater.countLine', '{unread}개 안 읽음 · 총 {total}개', { unread: unreadCount, total: items.length })}</span>
         <div className="rl-bar-actions">
-          <button className="rl-toggle" onClick={() => setShowRead((v) => !v)} title="읽은 항목 표시 전환">
-            {showRead ? '안 읽은 것만' : '전체 보기'}
+          <button className="rl-toggle" onClick={() => setShowRead((v) => !v)} title={tr('ui.sidepanel.readlater.toggleTitle', '읽은 항목 표시 전환')}>
+            {showRead ? tr('ui.sidepanel.readlater.unreadOnly', '안 읽은 것만') : tr('ui.sidepanel.readlater.showAll', '전체 보기')}
           </button>
           {hasRead && (
-            <button className="rl-toggle" onClick={() => window.browserAPI.readlater.clearRead()} title="읽은 항목 모두 삭제">
-              읽은 항목 비우기
+            <button className="rl-toggle" onClick={() => window.browserAPI.readlater.clearRead()} title={tr('ui.sidepanel.readlater.clearReadTitle', '읽은 항목 모두 삭제')}>
+              {tr('ui.sidepanel.readlater.clearRead', '읽은 항목 비우기')}
             </button>
           )}
         </div>
       </div>
       <div className="sidepanel-readlater">
         {visible.length === 0 ? (
-          <div className="sidepanel-empty">안 읽은 항목이 없습니다.</div>
+          <div className="sidepanel-empty">{tr('ui.sidepanel.readlater.noUnread', '안 읽은 항목이 없습니다.')}</div>
         ) : visible.map((it) => (
           <div key={it.id} className={`rl-row ${it.read ? 'read' : ''}`}>
             <a
@@ -396,12 +405,12 @@ function ReadLaterTab({ windowId, active }: { windowId: string; active: TabSumma
             </a>
             <button
               className="rl-act"
-              title={it.read ? '안 읽음으로 표시' : '읽음으로 표시'}
+              title={it.read ? tr('ui.sidepanel.readlater.markUnread', '안 읽음으로 표시') : tr('ui.sidepanel.readlater.markRead', '읽음으로 표시')}
               onClick={() => window.browserAPI.readlater.setRead(it.id, !it.read)}
             >{it.read ? '↩' : '✓'}</button>
             <button
               className="rl-act rl-rm"
-              title="목록에서 삭제"
+              title={tr('ui.sidepanel.readlater.removeTitle', '목록에서 삭제')}
               onClick={() => window.browserAPI.readlater.remove(it.id)}
             >×</button>
           </div>
@@ -412,6 +421,7 @@ function ReadLaterTab({ windowId, active }: { windowId: string; active: TabSumma
 }
 
 function NotesTab({ side }: { side: 'left' | 'right' }) {
+  const tr = useI18nT()
   // 메인 저장(widgets-data)로 승격 — 데이터 내보내기에 포함, localStorage 보다 안전.
   const dataKey = `notes-${side}`
   const legacyKey = `${STORAGE_NOTES}.${side}`
@@ -453,7 +463,7 @@ function NotesTab({ side }: { side: 'left' | 'right' }) {
     <textarea
       className="sidepanel-notes"
       value={text}
-      placeholder="여기에 자유롭게 메모하세요. 입력 즉시 저장됩니다."
+      placeholder={tr('ui.sidepanel.notes.placeholder', '여기에 자유롭게 메모하세요. 입력 즉시 저장됩니다.')}
       onChange={(e) => setText(e.target.value)}
     />
   )
@@ -468,6 +478,7 @@ interface CollectorSummary {
 interface CollectRunItem { [k: string]: string }
 
 function BriefingTab({ windowId, active }: { windowId: string; active: TabSummary | null }) {
+  const tr = useI18nT()
   const [collectors, setCollectors] = useState<CollectorSummary[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [items, setItems] = useState<CollectRunItem[]>([])
@@ -497,9 +508,9 @@ function BriefingTab({ windowId, active }: { windowId: string; active: TabSummar
   if (collectors.length === 0) {
     return (
       <div className="sidepanel-empty">
-        아직 수집기가 없습니다.<br />
+        {tr('ui.sidepanel.briefing.empty', '아직 수집기가 없습니다.')}<br />
         <button className="brf-link" onClick={() => void window.browserAPI.tabs.create(windowId, 'browser://ai-collectors', { background: false })}>
-          + 매일 자동 수집 만들기
+          {tr('ui.sidepanel.briefing.createLink', '+ 매일 자동 수집 만들기')}
         </button>
       </div>
     )
@@ -510,23 +521,23 @@ function BriefingTab({ windowId, active }: { windowId: string; active: TabSummar
       {collectors.map((c) => (
         <div key={c.id} className={`brf-card ${c.enabled ? '' : 'off'}`}>
           <div className="brf-head">
-            <div className="brf-name">{c.name}{!c.enabled ? <span className="brf-off">꺼짐</span> : null}</div>
-            <button className="brf-run" disabled={running === c.id} onClick={() => runNow(c.id)} title="지금 수집">
-              {running === c.id ? '수집 중…' : '지금 수집'}
+            <div className="brf-name">{c.name}{!c.enabled ? <span className="brf-off">{tr('ui.sidepanel.briefing.off', '꺼짐')}</span> : null}</div>
+            <button className="brf-run" disabled={running === c.id} onClick={() => runNow(c.id)} title={tr('ui.sidepanel.briefing.runNowTitle', '지금 수집')}>
+              {running === c.id ? tr('ui.sidepanel.briefing.running', '수집 중…') : tr('ui.sidepanel.briefing.runNow', '지금 수집')}
             </button>
           </div>
           <div className="brf-meta">
-            {c.lastRunAt ? relTime(c.lastRunAt) : '아직 실행 안 됨'}
-            {c.lastCount != null ? ` · 새 ${c.lastCount}건` : ''}
-            {c.keyword ? ` · 필터: ${c.keyword}` : ''}
+            {c.lastRunAt ? relTime(c.lastRunAt, tr) : tr('ui.sidepanel.briefing.neverRun', '아직 실행 안 됨')}
+            {c.lastCount != null ? tr('ui.sidepanel.briefing.newCount', ' · 새 {count}건', { count: c.lastCount }) : ''}
+            {c.keyword ? tr('ui.sidepanel.briefing.filterLabel', ' · 필터: {keyword}', { keyword: c.keyword }) : ''}
           </div>
-          {c.lastDigest ? <div className="brf-digest">{c.lastDigest}</div> : <div className="brf-digest dim">브리핑이 아직 없습니다. “지금 수집”을 눌러보세요.</div>}
+          {c.lastDigest ? <div className="brf-digest">{c.lastDigest}</div> : <div className="brf-digest dim">{tr('ui.sidepanel.briefing.noDigest', '브리핑이 아직 없습니다. “지금 수집”을 눌러보세요.')}</div>}
           <button className="brf-toggle" onClick={() => toggle(c.id)}>
-            {expanded === c.id ? '▾ 항목 접기' : '▸ 수집한 항목 보기'}
+            {expanded === c.id ? tr('ui.sidepanel.briefing.collapseItems', '▾ 항목 접기') : tr('ui.sidepanel.briefing.expandItems', '▸ 수집한 항목 보기')}
           </button>
           {expanded === c.id && (
             <div className="brf-items">
-              {items.length === 0 ? <div className="brf-item dim">항목이 없습니다.</div> : items.map((it, i) => {
+              {items.length === 0 ? <div className="brf-item dim">{tr('ui.sidepanel.briefing.noItems', '항목이 없습니다.')}</div> : items.map((it, i) => {
                 const url = it['링크'] || it.link || it.url || ''
                 const title = it['제목'] || Object.values(it)[0] || ''
                 return url ? (
@@ -546,10 +557,12 @@ function BriefingTab({ windowId, active }: { windowId: string; active: TabSummar
   )
 }
 
-function relTime(ts: number): string {
+type TFn = (key: string, fallback?: string, vars?: Record<string, string | number>) => string
+
+function relTime(ts: number, tr: TFn): string {
   const d = Date.now() - ts
-  if (d < 60000) return '방금'
-  if (d < 3600000) return `${Math.floor(d / 60000)}분 전`
-  if (d < 86400000) return `${Math.floor(d / 3600000)}시간 전`
-  return `${Math.floor(d / 86400000)}일 전`
+  if (d < 60000) return tr('ui.sidepanel.relTime.justNow', '방금')
+  if (d < 3600000) return tr('ui.sidepanel.relTime.minutesAgo', '{n}분 전', { n: Math.floor(d / 60000) })
+  if (d < 86400000) return tr('ui.sidepanel.relTime.hoursAgo', '{n}시간 전', { n: Math.floor(d / 3600000) })
+  return tr('ui.sidepanel.relTime.daysAgo', '{n}일 전', { n: Math.floor(d / 86400000) })
 }

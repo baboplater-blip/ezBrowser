@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Bookmark, BookmarkFolder } from '../../shared/types'
+import { useI18nT } from '../i18n'
 
 interface Props {
   windowId: string
@@ -14,6 +15,7 @@ interface Props {
  * 이미 북마크된 페이지라도 여기선 삭제하지 않는다 — 실제 삭제는 "삭제" 버튼으로만.
  */
 export function BookmarkBubble({ windowId: _windowId, open, url, anchor, onClose }: Props) {
+  const tr = useI18nT()
   const [bookmark, setBookmark] = useState<Bookmark | null>(null)
   const [folders, setFolders] = useState<BookmarkFolder[]>([])
   const [title, setTitle] = useState('')
@@ -75,10 +77,10 @@ export function BookmarkBubble({ windowId: _windowId, open, url, anchor, onClose
       <div className="bm-bubble" style={style} onMouseDown={(e) => e.stopPropagation()}>
         <div className="bm-bubble-head">
           <span className="bm-bubble-star">★</span>
-          <span>{bookmark ? '북마크가 추가됨' : '저장 중…'}</span>
+          <span>{bookmark ? tr('ui.bookmarkBubble.added', '북마크가 추가됨') : tr('ui.bookmarkBubble.saving', '저장 중…')}</span>
         </div>
         <label className="bm-bubble-field">
-          <span>이름</span>
+          <span>{tr('ui.bookmarkBubble.name', '이름')}</span>
           <input
             className="bm-bubble-input"
             value={title}
@@ -92,21 +94,21 @@ export function BookmarkBubble({ windowId: _windowId, open, url, anchor, onClose
           />
         </label>
         <label className="bm-bubble-field">
-          <span>폴더</span>
+          <span>{tr('ui.bookmarkBubble.folder', '폴더')}</span>
           <select
             className="bm-bubble-select"
             value={folderId ?? ''}
             onChange={(e) => commitFolder(e.target.value)}
           >
-            <option value="">북마크 바</option>
+            <option value="">{tr('ui.bookmarkBubble.bookmarkBar', '북마크 바')}</option>
             {folders.map((f) => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
           </select>
         </label>
         <div className="bm-bubble-actions">
-          <button className="bm-bubble-remove" onClick={remove}>삭제</button>
-          <button className="bm-bubble-done" onClick={done}>완료</button>
+          <button className="bm-bubble-remove" onClick={remove}>{tr('ui.bookmarkBubble.remove', '삭제')}</button>
+          <button className="bm-bubble-done" onClick={done}>{tr('ui.bookmarkBubble.done', '완료')}</button>
         </div>
       </div>
     </div>

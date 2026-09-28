@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ExtensionSummary } from '../../shared/types'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 interface Props {
   windowId: string
@@ -18,6 +19,7 @@ interface MenuState {
 const MAX_VISIBLE_ICONS = 6
 
 export function ExtensionActions({ windowId, extensions }: Props) {
+  const tr = useI18nT()
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const overflowRef = useRef<HTMLDivElement>(null)
@@ -106,14 +108,14 @@ export function ExtensionActions({ windowId, extensions }: Props) {
             type="button"
             className="ext-action-icon ext-overflow-btn"
             onClick={() => setOverflowOpen((v) => !v)}
-            title={`확장 ${overflow.length}개 더`}
-            aria-label={`확장 ${overflow.length}개 더 보기`}
+            title={tr('ui.extActions.overflowTitle', '확장 {count}개 더', { count: overflow.length })}
+            aria-label={tr('ui.extActions.overflowAria', '확장 {count}개 더 보기', { count: overflow.length })}
             aria-expanded={overflowOpen}
           >
             ⋯<span className="ext-overflow-count" aria-hidden="true">{overflow.length}</span>
           </button>
           {overflowOpen && (
-            <div className="ext-overflow-panel" data-ext-overflow="1" role="group" aria-label="숨겨진 확장 아이콘">
+            <div className="ext-overflow-panel" data-ext-overflow="1" role="group" aria-label={tr('ui.extActions.hiddenGroupAria', '숨겨진 확장 아이콘')}>
               {overflow.map(renderIcon)}
             </div>
           )}
@@ -124,7 +126,7 @@ export function ExtensionActions({ windowId, extensions }: Props) {
           className="ext-context-menu"
           data-ext-menu="1"
           role="menu"
-          aria-label={`${menu.name} 메뉴`}
+          aria-label={tr('ui.extActions.menuAria', '{name} 메뉴', { name: menu.name })}
           style={{ left: Math.min(menu.x, window.innerWidth - 200), top: menu.y }}
         >
           <div className="ext-context-title">{menu.name}</div>
@@ -134,7 +136,7 @@ export function ExtensionActions({ windowId, extensions }: Props) {
               role="menuitem"
               className="ext-context-item"
               onClick={() => { void window.browserAPI.extensions.openOptions(menu.id); setMenu(null) }}
-            >옵션</button>
+            >{tr('ui.extActions.options', '옵션')}</button>
           )}
           <button
             type="button"
@@ -144,18 +146,18 @@ export function ExtensionActions({ windowId, extensions }: Props) {
               void window.browserAPI.actions.run('action.extensions.open', { windowId })
               setMenu(null)
             }}
-          >확장 관리</button>
+          >{tr('ui.extActions.manage', '확장 관리')}</button>
           <button
             type="button"
             role="menuitem"
             className="ext-context-item danger"
             onClick={() => {
-              if (confirm(`"${menu.name}" 확장을 제거할까요?`)) {
+              if (confirm(tr('ui.extActions.confirmRemove', '"{name}" 확장을 제거할까요?', { name: menu.name }))) {
                 void window.browserAPI.extensions.remove(menu.id)
               }
               setMenu(null)
             }}
-          >제거</button>
+          >{tr('ui.extActions.remove', '제거')}</button>
         </div>
       )}
     </div>
