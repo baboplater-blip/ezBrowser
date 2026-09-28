@@ -473,6 +473,13 @@ function steps(outRoot) {
       script: 'perf-measure.mjs', outArg: true, result: (o) => path.join(o, 'perf', 'perf-results.json'),
       timeoutMs: 30 * 60000, desc: '게이트 4 성능 예산 실측',
     },
+    {
+      // 묶음 A(탭 엔진) — 팝업 opener 관계·오류 페이지·HTML5 전체화면·beforeunload 확인·썸네일.
+      id: 'tab-engine', kind: 'harness', modes: ['full'],
+      script: 'verify-tab-engine-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'tab-engine', 'tab-engine-results.json'),
+      timeoutMs: 8 * 60000, desc: '탭 엔진: 팝업 opener·오류 페이지·전체화면·beforeunload·썸네일 T1~T8',
+    },
   ]
 }
 
