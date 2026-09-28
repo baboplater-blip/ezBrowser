@@ -518,6 +518,13 @@ function steps(outRoot) {
       result: (o) => path.join(o, 'data-password', 'data-password-results.json'),
       timeoutMs: 10 * 60000, desc: '데이터 백업(비밀번호 재암호화·코드항목 게이팅)·저장안함 영속화·CSV 왕복',
     },
+    {
+      // 묶음 A(탭 엔진) — 팝업 opener 관계·오류 페이지·HTML5 전체화면·beforeunload 확인·썸네일.
+      id: 'tab-engine', kind: 'harness', modes: ['full'],
+      script: 'verify-tab-engine-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'tab-engine', 'tab-engine-results.json'),
+      timeoutMs: 8 * 60000, desc: '탭 엔진: 팝업 opener·오류 페이지·전체화면·beforeunload·썸네일 T1~T8',
+    },
   ]
 }
 

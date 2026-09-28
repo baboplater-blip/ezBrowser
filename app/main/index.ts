@@ -65,6 +65,7 @@ import {
 } from './features/perf'
 import { nudgeGc } from './features/gc-nudge'
 import { captureBrands } from './features/client-hints'
+import { initGlobalPageErrorHandlers } from './features/page-errors'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'browser', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -154,6 +155,8 @@ if (!app.requestSingleInstanceLock()) {
         createTab({ windowId, url, background: opts?.background === true })
       })
       setMagnetHandler((url) => { void addTorrent(url) })
+      // 인증서 오류(경고 페이지 + 세션 한정 예외) · HTTP 기본 인증(작은 로그인 창) — 창/세션과 무관한 앱 레벨 이벤트
+      initGlobalPageErrorHandlers()
       // 부팅 초기화 중 서로 무관한 것들을 Promise.all 로 병렬 실행 — 전부 자기 소유 파일만 읽고
       // 쓰며, 서로의 완료를 기다릴 필요가 없다(각 init* 함수 본문 확인 완료: 다른 모듈의 상태를
       // 읽거나 등록에 의존하지 않음). 실제 순서 의존은 이 Promise.all *뒤에* 있다 —
@@ -354,7 +357,10 @@ if (!app.requestSingleInstanceLock()) {
   process.on('unhandledRejection', (err) => { console.error('[main] unhandled rejection', err) })
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    // 우리 메인 창은 BaseWindow(BrowserWindow 아님) 라 Electron 의 'window-all-closed' 카운트와
+    // 별개일 수 있다 — 팝업(item 1, 실제 BrowserWindow) 하나가 닫힐 때 이 이벤트가 발화해도
+    // getAllWindows() 가 여전히 남아있으면 앱을 끄지 않는다.
+    if (process.platform !== 'darwin' && getAllWindows().length === 0) app.quit()
   })
 
   app.on('activate', () => {
