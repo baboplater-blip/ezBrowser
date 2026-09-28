@@ -8,6 +8,7 @@
 //
 // 행동: 깜빡임 · 두리번 · 총총 걷기 · 손(날개) 흔들기 · 클릭하면 점프+하트 ·
 //       밤(23~6시)엔 잠(Zzz, 클릭하면 잠깐 깸) · 비 오면 우산 · 눈 오면 눈송이 · 마우스를 따라 봄.
+// 절기: 새해(고깔+꽃가루) · 설날(복주머니) · 추석(보름달+송편) · 할로윈(호박) · 크리스마스(산타 모자+눈).
 ;(function () {
   'use strict'
 
@@ -39,7 +40,17 @@
     H: '#ff5a7a', // 하트
     Z: '#8a9bbf', // Zzz
     A: '#8fbcff', // 빗방울
-    S: '#ffffff', // 눈송이
+    // 눈송이 — 밝은 배경에선 흰색이 안 보여 연한 파랑회색, 다크 테마에선 흰색
+    S: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? '#ffffff' : '#aebfdc',
+    G: '#f4c542', // 금색(복주머니 끈·고깔 꼭지)
+    Y: '#ffd84d', // 고깔 노랑
+    Q: '#ff8fc7', // 고깔 분홍
+    M: '#fff1a8', // 보름달
+    m: '#f0dc86', // 달 무늬
+    N: '#a8dc8f', // 송편
+    U: '#f28c28', // 호박
+    g: '#5aa04a', // 호박 꼭지
+    V: '#b58cff', // 꽃가루 보라
   }
 
   // 정면 몸통(눈·발·날개는 상태에 따라 따로 그린다). 좌우 대칭(열 c ↔ 15-c).
@@ -74,6 +85,59 @@
     '.....KK.....',
   ]
   const HEART = ['.H.H.', 'HHHHH', '.HHH.', '..H..']
+
+  // ── 절기 소품 ──
+  const SANTA_HAT = [      // 새 기준 (x+2, y-3) — 챙이 머리 윗줄을 덮는다
+    '.........WW.',
+    '......RRRWW.',
+    '...RRRRRR...',
+    '..RRRRRRRR..',
+    '.WWWWWWWWWW.',
+  ]
+  const PARTY_HAT = ['..G..', '..Y..', '.YQY.', '.QYQ.', 'YQYQY'] // 새 기준 (x+5, y-3)
+  const LUCKY_POUCH = ['.G.G.', '..G..', '.RRR.', 'RRGRR', 'RRRRR', '.RRR.'] // 복주머니, 날개 옆
+  const SONGPYEON = ['.NN.', 'NNNN']
+  const MOON = ['..MMMM..', '.MMMMMM.', 'MMMmMMMM', 'MMMMMMMM', 'MMMMMmMM', 'MMmMMMMM', '.MMMMMM.', '..MMMM..']
+  const PUMPKIN = ['...g...', '.UUUUU.', 'UUKUKUU', 'UUUUUUU', 'UKKKKKU', '.UUUUU.']
+
+  // 음력 명절은 해마다 날짜가 바뀌어 표로 둔다(설날·추석 당일, 한국천문연구원 역서 기준).
+  // 표에 없는 해에는 두 명절 연출만 조용히 빠진다 — 틀린 날에 나오는 것보다 낫다.
+  const LUNAR = {
+    2026: { seol: '02-17', chu: '09-25' },
+    2027: { seol: '02-07', chu: '09-15' },
+    2028: { seol: '01-27', chu: '10-03' },
+    2029: { seol: '02-13', chu: '09-22' },
+    2030: { seol: '02-03', chu: '09-12' },
+  }
+  // 당일 앞뒤 하루(연휴 3일)를 포함하는지
+  function nearDay(d, mmdd) {
+    const [mm, dd] = mmdd.split('-').map(Number)
+    const t = new Date(d.getFullYear(), mm - 1, dd)
+    return Math.abs(Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - t) / 86400000)) <= 1
+  }
+  const EVENTS = [
+    { id: 'newyear', when: (d) => (d.getMonth() === 11 && d.getDate() === 31) || (d.getMonth() === 0 && d.getDate() <= 2),
+      hat: PARTY_HAT, hatAt: [5, -3], fx: 'confetti',
+      greet: '새해 복 많이 받으세요! 🎉', lines: ['해피 뉴 이어!', '올해도 잘 부탁해요!', '🎉'] },
+    { id: 'seollal', when: (d) => !!LUNAR[d.getFullYear()] && nearDay(d, LUNAR[d.getFullYear()].seol),
+      held: LUCKY_POUCH, greet: '설날이에요! 새해 복 많이 받으세요 🧧',
+      lines: ['세배 받으실래요?', '떡국 드셨어요?', '복주머니 가득!'] },
+    { id: 'chuseok', when: (d) => !!LUNAR[d.getFullYear()] && nearDay(d, LUNAR[d.getFullYear()].chu),
+      held: SONGPYEON, scene: 'moon', greet: '풍성한 한가위 보내세요 🌕',
+      lines: ['송편 하나 드세요!', '보름달에 소원 빌었어요?', '달이 참 밝네요'] },
+    { id: 'halloween', when: (d) => d.getMonth() === 9 && d.getDate() >= 30,
+      scene: 'pumpkin', greet: '트릭 오어 트릿! 🎃', lines: ['사탕 주세요!', '부우~ 👻', '🎃'] },
+    { id: 'christmas', when: (d) => d.getMonth() === 11 && d.getDate() >= 24 && d.getDate() <= 25,
+      hat: SANTA_HAT, hatAt: [2, -3], fx: 'snow', greet: '메리 크리스마스! 🎄',
+      lines: ['선물 받으셨어요?', '호호호!', '🎁'] },
+  ]
+  // 검증·미리보기용: browser://newtab?buddyDate=2026-12-25 로 날짜를 지정할 수 있다.
+  function today() {
+    const q = new URLSearchParams(location.search).get('buddyDate')
+    const m = q && /^(\d{4})-(\d{2})-(\d{2})$/.exec(q)
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), new Date().getHours()) : new Date()
+  }
+  const EVENT = EVENTS.find((e) => e.when(today())) || null
   const ZED = ['ZZZZ', '..Z.', '.Z..', 'ZZZZ']
 
   // ── 상태 ──
@@ -120,6 +184,10 @@
     for (const [x, y, c] of leftUp ? WING_UP : WING_DOWN) px(ox + x, oy + y, c)
     for (const [x, y, c] of rightUp ? WING_UP : WING_DOWN) px(ox + 15 - x, oy + y, c)
 
+    // 절기 소품: 모자는 머리 위, 들고 있는 물건은 오른쪽 날개 옆
+    if (EVENT && EVENT.hat) sprite(EVENT.hat, ox + EVENT.hatAt[0], oy + EVENT.hatAt[1])
+    if (EVENT && EVENT.held) sprite(EVENT.held, ox + 15, oy + 15 - EVENT.held.length)
+
     // 눈 (왼 4-5, 오른 10-11 기준, 시선만큼 1칸 이동)
     const asleep = sleeping()
     const blink = st.blinkT <= 1
@@ -152,6 +220,9 @@
     const asleep = sleeping()
     const bob = asleep ? (st.tick % 20 < 10 ? 1 : 0) : (st.mode === 'walk' && st.tick % 2 ? -1 : 0)
     const oy = GROUND - 15 - st.jump + bob
+    // 절기 배경(새 뒤에 고정)
+    if (EVENT && EVENT.scene === 'moon') sprite(MOON, 6, 2)
+    if (EVENT && EVENT.scene === 'pumpkin') sprite(PUMPKIN, W - 12, GROUND - 5)
     if (st.weather === 'rain') sprite(UMBRELLA, st.x + 2, oy - 7)
     drawBird(st.x, oy)
     for (const p of particles) {
@@ -159,6 +230,7 @@
       else if (p.kind === 'zed') sprite(ZED, Math.round(p.x), Math.round(p.y))
       else if (p.kind === 'rain') { px(Math.round(p.x), Math.round(p.y), 'A'); px(Math.round(p.x), Math.round(p.y) + 1, 'A') }
       else if (p.kind === 'snow') px(Math.round(p.x), Math.round(p.y), 'S')
+      else if (p.kind === 'confetti') px(Math.round(p.x), Math.round(p.y), p.c)
     }
     // 말풍선은 새 머리 위를 따라다닌다
     if (bubble) bubble.style.left = ((st.x + 8) * S) + 'px'
@@ -227,6 +299,11 @@
     // 날씨 파티클
     if (st.weather === 'rain' && Math.random() < 0.6)
       particles.push({ kind: 'rain', x: rand(0, W - 1), y: -2, vx: -0.2, vy: 1.6, life: 30 })
+    // 절기 파티클(크리스마스 눈은 실제 날씨와 겹치지 않게 날씨가 눈이 아닐 때만)
+    if (EVENT && EVENT.fx === 'snow' && st.weather !== 'snow' && Math.random() < 0.25)
+      particles.push({ kind: 'snow', x: rand(0, W - 1), y: -1, vx: (Math.random() - 0.5) * 0.3, vy: 0.35, life: 90 })
+    if (EVENT && EVENT.fx === 'confetti' && Math.random() < 0.35)
+      particles.push({ kind: 'confetti', c: 'RYQVGA'[rand(0, 5)], x: rand(0, W - 1), y: -1, vx: (Math.random() - 0.5) * 0.4, vy: 0.5, life: 70 })
     if (st.weather === 'snow' && Math.random() < 0.3)
       particles.push({ kind: 'snow', x: rand(0, W - 1), y: -1, vx: (Math.random() - 0.5) * 0.3, vy: 0.35, life: 90 })
 
@@ -255,7 +332,9 @@
       st.wakeT = 60 // 약 6초 깨어 있다 다시 잔다
       say('으음… 아직 밤이에요 😴', 1800)
     } else {
-      const lines = ['안녕하세요!', '오늘도 가볍게 🪶', '찾으시는 게 있나요?', '헤헤', '같이 둘러봐요!']
+      const base = ['안녕하세요!', '오늘도 가볍게 🪶', '찾으시는 게 있나요?', '헤헤', '같이 둘러봐요!']
+      // 절기에는 절반 확률로 그날 대사
+      const lines = EVENT && Math.random() < 0.6 ? EVENT.lines : base
       say(lines[rand(0, lines.length - 1)], 1600)
     }
     st.happyT = 12
@@ -291,6 +370,7 @@
   window.bbBuddy = {
     // 날씨 카드가 이미 받은 결과를 넘겨준다(중복 요청 없음)
     get tick() { return st.tick }, // 검증용(읽기 전용): 루프가 도는지 확인
+    get event() { return EVENT ? EVENT.id : null }, // 검증용: 오늘의 절기
     setWeather(w) { if (w && typeof w.code === 'number') { st.weather = weatherKind(w.code); draw() } },
   }
 
@@ -302,7 +382,11 @@
   start()
   if (!sleeping()) {
     const h = new Date().getHours()
-    const hello = h < 11 ? '좋은 아침이에요!' : h < 17 ? '안녕하세요!' : '좋은 저녁이에요!'
-    setTimeout(() => { st.mode = 'wave'; st.modeT = 14; say(hello, 2200); if (reduced) draw() }, 400)
+    const hello = EVENT ? EVENT.greet : h < 11 ? '좋은 아침이에요!' : h < 17 ? '안녕하세요!' : '좋은 저녁이에요!'
+    setTimeout(() => { st.mode = 'wave'; st.modeT = 14; say(hello, EVENT ? 3200 : 2200); if (reduced) draw() }, 400)
+  }
+  else if (EVENT) {
+    // 명절 밤에는 깨우지 않고 잠꼬대로만 인사한다
+    setTimeout(() => say('쿨… ' + EVENT.greet, 3200), 400)
   }
 })()

@@ -2,6 +2,7 @@
 //  B1 무대가 보이고 캔버스에 실제로 그려진다  B2 시간이 지나면 그림이 바뀐다(애니메이션)
 //  B3 새를 클릭하면 말풍선이 뜬다          B4 탭이 숨으면 타이머가 멈춘다(휴식 CPU 0)
 //  B5 설정에서 끄면 무대도 스크립트도 없다(끄면 비용 0)
+//  B6 절기 날짜마다 맞는 연출이 켜지고, 평일·표 밖의 해에는 켜지지 않는다(?buddyDate= 로 날짜 지정)
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -126,8 +127,10 @@ async function main() {
     // B4: 탭이 숨으면 멈춘다 — 다른 탭을 활성화해 newtab 을 숨긴다
     const windowId = await evaluate(shell, `new URL(location.href).searchParams.get('windowId')`)
     const ntTabId = await evaluate(shell, `window.browserAPI.tabs.list(${JSON.stringify(windowId)}).then((t) => t.find((x) => String(x.url).startsWith('browser://newtab'))?.id)`)
+    // 앞에서 켠 포커스 흉내는 "보이는 중" 으로 판정을 끌어당길 수 있어 먼저 끈다
+    await memSession.send('Emulation.setFocusEmulationEnabled', { enabled: false }, 5000).catch(() => {})
     await evaluate(shell, `window.browserAPI.tabs.create(${JSON.stringify(windowId)}, 'about:blank')`)
-    await sleep(1500)
+    for (let i = 0; i < 20 && !(await evaluate(memSession, 'document.hidden')); i++) await sleep(250)
     const hidden = await evaluate(memSession, 'document.hidden')
     const k1 = await tick()
     await sleep(2500)
@@ -145,6 +148,34 @@ async function main() {
     check('B5', '끄면 무대도 스크립트도 없다', !!off && !off.shown && !off.script,
       off ? `표시 ${off.shown} · 스크립트 ${off.script}` : '페이지 읽기 실패')
     await evaluate(shell, `window.browserAPI.settings.set('widgets.buddyEnabled', true)`)
+
+    // B6: 절기 — 날짜별 기대값(음력 명절은 앞뒤 하루 포함, 표 밖의 해는 없음)
+    await sleep(500)
+    const cases = [
+      ['2026-12-25', 'christmas'], ['2026-12-31', 'newyear'], ['2027-01-02', 'newyear'],
+      ['2027-02-06', 'seollal'], ['2027-02-08', 'seollal'], ['2027-02-10', null],
+      ['2026-09-25', 'chuseok'], ['2028-10-03', 'chuseok'], ['2026-10-31', 'halloween'],
+      ['2026-07-15', null], ['2031-01-23', null],
+    ]
+    const wrong = []
+    let painted = 0
+    for (const [date, want] of cases) {
+      await evaluate(memSession, `location.href = 'browser://newtab/?buddyDate=${date}'`).catch(() => {})
+      let got
+      for (let i = 0; i < 20; i++) {
+        await sleep(250)
+        got = await evaluate(memSession, 'window.bbBuddy ? window.bbBuddy.event : undefined').catch(() => undefined)
+        if (got !== undefined) break
+      }
+      if (got !== want) wrong.push(`${date}: 기대 ${want} · 실제 ${got}`)
+      if (want === 'christmas') {
+        const shotX = await memSession.send('Page.captureScreenshot', { format: 'png' }, 15_000).catch(() => null)
+        if (shotX?.data) fs.writeFileSync(path.join(args.out, 'newtab-buddy-christmas.png'), Buffer.from(shotX.data, 'base64'))
+        painted = (await evaluate(memSession, snap))?.painted || 0
+      }
+    }
+    check('B6', '절기 날짜마다 맞는 연출(평일·표 밖의 해는 없음)', wrong.length === 0,
+      wrong.length ? wrong.join(' / ') : `${cases.length}개 날짜 전부 일치 · 크리스마스 칠해진 픽셀 ${painted}`)
   } catch (err) {
     check('FATAL', '하네스 실행', false, err.message)
   } finally {
