@@ -20,7 +20,7 @@ function flatten(obj, prefix = '', out = new Map()) {
   return out
 }
 
-const locales = ['ko', 'en']
+const locales = ['ko', 'en', 'vi']
 const flat = Object.fromEntries(locales.map((l) => [l, flatten(load(`${l}.json`))]))
 
 // 모든 로케일 키의 합집합을 기준으로 각 로케일의 누락을 찾는다.

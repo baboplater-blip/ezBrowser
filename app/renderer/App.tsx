@@ -29,7 +29,8 @@ import { useDownloads } from './hooks/useDownloads'
 import { useBookmarks } from './hooks/useBookmarks'
 import { useVideoCandidates } from './hooks/useVideoCandidates'
 import { useChromeOverlay } from './hooks/useChromeOverlay'
-import { labels } from './i18n'
+import { useI18nDict, setLocale } from './i18n'
+import type { SupportedLocale } from '../shared/i18n-core'
 import { NEW_TAB_URL } from '../shared/constants'
 
 const BOOKMARK_BAR_KEY = 'browserbuild.bookmark-bar.show'
@@ -74,6 +75,9 @@ function loadBool(key: string, def: boolean): boolean {
 }
 
 export function App() {
+  // 언어 사전(반응형) — 쿼리 `?lang=` 으로 초기값이 이미 맞게 들어와 있고(무깜빡임),
+  // 아래 useEffect 가 설정 변경(browser://settings 의 언어 select)을 구독해 재로드 없이 갱신한다.
+  const labels = useI18nDict()
   const [windowId, setWindowId] = useState<string | null>(() => readWindowIdFromQuery())
   const [incognito] = useState<boolean>(() => readIncognitoFromQuery())
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -151,6 +155,17 @@ export function App() {
       top: chromeHeight, left, right, bottom: 0,
     })
   }, [windowId, chromeHeight, leftPanelOpen, rightPanelOpen, downloadsOpen, videoOpen, videoCandidates.length, tabbarOrientation, workspaceRailOpen])
+
+  // 언어 변경 반영 — 초기값은 쿼리(?lang=)로 이미 맞지만, 부팅 후 설정에서 언어를 바꾸면
+  // i18n:changed 브로드캐스트로 재로드 없이 갱신한다. 마운트 시 한 번 더 조회해 쿼리가 없던
+  // 경로(예: 개발 중 수동 새로고침)에서도 정확한 값을 쓰게 한다.
+  useEffect(() => {
+    void window.browserAPI.i18n.get()
+      .then((p) => setLocale(p.locale as SupportedLocale))
+      .catch(() => { /* 쿼리 초기값 유지 */ })
+    const off = window.browserAPI.i18n.onChanged((p) => setLocale(p.locale as SupportedLocale))
+    return off
+  }, [])
 
   // localStorage 는 첫 paint cache 만. 정본은 main settings.ui.*
   useEffect(() => {

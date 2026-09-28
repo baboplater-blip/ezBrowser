@@ -401,6 +401,12 @@ function steps(outRoot) {
       timeoutMs: 10 * 60000, desc: '설정 되돌릴 수 없는 동작 — 내보내기/가져오기·키맵 D1~D3·K1~K3',
     },
     {
+      id: 'i18n', kind: 'harness', modes: ['full'],
+      script: 'verify-i18n-cdp.mjs', outArg: true,
+      result: (o) => path.join(o, 'i18n-results.json'),
+      timeoutMs: 8 * 60000, desc: '다국어(ko/en/vi) 인프라 — 언어 시드·판정·반응형 반영 I1~I9',
+    },
+    {
       id: 'corrupt-profile', kind: 'harness', modes: ['full'],
       script: 'verify-corrupt-profile-cdp.mjs', outArg: true,
       result: (o) => path.join(o, 'corrupt-profile', 'corrupt-profile-results.json'),

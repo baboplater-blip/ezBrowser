@@ -62,6 +62,9 @@ export interface AppSettings {
     sidepanelRightOpen: boolean
     tabbarOrientation: 'top' | 'left' | 'right'
     workspaceRailOpen: boolean
+    // 'auto' = OS 로케일로 판정(app.getLocale()/navigator.language) — ko*→ko, vi*→vi, 그 외 en.
+    // 명시값이면 그 언어를 강제. resolveLocale()(app/shared/i18n-core.ts) 단일 출처로 판정.
+    language: 'auto' | 'ko' | 'en' | 'vi'
   }
   performance: {
     tabSleepEnabled: boolean
@@ -182,6 +185,7 @@ const DEFAULTS: AppSettings = {
     sidepanelRightOpen: false,
     tabbarOrientation: 'top',
     workspaceRailOpen: true,
+    language: 'auto',
   },
   performance: {
     tabSleepEnabled: true,

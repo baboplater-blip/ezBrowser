@@ -7,6 +7,7 @@ import { getAllWindows, broadcastToInternalPages } from '../../windows/window-se
 import { getSetting } from '../../storage/settings'
 import { addSessionInitHook, setupSessionByPartition } from '../../session-bootstrap'
 import { findTabIdByWebContentsId, getTabPartition } from '../../tabs/tab-service'
+import { tMain } from '../../i18n'
 import {
   type AcceleratorJob, cancelJob as cancelAcceleratorJob, metaFromJob,
   pauseJob as pauseAcceleratorJob, probeUrl, resumeAcceleratedDownload,
@@ -386,7 +387,9 @@ function installCompletionFeedback(): void {
   downloadEvents.on('done', (meta: DownloadDto) => {
     const ok = meta.state === 'done'
     if (!ok && meta.state !== 'failed') return // cancelled 는 알리지 않음
-    const msg = ok ? `✓ ${meta.filename} 다운로드 완료` : `✗ ${meta.filename} 다운로드 실패`
+    const msg = ok
+      ? tMain('main.download.completeToast', `✓ ${meta.filename} 다운로드 완료`, { filename: meta.filename })
+      : tMain('main.download.failedToast', `✗ ${meta.filename} 다운로드 실패`, { filename: meta.filename })
     for (const ctx of getAllWindows()) {
       if (!ctx.chrome.webContents.isDestroyed()) {
         ctx.chrome.webContents.send('toast:show', { message: msg, ts: Date.now() })
@@ -395,7 +398,7 @@ function installCompletionFeedback(): void {
     if (ok) {
       try {
         if (Notification.isSupported()) {
-          const n = new Notification({ title: '다운로드 완료', body: meta.filename })
+          const n = new Notification({ title: tMain('main.download.completeTitle', '다운로드 완료'), body: meta.filename })
           n.on('click', () => { try { openDownloadFolder(meta.id) } catch { /* ignore */ } })
           n.show()
         }

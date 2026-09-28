@@ -123,9 +123,38 @@ const ASSET_MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
 }
 
+// `browser://shared/<file>` — 모든 내부 페이지가 공유하는 정적 자산(현재는 i18n.js 뿐).
+// 일반 페이지(pages/<page>/)와 분리된 특수 호스트라 여기서 먼저 가로챈다.
+// index.html 폴백은 없다(페이지가 아니라 자산 전용 디렉터리).
+// ⚠ 이름에 밑줄(`_`)을 쓰지 말 것 — CSP `script-src`/`connect-src` 의 host-source 문법은
+// 밑줄을 허용하지 않아 `browser://_shared` 를 통째로 무효 소스로 무시해 조용히 차단된다
+// (Chromium 콘솔: "contains an invalid source: 'browser://_shared'. It will be ignored.").
+// `shared` 처럼 영문 소문자·숫자·하이픈만 쓸 것 — 일반 페이지명 정규식(`^[a-z0-9-]+$`)과도 겹치므로
+// 안전하다.
+const SHARED_ASSET_HOST = 'shared'
+
+async function handleSharedAsset(url: URL): Promise<Response> {
+  let rel = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+  const safe = rel.length > 0 && /^[a-z0-9_.-]+$/i.test(rel) && !rel.includes('..')
+  const ext = safe ? rel.slice(rel.lastIndexOf('.')).toLowerCase() : ''
+  if (!safe || !ASSET_MIME[ext] || ext === '.html') {
+    return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+  }
+  const dir = path.join(app.getAppPath(), 'pages', SHARED_ASSET_HOST)
+  try {
+    const data = await fsPromises.readFile(path.join(dir, rel))
+    // browser 스킴이 corsEnabled:true 라 교차 페이지(browser://settings 등)에서의 <script src>/fetch 가
+    // CORS 검사를 받는다 — 정적 공용 자산(민감정보 없음)이므로 전부 허용해 어느 페이지에서든 로드되게 한다.
+    return new Response(data, { headers: { 'Content-Type': ASSET_MIME[ext], 'Access-Control-Allow-Origin': '*' } })
+  } catch {
+    return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+  }
+}
+
 async function handleBrowserUrl(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const page = url.hostname
+  if (page === SHARED_ASSET_HOST) return handleSharedAsset(url)
   if (!/^[a-z0-9-]+$/i.test(page)) {
     return new Response('Bad Request', { status: 400 })
   }

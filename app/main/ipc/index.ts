@@ -31,6 +31,7 @@ import { registerPermissionsIpc } from './permissions'
 import { registerSiteDataIpc } from './sitedata'
 import { registerImportIpc } from './import'
 import { registerAiIpc } from './ai'
+import { registerI18nIpc } from './i18n'
 
 export function registerAllIpc(): void {
   registerWindowsIpc()
@@ -66,4 +67,5 @@ export function registerAllIpc(): void {
   registerSiteDataIpc()
   registerImportIpc()
   registerAiIpc()
+  registerI18nIpc()
 }

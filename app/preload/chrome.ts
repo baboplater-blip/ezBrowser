@@ -170,6 +170,10 @@ const api = {
     set: (key: string, value: unknown) => ipcRenderer.invoke(IPC.settings.set, { key, value }),
     onChange: (cb: (settings: unknown) => void) => on(IPC.settings.changed, cb),
   },
+  i18n: {
+    get: (): Promise<{ locale: string; dict: Record<string, string> }> => ipcRenderer.invoke(IPC.i18n.get),
+    onChanged: (cb: (p: { locale: string; dict: Record<string, string> }) => void) => on(IPC.i18n.changed, cb),
+  },
   userchrome: {
     get: (): Promise<UserChromeState> => ipcRenderer.invoke(IPC.userchrome.get),
     update: (kind: 'css' | 'js', content: string): Promise<void> =>
