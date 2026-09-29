@@ -835,6 +835,88 @@
         "ko": "한국어",
         "en": "English",
         "vi": "Tiếng Việt"
+      },
+      "title": "Appearance",
+      "section": {
+        "theme": "Overall theme",
+        "layout": "Shell layout",
+        "startup": "Startup behavior",
+        "tabs": "Tab behavior"
+      },
+      "theme": {
+        "label": "Theme",
+        "desc": "System / Light / Dark (shell UI)",
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "density": {
+        "label": "Density",
+        "desc": "Spacing / padding",
+        "compact": "Compact",
+        "regular": "Regular",
+        "comfy": "Comfortable"
+      },
+      "forcePageDark": {
+        "label": "Force page dark mode",
+        "desc": "CSS filter invert on all sites (Ctrl+Shift+D)"
+      },
+      "pageDarkFollowSystem": {
+        "label": "Follow OS dark mode",
+        "desc": "Auto-apply page dark mode only when the system theme is dark"
+      },
+      "mouseGestures": {
+        "label": "Mouse gestures",
+        "desc": "Right-click drag — ←Back →Forward ↑Reload ↓New tab ↓→ Close tab"
+      },
+      "quickSearch": {
+        "label": "Quick search",
+        "desc": "Show a floating search button when text is selected"
+      },
+      "hoverTranslate": {
+        "label": "Hover-to-translate word",
+        "desc": "Hold Alt and hover a word → translation popup"
+      },
+      "tabbarOrientation": {
+        "label": "Tab bar position",
+        "desc": "Top / Left / Right (Ctrl+Alt+T cycles)",
+        "top": "Top",
+        "left": "Left (vertical)",
+        "right": "Right (vertical)"
+      },
+      "bookmarkBarShow": {
+        "label": "Show bookmarks bar",
+        "desc": "Favorites bar below the toolbar (Ctrl+Shift+B)"
+      },
+      "workspaceRailOpen": {
+        "label": "Workspace sidebar",
+        "desc": "Left color-chip stripe"
+      },
+      "sidepanelLeftOpen": {
+        "label": "Left side panel",
+        "desc": "Bookmarks · History · Notes (Ctrl+B)"
+      },
+      "sidepanelRightOpen": {
+        "label": "Right side panel",
+        "desc": "Bookmarks · History · Notes (Ctrl+Alt+B)"
+      },
+      "startupMode": {
+        "label": "When opening the browser",
+        "desc": "What to show on app start — after an unexpected shutdown you will always be asked whether to restore",
+        "newtab": "New tab (default)",
+        "lastSession": "Restore last session (tabs, groups, splits, scroll)",
+        "urls": "Open specific pages"
+      },
+      "startupUrls": {
+        "label": "Startup pages",
+        "desc": "One per line (http(s):// or browser://)"
+      },
+      "tabsOpenBehavior": {
+        "label": "When a link requests a new window",
+        "desc": "Behavior when a site tries to open a new window via target=\"_blank\" or window.open() — affects cases like the Naver Mail icon forcing a new tab",
+        "newTab": "New tab (foreground) — default",
+        "sameTab": "Navigate current tab",
+        "backgroundTab": "New tab (background, keep focus)"
       }
     },
     "nav": {
@@ -854,7 +936,619 @@
       "update": "Update",
       "data": "Data Management",
       "about": "About"
-    }
+    },
+    "common": {
+      "internalApiMissing": "internalAPI not injected",
+      "loading": "Loading…",
+      "save": "Save",
+      "delete": "Delete",
+      "default": "Default",
+      "allow": "Allow",
+      "deny": "Block",
+      "done": "Done",
+      "failed": "Failed",
+      "error": "Error",
+      "cancel": "Cancel"
+    },
+    "ai": {
+      "apiKey": {
+        "label": "API key",
+        "unavailable": "This device can't use secure key storage (safeStorage), so the key can't be saved.",
+        "unavailableBadge": "Can't save",
+        "setBadge": "✓ Set",
+        "unsetBadge": "Not set",
+        "replacePlaceholder": "Enter a new key to replace it",
+        "pastePlaceholder": "Paste API key",
+        "desc": "Stored only via OS encryption (safeStorage) — never kept in plain text",
+        "confirmClear": "Delete the saved API key?"
+      },
+      "title": "✨ AI Assistant",
+      "section": {
+        "basic": "Basic",
+        "agentAutomation": "Agent automation",
+        "advanced": "Advanced"
+      },
+      "enabled": {
+        "label": "Enable AI features",
+        "desc": "Page summary, Q&A, and chat in the sidebar (toolbar ✨ or Ctrl+Shift+Space)"
+      },
+      "provider": {
+        "label": "AI provider",
+        "desc": "Like aside, use your own API key or a local model — you cover the cost with your own key",
+        "claudeCode": "Claude Code (runs via Claude subscription)",
+        "codex": "Codex (runs via ChatGPT subscription)",
+        "geminiCli": "Gemini CLI (Google account)",
+        "anthropic": "Claude (Anthropic API key)",
+        "openai": "OpenAI (ChatGPT API key)",
+        "google": "Google Gemini (free tier key)",
+        "ollama": "Local Ollama (free, private)"
+      },
+      "diag": {
+        "label": "AI status check",
+        "desc": "Checks whether the AI you configured actually works. If not, it tells you the cause and a fix.",
+        "button": "🩺 Run check",
+        "checking": "Checking…",
+        "requesting": "Sending a real request to the current provider…",
+        "failedToRun": "Couldn't run the check.",
+        "installedModels": "Installed models:"
+      },
+      "includePageByDefault": {
+        "label": "Include page content in questions",
+        "desc": "Send the current page body by default (can be toggled off in the sidebar)"
+      },
+      "memoryEnabled": {
+        "label": "Use memory",
+        "desc": "Reference personal context the AI has saved when answering — no need to re-explain every time (<a href=\"browser://ai-memory\" data-link>Manage memory</a>)"
+      },
+      "autoMemory": {
+        "label": "Auto memory extraction (Dreaming)",
+        "desc": "When a conversation ends, automatically extract memorable facts and save them (off by default — enabling adds an extra request per conversation)"
+      },
+      "nativeToolUse": {
+        "label": "Agent native function calling",
+        "desc": "On supported models (Claude, GPT, Gemini, Ollama qwen/llama3.1+, etc.) the agent works more reliably via structured function calls. Auto: use it if supported, otherwise fall back to the JSON method",
+        "auto": "Auto (use if supported)",
+        "off": "Off (always JSON method)"
+      },
+      "agentVision": {
+        "label": "Agent screen perception (vision)",
+        "desc": "The agent looks at a screenshot of the current screen to decide (helpful for visually complex sites). <b>Auto (recommended)</b> only captures when the screen changes or gets stuck, saving subscription limits and time. <b>Always</b> captures every step (maximum accuracy, higher usage). Supported: Claude, GPT, Gemini (API key), local vision models (llava, llama3.2-vision, etc.), <b>Claude Code (subscription)</b>. Automatically off for codex/gemini-cli and plain text models.",
+        "auto": "Auto (smart — saves limits, recommended)",
+        "always": "Always (capture every step)",
+        "off": "Off"
+      },
+      "triggers": {
+        "label": "AI triggers (automation)",
+        "desc": "Automatically runs the agent when entering a site, at a set time each day, or on page-change detection. Persists across restarts. (<a href=\"browser://ai-triggers\" data-link>Open trigger manager</a>)"
+      },
+      "collectors": {
+        "label": "Daily auto-collect",
+        "desc": "Quietly opens specified sites each day, gathers only new items, and sends an AI summary briefing as a notification. (<a href=\"browser://ai-collectors\" data-link>Open collector manager</a>)"
+      },
+      "profile": {
+        "label": "My info (autofill)",
+        "desc": "Save your name, address, email, card, etc. safely, and any form gets filled automatically (values are never sent to the AI). (<a href=\"browser://ai-profile\" data-link>Manage my info</a>)"
+      },
+      "webhookUrl": {
+        "label": "Collected data webhook",
+        "desc": "Sends data collected by the agent to this address as JSON. Connect to Zapier, Make, IFTTT, Google Sheets (Apps Script), Notion, email, etc. Sent via the \"🔗 Send\" button in the data table."
+      },
+      "anthropic": {
+        "title": "Claude (Anthropic)",
+        "model": {
+          "label": "Model",
+          "desc": "Model name available on your account (e.g. claude-sonnet-4-5)"
+        },
+        "keyHint": "Get an API key: console.anthropic.com → API Keys"
+      },
+      "openai": {
+        "title": "OpenAI (ChatGPT)",
+        "model": {
+          "label": "Model",
+          "desc": "e.g. gpt-4o, gpt-4o-mini"
+        },
+        "keyHint": "Get an API key: platform.openai.com → API keys"
+      },
+      "google": {
+        "title": "Google Gemini <span style=\"font-size:11px;color:var(--accent)\">free tier</span>",
+        "desc": "Get a <b>free</b> API key from Google AI Studio and paste it in (rate-limited per minute but no cost). No credit card required.",
+        "model": {
+          "label": "Model",
+          "desc": "e.g. gemini-2.0-flash (fast, free tier), gemini-2.5-flash"
+        },
+        "keyHint": "Get a free API key: aistudio.google.com → Get API key"
+      },
+      "claudeCode": {
+        "title": "Claude Code <span style=\"font-size:11px;color:var(--accent)\">runs via subscription</span>",
+        "desc": "Runs the agent on your <b>Claude Pro/Max subscription</b> instead of pay-as-you-go API. Install <b>Claude Code</b> locally (claude.com/claude-code), run <code>claude</code> once to log in with your subscription, and this browser will call that CLI. No API key needed.",
+        "path": {
+          "label": "Executable path",
+          "desc": "Leave blank to use <code>claude</code> from PATH. Specify a path if needed (e.g. C:\\\\Users\\\\me\\\\AppData\\\\Roaming\\\\npm\\\\claude)"
+        },
+        "model": {
+          "label": "Model",
+          "desc": "Leave blank for the Claude Code default. To specify, use opus / sonnet / haiku or a full model ID"
+        },
+        "checkHint": "Check: <code>claude --version</code> works in a terminal, and <code>echo hi | claude -p</code> responds — you're ready."
+      },
+      "codex": {
+        "title": "Codex <span style=\"font-size:11px;color:var(--accent)\">runs via ChatGPT subscription</span>",
+        "desc": "Runs on your <b>ChatGPT Plus/Pro subscription</b> instead of pay-as-you-go API. Install <b>Codex CLI</b> locally (<code>npm i -g @openai/codex</code>), run <code>codex</code> and <b>log in with ChatGPT</b>, and this browser will call it via <code>codex exec</code>.",
+        "path": {
+          "label": "Executable path",
+          "desc": "Leave blank to use <code>codex</code> from PATH"
+        },
+        "model": {
+          "label": "Model",
+          "desc": "You must specify a model <b>allowed on your ChatGPT account</b> (varies by account/plan). If left blank, codex's default may be rejected by your account."
+        },
+        "checkHint": "Check: <code>echo hi | codex exec --skip-git-repo-check -</code> responds — you're ready. If you get a \"model is not supported\" error, switch to a model your account allows."
+      },
+      "geminiCli": {
+        "title": "Gemini CLI <span style=\"font-size:11px;color:var(--accent)\">Google account</span>",
+        "desc": "Install <b>Gemini CLI</b> locally (<code>npm i -g @google/gemini-cli</code>), run <code>gemini</code> and <b>log in with your Google account</b> (free tier), and this browser will call it. Runs on your account without an API key.",
+        "path": {
+          "label": "Executable path",
+          "desc": "Leave blank to use <code>gemini</code> from PATH"
+        },
+        "model": {
+          "label": "Model",
+          "desc": "e.g. gemini-2.5-flash (leave blank for default)"
+        },
+        "checkHint": "Check: <code>gemini --version</code> works and <code>echo hi | gemini</code> responds — you're ready."
+      },
+      "ollama": {
+        "title": "Local Ollama",
+        "desc": "Install Ollama (ollama.com) and download a model to run fully locally with no API key. e.g. in a terminal: <code>ollama pull llama3.2</code>",
+        "url": {
+          "label": "Server address",
+          "desc": "Default http://localhost:11434"
+        },
+        "model": {
+          "label": "Model",
+          "desc": "Name of an installed model (e.g. llama3.2, qwen2.5)"
+        }
+      },
+      "agentFilesDir": {
+        "label": "Asset folder",
+        "desc": "The folder holding files the agent can upload (<b>including subfolders</b>). <b>Anything outside this folder is blocked</b>. Once set, the agent can upload autonomously — e.g. \"post cat.jpg to Instagram\" — without a file picker.",
+        "unset": "Not set",
+        "pick": "Choose folder…",
+        "clear": "Clear",
+        "fileCount": "{count} file(s)",
+        "empty": " (empty — add some files)"
+      },
+      "agentHumanInput": {
+        "label": "Act like a human (bot-detection avoidance)",
+        "desc": "The agent operates with <b>real mouse movement paths and trusted clicks/keystrokes</b>. Makes it look like a human on bot-detecting sites like Instagram, Facebook, and YouTube (recommended). Turning it off uses faster synthetic events but may get blocked on some sites."
+      },
+      "agentInputMode": {
+        "label": "Operation speed",
+        "desc": "Human-like timing (mouse paths, keystroke intervals) is needed to avoid bot detection but is slower. <b>Auto</b> (recommended): human speed only on sites known to run bot detection like Instagram/TikTok, and fast real input elsewhere (about 3x faster clicks, 2.5x faster typing). <b>Always human speed</b>: safest but slow. <b>Always fast</b>: fastest but may be detected on some sites.",
+        "auto": "Auto (depends on site)",
+        "human": "Always human speed",
+        "fast": "Always fast"
+      },
+      "agentCollapsePanels": {
+        "label": "Auto-collapse panels while running",
+        "desc": "While the agent is running, collapses the <b>downloads/video docks and the left side panel</b> to widen the page area, and restores them when done (the AI panel stays). Reduces cases where a large dialog, like Instagram's post window, gets clipped and hides buttons."
+      },
+      "cliSession": {
+        "label": "Keep CLI session (Claude Code · Codex)",
+        "desc": "When running the agent via Claude Code or Codex, keeps <b>one CLI process per task</b> and sends steps to it continuously. Removes the boot time and cache loss of relaunching every step, so <b>per-step latency drops a lot and tokens are saved</b>. Turn this off if you run into issues (goes back to relaunching every step)."
+      },
+      "agentAutoApprove": {
+        "label": "Auto-approve sensitive actions (unattended runs)",
+        "desc": "By default only <b>actions that spend money or destroy data, like payments, purchases, transfers, or deletions</b>, need confirmation (search, login, form submission, and <b>posting/publishing/uploading proceed without confirmation</b> — so it doesn't get in the way of auto-publishing). Turning this on lets even those risky actions <b>proceed automatically without confirmation</b>. Convenient but risky — only enable it for tasks you trust."
+      },
+      "agentMaxSteps": {
+        "label": "Agent max steps",
+        "desc": "Maximum steps the agent will attempt for one task. Set higher for long tasks like login → upload → publish (default 25, range 6–80)"
+      },
+      "maxTokens": {
+        "label": "Max response length (tokens)",
+        "desc": "Max tokens to generate in one reply"
+      },
+      "maxContextChars": {
+        "label": "Max page context characters",
+        "desc": "How many characters of page body to send to the AI"
+      }
+    },
+    "adblock": {
+      "title": "Ad & Tracker Blocking",
+      "enabled": {
+        "label": "Enabled",
+        "desc": "EasyList + EasyPrivacy + Korean KR filter"
+      },
+      "level": {
+        "label": "Strength",
+        "desc": "lite / standard / strict",
+        "lite": "Light (EasyList only)",
+        "standard": "Standard (+ EasyPrivacy + List-KR)",
+        "strict": "Strong (+ Fanboy)"
+      },
+      "applyHint": "Changes take effect from the next boot or next page load."
+    },
+    "search": {
+      "title": "Search",
+      "defaultEngine": {
+        "label": "Default search engine",
+        "desc": "Used when entering a search query in the address bar"
+      },
+      "suggestEnabled": {
+        "label": "Autocomplete",
+        "desc": "Show suggestions while typing in the address bar"
+      },
+      "bangsEnabled": {
+        "label": "Bang shortcuts",
+        "desc": "DuckDuckGo-style shortcuts like !yt, !gh"
+      },
+      "section": {
+        "engines": "Registered search engines"
+      },
+      "engine": {
+        "keywordDesc": "Keyword {keyword} · {url}"
+      }
+    },
+    "privacy": {
+      "title": "Privacy",
+      "historyRetention": {
+        "label": "History retention period",
+        "desc": "Used for address-bar autocomplete and the history page",
+        "unlimited": "Unlimited",
+        "1y": "1 year",
+        "3m": "3 months",
+        "1m": "1 month",
+        "1w": "1 week"
+      },
+      "blockThirdPartyCookies": {
+        "label": "Block third-party cookies",
+        "desc": "Has a big impact on ads and trackers"
+      },
+      "passkeyAutoPrompt": {
+        "label": "Auto passkey prompts",
+        "desc": "Automatic passkey (WebAuthn) requests sites send the moment a page opens. Chrome quietly adds these to the autofill list, but this browser has no such UI, so a <b>Windows \"Sign in with a security key\" window</b> pops up. <b>Block</b> (default) rejects only that automatic request, while requests the user explicitly triggers by clicking \"Sign in with passkey\" still go through. Per-site exceptions are in the address bar lock icon.",
+        "block": "Block automatic requests (recommended)",
+        "allow": "Allow (an OS window may appear)"
+      }
+    },
+    "permissions": {
+      "col": {
+        "media": "Camera · Mic",
+        "geolocation": "Location",
+        "notifications": "Notifications",
+        "clipboardRead": "Clipboard",
+        "passkey": "Passkey sign-in window",
+        "origin": "Site"
+      },
+      "title": "Site Permissions",
+      "intro": "Allow/block camera, microphone, location, notification, and clipboard permissions per site. \"Default\" follows standard behavior (mostly allow on request). Only sites you've configured are shown here.",
+      "empty": "No per-site permission settings yet.",
+      "clearAll": "Reset all",
+      "confirmClearAll": "Reset permission settings for all sites?"
+    },
+    "accounts": {
+      "title": "🔐 Login Accounts",
+      "intro1": "With pre-registered IDs and passwords, the agent can get through login screens on its own. Adding an account doesn't turn this on automatically — it only works when <b>you explicitly enable \"Allow auto-login\" per account</b>.",
+      "intro2": "CAPTCHAs and verification codes (2FA) are not handled automatically — those are handed off to you.",
+      "manage": {
+        "label": "Manage login accounts",
+        "desc": "Add/edit/delete accounts, toggle auto-login, view saved passwords",
+        "open": "Open account manager"
+      }
+    },
+    "downloads": {
+      "defaultPath": {
+        "pick": "Choose folder…",
+        "label": "Default save location",
+        "desc": "Leave blank for the OS Downloads folder"
+      },
+      "title": "Downloads",
+      "askEveryTime": {
+        "label": "Ask every time",
+        "desc": "Show a dialog when a download starts"
+      },
+      "accelerator": {
+        "label": "Accelerator (multi-connection)",
+        "desc": "4 parallel connections (HTTP)"
+      },
+      "torrentDht": {
+        "label": "Torrent DHT",
+        "desc": "Anonymous P2P tracker — usually OFF"
+      },
+      "torrentMaxSeedRatio": {
+        "label": "Max torrent seed ratio",
+        "desc": "Upload ratio after completion (1.0–10.0)"
+      },
+      "video": {
+        "title": "Video download (yt-dlp)"
+      },
+      "ytdlpAutoUpdate": {
+        "label": "Auto-update yt-dlp",
+        "desc": "YouTube etc. change often, so staying up to date matters — checked once a day"
+      },
+      "ytdlpUpdateNow": {
+        "label": "Update now",
+        "desc": "Replaces with the latest if already installed, otherwise downloads the latest",
+        "button": "Update now",
+        "checking": "Checking…",
+        "result": {
+          "updated": "Updated to latest ✓",
+          "upToDate": "Already up to date ✓",
+          "skipped": "Can't update right now (downloading or network issue)",
+          "failed": "Failed — check your network",
+          "failedWithError": "Failed — {error}"
+        }
+      }
+    },
+    "freedom": {
+      "title": "Freedom Modules",
+      "userChromeCss": {
+        "desc": "Shell CSS hot-reload (Ctrl+Alt+Shift+R)"
+      },
+      "userChromeJs": {
+        "desc": "Inject user JS into the shell (experimental, use with security caution)"
+      },
+      "userscripts": {
+        "desc": "Tampermonkey-compatible (Ctrl+Shift+U)"
+      },
+      "commandPalette": {
+        "label": "Command palette"
+      },
+      "modApi": {
+        "desc": "Deep plugin hooking (experimental, trusted modules only)"
+      },
+      "managePages": "Manage pages: <a href=\"browser://userscripts\" data-link>Userscript</a> · <a href=\"browser://policies\" data-link>Site policies</a>"
+    },
+    "workspace": {
+      "title": "Workspaces",
+      "count": "Currently {count} — switch via the color chips in the left sidebar. ",
+      "new": "+ New workspace",
+      "active": "Active",
+      "field": {
+        "name": "Name",
+        "homeUrl": "Home URL",
+        "color": "Color"
+      },
+      "confirmRemove": "Delete workspace \"{name}\"?\n(All tabs and sessions in this workspace will be lost.)"
+    },
+    "keymap": {
+      "title": "Keyboard Shortcuts",
+      "conflicts": "{count} conflict(s)",
+      "addBinding": "+ Add binding",
+      "resetDefault": "Restore defaults",
+      "col": {
+        "action": "Action",
+        "key": "Key",
+        "context": "Context"
+      },
+      "unset": "(not set — click)",
+      "hint": "Click a key cell, then press the shortcut you want. Esc to cancel. Action IDs can be found by searching the command palette (Ctrl+Shift+P).",
+      "confirmReset": "Restore all shortcuts to defaults?",
+      "pressKey": "Press a key…"
+    },
+    "design": {
+      "resetToDefault": "Reset to default",
+      "tokenDesc": "<code>{key}</code> · default <code>{value}</code>",
+      "title": "Design Tokens",
+      "intro": "Instantly change the shell UI's colors, sizes, corner radius, and motion. Changes apply to all windows automatically and persist across restarts.",
+      "resetAll": "Restore all tokens to defaults",
+      "section": {
+        "color": "Color",
+        "size": "Size · radius",
+        "duration": "Motion"
+      },
+      "confirmResetAll": "Restore all design tokens to defaults?"
+    },
+    "data": {
+      "title": "Data Management",
+      "intro": "Back up and restore settings, keymap, workspaces, bookmarks, history, userscripts, policies, userChrome, macros, design tokens, read-later list, new-tab widgets (notes, to-dos, shortcuts), and AI (conversations, memory, agent tasks) as a single JSON bundle.",
+      "passwordNote": "<b>Passwords are excluded by default.</b> The safeStorage ciphertext can only be decrypted on this PC, so exporting without a password would leave values that can't be restored anywhere. Enter a backup password below (at least 6 characters) to re-encrypt them so they can be restored on other PCs too.",
+      "backupPwPlaceholder": "Backup password (optional — enter to include passwords, min 6 chars)",
+      "exportButton": "📤 Export all data (JSON)",
+      "importButton": "📥 Import",
+      "restartHint": "After importing, restarting the app is recommended so changes fully take effect.",
+      "section": {
+        "importBrowser": "Import from another browser",
+        "managePages": "Manage pages"
+      },
+      "importBrowser": {
+        "desc": "Import bookmarks and history from Chrome, Edge, Brave, or Whale. To import history, fully quit that browser first.",
+        "scan": "🌐 Find installed browsers",
+        "scanning": "Finding installed browsers…",
+        "notFound": "Couldn't find any importable browsers (Chrome, Edge, Brave, Whale).",
+        "pickProfile": "Choose a profile to import:",
+        "tagBookmarks": "Bookmarks",
+        "tagHistory": "History",
+        "importing": "Importing…",
+        "done": "✓ Imported {bookmarks} bookmark(s) and {history} history item(s).",
+        "failed": "Import failed: {error}"
+      },
+      "link": {
+        "macros": "Automation macros",
+        "mods": "Mods (experimental)"
+      },
+      "codeItem": {
+        "userChromeJs": "userChrome.js (JS injected into the shell)",
+        "macros": "Macros (automation action sequences)",
+        "userscript": "Userscript — {rel}",
+        "policy": "Site policy (may include customJs) — {rel}"
+      },
+      "pwTooShort": "⚠ The backup password must be at least 6 characters.",
+      "exportDone": {
+        "withPw": "✓ Export complete (passwords included — re-encrypted with the backup password)",
+        "noPw": "✓ Export complete (passwords not included)"
+      },
+      "jsonParseFailed": "⚠ Failed to parse JSON: {error}",
+      "importConfirm": {
+        "title": "Confirm import",
+        "itemCount": "This backup has {count} item(s). Some of your existing data will be overwritten.",
+        "codeWarning": "<b>⚠ There are {count} item(s) that can contain executable code</b> — only include these from a trusted backup.",
+        "includeCode": "Also import code items",
+        "hasPasswords": "This backup contains passwords. Enter the backup password you set when exporting.",
+        "pwPlaceholder": "Backup password",
+        "proceed": "Proceed with import"
+      },
+      "pwStatus": {
+        "skippedNoPassword": " · Passwords: skipped, no password entered",
+        "wrongPassword": " · Passwords: incorrect password",
+        "invalidPassphrase": " · Passwords: password too short",
+        "imported": " · {added} password(s) added, {updated} updated"
+      },
+      "codeItemsSkipped": " · {count} code item(s) excluded",
+      "restoreDone": "✓ Restore complete: {count} item(s)",
+      "restoreErrors": " · {count} error(s)",
+      "importFailed": "⚠ Import failed: {errors}"
+    },
+    "about": {
+      "title": "About",
+      "userData": "User data: <code>%APPDATA%/browser-build/</code>",
+      "storageLocations1": "Policy rules: <code>policies/</code> · Userscripts: <code>userscripts/</code> · Workspaces: <code>workspaces.json</code>",
+      "storageLocations2": "Bookmarks · History: sql.js (WASM) · <code>data/bookmarks.db</code>, <code>data/history.db</code>",
+      "storageLocations3": "Settings: <code>settings.json</code> · Design tokens: <code>user-tokens.json</code> · Macros: <code>macros.json</code> · Mods: <code>mods/</code>",
+      "section": {
+        "manage": "Manage",
+        "legal": "Legal"
+      },
+      "link": {
+        "policies": "Site policies",
+        "passwords": "Passwords",
+        "bookmarks": "Manage bookmarks",
+        "history": "History",
+        "downloads": "Downloads",
+        "macros": "Macros",
+        "privacy": "Privacy policy",
+        "terms": "Terms of use",
+        "licenses": "Open-source licenses"
+      },
+      "privacyNote": "ezBrowser does not collect usage statistics or telemetry — all data is stored only on this computer."
+    },
+    "widgets": {
+      "title": "New Tab Widgets",
+      "section": {
+        "buddy": "Pixel buddy",
+        "weather": "Weather",
+        "news": "News",
+        "notes": "Notes · To-dos · Read-later",
+        "fx": "Exchange rate"
+      },
+      "buddyEnabled": {
+        "label": "Show pixel buddy",
+        "desc": "A logo bird walks around and greets you above the search box (sleeps at night, brings an umbrella when raining). Not loaded when off."
+      },
+      "weatherEnabled": {
+        "label": "Show weather card",
+        "desc": "Show current weather and a 3-day forecast on the new tab"
+      },
+      "locationMode": {
+        "label": "Location",
+        "desc": "Automatic (IP-based) or manual coordinates",
+        "auto": "Automatic (IP location)",
+        "manual": "Manual (enter coordinates)"
+      },
+      "manualPlace": {
+        "label": "Place name",
+        "desc": "Name to show on the card (e.g. Seoul)"
+      },
+      "manualLat": {
+        "label": "Latitude",
+        "desc": "-90 to 90"
+      },
+      "manualLon": {
+        "label": "Longitude",
+        "desc": "-180 to 180"
+      },
+      "units": {
+        "label": "Temperature unit",
+        "desc": "Celsius / Fahrenheit",
+        "metric": "Celsius (°C)",
+        "imperial": "Fahrenheit (°F)"
+      },
+      "newsEnabled": {
+        "label": "Show news card",
+        "desc": "Show Google News headlines"
+      },
+      "newsTopic": {
+        "label": "Topic",
+        "desc": "News category to display",
+        "headlines": "Top stories",
+        "world": "World",
+        "nation": "National",
+        "business": "Business",
+        "technology": "Technology",
+        "entertainment": "Entertainment",
+        "sports": "Sports",
+        "science": "Science",
+        "health": "Health"
+      },
+      "notesEnabled": {
+        "label": "Notes card",
+        "desc": "Free-form notepad on the new tab (auto-saved)"
+      },
+      "todoEnabled": {
+        "label": "To-do card",
+        "desc": "Checklist (add, complete, delete)"
+      },
+      "readLaterEnabled": {
+        "label": "Read-later card",
+        "desc": "Preview of pages saved for later (📖) — up to 6 unread items"
+      },
+      "fxEnabled": {
+        "label": "Exchange rate card",
+        "desc": "Show Frankfurter (ECB) exchange rates — no key needed"
+      },
+      "fxBase": {
+        "label": "Base currency",
+        "desc": "3-letter code (e.g. USD, KRW, EUR)"
+      },
+      "fxSymbols": {
+        "label": "Displayed currencies",
+        "desc": "Comma-separated (e.g. KRW,JPY,EUR,CNY)"
+      },
+      "sourceNote": "Weather uses Open-Meteo, news uses Google News RSS, and exchange rates use Frankfurter (ECB) — no API key required. Notes and to-dos are stored on this device. Reopen a new tab after changes to see them applied."
+    },
+    "update": {
+      "title": "Update",
+      "section": {
+        "status": "Status",
+        "channel": "Channel · options"
+      },
+      "checking": "Checking…",
+      "checkNow": "Check for updates now",
+      "installButton": "Restart to install",
+      "channel": {
+        "label": "Update channel",
+        "desc": "Stable (latest) / Beta / Nightly — beta and nightly include GitHub prereleases",
+        "latest": "Stable (latest)",
+        "beta": "Beta",
+        "nightly": "Nightly"
+      },
+      "autoCheck": {
+        "label": "Auto-check",
+        "desc": "Check for a new version 1 minute after boot, then every 6 hours"
+      },
+      "autoDownload": {
+        "label": "Auto-download",
+        "desc": "Automatically download new versions and notify"
+      },
+      "notifyOnUpdate": {
+        "label": "Update notification",
+        "desc": "Show a banner when a new version is available"
+      },
+      "packagedOnlyNote": "Auto-update only works in packaged (installed) builds. Channel changes apply immediately and take effect from the next check.",
+      "state": {
+        "idle": "Idle",
+        "checking": "Checking…",
+        "available": "New version available",
+        "notAvailable": "You're up to date",
+        "downloading": "Downloading",
+        "downloaded": "Download complete — restart to install",
+        "error": "Error",
+        "disabled": "Disabled (dev mode or not installed)"
+      },
+      "currentVersion": "Current v{version} · {label}"
+    },
+    "pageTitle": "Settings"
   },
   "ui": {
     "toolbar": {
@@ -1678,6 +2372,373 @@
       "t11": "Copied ✓",
       "d4": "Clipboard access failed",
       "d5": "Import accounts from this CSV file? Existing entries with the same site·username will be overwritten by the CSV values."
+    },
+    "newtab": {
+      "title": "New Tab",
+      "buddy": {
+        "ariaLabel": "Pixel buddy",
+        "base": {
+          "0": "Hi there!",
+          "1": "Keeping it light today 🪶",
+          "2": "Looking for something?",
+          "3": "Hehe",
+          "4": "Let's look around together!"
+        },
+        "sleepWake": "Mmm… it's still nighttime 😴",
+        "sleepTalkPrefix": "Zzz… ",
+        "hello": {
+          "morning": "Good morning!",
+          "day": "Hello!",
+          "evening": "Good evening!"
+        },
+        "events": {
+          "newyear": {
+            "greet": "Happy New Year! 🎉",
+            "lines": {
+              "0": "Happy new year!",
+              "1": "Looking forward to this year with you!",
+              "2": "🎉"
+            }
+          },
+          "seollal": {
+            "greet": "It's Seollal! Happy Lunar New Year 🧧",
+            "lines": {
+              "0": "Want a bow?",
+              "1": "Did you have rice cake soup?",
+              "2": "Lucky pouch full!"
+            }
+          },
+          "chuseok": {
+            "greet": "Happy Chuseok 🌕",
+            "lines": {
+              "0": "Have a songpyeon!",
+              "1": "Did you make a wish on the full moon?",
+              "2": "The moon is so bright"
+            }
+          },
+          "halloween": {
+            "greet": "Trick or treat! 🎃",
+            "lines": {
+              "0": "Candy, please!",
+              "1": "Boo~ 👻",
+              "2": "🎃"
+            }
+          },
+          "christmas": {
+            "greet": "Merry Christmas! 🎄",
+            "lines": {
+              "0": "Did you get any presents?",
+              "1": "Ho ho ho!",
+              "2": "🎁"
+            }
+          }
+        }
+      },
+      "date": {
+        "loading": "Loading…"
+      },
+      "greet": {
+        "night": "It's late at night",
+        "morning": "Good morning",
+        "afternoon": "Good afternoon",
+        "evening": "Have a cozy evening"
+      },
+      "search": {
+        "placeholder": "Search or enter a URL · command  (Ctrl+Shift+P = Command Palette)"
+      },
+      "error": {
+        "noApi": "internalAPI not injected"
+      },
+      "topSites": {
+        "title": "Frequently Visited",
+        "history": "History →",
+        "empty": "No browsing history yet. Cards will appear here as you visit sites."
+      },
+      "bookmarks": {
+        "title": "Bookmarks Bar",
+        "manageAll": "Manage All →"
+      },
+      "recent": {
+        "title": "Recently Visited"
+      },
+      "weather": {
+        "title": "Weather",
+        "refresh": "Refresh",
+        "error": "Couldn't load the weather.",
+        "wind": "Wind {value}"
+      },
+      "news": {
+        "title": "News",
+        "more": "More →",
+        "error": "Couldn't load the news.",
+        "titleWithTopic": "News · {topic}",
+        "topic": {
+          "headlines": "Top Stories",
+          "world": "World",
+          "nation": "National",
+          "business": "Business",
+          "technology": "Technology",
+          "entertainment": "Entertainment",
+          "sports": "Sports",
+          "science": "Science",
+          "health": "Health"
+        }
+      },
+      "memo": {
+        "title": "Notes",
+        "placeholder": "Jot down anything here…",
+        "saving": "Saving…",
+        "saved": "Saved ✓",
+        "failed": "Save failed"
+      },
+      "todo": {
+        "title": "To-Do",
+        "addPlaceholder": "Add a task, then press Enter",
+        "empty": "No tasks yet."
+      },
+      "fx": {
+        "title": "Exchange Rates",
+        "refresh": "Refresh",
+        "error": "Couldn't load exchange rates.",
+        "base": "Base 1 {base}"
+      },
+      "readlater": {
+        "title": "Read Later",
+        "unread": "{count} unread",
+        "empty": "No saved pages. Add one with the 📖 icon next to the address bar.",
+        "markRead": "Mark as read"
+      },
+      "shortcuts": {
+        "title": "Shortcuts",
+        "add": "+ Add",
+        "edit": "Edit",
+        "remove": "Remove",
+        "addTile": "Add Shortcut",
+        "addLabel": "Add"
+      },
+      "shortcutModal": {
+        "addTitle": "Add Shortcut",
+        "editTitle": "Edit Shortcut",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. YouTube",
+        "urlLabel": "Address",
+        "urlPlaceholder": "e.g. youtube.com",
+        "cancel": "Cancel",
+        "save": "Save"
+      },
+      "tips": {
+        "palette": "Command Palette",
+        "split": "Split View",
+        "extensions": "Extensions",
+        "dark": "Site Dark Mode",
+        "adblock": "Site Ad Blocking"
+      },
+      "footer": {
+        "settings": "Settings",
+        "privacy": "Privacy Policy",
+        "terms": "Terms",
+        "licenses": "Open Source Licenses"
+      }
+    },
+    "welcome": {
+      "pageTitle": "Welcome to ezBrowser",
+      "tagline": "A light, free browser",
+      "step0": {
+        "title": "Default search engine",
+        "desc": "Choose the engine used when you type a search into the address bar. You can change this later in Settings.",
+        "google": "Search · images · news",
+        "naver": "Strong for Korean search",
+        "bing": "Integrated AI answers",
+        "ddg": "No tracking"
+      },
+      "step1": {
+        "title": "Import your data",
+        "desc": "Bring over bookmarks and history from a browser you used before. To import history, fully quit that browser first."
+      },
+      "import": {
+        "loading": "Looking for installed browsers…",
+        "notFound": "No browsers to import from were found (Chrome, Edge, Brave, Whale). You can skip this.",
+        "tagBookmarks": "Bookmarks",
+        "tagHistory": "History",
+        "optBookmarks": "Import bookmarks",
+        "optHistory": "Import history",
+        "running": "Importing…",
+        "runButton": "Import selected data",
+        "resultOk": "✓ Imported {bookmarks} bookmarks and {history} history entries.",
+        "failed": "Import failed: {error}"
+      },
+      "step2": {
+        "title": "Theme",
+        "desc": "Choose how the shell UI color and page dark mode are handled.",
+        "systemTitle": "Follow system",
+        "systemSub": "Syncs with OS dark/light",
+        "lightTitle": "Light",
+        "lightSub": "Always light",
+        "darkTitle": "Dark",
+        "darkSub": "Always dark",
+        "darkPageTitle": "Dark + page dark",
+        "darkPageSub": "Force dark mode on every site too"
+      },
+      "step3": {
+        "title": "Handy features",
+        "desc": "Recommended ON by default — you can turn any of these off anytime.",
+        "adblockLabel": "Ad & tracker blocking",
+        "adblockHelp": "EasyList + EasyPrivacy + Korean KR filter",
+        "gesturesLabel": "Mouse gestures",
+        "gesturesHelp": "Right-click drag — ← Back, → Forward, ↑ Reload, ↓ New tab",
+        "quickSearchLabel": "Quick search",
+        "quickSearchHelp": "Floating search button when you select text",
+        "hoverTranslateLabel": "Hover-word translate",
+        "hoverTranslateHelp": "Hold Alt and hover a word → translation popup"
+      },
+      "step4": {
+        "title": "Connect AI",
+        "desc": "This browser's AI runs through <b>your own account and your own computer</b>. We've found a few ways you can use it right now — pick one and we'll check that it actually works. You can also do this later."
+      },
+      "ai": {
+        "costSubscription": "Subscription account · no extra charge",
+        "costFreeLocal": "On your computer · free",
+        "costFreeTier": "Free tier",
+        "costPaidKey": "Pay as you go",
+        "connected": "✓ Connected to <b>{label}</b>. Use the ✨ button in the sidebar to start.",
+        "loading": "Looking for AI you can use on this computer…",
+        "notFound": "We couldn't find an AI you can use right now. You can connect one later in Settings &gt; AI, and the browser works fine without it.",
+        "connecting": "Checking the connection…",
+        "connectFailed": "Couldn't connect."
+      },
+      "step5": {
+        "title": "Key shortcuts",
+        "desc": "Learning just these shortcuts covers 80% of daily use. Every key can be rebound at <code style=\"background:var(--bg);padding:1px 4px;border-radius:3px;\">browser://keymap</code>."
+      },
+      "shortcut": {
+        "newTab": "New tab",
+        "closeTab": "Close tab",
+        "focusAddress": "Focus address bar",
+        "commandPalette": "Command palette",
+        "splitH": "Split left/right",
+        "splitV": "Split top/bottom",
+        "extensions": "Manage extensions",
+        "pageDarkToggle": "Toggle page dark mode",
+        "siteDark": "Dark mode for this site",
+        "siteAdblock": "Ad block for this site"
+      },
+      "nav": {
+        "skip": "Skip",
+        "prev": "‹ Back",
+        "next": "Next ›",
+        "start": "✓ Get started"
+      }
+    },
+    "error": {
+      "docTitle": "This page can't be opened",
+      "title": {
+        "loadFail": "This page can't be opened",
+        "crash": "The tab has stopped",
+        "cert": "This connection isn't private"
+      },
+      "desc": {
+        "certUntrusted": "This site's security certificate can't be trusted",
+        "crashTemplate": "The tab has stopped ({label})",
+        "net": {
+          "nameNotResolved": "The address can't be found",
+          "connectionRefused": "The connection was refused",
+          "connectionReset": "The connection was reset",
+          "connectionClosed": "The connection was closed",
+          "connectionTimedOut": "The connection timed out",
+          "internetDisconnected": "You're not connected to the internet",
+          "addressUnreachable": "The address is unreachable",
+          "emptyResponse": "The server didn't respond",
+          "sslProtocolError": "SSL connection error",
+          "networkChanged": "The network changed",
+          "fileNotFound": "The file couldn't be found",
+          "tooManyRedirects": "Too many redirects",
+          "blockedByClient": "This browser blocked the request"
+        }
+      },
+      "crashReason": {
+        "crashed": "crashed",
+        "oom": "out of memory",
+        "launchFailed": "launch failed",
+        "killed": "killed",
+        "integrityFailure": "integrity failure"
+      },
+      "codeLabel": "Error code: {code}",
+      "retry": {
+        "default": "Try again",
+        "reload": "Reload"
+      },
+      "risk": "Proceed at your own risk"
+    },
+    "memory": {
+      "title": "📊 Memory & Performance",
+      "subtitle": "Live per-process memory/CPU and background tab sleep status. Updates every second.",
+      "loading": "Loading…",
+      "internalApiMissing": "internalAPI not injected",
+      "fmt": {
+        "seconds": "{s}s",
+        "minSec": "{m}m {s}s",
+        "hourMin": "{h}h {m}m"
+      },
+      "unit": {
+        "count": "",
+        "minutes": " min"
+      },
+      "stat": {
+        "mainPrivate": "Main process (private bytes)",
+        "workingSetAll": "Total working set (reference · overestimate)",
+        "processes": "Processes",
+        "avgCpu": "Avg CPU",
+        "uptime": "Uptime",
+        "tabsTotal": "Tabs (total)",
+        "tabsAwake": "Awake",
+        "tabsSleep": "💤 Sleeping",
+        "sleepThreshold": "Sleep threshold"
+      },
+      "sweepBtn": "💤 Sleep inactive tabs now",
+      "refreshBtn": "↻ Refresh",
+      "sleepOn": "Auto sleep ON ({min}m)",
+      "sleepOff": "Auto sleep OFF — enable it in Settings",
+      "budgetSectionTitle": "Principle #1 — Lightness budget (CLAUDE.md)",
+      "hint1": "Empty-window RSS is measured on <b>private working set</b>, which this page can't measure precisely (Electron's own tally double-counts shared pages). The accurate verdict comes from the perf stage of <code>npm run verify:full</code> (WMI measurement). Below is the <b>baseline</b> and the last measured value.",
+      "hint2": "The <b>private bytes</b> card above is Electron's <i>commit-based</i> figure, which differs from the WMI <i>private working set</i> used for the budget (usually higher). Don't compare the two directly.",
+      "budget": {
+        "emptyLabel": "Empty-window RSS baseline",
+        "emptyTarget": "Needs measuring",
+        "emptyCurrent": "Run npm run verify:full to record a measurement here",
+        "timeUnknown": "time unknown",
+        "medianSuffix": " (median of last {n}: {v})",
+        "noAdMissing": "Not measured yet — recorded from the next verify:full",
+        "adblockCostSuffix": " · of which adblock {v}MB",
+        "totalMissing": "Not measured",
+        "noAdblockLabel": "Empty-window RSS — excluding adblock (primary verdict)",
+        "totalLabel": "Empty-window RSS — total (reference/trend)",
+        "coldStartLabel": "Cold start (last measured)",
+        "footnote": "The three lines above are from a harness run at <b>{when}</b> (baked in at build time — run <code>npm run verify:full</code> to refresh).",
+        "mainPrivNowLabel": "Main process private bytes (now)",
+        "refLabel": "Reference metric",
+        "cpuLabel": "Idle CPU",
+        "sleepLabel": "Background sleep",
+        "sleepTarget": "30 min inactive → discard",
+        "sleepOnMark": "✓ On",
+        "sleepOffMark": "✗ Off",
+        "targetPrefix": "Target: "
+      },
+      "processSectionTitle": "By process ({n})",
+      "table": {
+        "pid": "PID",
+        "type": "Type",
+        "memoryMb": "Memory (MB)",
+        "cpuPercent": "CPU %"
+      },
+      "envSectionTitle": "Environment",
+      "env": {
+        "appVersion": "App version",
+        "platform": "Platform"
+      },
+      "alert": {
+        "sweepResult": "Slept {discarded} inactive tab(s) (skipped: {skipped})"
+      },
+      "docTitle": "Memory & Performance"
     }
   },
   "ai": {

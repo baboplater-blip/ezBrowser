@@ -84,12 +84,15 @@ async function closeAll(port, child, shell) {
 async function openInternalPage(port, shell, windowId, url) {
   await evaluate(shell, `window.browserAPI.tabs.create(${JSON.stringify(windowId)}, ${JSON.stringify(url)})`)
   const deadline = Date.now() + 15_000
+  let lastList = []
   while (Date.now() < deadline) {
-    const t = (await getTargetList(port)).find((x) => String(x.url).startsWith(url))
+    lastList = await getTargetList(port)
+    const t = lastList.find((x) => String(x.url).startsWith(url))
     if (t) return t
     await sleep(300)
   }
-  throw new Error(`${url} 타깃을 찾지 못함`)
+  const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
+  throw new Error(`${url} 타깃을 찾지 못함\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
 }
 
 async function main() {
@@ -213,6 +216,52 @@ async function main() {
 
       const moreSummary = await evaluate(shell, `(document.querySelector('.ai-provider-more summary')?.textContent || '').trim()`)
       check('I4d', 'AI 사이드바(en) — "준비되지 않은 방법 N개 보기" 접기 요약이 영어', /Show \d+ not-yet-ready option/.test(moreSummary), `summary="${moreSummary}"`)
+
+      settingsSession.close()
+
+      // I10: browser://welcome(en) — 1단계 제목이 en 인지(묶음 M3, JS 템플릿 렌더).
+      const welcomeTarget = await openInternalPage(args.port, shell, windowId, 'browser://welcome')
+      const welcomeSession = await connectSession(welcomeTarget, 'welcome-en')
+      await sleep(1200)
+      const welcomeTitle = await evaluate(welcomeSession, `(document.querySelector('h2')?.textContent || '').trim()`)
+      check('C10', 'browser://welcome(en) — 1단계 제목이 "Default search engine"', welcomeTitle === 'Default search engine', `title="${welcomeTitle}"`)
+      welcomeSession.close()
+
+      // I11: browser://newtab(en) — document.title·바로가기 섹션 제목이 en 인지(정적 data-i18n).
+      const newtabTarget = await openInternalPage(args.port, shell, windowId, 'browser://newtab')
+      const newtabSession = await connectSession(newtabTarget, 'newtab-en')
+      await sleep(1200)
+      const newtabDocTitle = await evaluate(newtabSession, `document.title`)
+      const shortcutsTitle = await evaluate(newtabSession, `(document.querySelector('.section-title')?.textContent || '').trim()`)
+      check('C11', 'browser://newtab(en) — 탭 제목 "New Tab" + 바로가기 섹션 "Shortcuts"',
+        newtabDocTitle === 'New Tab' && shortcutsTitle === 'Shortcuts', `docTitle="${newtabDocTitle}" shortcuts="${shortcutsTitle}"`)
+      newtabSession.close()
+
+      // I12: browser://memory(en) — 통계 카드 라벨이 en 인지(JS 템플릿 렌더 + trSafe).
+      const memoryTarget = await openInternalPage(args.port, shell, windowId, 'browser://memory')
+      const memorySession = await connectSession(memoryTarget, 'memory-en')
+      await sleep(1500)
+      const memLabel = await evaluate(memorySession, `(document.querySelector('.stat .label')?.textContent || '').trim()`)
+      check('C12', 'browser://memory(en) — 첫 통계 라벨이 "Main process (private bytes)"',
+        memLabel === 'Main process (private bytes)', `label="${memLabel}"`)
+      memorySession.close()
+
+      // I13: browser://error(en) — kind/code 기반 클라이언트 재번역이 net 에러 설명을 en 으로 보여주는지.
+      // Chromium 은 host 뒤 query 앞에 '/' 를 자동으로 붙인다(browser://error?.. → browser://error/?..) —
+      // openInternalPage 의 startsWith 매칭이 실제 타깃 URL 과 어긋나지 않게 미리 슬래시를 넣는다.
+      const errorUrl = 'browser://error/?' + new URLSearchParams({
+        kind: 'load-fail', code: '-105', desc: 'name-not-resolved', url: 'https://no-such-host.invalid/',
+      }).toString()
+      const errorTarget = await openInternalPage(args.port, shell, windowId, errorUrl)
+      const errorSession = await connectSession(errorTarget, 'error-en')
+      await sleep(1200)
+      const errTitle = await evaluate(errorSession, `(document.getElementById('title')?.textContent || '').trim()`)
+      const errDesc = await evaluate(errorSession, `(document.getElementById('desc')?.textContent || '').trim()`)
+      const errRetry = await evaluate(errorSession, `(document.getElementById('retry')?.textContent || '').trim()`)
+      check('C13', 'browser://error(en) — 제목/설명/버튼이 en (net 코드 -105 기반 재번역)',
+        errTitle === "This page can't be opened" && errDesc === "The address can't be found" && errRetry === 'Try again',
+        `title="${errTitle}" desc="${errDesc}" retry="${errRetry}"`)
+      errorSession.close()
     } catch (err) {
       check('FATAL-EN', 'en 시드 실행', false, err.message)
     } finally {
@@ -265,6 +314,33 @@ async function main() {
 
       const costLabelVi = await evaluate(shell, `(document.querySelector('.ai-provider-cost.cost-subscription')?.textContent || '').trim()`)
       check('I6c', 'AI 사이드바(vi) — 제공자 카드의 비용 라벨이 베트남어', costLabelVi === 'Tài khoản đăng ký · Không phí thêm', `cost="${costLabelVi}"`)
+
+      // I14: browser://welcome(vi) — 1단계 제목이 베트남어인지.
+      const welcomeTarget = await openInternalPage(args.port, shell, windowId, 'browser://welcome')
+      const welcomeSession = await connectSession(welcomeTarget, 'welcome-vi')
+      await sleep(1200)
+      const welcomeTitle = await evaluate(welcomeSession, `(document.querySelector('h2')?.textContent || '').trim()`)
+      check('C14', 'browser://welcome(vi) — 1단계 제목이 "Công cụ tìm kiếm mặc định"', welcomeTitle === 'Công cụ tìm kiếm mặc định', `title="${welcomeTitle}"`)
+      welcomeSession.close()
+
+      // I15: browser://newtab(vi) — 탭 제목·바로가기 섹션 제목이 베트남어인지.
+      const newtabTarget = await openInternalPage(args.port, shell, windowId, 'browser://newtab')
+      const newtabSession = await connectSession(newtabTarget, 'newtab-vi')
+      await sleep(1200)
+      const newtabDocTitle = await evaluate(newtabSession, `document.title`)
+      const shortcutsTitle = await evaluate(newtabSession, `(document.querySelector('.section-title')?.textContent || '').trim()`)
+      check('C15', 'browser://newtab(vi) — 탭 제목 "Tab mới" + 바로가기 섹션 "Lối tắt"',
+        newtabDocTitle === 'Tab mới' && shortcutsTitle === 'Lối tắt', `docTitle="${newtabDocTitle}" shortcuts="${shortcutsTitle}"`)
+      newtabSession.close()
+
+      // I16: browser://memory(vi) — 통계 카드 라벨이 베트남어인지.
+      const memoryTarget = await openInternalPage(args.port, shell, windowId, 'browser://memory')
+      const memorySession = await connectSession(memoryTarget, 'memory-vi')
+      await sleep(1500)
+      const memLabel = await evaluate(memorySession, `(document.querySelector('.stat .label')?.textContent || '').trim()`)
+      check('C16', 'browser://memory(vi) — 첫 통계 라벨이 "Tiến trình chính (private bytes)"',
+        memLabel === 'Tiến trình chính (private bytes)', `label="${memLabel}"`)
+      memorySession.close()
     } catch (err) {
       check('FATAL-VI', 'vi 시드 실행', false, err.message)
     } finally {

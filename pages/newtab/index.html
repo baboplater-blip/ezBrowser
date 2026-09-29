@@ -2,8 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
-    <title>새 탭</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <title data-i18n="page.newtab.title">새 탭</title>
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <style>
       :root { color-scheme: light dark;
         --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
@@ -289,135 +291,162 @@
   <body>
     <div class="wrap">
       <h1 class="clock" id="clock">--:--</h1>
-      <div class="date" id="date">불러오는 중…</div>
+      <div class="date" id="date" data-i18n="page.newtab.date.loading">불러오는 중…</div>
       <div class="greet" id="greet"></div>
-      <div class="buddy-stage" id="buddy-stage" style="display:none;" aria-label="픽셀 친구">
+      <div class="buddy-stage" id="buddy-stage" style="display:none;" aria-label="픽셀 친구" data-i18n-attr="aria-label:page.newtab.buddy.ariaLabel">
         <canvas id="buddy-canvas"></canvas>
         <div class="buddy-bubble" id="buddy-bubble"></div>
       </div>
       <div class="workspace-bar" id="ws-bar" style="display:none;"></div>
 
       <form class="search" id="search-form">
-        <input id="q" class="q" placeholder="검색하거나 URL · 명령 입력  (Ctrl+Shift+P = 명령 팔레트)" autofocus autocomplete="off" />
+        <input id="q" class="q" placeholder="검색하거나 URL · 명령 입력  (Ctrl+Shift+P = 명령 팔레트)" data-i18n-attr="placeholder:page.newtab.search.placeholder" autofocus autocomplete="off" />
         <span class="ico">🔍</span>
       </form>
 
       <div class="widget-row" id="widget-row" style="display:none;">
         <div class="widget" id="wx-card" style="display:none;">
           <div class="widget-head">
-            <span class="t">날씨</span>
-            <span class="a" id="wx-refresh">새로고침</span>
+            <span class="t" data-i18n="page.newtab.weather.title">날씨</span>
+            <span class="a" id="wx-refresh" data-i18n="page.newtab.weather.refresh">새로고침</span>
           </div>
-          <div id="wx-body"><div class="ph">불러오는 중…</div></div>
+          <div id="wx-body"><div class="ph" data-i18n="page.newtab.date.loading">불러오는 중…</div></div>
         </div>
         <div class="widget" id="news-card" style="display:none;">
           <div class="widget-head">
-            <span class="t" id="news-title">뉴스</span>
-            <a class="a" href="https://news.google.com/?hl=ko&gl=KR&ceid=KR:ko">더 보기 →</a>
+            <span class="t" id="news-title" data-i18n="page.newtab.news.title">뉴스</span>
+            <a class="a" href="https://news.google.com/?hl=ko&gl=KR&ceid=KR:ko" data-i18n="page.newtab.news.more">더 보기 →</a>
           </div>
-          <div id="news-body"><div class="ph">불러오는 중…</div></div>
+          <div id="news-body"><div class="ph" data-i18n="page.newtab.date.loading">불러오는 중…</div></div>
         </div>
       </div>
 
       <div class="widget-row2" id="widget-row2" style="display:none;">
         <div class="widget compact" id="memo-card" style="display:none;">
-          <div class="widget-head"><span class="t">메모</span></div>
-          <textarea class="memo-area" id="memo-area" placeholder="여기에 자유롭게 메모하세요…"></textarea>
+          <div class="widget-head"><span class="t" data-i18n="page.newtab.memo.title">메모</span></div>
+          <textarea class="memo-area" id="memo-area" placeholder="여기에 자유롭게 메모하세요…" data-i18n-attr="placeholder:page.newtab.memo.placeholder"></textarea>
           <div class="save-hint" id="memo-hint"></div>
         </div>
         <div class="widget compact" id="todo-card" style="display:none;">
-          <div class="widget-head"><span class="t">할 일</span></div>
-          <input class="todo-add" id="todo-add" placeholder="할 일 추가 후 Enter" autocomplete="off" />
+          <div class="widget-head"><span class="t" data-i18n="page.newtab.todo.title">할 일</span></div>
+          <input class="todo-add" id="todo-add" placeholder="할 일 추가 후 Enter" data-i18n-attr="placeholder:page.newtab.todo.addPlaceholder" autocomplete="off" />
           <div class="todo-list" id="todo-list"></div>
         </div>
         <div class="widget compact" id="fx-card" style="display:none;">
           <div class="widget-head">
-            <span class="t">환율</span>
-            <span class="a" id="fx-refresh">새로고침</span>
+            <span class="t" data-i18n="page.newtab.fx.title">환율</span>
+            <span class="a" id="fx-refresh" data-i18n="page.newtab.fx.refresh">새로고침</span>
           </div>
-          <div id="fx-body"><div class="ph">불러오는 중…</div></div>
+          <div id="fx-body"><div class="ph" data-i18n="page.newtab.date.loading">불러오는 중…</div></div>
         </div>
         <div class="widget compact" id="rl-card" style="display:none;">
           <div class="widget-head">
-            <span class="t">읽기 목록</span>
+            <span class="t" data-i18n="page.newtab.readlater.title">읽기 목록</span>
             <span class="a" id="rl-count"></span>
           </div>
-          <div id="rl-body"><div class="ph">불러오는 중…</div></div>
+          <div id="rl-body"><div class="ph" data-i18n="page.newtab.date.loading">불러오는 중…</div></div>
         </div>
       </div>
 
       <div class="grid-row" id="shortcut-row" style="display:none;">
         <div class="section-head">
-          <div class="section-title">바로가기</div>
-          <a class="section-action" id="sc-add-link">+ 추가</a>
+          <div class="section-title" data-i18n="page.newtab.shortcuts.title">바로가기</div>
+          <a class="section-action" id="sc-add-link" data-i18n="page.newtab.shortcuts.add">+ 추가</a>
         </div>
         <div class="top-grid" id="shortcut-grid"></div>
       </div>
 
       <div class="grid-row" id="bookmark-row" style="display:none;">
         <div class="section-head">
-          <div class="section-title">북마크 바</div>
-          <a class="section-action" href="browser://bookmarks">전체 관리 →</a>
+          <div class="section-title" data-i18n="page.newtab.bookmarks.title">북마크 바</div>
+          <a class="section-action" href="browser://bookmarks" data-i18n="page.newtab.bookmarks.manageAll">전체 관리 →</a>
         </div>
         <div class="quick-row" id="bookmark-row-list"></div>
       </div>
 
       <div class="grid-row">
         <div class="section-head">
-          <div class="section-title">자주 가는 사이트</div>
-          <a class="section-action" href="browser://history">방문 기록 →</a>
+          <div class="section-title" data-i18n="page.newtab.topSites.title">자주 가는 사이트</div>
+          <a class="section-action" href="browser://history" data-i18n="page.newtab.topSites.history">방문 기록 →</a>
         </div>
         <div class="top-grid" id="top-grid"></div>
       </div>
 
       <div class="grid-row" id="recent-row" style="display:none;">
         <div class="section-head">
-          <div class="section-title">최근 방문</div>
+          <div class="section-title" data-i18n="page.newtab.recent.title">최근 방문</div>
         </div>
         <div class="recent-list" id="recent-list"></div>
       </div>
 
       <div class="footer-tips">
-        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> 명령 팔레트</span>
-        <span><kbd>Ctrl</kbd>+<kbd>\</kbd> 분할 화면</span>
-        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> 확장</span>
-        <span><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> 사이트 다크</span>
-        <span><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> 사이트 광고차단</span>
+        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> <span data-i18n="page.newtab.tips.palette">명령 팔레트</span></span>
+        <span><kbd>Ctrl</kbd>+<kbd>\</kbd> <span data-i18n="page.newtab.tips.split">분할 화면</span></span>
+        <span><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> <span data-i18n="page.newtab.tips.extensions">확장</span></span>
+        <span><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> <span data-i18n="page.newtab.tips.dark">사이트 다크</span></span>
+        <span><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> <span data-i18n="page.newtab.tips.adblock">사이트 광고차단</span></span>
       </div>
 
       <div class="footer-legal">
-        <a href="browser://settings">설정</a>
-        <a href="browser://privacy">개인정보처리방침</a>
-        <a href="browser://terms">약관</a>
-        <a href="browser://licenses">오픈소스 라이선스</a>
+        <a href="browser://settings" data-i18n="page.newtab.footer.settings">설정</a>
+        <a href="browser://privacy" data-i18n="page.newtab.footer.privacy">개인정보처리방침</a>
+        <a href="browser://terms" data-i18n="page.newtab.footer.terms">약관</a>
+        <a href="browser://licenses" data-i18n="page.newtab.footer.licenses">오픈소스 라이선스</a>
       </div>
     </div>
 
     <div class="sc-modal" id="sc-modal">
       <div class="sc-dialog">
-        <h3 id="sc-modal-title">바로가기 추가</h3>
-        <label for="sc-name">이름</label>
-        <input id="sc-name" placeholder="예: 유튜브" autocomplete="off" />
-        <label for="sc-url">주소</label>
-        <input id="sc-url" placeholder="예: youtube.com" autocomplete="off" />
+        <h3 id="sc-modal-title" data-i18n="page.newtab.shortcutModal.addTitle">바로가기 추가</h3>
+        <label for="sc-name" data-i18n="page.newtab.shortcutModal.nameLabel">이름</label>
+        <input id="sc-name" placeholder="예: 유튜브" data-i18n-attr="placeholder:page.newtab.shortcutModal.namePlaceholder" autocomplete="off" />
+        <label for="sc-url" data-i18n="page.newtab.shortcutModal.urlLabel">주소</label>
+        <input id="sc-url" placeholder="예: youtube.com" data-i18n-attr="placeholder:page.newtab.shortcutModal.urlPlaceholder" autocomplete="off" />
         <div class="sc-actions">
-          <button class="sc-btn" id="sc-cancel">취소</button>
-          <button class="sc-btn primary" id="sc-save">저장</button>
+          <button class="sc-btn" id="sc-cancel" data-i18n="page.newtab.shortcutModal.cancel">취소</button>
+          <button class="sc-btn primary" id="sc-save" data-i18n="page.newtab.shortcutModal.save">저장</button>
         </div>
       </div>
     </div>
     <script>
+      // 다국어 안전 헬퍼(docs/i18n.md — 함수명을 't' 로 재선언하면 window.t 가 무한 재귀로 죽는다)
+      function trSafe(key, fallback, vars) {
+        if (typeof window.t === 'function') return window.t(key, fallback, vars)
+        if (!vars) return fallback
+        return String(fallback).replace(/\{(\w+)\}/g, (m, k) =>
+          Object.prototype.hasOwnProperty.call(vars, k) ? String(vars[k]) : m)
+      }
+      function localeTag() {
+        const loc = (typeof window.getI18nLocale === 'function' && window.getI18nLocale()) || 'ko'
+        return loc === 'ko' ? 'ko-KR' : loc === 'vi' ? 'vi-VN' : 'en-US'
+      }
+
       function pad(n) { return n.toString().padStart(2, '0') }
+      function formatDateLine(now) {
+        const loc = (typeof window.getI18nLocale === 'function' && window.getI18nLocale()) || 'ko'
+        if (loc === 'ko') {
+          // ko 화면은 항상 이 고정 서식을 그대로 쓴다(로케일 API 출력과 무관하게 무변경 보장)
+          const days = ['일','월','화','수','목','금','토']
+          const month = now.getMonth() + 1
+          const date = now.getDate()
+          return `${now.getFullYear()}년 ${month}월 ${date}일 · ${days[now.getDay()]}요일`
+        }
+        try {
+          return new Intl.DateTimeFormat(localeTag(), { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(now)
+        } catch (e) {
+          return now.toDateString()
+        }
+      }
       function tickClock() {
         const now = new Date()
         const h = now.getHours()
         const m = now.getMinutes()
         document.getElementById('clock').textContent = `${pad(h)}:${pad(m)}`
-        const days = ['일','월','화','수','목','금','토']
-        const month = now.getMonth() + 1
-        const date = now.getDate()
-        document.getElementById('date').textContent = `${now.getFullYear()}년 ${month}월 ${date}일 · ${days[now.getDay()]}요일`
-        const greet = h < 5 ? '늦은 밤이에요' : h < 12 ? '좋은 아침이에요' : h < 18 ? '좋은 오후에요' : '편안한 저녁이에요'
+        document.getElementById('date').textContent = formatDateLine(now)
+        const greet = h < 5 ? trSafe('page.newtab.greet.night', '늦은 밤이에요')
+          : h < 12 ? trSafe('page.newtab.greet.morning', '좋은 아침이에요')
+          : h < 18 ? trSafe('page.newtab.greet.afternoon', '좋은 오후에요')
+          : trSafe('page.newtab.greet.evening', '편안한 저녁이에요')
         document.getElementById('greet').textContent = greet
       }
       tickClock()
@@ -445,12 +474,12 @@
       async function loadTop() {
         const grid = document.getElementById('top-grid')
         if (!window.internalAPI) {
-          grid.innerHTML = '<div class="empty">internalAPI 미주입</div>'
+          grid.innerHTML = `<div class="empty">${escape(trSafe('page.newtab.error.noApi', 'internalAPI 미주입'))}</div>`
           return
         }
         const sites = await window.internalAPI.history.topSites(12)
         if (!sites || sites.length === 0) {
-          grid.outerHTML = '<div class="empty"><img class="empty-illust" src="empty.png" alt="">아직 방문 이력이 없습니다. 사이트를 둘러보면 여기에 카드가 생깁니다.</div>'
+          grid.outerHTML = `<div class="empty"><img class="empty-illust" src="empty.png" alt="">${escape(trSafe('page.newtab.topSites.empty', '아직 방문 이력이 없습니다. 사이트를 둘러보면 여기에 카드가 생깁니다.'))}</div>`
           return
         }
         grid.innerHTML = sites.map((s) => {
@@ -517,37 +546,44 @@
         } catch { /* ignore */ }
       }
 
-      const NEWS_TOPIC_LABEL = {
+      // NEWS_TOPIC_LABEL 의 한국어 폴백 — 키(headlines 등)는 백엔드에서 오는 값과 동일해야 한다
+      const NEWS_TOPIC_FALLBACK = {
         headlines: '주요 뉴스', world: '세계', nation: '국내', business: '경제',
         technology: '기술', entertainment: '연예', sports: '스포츠', science: '과학', health: '건강',
+      }
+      function newsTopicLabel(topic) {
+        const key = NEWS_TOPIC_FALLBACK[topic] ? topic : 'headlines'
+        return trSafe('page.newtab.news.topic.' + key, NEWS_TOPIC_FALLBACK[key])
       }
 
       function renderWeather(w) {
         const body = document.getElementById('wx-body')
-        if (!w) { body.innerHTML = '<div class="ph">날씨를 불러올 수 없습니다.</div>'; return }
+        if (!w) { body.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.weather.error', '날씨를 불러올 수 없습니다.'))}</div>`; return }
         window.__bbLastWeather = w
         if (window.bbBuddy) window.bbBuddy.setWeather(w)
         const days = (w.daily || []).map((d) =>
           `<div class="wx-day"><span>${escape(d.label)}</span><span class="d-ico">${d.icon}</span>`
           + `<span class="d-t">${d.max}°/${d.min}°</span></div>`).join('')
+        const windText = trSafe('page.newtab.weather.wind', '바람 {value}', { value: w.wind })
         body.innerHTML =
           `<div class="wx-main">
              <span class="wx-icon">${w.icon}</span>
              <span class="wx-temp">${w.temp}${escape(w.unit)}</span>
              <div class="wx-meta">
                <span class="wx-place">${escape(w.place)}</span>
-               <span class="wx-desc">${escape(w.desc)} · 바람 ${w.wind}</span>
+               <span class="wx-desc">${escape(w.desc)} · ${escape(windText)}</span>
              </div>
            </div>
            <div class="wx-days">${days}</div>`
       }
 
       function renderNews(n) {
+        window.__bbLastNews = n
         const body = document.getElementById('news-body')
         const titleEl = document.getElementById('news-title')
-        if (n && titleEl) titleEl.textContent = '뉴스 · ' + (NEWS_TOPIC_LABEL[n.topic] || '주요 뉴스')
+        if (n && titleEl) titleEl.textContent = trSafe('page.newtab.news.titleWithTopic', '뉴스 · {topic}', { topic: newsTopicLabel(n.topic) })
         if (!n || !n.items || n.items.length === 0) {
-          body.innerHTML = '<div class="ph">뉴스를 불러올 수 없습니다.</div>'; return
+          body.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.news.error', '뉴스를 불러올 수 없습니다.'))}</div>`; return
         }
         body.innerHTML = '<div class="news-list">' + n.items.map((it) =>
           `<a class="news-item" href="${escape(it.link)}" title="${escape(it.title)}">${escape(it.title)}`
@@ -555,15 +591,17 @@
       }
 
       function renderFx(f) {
+        window.__bbLastFx = f
         const body = document.getElementById('fx-body')
         if (!f || !f.rates || f.rates.length === 0) {
-          body.innerHTML = '<div class="ph">환율을 불러올 수 없습니다.</div>'; return
+          body.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.fx.error', '환율을 불러올 수 없습니다.'))}</div>`; return
         }
-        const fmt = (v) => v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2)
+        const fmt = (v) => v >= 100 ? Math.round(v).toLocaleString(localeTag()) : v.toFixed(2)
         const rows = f.rates.map((r) =>
           `<div class="fx-row"><span class="code">${escape(r.code)}</span><span class="val">${fmt(r.value)}</span></div>`).join('')
+        const baseText = trSafe('page.newtab.fx.base', '기준 1 {base}', { base: escape(f.base) })
         body.innerHTML = '<div class="fx-list">' + rows + '</div>'
-          + `<div class="fx-base">기준 1 ${escape(f.base)}${f.date ? ' · ' + escape(f.date) : ''}</div>`
+          + `<div class="fx-base">${baseText}${f.date ? ' · ' + escape(f.date) : ''}</div>`
       }
 
       // ── 메모 ──
@@ -573,11 +611,11 @@
         const hint = document.getElementById('memo-hint')
         window.internalAPI.widgets.dataGet('notes').then((v) => { if (typeof v === 'string') area.value = v }).catch(() => {})
         area.addEventListener('input', () => {
-          hint.textContent = '저장 중…'
+          hint.textContent = trSafe('page.newtab.memo.saving', '저장 중…')
           if (memoTimer) clearTimeout(memoTimer)
           memoTimer = setTimeout(async () => {
-            try { await window.internalAPI.widgets.dataSet('notes', area.value); hint.textContent = '저장됨 ✓' }
-            catch { hint.textContent = '저장 실패' }
+            try { await window.internalAPI.widgets.dataSet('notes', area.value); hint.textContent = trSafe('page.newtab.memo.saved', '저장됨 ✓') }
+            catch { hint.textContent = trSafe('page.newtab.memo.failed', '저장 실패') }
             setTimeout(() => { hint.textContent = '' }, 1500)
           }, 500)
         })
@@ -587,7 +625,7 @@
       let todos = []
       function renderTodos() {
         const list = document.getElementById('todo-list')
-        if (todos.length === 0) { list.innerHTML = '<div class="ph">할 일이 없습니다.</div>'; return }
+        if (todos.length === 0) { list.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.todo.empty', '할 일이 없습니다.'))}</div>`; return }
         list.innerHTML = todos.map((t) =>
           `<div class="todo-item${t.done ? ' done' : ''}" data-id="${t.id}">`
           + `<span class="box">${t.done ? '✓' : ''}</span>`
@@ -622,22 +660,24 @@
 
       // ── 읽기 목록 위젯 ──
       function renderReadLater(items) {
+        window.__bbLastReadLater = items
         const body = document.getElementById('rl-body')
         const countEl = document.getElementById('rl-count')
         const unread = (items || []).filter((x) => !x.read)
-        if (countEl) countEl.textContent = unread.length > 0 ? `안 읽음 ${unread.length}` : ''
+        if (countEl) countEl.textContent = unread.length > 0 ? trSafe('page.newtab.readlater.unread', '안 읽음 {count}', { count: unread.length }) : ''
         const show = unread.slice(0, 6)
         if (show.length === 0) {
-          body.innerHTML = '<div class="ph">저장된 페이지가 없습니다. 주소창 옆 📖 로 추가하세요.</div>'
+          body.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.readlater.empty', '저장된 페이지가 없습니다. 주소창 옆 📖 로 추가하세요.'))}</div>`
           return
         }
+        const markReadTitle = escape(trSafe('page.newtab.readlater.markRead', '읽음으로 표시'))
         body.innerHTML = '<div class="rl-list">' + show.map((it) => {
           const host = hostOf(it.url)
           const fv = it.favicon || faviconUrl(it.url)
           return `<a class="rl-w-item" href="${escape(it.url)}" data-id="${escape(it.id)}" title="${escape(it.url)}">
             ${fv ? `<img src="${fv}" alt=""/>` : ''}
             <span class="rl-w-title">${escape(it.title || host)}</span>
-            <button class="rl-w-done" data-done="${escape(it.id)}" title="읽음으로 표시">✓</button>
+            <button class="rl-w-done" data-done="${escape(it.id)}" title="${markReadTitle}">✓</button>
           </a>`
         }).join('') + '</div>'
         body.querySelectorAll('.rl-w-item').forEach((el) => {
@@ -706,14 +746,14 @@
 
       document.getElementById('wx-refresh').addEventListener('click', () => {
         const body = document.getElementById('wx-body')
-        body.innerHTML = '<div class="ph">불러오는 중…</div>'
+        body.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.date.loading', '불러오는 중…'))}</div>`
         if (window.internalAPI && window.internalAPI.widgets)
           window.internalAPI.widgets.weather(true).then(renderWeather).catch(() => renderWeather(null))
       })
 
       document.getElementById('fx-refresh').addEventListener('click', () => {
         const body = document.getElementById('fx-body')
-        body.innerHTML = '<div class="ph">불러오는 중…</div>'
+        body.innerHTML = `<div class="ph">${escape(trSafe('page.newtab.date.loading', '불러오는 중…'))}</div>`
         if (window.internalAPI && window.internalAPI.widgets)
           window.internalAPI.widgets.fx(true).then(renderFx).catch(() => renderFx(null))
       })
@@ -733,22 +773,24 @@
 
       function renderShortcuts() {
         const grid = document.getElementById('shortcut-grid')
+        const editTitle = escape(trSafe('page.newtab.shortcuts.edit', '편집'))
+        const removeTitle = escape(trSafe('page.newtab.shortcuts.remove', '삭제'))
         const tiles = shortcuts.map((s, i) => {
           const host = hostOf(s.url)
           const title = escape(s.title || host)
           const fv = faviconUrl(s.url)
           return `<a class="site" href="${escape(s.url)}" draggable="true" data-idx="${i}" data-id="${escape(s.id)}">
             <div class="actions">
-              <button class="act edit" data-edit="${escape(s.id)}" title="편집">✎</button>
-              <button class="act rm" data-rm="${escape(s.id)}" title="삭제">✕</button>
+              <button class="act edit" data-edit="${escape(s.id)}" title="${editTitle}">✎</button>
+              <button class="act rm" data-rm="${escape(s.id)}" title="${removeTitle}">✕</button>
             </div>
             <div class="ico">${fv ? `<img src="${fv}" alt=""/>` : letter(host)}</div>
             <div class="lbl">${title}</div>
             <div class="host">${escape(host)}</div>
           </a>`
         }).join('')
-        const addTile = `<div class="site add" id="sc-add-tile" title="바로가기 추가">
-          <div class="ico">＋</div><div class="lbl">추가</div></div>`
+        const addTile = `<div class="site add" id="sc-add-tile" title="${escape(trSafe('page.newtab.shortcuts.addTile', '바로가기 추가'))}">
+          <div class="ico">＋</div><div class="lbl">${escape(trSafe('page.newtab.shortcuts.addLabel', '추가'))}</div></div>`
         grid.innerHTML = tiles + addTile
 
         grid.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', (e) => {
@@ -794,16 +836,22 @@
         })
       }
 
+      let scModalOpen = false
+      function scModalTitle(id) {
+        return id ? trSafe('page.newtab.shortcutModal.editTitle', '바로가기 편집')
+                  : trSafe('page.newtab.shortcutModal.addTitle', '바로가기 추가')
+      }
       function openScModal(id) {
         scEditId = id
+        scModalOpen = true
         const sc = id ? shortcuts.find((x) => x.id === id) : null
-        document.getElementById('sc-modal-title').textContent = id ? '바로가기 편집' : '바로가기 추가'
+        document.getElementById('sc-modal-title').textContent = scModalTitle(id)
         document.getElementById('sc-name').value = sc ? sc.title : ''
         document.getElementById('sc-url').value = sc ? sc.url : ''
         document.getElementById('sc-modal').classList.add('open')
         setTimeout(() => document.getElementById('sc-name').focus(), 30)
       }
-      function closeScModal() { document.getElementById('sc-modal').classList.remove('open'); scEditId = null }
+      function closeScModal() { document.getElementById('sc-modal').classList.remove('open'); scEditId = null; scModalOpen = false }
       function submitScModal() {
         const name = document.getElementById('sc-name').value.trim()
         const url = normalizeUrl(document.getElementById('sc-url').value)
@@ -851,6 +899,23 @@
         window.internalAPI.history.onChanged(() => { loadTop(); loadRecent() })
         if (window.internalAPI.bookmarks) window.internalAPI.bookmarks.onChanged(() => loadBookmarks())
         if (window.internalAPI.workspace) window.internalAPI.workspace.onChanged(() => loadWorkspace())
+      }
+
+      // 언어가 바뀌면 JS 로 그린 동적 콘텐츠를 다시 그린다(정적 data-i18n 요소는 로더가 알아서 갱신)
+      if (typeof window.onI18nChanged === 'function') {
+        window.onI18nChanged(() => {
+          try { tickClock() } catch (e) {}
+          try { loadTop() } catch (e) {}
+          try { if (window.__bbLastWeather !== undefined) renderWeather(window.__bbLastWeather) } catch (e) {}
+          try { if (window.__bbLastNews !== undefined) renderNews(window.__bbLastNews) } catch (e) {}
+          try { if (window.__bbLastFx !== undefined) renderFx(window.__bbLastFx) } catch (e) {}
+          try { renderTodos() } catch (e) {}
+          try { if (window.__bbLastReadLater !== undefined) renderReadLater(window.__bbLastReadLater) } catch (e) {}
+          try { renderShortcuts() } catch (e) {}
+          try {
+            if (scModalOpen) document.getElementById('sc-modal-title').textContent = scModalTitle(scEditId)
+          } catch (e) {}
+        })
       }
     </script>
   </body>
