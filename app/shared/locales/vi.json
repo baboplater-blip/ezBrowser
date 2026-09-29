@@ -2372,6 +2372,373 @@
       "t11": "Đã sao chép ✓",
       "d4": "Truy cập bộ nhớ tạm thất bại",
       "d5": "Nhập tài khoản từ tệp CSV này? Các mục hiện có cùng trang·tên người dùng sẽ bị ghi đè bằng giá trị trong CSV."
+    },
+    "newtab": {
+      "title": "Tab mới",
+      "buddy": {
+        "ariaLabel": "Bạn nhỏ pixel",
+        "base": {
+          "0": "Xin chào!",
+          "1": "Hôm nay cũng nhẹ nhàng thôi 🪶",
+          "2": "Bạn đang tìm gì vậy?",
+          "3": "Hehe",
+          "4": "Cùng khám phá nào!"
+        },
+        "sleepWake": "Ừm… vẫn còn là ban đêm mà 😴",
+        "sleepTalkPrefix": "Zzz… ",
+        "hello": {
+          "morning": "Chào buổi sáng!",
+          "day": "Xin chào!",
+          "evening": "Chào buổi tối!"
+        },
+        "events": {
+          "newyear": {
+            "greet": "Chúc mừng năm mới! 🎉",
+            "lines": {
+              "0": "Chúc mừng năm mới!",
+              "1": "Mong được đồng hành cùng bạn năm nay!",
+              "2": "🎉"
+            }
+          },
+          "seollal": {
+            "greet": "Tết Seollal rồi! Chúc mừng năm mới 🧧",
+            "lines": {
+              "0": "Bạn muốn cúi chào không?",
+              "1": "Bạn đã ăn canh bánh gạo chưa?",
+              "2": "Túi may mắn đầy ắp!"
+            }
+          },
+          "chuseok": {
+            "greet": "Chúc bạn Chuseok đầy đủ 🌕",
+            "lines": {
+              "0": "Ăn một cái songpyeon nhé!",
+              "1": "Bạn đã ước nguyện dưới trăng tròn chưa?",
+              "2": "Trăng sáng quá"
+            }
+          },
+          "halloween": {
+            "greet": "Trick or treat! 🎃",
+            "lines": {
+              "0": "Cho kẹo đi!",
+              "1": "Hù~ 👻",
+              "2": "🎃"
+            }
+          },
+          "christmas": {
+            "greet": "Giáng sinh vui vẻ! 🎄",
+            "lines": {
+              "0": "Bạn đã nhận quà chưa?",
+              "1": "Ho ho ho!",
+              "2": "🎁"
+            }
+          }
+        }
+      },
+      "date": {
+        "loading": "Đang tải…"
+      },
+      "greet": {
+        "night": "Đã khuya rồi",
+        "morning": "Chào buổi sáng",
+        "afternoon": "Chào buổi chiều",
+        "evening": "Chúc buổi tối an lành"
+      },
+      "search": {
+        "placeholder": "Tìm kiếm hoặc nhập URL · lệnh  (Ctrl+Shift+P = Bảng lệnh)"
+      },
+      "error": {
+        "noApi": "internalAPI chưa được chèn"
+      },
+      "topSites": {
+        "title": "Trang truy cập thường xuyên",
+        "history": "Lịch sử →",
+        "empty": "Chưa có lịch sử duyệt web. Thẻ sẽ xuất hiện ở đây khi bạn truy cập các trang."
+      },
+      "bookmarks": {
+        "title": "Thanh dấu trang",
+        "manageAll": "Quản lý tất cả →"
+      },
+      "recent": {
+        "title": "Truy cập gần đây"
+      },
+      "weather": {
+        "title": "Thời tiết",
+        "refresh": "Làm mới",
+        "error": "Không thể tải thời tiết.",
+        "wind": "Gió {value}"
+      },
+      "news": {
+        "title": "Tin tức",
+        "more": "Xem thêm →",
+        "error": "Không thể tải tin tức.",
+        "titleWithTopic": "Tin tức · {topic}",
+        "topic": {
+          "headlines": "Tin nổi bật",
+          "world": "Thế giới",
+          "nation": "Trong nước",
+          "business": "Kinh doanh",
+          "technology": "Công nghệ",
+          "entertainment": "Giải trí",
+          "sports": "Thể thao",
+          "science": "Khoa học",
+          "health": "Sức khỏe"
+        }
+      },
+      "memo": {
+        "title": "Ghi chú",
+        "placeholder": "Ghi chú tự do ở đây…",
+        "saving": "Đang lưu…",
+        "saved": "Đã lưu ✓",
+        "failed": "Lưu thất bại"
+      },
+      "todo": {
+        "title": "Việc cần làm",
+        "addPlaceholder": "Thêm việc rồi nhấn Enter",
+        "empty": "Chưa có việc cần làm."
+      },
+      "fx": {
+        "title": "Tỷ giá",
+        "refresh": "Làm mới",
+        "error": "Không thể tải tỷ giá.",
+        "base": "Cơ sở 1 {base}"
+      },
+      "readlater": {
+        "title": "Đọc sau",
+        "unread": "{count} chưa đọc",
+        "empty": "Chưa có trang nào được lưu. Thêm bằng biểu tượng 📖 cạnh thanh địa chỉ.",
+        "markRead": "Đánh dấu đã đọc"
+      },
+      "shortcuts": {
+        "title": "Lối tắt",
+        "add": "+ Thêm",
+        "edit": "Sửa",
+        "remove": "Xóa",
+        "addTile": "Thêm lối tắt",
+        "addLabel": "Thêm"
+      },
+      "shortcutModal": {
+        "addTitle": "Thêm lối tắt",
+        "editTitle": "Sửa lối tắt",
+        "nameLabel": "Tên",
+        "namePlaceholder": "vd: YouTube",
+        "urlLabel": "Địa chỉ",
+        "urlPlaceholder": "vd: youtube.com",
+        "cancel": "Hủy",
+        "save": "Lưu"
+      },
+      "tips": {
+        "palette": "Bảng lệnh",
+        "split": "Chia màn hình",
+        "extensions": "Tiện ích",
+        "dark": "Chế độ tối cho trang",
+        "adblock": "Chặn quảng cáo cho trang"
+      },
+      "footer": {
+        "settings": "Cài đặt",
+        "privacy": "Chính sách quyền riêng tư",
+        "terms": "Điều khoản",
+        "licenses": "Giấy phép mã nguồn mở"
+      }
+    },
+    "welcome": {
+      "pageTitle": "Chào mừng đến với ezBrowser",
+      "tagline": "Trình duyệt nhẹ và tự do",
+      "step0": {
+        "title": "Công cụ tìm kiếm mặc định",
+        "desc": "Chọn công cụ tìm kiếm dùng khi bạn nhập từ khóa vào thanh địa chỉ. Bạn có thể đổi sau trong Cài đặt.",
+        "google": "Tìm kiếm · hình ảnh · tin tức",
+        "naver": "Mạnh về tìm kiếm tiếng Hàn",
+        "bing": "Tích hợp câu trả lời AI",
+        "ddg": "Không theo dõi"
+      },
+      "step1": {
+        "title": "Nhập dữ liệu",
+        "desc": "Bạn có thể chuyển dấu trang và lịch sử duyệt web từ trình duyệt cũ sang. Để nhập lịch sử, hãy đóng hoàn toàn trình duyệt đó trước."
+      },
+      "import": {
+        "loading": "Đang tìm trình duyệt đã cài đặt…",
+        "notFound": "Không tìm thấy trình duyệt nào để nhập (Chrome, Edge, Brave, Whale). Bạn có thể bỏ qua bước này.",
+        "tagBookmarks": "Dấu trang",
+        "tagHistory": "Lịch sử",
+        "optBookmarks": "Nhập dấu trang",
+        "optHistory": "Nhập lịch sử duyệt web",
+        "running": "Đang nhập…",
+        "runButton": "Nhập dữ liệu đã chọn",
+        "resultOk": "✓ Đã nhập {bookmarks} dấu trang và {history} mục lịch sử.",
+        "failed": "Nhập dữ liệu thất bại: {error}"
+      },
+      "step2": {
+        "title": "Giao diện",
+        "desc": "Chọn cách xử lý màu sắc giao diện và chế độ tối trên trang web.",
+        "systemTitle": "Theo hệ thống",
+        "systemSub": "Đồng bộ sáng/tối với hệ điều hành",
+        "lightTitle": "Sáng",
+        "lightSub": "Luôn sáng",
+        "darkTitle": "Tối",
+        "darkSub": "Luôn tối",
+        "darkPageTitle": "Tối + trang web tối",
+        "darkPageSub": "Ép chế độ tối trên mọi trang web"
+      },
+      "step3": {
+        "title": "Tính năng tiện lợi",
+        "desc": "Khuyến nghị bật mặc định — bạn có thể tắt bất cứ lúc nào.",
+        "adblockLabel": "Chặn quảng cáo & trình theo dõi",
+        "adblockHelp": "EasyList + EasyPrivacy + bộ lọc Hàn Quốc (KR)",
+        "gesturesLabel": "Cử chỉ chuột",
+        "gesturesHelp": "Kéo chuột phải — ← Quay lại, → Tiến tới, ↑ Tải lại, ↓ Tab mới",
+        "quickSearchLabel": "Tìm kiếm nhanh",
+        "quickSearchHelp": "Nút tìm kiếm nổi khi bạn chọn văn bản",
+        "hoverTranslateLabel": "Dịch khi di chuột",
+        "hoverTranslateHelp": "Giữ Alt và di chuột qua từ → bật cửa sổ dịch"
+      },
+      "step4": {
+        "title": "Kết nối AI",
+        "desc": "AI của trình duyệt này chạy bằng <b>tài khoản và máy tính của chính bạn</b>. Chúng tôi đã tìm sẵn vài cách để bạn dùng ngay — chọn một cách và chúng tôi sẽ kiểm tra xem nó có hoạt động thật không. Bạn cũng có thể làm việc này sau."
+      },
+      "ai": {
+        "costSubscription": "Tài khoản đăng ký · không tốn thêm phí",
+        "costFreeLocal": "Trên máy tính của bạn · miễn phí",
+        "costFreeTier": "Gói miễn phí",
+        "costPaidKey": "Trả theo mức sử dụng",
+        "connected": "✓ Đã kết nối với <b>{label}</b>. Dùng nút ✨ ở thanh bên để bắt đầu.",
+        "loading": "Đang tìm AI có thể dùng trên máy tính này…",
+        "notFound": "Chúng tôi không tìm thấy AI nào có thể dùng ngay lúc này. Bạn có thể kết nối sau trong Cài đặt &gt; AI, và trình duyệt vẫn hoạt động bình thường mà không cần AI.",
+        "connecting": "Đang kiểm tra kết nối…",
+        "connectFailed": "Không thể kết nối."
+      },
+      "step5": {
+        "title": "Phím tắt cốt lõi",
+        "desc": "Chỉ cần nhớ các phím tắt này là đủ dùng 80% thời gian. Mọi phím đều có thể gán lại tại <code style=\"background:var(--bg);padding:1px 4px;border-radius:3px;\">browser://keymap</code>."
+      },
+      "shortcut": {
+        "newTab": "Tab mới",
+        "closeTab": "Đóng tab",
+        "focusAddress": "Focus thanh địa chỉ",
+        "commandPalette": "Bảng lệnh",
+        "splitH": "Chia trái/phải",
+        "splitV": "Chia trên/dưới",
+        "extensions": "Quản lý tiện ích",
+        "pageDarkToggle": "Bật/tắt chế độ tối trang web",
+        "siteDark": "Chế độ tối cho trang này",
+        "siteAdblock": "Chặn quảng cáo cho trang này"
+      },
+      "nav": {
+        "skip": "Bỏ qua",
+        "prev": "‹ Quay lại",
+        "next": "Tiếp theo ›",
+        "start": "✓ Bắt đầu"
+      }
+    },
+    "error": {
+      "docTitle": "Không thể mở trang này",
+      "title": {
+        "loadFail": "Không thể mở trang này",
+        "crash": "Tab đã ngừng phản hồi",
+        "cert": "Kết nối này không ở chế độ riêng tư"
+      },
+      "desc": {
+        "certUntrusted": "Chứng chỉ bảo mật của trang này không đáng tin cậy",
+        "crashTemplate": "Tab đã ngừng phản hồi ({label})",
+        "net": {
+          "nameNotResolved": "Không tìm thấy địa chỉ",
+          "connectionRefused": "Kết nối bị từ chối",
+          "connectionReset": "Kết nối đã bị đặt lại",
+          "connectionClosed": "Kết nối đã bị đóng",
+          "connectionTimedOut": "Kết nối đã hết thời gian chờ",
+          "internetDisconnected": "Bạn chưa kết nối internet",
+          "addressUnreachable": "Không thể truy cập địa chỉ này",
+          "emptyResponse": "Máy chủ không phản hồi",
+          "sslProtocolError": "Lỗi kết nối SSL",
+          "networkChanged": "Mạng đã thay đổi",
+          "fileNotFound": "Không tìm thấy tệp",
+          "tooManyRedirects": "Quá nhiều lần chuyển hướng",
+          "blockedByClient": "Trình duyệt này đã chặn yêu cầu"
+        }
+      },
+      "crashReason": {
+        "crashed": "sự cố",
+        "oom": "hết bộ nhớ",
+        "launchFailed": "khởi chạy thất bại",
+        "killed": "bị buộc dừng",
+        "integrityFailure": "lỗi toàn vẹn"
+      },
+      "codeLabel": "Mã lỗi: {code}",
+      "retry": {
+        "default": "Thử lại",
+        "reload": "Tải lại"
+      },
+      "risk": "Tiếp tục và tự chịu rủi ro"
+    },
+    "memory": {
+      "title": "📊 Bộ nhớ & Hiệu năng",
+      "subtitle": "Bộ nhớ/CPU theo từng tiến trình và trạng thái ngủ nền của tab theo thời gian thực. Cập nhật mỗi giây.",
+      "loading": "Đang tải…",
+      "internalApiMissing": "internalAPI chưa được nạp",
+      "fmt": {
+        "seconds": "{s} giây",
+        "minSec": "{m} phút {s} giây",
+        "hourMin": "{h} giờ {m} phút"
+      },
+      "unit": {
+        "count": "",
+        "minutes": " phút"
+      },
+      "stat": {
+        "mainPrivate": "Tiến trình chính (private bytes)",
+        "workingSetAll": "Tổng WorkingSet (tham khảo · cao hơn thực tế)",
+        "processes": "Tiến trình",
+        "avgCpu": "CPU trung bình",
+        "uptime": "Thời gian hoạt động",
+        "tabsTotal": "Tab (tổng)",
+        "tabsAwake": "Đang hoạt động",
+        "tabsSleep": "💤 Đang ngủ",
+        "sleepThreshold": "Ngưỡng ngủ"
+      },
+      "sweepBtn": "💤 Cho tab không hoạt động ngủ ngay",
+      "refreshBtn": "↻ Làm mới",
+      "sleepOn": "Tự động ngủ: BẬT ({min} phút)",
+      "sleepOff": "Tự động ngủ: TẮT — bật trong Cài đặt",
+      "budgetSectionTitle": "Nguyên tắc #1 — Ngân sách nhẹ nhàng (CLAUDE.md)",
+      "hint1": "RSS cửa sổ trống được đo theo <b>private working set</b> nên trang này không đo chính xác được (Electron tự tính lặp các trang dùng chung). Kết quả chính xác đến từ bước perf của <code>npm run verify:full</code> (đo bằng WMI). Bên dưới là <b>mốc chuẩn</b> và giá trị đo gần nhất.",
+      "hint2": "Thẻ <b>private bytes</b> ở trên là chỉ số <i>theo commit</i> do Electron cung cấp, khác với <i>private working set</i> của WMI dùng để tính ngân sách (thường cao hơn). Đừng so sánh trực tiếp hai chỉ số này.",
+      "budget": {
+        "emptyLabel": "Mốc chuẩn RSS cửa sổ trống",
+        "emptyTarget": "Cần đo",
+        "emptyCurrent": "Chạy npm run verify:full để ghi lại kết quả đo tại đây",
+        "timeUnknown": "không rõ thời điểm",
+        "medianSuffix": " (trung vị {n} lần gần nhất: {v})",
+        "noAdMissing": "Chưa đo — sẽ được ghi từ lần verify:full tiếp theo",
+        "adblockCostSuffix": " · trong đó adblock {v}MB",
+        "totalMissing": "Chưa đo",
+        "noAdblockLabel": "RSS cửa sổ trống — không tính adblock (căn cứ chính)",
+        "totalLabel": "RSS cửa sổ trống — tổng (tham khảo/xu hướng)",
+        "coldStartLabel": "Khởi động nguội (đo lần gần nhất)",
+        "footnote": "Ba dòng trên là kết quả đo bằng harness lúc <b>{when}</b> (nạp sẵn lúc build — chạy <code>npm run verify:full</code> để cập nhật).",
+        "mainPrivNowLabel": "Private bytes tiến trình chính (hiện tại)",
+        "refLabel": "Chỉ số tham khảo",
+        "cpuLabel": "CPU khi nghỉ",
+        "sleepLabel": "Ngủ nền",
+        "sleepTarget": "30 phút không hoạt động → discard",
+        "sleepOnMark": "✓ Đang bật",
+        "sleepOffMark": "✗ Đang tắt",
+        "targetPrefix": "Mục tiêu: "
+      },
+      "processSectionTitle": "Theo tiến trình ({n})",
+      "table": {
+        "pid": "PID",
+        "type": "Loại",
+        "memoryMb": "Bộ nhớ (MB)",
+        "cpuPercent": "CPU %"
+      },
+      "envSectionTitle": "Môi trường",
+      "env": {
+        "appVersion": "Phiên bản ứng dụng",
+        "platform": "Nền tảng"
+      },
+      "alert": {
+        "sweepResult": "Đã cho {discarded} tab không hoạt động ngủ (bỏ qua: {skipped})"
+      },
+      "docTitle": "Bộ nhớ & Hiệu năng"
     }
   },
   "ai": {
@@ -3026,375 +3393,6 @@
       "writeThisPart": "Viết",
       "writeThisPartTitle": "Viết phần này",
       "youtubeFieldHint": "Dùng ô tiêu đề ở trên cho tiêu đề, ô nội dung cho mô tả."
-    }
-  },
-  "page": {
-    "newtab": {
-      "title": "Tab mới",
-      "buddy": {
-        "ariaLabel": "Bạn nhỏ pixel",
-        "base": {
-          "0": "Xin chào!",
-          "1": "Hôm nay cũng nhẹ nhàng thôi 🪶",
-          "2": "Bạn đang tìm gì vậy?",
-          "3": "Hehe",
-          "4": "Cùng khám phá nào!"
-        },
-        "sleepWake": "Ừm… vẫn còn là ban đêm mà 😴",
-        "sleepTalkPrefix": "Zzz… ",
-        "hello": {
-          "morning": "Chào buổi sáng!",
-          "day": "Xin chào!",
-          "evening": "Chào buổi tối!"
-        },
-        "events": {
-          "newyear": {
-            "greet": "Chúc mừng năm mới! 🎉",
-            "lines": {
-              "0": "Chúc mừng năm mới!",
-              "1": "Mong được đồng hành cùng bạn năm nay!",
-              "2": "🎉"
-            }
-          },
-          "seollal": {
-            "greet": "Tết Seollal rồi! Chúc mừng năm mới 🧧",
-            "lines": {
-              "0": "Bạn muốn cúi chào không?",
-              "1": "Bạn đã ăn canh bánh gạo chưa?",
-              "2": "Túi may mắn đầy ắp!"
-            }
-          },
-          "chuseok": {
-            "greet": "Chúc bạn Chuseok đầy đủ 🌕",
-            "lines": {
-              "0": "Ăn một cái songpyeon nhé!",
-              "1": "Bạn đã ước nguyện dưới trăng tròn chưa?",
-              "2": "Trăng sáng quá"
-            }
-          },
-          "halloween": {
-            "greet": "Trick or treat! 🎃",
-            "lines": {
-              "0": "Cho kẹo đi!",
-              "1": "Hù~ 👻",
-              "2": "🎃"
-            }
-          },
-          "christmas": {
-            "greet": "Giáng sinh vui vẻ! 🎄",
-            "lines": {
-              "0": "Bạn đã nhận quà chưa?",
-              "1": "Ho ho ho!",
-              "2": "🎁"
-            }
-          }
-        }
-      },
-      "date": {
-        "loading": "Đang tải…"
-      },
-      "greet": {
-        "night": "Đã khuya rồi",
-        "morning": "Chào buổi sáng",
-        "afternoon": "Chào buổi chiều",
-        "evening": "Chúc buổi tối an lành"
-      },
-      "search": {
-        "placeholder": "Tìm kiếm hoặc nhập URL · lệnh  (Ctrl+Shift+P = Bảng lệnh)"
-      },
-      "error": {
-        "noApi": "internalAPI chưa được chèn"
-      },
-      "topSites": {
-        "title": "Trang truy cập thường xuyên",
-        "history": "Lịch sử →",
-        "empty": "Chưa có lịch sử duyệt web. Thẻ sẽ xuất hiện ở đây khi bạn truy cập các trang."
-      },
-      "bookmarks": {
-        "title": "Thanh dấu trang",
-        "manageAll": "Quản lý tất cả →"
-      },
-      "recent": {
-        "title": "Truy cập gần đây"
-      },
-      "weather": {
-        "title": "Thời tiết",
-        "refresh": "Làm mới",
-        "error": "Không thể tải thời tiết.",
-        "wind": "Gió {value}"
-      },
-      "news": {
-        "title": "Tin tức",
-        "more": "Xem thêm →",
-        "error": "Không thể tải tin tức.",
-        "titleWithTopic": "Tin tức · {topic}",
-        "topic": {
-          "headlines": "Tin nổi bật",
-          "world": "Thế giới",
-          "nation": "Trong nước",
-          "business": "Kinh doanh",
-          "technology": "Công nghệ",
-          "entertainment": "Giải trí",
-          "sports": "Thể thao",
-          "science": "Khoa học",
-          "health": "Sức khỏe"
-        }
-      },
-      "memo": {
-        "title": "Ghi chú",
-        "placeholder": "Ghi chú tự do ở đây…",
-        "saving": "Đang lưu…",
-        "saved": "Đã lưu ✓",
-        "failed": "Lưu thất bại"
-      },
-      "todo": {
-        "title": "Việc cần làm",
-        "addPlaceholder": "Thêm việc rồi nhấn Enter",
-        "empty": "Chưa có việc cần làm."
-      },
-      "fx": {
-        "title": "Tỷ giá",
-        "refresh": "Làm mới",
-        "error": "Không thể tải tỷ giá.",
-        "base": "Cơ sở 1 {base}"
-      },
-      "readlater": {
-        "title": "Đọc sau",
-        "unread": "{count} chưa đọc",
-        "empty": "Chưa có trang nào được lưu. Thêm bằng biểu tượng 📖 cạnh thanh địa chỉ.",
-        "markRead": "Đánh dấu đã đọc"
-      },
-      "shortcuts": {
-        "title": "Lối tắt",
-        "add": "+ Thêm",
-        "edit": "Sửa",
-        "remove": "Xóa",
-        "addTile": "Thêm lối tắt",
-        "addLabel": "Thêm"
-      },
-      "shortcutModal": {
-        "addTitle": "Thêm lối tắt",
-        "editTitle": "Sửa lối tắt",
-        "nameLabel": "Tên",
-        "namePlaceholder": "vd: YouTube",
-        "urlLabel": "Địa chỉ",
-        "urlPlaceholder": "vd: youtube.com",
-        "cancel": "Hủy",
-        "save": "Lưu"
-      },
-      "tips": {
-        "palette": "Bảng lệnh",
-        "split": "Chia màn hình",
-        "extensions": "Tiện ích",
-        "dark": "Chế độ tối cho trang",
-        "adblock": "Chặn quảng cáo cho trang"
-      },
-      "footer": {
-        "settings": "Cài đặt",
-        "privacy": "Chính sách quyền riêng tư",
-        "terms": "Điều khoản",
-        "licenses": "Giấy phép mã nguồn mở"
-      }
-    },
-    "welcome": {
-      "pageTitle": "Chào mừng đến với ezBrowser",
-      "tagline": "Trình duyệt nhẹ và tự do",
-      "step0": {
-        "title": "Công cụ tìm kiếm mặc định",
-        "desc": "Chọn công cụ tìm kiếm dùng khi bạn nhập từ khóa vào thanh địa chỉ. Bạn có thể đổi sau trong Cài đặt.",
-        "google": "Tìm kiếm · hình ảnh · tin tức",
-        "naver": "Mạnh về tìm kiếm tiếng Hàn",
-        "bing": "Tích hợp câu trả lời AI",
-        "ddg": "Không theo dõi"
-      },
-      "step1": {
-        "title": "Nhập dữ liệu",
-        "desc": "Bạn có thể chuyển dấu trang và lịch sử duyệt web từ trình duyệt cũ sang. Để nhập lịch sử, hãy đóng hoàn toàn trình duyệt đó trước."
-      },
-      "import": {
-        "loading": "Đang tìm trình duyệt đã cài đặt…",
-        "notFound": "Không tìm thấy trình duyệt nào để nhập (Chrome, Edge, Brave, Whale). Bạn có thể bỏ qua bước này.",
-        "tagBookmarks": "Dấu trang",
-        "tagHistory": "Lịch sử",
-        "optBookmarks": "Nhập dấu trang",
-        "optHistory": "Nhập lịch sử duyệt web",
-        "running": "Đang nhập…",
-        "runButton": "Nhập dữ liệu đã chọn",
-        "resultOk": "✓ Đã nhập {bookmarks} dấu trang và {history} mục lịch sử.",
-        "failed": "Nhập dữ liệu thất bại: {error}"
-      },
-      "step2": {
-        "title": "Giao diện",
-        "desc": "Chọn cách xử lý màu sắc giao diện và chế độ tối trên trang web.",
-        "systemTitle": "Theo hệ thống",
-        "systemSub": "Đồng bộ sáng/tối với hệ điều hành",
-        "lightTitle": "Sáng",
-        "lightSub": "Luôn sáng",
-        "darkTitle": "Tối",
-        "darkSub": "Luôn tối",
-        "darkPageTitle": "Tối + trang web tối",
-        "darkPageSub": "Ép chế độ tối trên mọi trang web"
-      },
-      "step3": {
-        "title": "Tính năng tiện lợi",
-        "desc": "Khuyến nghị bật mặc định — bạn có thể tắt bất cứ lúc nào.",
-        "adblockLabel": "Chặn quảng cáo & trình theo dõi",
-        "adblockHelp": "EasyList + EasyPrivacy + bộ lọc Hàn Quốc (KR)",
-        "gesturesLabel": "Cử chỉ chuột",
-        "gesturesHelp": "Kéo chuột phải — ← Quay lại, → Tiến tới, ↑ Tải lại, ↓ Tab mới",
-        "quickSearchLabel": "Tìm kiếm nhanh",
-        "quickSearchHelp": "Nút tìm kiếm nổi khi bạn chọn văn bản",
-        "hoverTranslateLabel": "Dịch khi di chuột",
-        "hoverTranslateHelp": "Giữ Alt và di chuột qua từ → bật cửa sổ dịch"
-      },
-      "step4": {
-        "title": "Kết nối AI",
-        "desc": "AI của trình duyệt này chạy bằng <b>tài khoản và máy tính của chính bạn</b>. Chúng tôi đã tìm sẵn vài cách để bạn dùng ngay — chọn một cách và chúng tôi sẽ kiểm tra xem nó có hoạt động thật không. Bạn cũng có thể làm việc này sau."
-      },
-      "ai": {
-        "costSubscription": "Tài khoản đăng ký · không tốn thêm phí",
-        "costFreeLocal": "Trên máy tính của bạn · miễn phí",
-        "costFreeTier": "Gói miễn phí",
-        "costPaidKey": "Trả theo mức sử dụng",
-        "connected": "✓ Đã kết nối với <b>{label}</b>. Dùng nút ✨ ở thanh bên để bắt đầu.",
-        "loading": "Đang tìm AI có thể dùng trên máy tính này…",
-        "notFound": "Chúng tôi không tìm thấy AI nào có thể dùng ngay lúc này. Bạn có thể kết nối sau trong Cài đặt &gt; AI, và trình duyệt vẫn hoạt động bình thường mà không cần AI.",
-        "connecting": "Đang kiểm tra kết nối…",
-        "connectFailed": "Không thể kết nối."
-      },
-      "step5": {
-        "title": "Phím tắt cốt lõi",
-        "desc": "Chỉ cần nhớ các phím tắt này là đủ dùng 80% thời gian. Mọi phím đều có thể gán lại tại <code style=\"background:var(--bg);padding:1px 4px;border-radius:3px;\">browser://keymap</code>."
-      },
-      "shortcut": {
-        "newTab": "Tab mới",
-        "closeTab": "Đóng tab",
-        "focusAddress": "Focus thanh địa chỉ",
-        "commandPalette": "Bảng lệnh",
-        "splitH": "Chia trái/phải",
-        "splitV": "Chia trên/dưới",
-        "extensions": "Quản lý tiện ích",
-        "pageDarkToggle": "Bật/tắt chế độ tối trang web",
-        "siteDark": "Chế độ tối cho trang này",
-        "siteAdblock": "Chặn quảng cáo cho trang này"
-      },
-      "nav": {
-        "skip": "Bỏ qua",
-        "prev": "‹ Quay lại",
-        "next": "Tiếp theo ›",
-        "start": "✓ Bắt đầu"
-      }
-    },
-    "error": {
-      "docTitle": "Không thể mở trang này",
-      "title": {
-        "loadFail": "Không thể mở trang này",
-        "crash": "Tab đã ngừng phản hồi",
-        "cert": "Kết nối này không ở chế độ riêng tư"
-      },
-      "desc": {
-        "certUntrusted": "Chứng chỉ bảo mật của trang này không đáng tin cậy",
-        "crashTemplate": "Tab đã ngừng phản hồi ({label})",
-        "net": {
-          "nameNotResolved": "Không tìm thấy địa chỉ",
-          "connectionRefused": "Kết nối bị từ chối",
-          "connectionReset": "Kết nối đã bị đặt lại",
-          "connectionClosed": "Kết nối đã bị đóng",
-          "connectionTimedOut": "Kết nối đã hết thời gian chờ",
-          "internetDisconnected": "Bạn chưa kết nối internet",
-          "addressUnreachable": "Không thể truy cập địa chỉ này",
-          "emptyResponse": "Máy chủ không phản hồi",
-          "sslProtocolError": "Lỗi kết nối SSL",
-          "networkChanged": "Mạng đã thay đổi",
-          "fileNotFound": "Không tìm thấy tệp",
-          "tooManyRedirects": "Quá nhiều lần chuyển hướng",
-          "blockedByClient": "Trình duyệt này đã chặn yêu cầu"
-        }
-      },
-      "crashReason": {
-        "crashed": "sự cố",
-        "oom": "hết bộ nhớ",
-        "launchFailed": "khởi chạy thất bại",
-        "killed": "bị buộc dừng",
-        "integrityFailure": "lỗi toàn vẹn"
-      },
-      "codeLabel": "Mã lỗi: {code}",
-      "retry": {
-        "default": "Thử lại",
-        "reload": "Tải lại"
-      },
-      "risk": "Tiếp tục và tự chịu rủi ro"
-    },
-    "memory": {
-      "title": "📊 Bộ nhớ & Hiệu năng",
-      "subtitle": "Bộ nhớ/CPU theo từng tiến trình và trạng thái ngủ nền của tab theo thời gian thực. Cập nhật mỗi giây.",
-      "loading": "Đang tải…",
-      "internalApiMissing": "internalAPI chưa được nạp",
-      "fmt": {
-        "seconds": "{s} giây",
-        "minSec": "{m} phút {s} giây",
-        "hourMin": "{h} giờ {m} phút"
-      },
-      "unit": {
-        "count": "",
-        "minutes": " phút"
-      },
-      "stat": {
-        "mainPrivate": "Tiến trình chính (private bytes)",
-        "workingSetAll": "Tổng WorkingSet (tham khảo · cao hơn thực tế)",
-        "processes": "Tiến trình",
-        "avgCpu": "CPU trung bình",
-        "uptime": "Thời gian hoạt động",
-        "tabsTotal": "Tab (tổng)",
-        "tabsAwake": "Đang hoạt động",
-        "tabsSleep": "💤 Đang ngủ",
-        "sleepThreshold": "Ngưỡng ngủ"
-      },
-      "sweepBtn": "💤 Cho tab không hoạt động ngủ ngay",
-      "refreshBtn": "↻ Làm mới",
-      "sleepOn": "Tự động ngủ: BẬT ({min} phút)",
-      "sleepOff": "Tự động ngủ: TẮT — bật trong Cài đặt",
-      "budgetSectionTitle": "Nguyên tắc #1 — Ngân sách nhẹ nhàng (CLAUDE.md)",
-      "hint1": "RSS cửa sổ trống được đo theo <b>private working set</b> nên trang này không đo chính xác được (Electron tự tính lặp các trang dùng chung). Kết quả chính xác đến từ bước perf của <code>npm run verify:full</code> (đo bằng WMI). Bên dưới là <b>mốc chuẩn</b> và giá trị đo gần nhất.",
-      "hint2": "Thẻ <b>private bytes</b> ở trên là chỉ số <i>theo commit</i> do Electron cung cấp, khác với <i>private working set</i> của WMI dùng để tính ngân sách (thường cao hơn). Đừng so sánh trực tiếp hai chỉ số này.",
-      "budget": {
-        "emptyLabel": "Mốc chuẩn RSS cửa sổ trống",
-        "emptyTarget": "Cần đo",
-        "emptyCurrent": "Chạy npm run verify:full để ghi lại kết quả đo tại đây",
-        "timeUnknown": "không rõ thời điểm",
-        "medianSuffix": " (trung vị {n} lần gần nhất: {v})",
-        "noAdMissing": "Chưa đo — sẽ được ghi từ lần verify:full tiếp theo",
-        "adblockCostSuffix": " · trong đó adblock {v}MB",
-        "totalMissing": "Chưa đo",
-        "noAdblockLabel": "RSS cửa sổ trống — không tính adblock (căn cứ chính)",
-        "totalLabel": "RSS cửa sổ trống — tổng (tham khảo/xu hướng)",
-        "coldStartLabel": "Khởi động nguội (đo lần gần nhất)",
-        "footnote": "Ba dòng trên là kết quả đo bằng harness lúc <b>{when}</b> (nạp sẵn lúc build — chạy <code>npm run verify:full</code> để cập nhật).",
-        "mainPrivNowLabel": "Private bytes tiến trình chính (hiện tại)",
-        "refLabel": "Chỉ số tham khảo",
-        "cpuLabel": "CPU khi nghỉ",
-        "sleepLabel": "Ngủ nền",
-        "sleepTarget": "30 phút không hoạt động → discard",
-        "sleepOnMark": "✓ Đang bật",
-        "sleepOffMark": "✗ Đang tắt",
-        "targetPrefix": "Mục tiêu: "
-      },
-      "processSectionTitle": "Theo tiến trình ({n})",
-      "table": {
-        "pid": "PID",
-        "type": "Loại",
-        "memoryMb": "Bộ nhớ (MB)",
-        "cpuPercent": "CPU %"
-      },
-      "envSectionTitle": "Môi trường",
-      "env": {
-        "appVersion": "Phiên bản ứng dụng",
-        "platform": "Nền tảng"
-      },
-      "alert": {
-        "sweepResult": "Đã cho {discarded} tab không hoạt động ngủ (bỏ qua: {skipped})"
-      },
-      "docTitle": "Bộ nhớ & Hiệu năng"
     }
   }
 }
