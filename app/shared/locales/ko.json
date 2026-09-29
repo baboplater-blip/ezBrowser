@@ -824,6 +824,14 @@
       "historyReadFailed": "방문 기록을 읽지 못했습니다: {detail}",
       "profileNotFound": "가져올 프로필을 찾을 수 없습니다.",
       "bookmarksImportFailed": "북마크 가져오기 실패: {detail}"
+    },
+    "tabs": {
+      "beforeUnload": {
+        "title": "사이트에서 나가시겠습니까?",
+        "message": "변경한 내용이 저장되지 않을 수 있습니다.",
+        "stay": "머무르기",
+        "leave": "나가기"
+      }
     }
   },
   "settings": {

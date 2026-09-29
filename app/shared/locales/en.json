@@ -824,6 +824,14 @@
       "historyReadFailed": "Could not read browsing history: {detail}",
       "profileNotFound": "The profile to import could not be found.",
       "bookmarksImportFailed": "Failed to import bookmarks: {detail}"
+    },
+    "tabs": {
+      "beforeUnload": {
+        "title": "Leave site?",
+        "message": "Changes you made may not be saved.",
+        "stay": "Stay",
+        "leave": "Leave"
+      }
     }
   },
   "settings": {

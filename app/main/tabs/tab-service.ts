@@ -15,6 +15,7 @@ import {
 import { setupSessionByPartition } from '../session-bootstrap'
 import { getFavicon, recordFavicon } from '../features/favicon'
 import { trackPageErrors, thumbnailDataUrl } from '../features/page-errors'
+import { tMain } from '../i18n'
 
 type TabHook = (tab: { id: string; webContentsId: number }) => void
 const onTabCreatedHooks: TabHook[] = []
@@ -701,31 +702,45 @@ function confirmBeforeUnload(tab: TabRecord): Promise<boolean> {
       wc.removeListener('will-prevent-unload', onPrevent)
       resolve(true)
     }
-    const onPrevent = (event: Electron.Event): void => {
+    // 비동기 다이얼로그를 쓴다 — showMessageBoxSync 는 메인 JS 스레드를 통째로 멈춰
+    // 다른 창·탭·IPC·자동화까지 전부 얼렸다(탭 하나의 확인 창이 브라우저 전체를 세운다).
+    // 흐름: preventDefault 를 하지 않으면 이번 닫기는 취소되고 탭이 그대로 남는다 →
+    // 사용자가 "나가기" 를 고르면 beforeunload 없이 다시 닫는다(close() 기본값은 즉시 파괴).
+    const onPrevent = (): void => {
+      wc.removeListener('will-prevent-unload', onPrevent)
       const ctx = getWindow(tab.windowId)
-      let leave = true
-      try {
-        const boxOptions: Electron.MessageBoxSyncOptions = {
-          type: 'question',
-          buttons: ['머무르기', '나가기'],
-          defaultId: 0,
-          cancelId: 0,
-          title: '사이트에서 나가시겠습니까?',
-          message: '변경한 내용이 저장되지 않을 수 있습니다.',
-        }
-        const choice = ctx ? dialog.showMessageBoxSync(ctx.win, boxOptions) : dialog.showMessageBoxSync(boxOptions)
-        leave = choice === 1
-      } catch (err) {
+      const boxOptions: Electron.MessageBoxOptions = {
+        type: 'question',
+        buttons: [
+          tMain('main.tabs.beforeUnload.stay', '머무르기'),
+          tMain('main.tabs.beforeUnload.leave', '나가기'),
+        ],
+        defaultId: 0,
+        cancelId: 0,
+        title: tMain('main.tabs.beforeUnload.title', '사이트에서 나가시겠습니까?'),
+        message: tMain('main.tabs.beforeUnload.message', '변경한 내용이 저장되지 않을 수 있습니다.'),
+      }
+      const shown = ctx ? dialog.showMessageBox(ctx.win, boxOptions) : dialog.showMessageBox(boxOptions)
+      shown.then(({ response }) => response === 1, (err) => {
         console.warn('[tabs] beforeunload 확인 다이얼로그 실패 — 나가기로 처리', err)
-        leave = true
-      }
-      if (leave) {
-        // 페이지의 unload 방지 요청을 무시하고 실제로 닫는다 — Electron 이 이어서 destroy 를 진행한다.
-        event.preventDefault()
-      } else {
-        wc.removeListener('destroyed', onDestroyed)
-        if (!settled) { settled = true; resolve(false) }
-      }
+        return true
+      }).then((leave) => {
+        if (settled) return
+        if (!leave || wc.isDestroyed()) {
+          wc.removeListener('destroyed', onDestroyed)
+          settled = true
+          resolve(leave)
+          return
+        }
+        try {
+          wc.close() // beforeunload 를 다시 묻지 않고 파괴 → onDestroyed 가 resolve(true)
+        } catch (err) {
+          console.warn('[tabs] webContents.close 실패 — 닫힌 것으로 처리', err)
+          wc.removeListener('destroyed', onDestroyed)
+          settled = true
+          resolve(true)
+        }
+      })
     }
 
     wc.once('destroyed', onDestroyed)

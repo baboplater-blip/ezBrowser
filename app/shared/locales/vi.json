@@ -824,6 +824,14 @@
       "historyReadFailed": "Không thể đọc lịch sử duyệt web: {detail}",
       "profileNotFound": "Không tìm thấy hồ sơ để nhập.",
       "bookmarksImportFailed": "Nhập dấu trang thất bại: {detail}"
+    },
+    "tabs": {
+      "beforeUnload": {
+        "title": "Rời khỏi trang web?",
+        "message": "Các thay đổi bạn đã thực hiện có thể không được lưu.",
+        "stay": "Ở lại",
+        "leave": "Rời đi"
+      }
     }
   },
   "settings": {
