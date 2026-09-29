@@ -6,16 +6,25 @@
 // 맞는 언어로 그려지고, 그 뒤 언어가 바뀌면(설정 변경) `browserAPI.i18n.onChanged` 구독으로
 // 재로드 없이 갱신된다.
 import { useSyncExternalStore } from 'react'
-import ko from '../shared/locales/ko.json'
-import en from '../shared/locales/en.json'
-import vi from '../shared/locales/vi.json'
 import { flattenLocale, interpolate, resolveLocale, type SupportedLocale } from '../shared/i18n-core'
 
-const RAW: Record<SupportedLocale, unknown> = { ko, en, vi }
-const FLAT: Record<SupportedLocale, Record<string, string>> = {
-  ko: flattenLocale(RAW.ko),
-  en: flattenLocale(RAW.en),
-  vi: flattenLocale(RAW.vi),
+// 사전은 언어별 별도 청크로 나눠 **지금 쓰는 언어 하나만** 받는다. 세 사전(각 약 150KB)을 모두
+// 초기 번들에 넣으면 외피 초기 JS 가 258KB → 615KB 로 불고, 부팅마다 셋 다 파싱·평탄화한다.
+// main.tsx 가 첫 렌더 전에 initI18n() 을 await 하므로 첫 페인트부터 맞는 언어로 그려진다.
+const LOADERS: Record<SupportedLocale, () => Promise<{ default: unknown }>> = {
+  ko: () => import('../shared/locales/ko.json'),
+  en: () => import('../shared/locales/en.json'),
+  vi: () => import('../shared/locales/vi.json'),
+}
+const FLAT: Partial<Record<SupportedLocale, Record<string, string>>> = {}
+
+async function loadFlat(locale: SupportedLocale): Promise<Record<string, string>> {
+  const cached = FLAT[locale]
+  if (cached) return cached
+  const mod = await LOADERS[locale]()
+  const flat = flattenLocale(mod.default)
+  FLAT[locale] = flat
+  return flat
 }
 
 function initialLocale(): SupportedLocale {
@@ -29,7 +38,17 @@ function initialLocale(): SupportedLocale {
 }
 
 let currentLocale: SupportedLocale = initialLocale()
-let currentDict: Record<string, string> = FLAT[currentLocale]
+// 사전이 도착하기 전에는 비어 있다 — 모든 호출부가 한국어 원문 fallback 을 넘기므로 깨지지 않는다.
+let currentDict: Record<string, string> = {}
+
+/** 첫 렌더 전에 한 번 부른다(main.tsx). 실패해도 fallback(한국어 원문)으로 그려진다. */
+export async function initI18n(): Promise<void> {
+  try {
+    currentDict = await loadFlat(currentLocale)
+  } catch (err) {
+    console.error('[i18n] 사전 로드 실패 — 원문으로 표시', err)
+  }
+}
 
 type Listener = () => void
 const listeners = new Set<Listener>()
@@ -43,8 +62,11 @@ export function subscribeI18n(cb: Listener): () => void {
 export function setLocale(locale: SupportedLocale): void {
   if (locale === currentLocale) return
   currentLocale = locale
-  currentDict = FLAT[locale]
-  for (const cb of listeners) cb()
+  void loadFlat(locale).then((flat) => {
+    if (currentLocale !== locale) return // 로드 중 다시 바뀌었으면 최신 것만 반영
+    currentDict = flat
+    for (const cb of listeners) cb()
+  }, (err) => console.error('[i18n] 사전 로드 실패', err))
 }
 
 export function getLocale(): SupportedLocale {
@@ -89,5 +111,3 @@ export function useI18nT(): (key: string, fallback?: string, vars?: Record<strin
   }
 }
 
-/** 하위 호환 — 정적 스냅샷이 필요한 극히 드문 자리(모듈 최상위 등)에서만 쓸 것. React 안에서는 useI18nDict() 를 쓴다. */
-export const labels = currentDict

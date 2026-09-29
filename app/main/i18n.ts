@@ -1,20 +1,23 @@
 // 메인 프로세스용 i18n — 네이티브 메뉴·대화상자·토스트 문구에 쓴다.
 // 규약은 docs/i18n.md, 판정 로직은 app/shared/i18n-core.ts 단일 출처(renderer/페이지와 공유).
 import { app } from 'electron'
-import ko from '../shared/locales/ko.json'
-import en from '../shared/locales/en.json'
-import vi from '../shared/locales/vi.json'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { flattenLocale, resolveLocale, type SupportedLocale } from '../shared/i18n-core'
 import { getSetting } from './storage/settings'
 
-const RAW: Record<SupportedLocale, unknown> = { ko, en, vi }
+// 사전은 쓰는 언어만 **처음 필요할 때** 읽는다 — 세 사전(각 약 150KB)을 부팅 때 모두 require 하면
+// 쓰지도 않는 두 언어를 메모리에 올린다. tsconfig 의 include(../shared/**/*.json) 가 dist 로 복사한다.
+function loadRaw(locale: SupportedLocale): unknown {
+  return JSON.parse(readFileSync(path.join(__dirname, '..', 'shared', 'locales', `${locale}.json`), 'utf-8'))
+}
 
 // 평탄화는 로케일당 1회만(사전은 작고 부팅 후 안 바뀜 — 캐시해도 안전).
 const FLAT_CACHE = new Map<SupportedLocale, Record<string, string>>()
 function flatFor(locale: SupportedLocale): Record<string, string> {
   let cached = FLAT_CACHE.get(locale)
   if (!cached) {
-    cached = flattenLocale(RAW[locale])
+    cached = flattenLocale(loadRaw(locale))
     FLAT_CACHE.set(locale, cached)
   }
   return cached
