@@ -1326,8 +1326,21 @@ async function runSegment(task: PersistentTask, tabId: string, stepBudget: numbe
   const box: { outcome: SegmentOutcome } = { outcome: { kind: 'none' } }
   const trace: SegmentTrace = { lastStep: task.checkpoint.stepsUsed, exhausted: null }
 
+  // 구간이 도는 동안 대상 탭이 닫히면 에이전트가 **사라진 webContents 에 대한 동작을 영원히 기다릴 수
+  // 있다**(일시정지 → 탭 닫기 → 이어가기에서 작업이 "실행 중" 으로 단계 0 에 멈춘 채 남던 결함 —
+  // verify-task-target-ui 가 간헐적으로 잡았다). 탭 파괴를 감시해 구간을 끊고, 기존 'tab-gone'
+  // 분류("닫혔을 수 있음")로 보내 사람에게 대상을 다시 묻게 한다. 끊긴 뒤 늦게 오는 이벤트는 버린다.
+  let abandoned = false
+  const wc = getWebContentsByTabId(tabId)
+  let onGone: (() => void) | null = null
+  const gone = new Promise<void>((resolve) => {
+    if (!wc || wc.isDestroyed()) { resolve(); return }
+    onGone = () => resolve()
+    wc.once('destroyed', onGone)
+  })
+
   try {
-    await runAgentTask({
+    const agentRun = runAgentTask({
       reqId,
       tabId,
       task: task.instruction,
@@ -1342,11 +1355,22 @@ async function runSegment(task: PersistentTask, tabId: string, stepBudget: numbe
       allowedHosts: [...task.budget.allowedHosts],
       // 산출물 바구니 = 이 작업. 구간이 바뀌어도 같은 폴더에 쌓이고, 다른 작업은 닿지 못한다.
       taskId: task.id,
-    }, (evt: AgentEvent) => onSegmentEvent(task, evt, box, trace))
+    }, (evt: AgentEvent) => { if (!abandoned) onSegmentEvent(task, evt, box, trace) })
+    const winner = await Promise.race([
+      agentRun.then(() => 'agent' as const),
+      gone.then(() => 'tab-gone' as const),
+    ])
+    if (winner === 'tab-gone') {
+      abandoned = true
+      cancelAgentTask(reqId)
+      agentRun.catch(() => { /* 끊은 구간의 늦은 오류는 무시 */ })
+      box.outcome = { kind: 'error', message: '현재 탭을 찾을 수 없습니다(닫혔을 수 있음).' }
+    }
   } catch (err) {
     // runAgentTask 가 던지면(제공자 오류 등) 루프가 영구 동결되지 않도록 여기서 오류 결과로 바꾼다.
     box.outcome = { kind: 'error', message: err instanceof Error ? err.message : String(err) }
   } finally {
+    if (wc && onGone && !wc.isDestroyed()) wc.removeListener('destroyed', onGone)
     rt.reqId = null
     if (rt.waitKind === 'agent-confirm' || rt.waitKind === 'agent-ask') rt.waitKind = null
   }

@@ -200,7 +200,10 @@ function seedProfile(profileDir) {
   const settingsPath = path.join(profileDir, 'settings.json')
   const seed = {
     setup: { completed: true, completedAt: Date.now(), version: 'dl-matrix' },
-    startup: { mode: 'newtab', urls: [] },
+    // S11 은 강제 kill 뒤 재기동한다. 'newtab' 이면 비정상 종료 감지 시 "지난 세션 복원" 네이티브
+    // 대화상자가 창 생성 전에 떠서 CDP 타깃이 영영 안 생긴다(세션 저장이 1초로 빨라진 2026-09-20
+    // 이후 거의 매번). 다른 복원 하네스와 같이 'last-session' 으로 모달 없이 자동 복원시킨다.
+    startup: { mode: 'last-session', urls: [] },
     downloads: { accelerator: true },
   }
   fs.writeFileSync(settingsPath, JSON.stringify(seed, null, 2))

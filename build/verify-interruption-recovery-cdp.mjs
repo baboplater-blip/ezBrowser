@@ -674,7 +674,8 @@ async function scenarioIR3({ llm, fixture }) {
     const state = await waitForTaskState(app.shell, taskId, ['waiting-user', 'retrying', 'interrupted', 'completed', 'failed'], 30000)
 
     const isLedgerWait = state?.state === 'waiting-user' && state?.waitCause === 'ledger'
-    const hasReasonText = /발행이 됐는지 확실하지 않습니다/.test(state?.waitReason ?? '')
+    // 제품 문구는 `${noun}이(가) 실제로 됐는지 확실하지 않습니다` (task-runtime.ts) — 옛 표현도 허용한다.
+    const hasReasonText = /발행이(?:\(가\))? (?:실제로 )?됐는지 확실하지 않습니다/.test(state?.waitReason ?? '')
     const afterFirstCheck = fixture.state.publishes
     const publishedExactlyOnce = afterFirstCheck === baseline + 1
 
