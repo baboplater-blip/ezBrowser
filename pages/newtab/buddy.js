@@ -18,6 +18,16 @@
   if (!stage || !canvas || !canvas.getContext) return
   const ctx = canvas.getContext('2d')
 
+  // 다국어 안전 헬퍼(docs/i18n.md — IIFE 안 지역 함수라 window.t 를 덮어쓰지 않는다)
+  function trSafe(key, fallback) {
+    return typeof window.t === 'function' ? window.t(key, fallback) : fallback
+  }
+  // fallbackArr 의 각 인덱스를 'prefixKey.<i>' 키로 조회해 번역된 배열을 만든다
+  // (평탄화 사전은 배열을 지원하지 않아 숫자 문자열 키의 중첩 객체로 저장한다 — app/shared/i18n-core.ts flattenLocale)
+  function trList(prefixKey, fallbackArr) {
+    return fallbackArr.map((fb, i) => trSafe(prefixKey + '.' + i, fb))
+  }
+
   // ── 무대 규격 (단위 = 픽셀 아트 1칸) ──
   const S = 3                 // 화면 배율
   const W = 120, H = 28       // 무대 칸 수
@@ -330,11 +340,13 @@
     }
     if (sleeping()) {
       st.wakeT = 60 // 약 6초 깨어 있다 다시 잔다
-      say('으음… 아직 밤이에요 😴', 1800)
+      say(trSafe('page.newtab.buddy.sleepWake', '으음… 아직 밤이에요 😴'), 1800)
     } else {
       const base = ['안녕하세요!', '오늘도 가볍게 🪶', '찾으시는 게 있나요?', '헤헤', '같이 둘러봐요!']
       // 절기에는 절반 확률로 그날 대사
-      const lines = EVENT && Math.random() < 0.6 ? EVENT.lines : base
+      const lines = EVENT && Math.random() < 0.6
+        ? trList('page.newtab.buddy.events.' + EVENT.id + '.lines', EVENT.lines)
+        : trList('page.newtab.buddy.base', base)
       say(lines[rand(0, lines.length - 1)], 1600)
     }
     st.happyT = 12
@@ -382,11 +394,16 @@
   start()
   if (!sleeping()) {
     const h = new Date().getHours()
-    const hello = EVENT ? EVENT.greet : h < 11 ? '좋은 아침이에요!' : h < 17 ? '안녕하세요!' : '좋은 저녁이에요!'
+    const hello = EVENT
+      ? trSafe('page.newtab.buddy.events.' + EVENT.id + '.greet', EVENT.greet)
+      : h < 11 ? trSafe('page.newtab.buddy.hello.morning', '좋은 아침이에요!')
+      : h < 17 ? trSafe('page.newtab.buddy.hello.day', '안녕하세요!')
+      : trSafe('page.newtab.buddy.hello.evening', '좋은 저녁이에요!')
     setTimeout(() => { st.mode = 'wave'; st.modeT = 14; say(hello, EVENT ? 3200 : 2200); if (reduced) draw() }, 400)
   }
   else if (EVENT) {
     // 명절 밤에는 깨우지 않고 잠꼬대로만 인사한다
-    setTimeout(() => say('쿨… ' + EVENT.greet, 3200), 400)
+    const sleepGreet = trSafe('page.newtab.buddy.events.' + EVENT.id + '.greet', EVENT.greet)
+    setTimeout(() => say(trSafe('page.newtab.buddy.sleepTalkPrefix', '쿨… ') + sleepGreet, 3200), 400)
   }
 })()
