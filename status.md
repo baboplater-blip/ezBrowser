@@ -11,8 +11,8 @@
 | 항목 | 상태 |
 |------|------|
 | 제품명 | **ezBrowser** (코드네임 browser-build) |
-| 버전 | `0.2.0-rc.11` (후보 빌드 · 미서명) |
-| 빌드 | ✅ 통과 (외피 JS 306KB / gzip **100KB** — 예산 500KB의 20%) |
+| 버전 | `0.2.0-rc.19` (후보 빌드 · 미서명) |
+| 빌드 | ✅ 통과 (외피 초기 JS 267KB / gzip **83KB** — 예산 500KB의 17%, AI·언어 사전은 지연 청크) |
 | 부팅 | ✅ packaged 5+ 프로세스 정상, 로그 clean |
 | 기능 완성도 | 🟢 **매우 높음** — 콕콕 14종 + 자유도 12모듈 + 다운로드 엔진 + 세션 복원 + 탭 그룹 + **AI 어시스턴트/자율 에이전트(AI-1~16)** |
 | **출시 준비도** | 🟡 **중간** — 온보딩(AI 연결 포함 6단계)·데이터 가져오기·브랜드·oneClick 인스톨러·자동업데이트 실배포까지 완료. **잔여 차단 2건 = 코드 서명(사용자 인증서 필요) · 깨끗한 외부 PC 실기 검증** |
@@ -96,14 +96,14 @@
 
 ### 최신 실행
 
-**`npm run verify` — 21/21 PASS · 1m 13s** (2026-09-28 23:32)
+**`npm run verify` — 21/21 PASS · 1m 28s** (2026-09-29 07:47)
 
 | 단계 | 상태 | 소요 | 상세 |
 |------|------|------|------|
 | typecheck | ✅ PASS | 6s | 종료코드 0 |
-| build | ✅ PASS | 6s | 종료코드 0 |
-| package | ✅ PASS | 11s | 종료코드 0 |
-| smoke | ✅ PASS | 13s | PASS 16 |
+| build | ✅ PASS | 9s | 종료코드 0 |
+| package | ✅ PASS | 10s | 종료코드 0 |
+| smoke | ✅ PASS | 16s | PASS 16 |
 | korean-regex | ✅ PASS | 0s | PASS 2 |
 | editor-text | ✅ PASS | 0s | PASS 5 |
 | userscript-match | ✅ PASS | 0s | PASS 10 |
@@ -113,17 +113,19 @@
 | post-time | ✅ PASS | 0s | 종료코드 0 |
 | persistence-boundary | ✅ PASS | 0s | PASS 27 |
 | engage-durability | ✅ PASS | 0s | PASS 6 |
-| publish-evidence | ✅ PASS | 4s | PASS 8 |
+| publish-evidence | ✅ PASS | 5s | PASS 8 |
 | artifacts | ✅ PASS | 0s | 종료코드 0 |
 | agent-gate | ✅ PASS | 0s | PASS 9 |
 | general-engage | ✅ PASS | 0s | PASS 12 |
 | intent-routing | ✅ PASS | 0s | PASS 8 |
 | ai-providers | ✅ PASS | 0s | PASS 4 |
-| ai-connect | ✅ PASS | 8s | PASS 9 |
+| ai-connect | ✅ PASS | 10s | PASS 9 |
 | session-schema | ✅ PASS | 0s | 종료코드 0 |
 
 ### 최근 10회
 
+- 2026-09-29 07:47 · `quick` · **21/21 PASS** · 1m 28s
+- 2026-09-29 06:21 · `full` · **64/70 PASS** · 53m 24s
 - 2026-09-28 23:32 · `quick` · **21/21 PASS** · 1m 13s
 - 2026-09-28 23:06 · `quick` · **20/20 PASS** · 1m 17s
 - 2026-09-28 23:04 · `quick` · **20/20 PASS** · 1m 12s
@@ -132,14 +134,26 @@
 - 2026-09-28 15:46 · `quick` · **20/20 PASS** · 1m 44s
 - 2026-09-28 15:05 · `quick` · **20/20 PASS** · 2m 9s
 - 2026-09-28 13:50 · `quick` · **20/20 PASS** · 2m 15s
-- 2026-09-20 08:30 · `quick` · **20/20 PASS** · 1m 10s
-- 2026-09-20 06:02 · `quick` · **19/19 PASS** · 2m 8s
 
 <!-- verify-all:end -->
 
 ---
 
 ## 최근 라운드 로그 (최신이 위)
+
+### 2026-09-29 — 대규모 병렬 개선 (rc.19): 조사 45건 → 18묶음 병렬 구현
+
+상세는 CLAUDE.md 변경 이력의 같은 날짜 항목. 사용자 체감이 큰 것만 추리면:
+- **동작하지 않던 약속 9건을 실제로 동작하게**: 권한을 묻지 않고 허용 → 묻기 / 서드파티 쿠키·이력 보관·bang 설정 무효 → 반영 /
+  `window.prompt()` 버튼 무동작 → 인라인 입력 / "새 창에서 열기"가 새 탭 → 새 창 / 탭 전환 제안이 중복 로드 → 전환 /
+  Ctrl+D 가 확인 없이 삭제 → 말풍선 / 매크로 단축키·스크린샷 스텁 → 동작.
+- **보안 4건**: Mod 샌드박스 탈출(재현 후 수정), 외부 사이트에 내부 API 노출, IPC 무가드 채널, 가져오기의 무동의 코드 설치.
+- **새 기능**: 로그인·결제 팝업(opener 유지), 전체화면, 오류 페이지, 백업 암호, 크롬 CSV, userscript 격리·GM_xmlhttpRequest,
+  확장 설치 동의·팝업 창, 베트남어 포함 3개 언어.
+- **통합 과정에서 드러난 기존 결함**: 확인 창이 브라우저 전체를 멈춤, 일시정지 후 탭을 닫으면 작업이 영구 정지 — 둘 다 수정.
+
+검증: 실패 6단계 재실행 전부 통과(표는 CLAUDE.md). **남은 것 — adblock 제외 빈 창 158MB > 155MB 예산**(+8MB 출처 미상,
+사용자 부재 시 교대 측정으로 분해할 것). 반성: 사용자가 화면을 쓰는 동안 `verify:full` 을 돌렸다(규칙 위반).
 
 ### 2026-09-19 — 저장이 막혀도 글은 나갔고, AI 가 "올렸다"고 말하기만 해도 완료였다 (rc.11)
 

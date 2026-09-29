@@ -1827,3 +1827,21 @@ Electron 30+ 부터 `BrowserView` 는 deprecated. 모든 탭 컨테이너는 반
   - **알려진 한계**: 스크롤·입력 중인 글자는 마지막 상호작용 약 5초 뒤·30초 주기에 저장된다 —
     그 사이 강제 종료 시 **탭은 전부 돌아오지만 스크롤은 조금 전 것**일 수 있다(이전에는 같은 구간에서
     탭 자체가 사라졌다). 다중 창 동시 크래시는 시나리오에 없다. 설치→제거 실증은 여전히 `rc.2` 가 정본.
+- 2026-09-29: **대규모 병렬 개선 라운드(rc.19) — 조사 45건 → 18개 묶음 병렬 구현·병합**. 사용자 지시 "승인 없이 순서대로 병렬로 모두 구현하고 보고".
+  - **진행 방식**: 조사 에이전트 3기가 기본 브라우징·성능/안정성·기능/다국어 갭 45건을 찾음 → 파일 소유권이 겹치지 않게 묶음으로 나눠 git worktree(`../bb-lanes/lane-*`, HEAD 기준 수동 생성)에서 병렬 구현 → 지휘자가 순차 병합(verify-all 등록부·locales 는 전용 병합 스크립트).
+    ⚠ 함정 2건(메모리에 기록): Agent `isolation:worktree` 는 **main(옛 2커밋 스냅샷)** 기준이라 1차 7묶음이 전부 폐기됐고, junction `node_modules` 가 있는 worktree 를 `git worktree remove --force` 하면 **원본 node_modules 가 비워진다**(npm ci + electron install 로 복구). 또 locales JSON 을 git 텍스트 자동 병합하면 `"page": {` 가 중복돼 JSON.parse 가 vi 키 310개를 조용히 버렸다 → `i18n-check` 에 중복 키 검사 추가.
+  - **A 탭 엔진**: 크기 지정 `window.open` 을 실제 자식 창으로(opener·postMessage 유지 — OAuth·PG·본인인증), HTML 전체화면, `browser://error`(로드 실패·크래시·인증서 경고+세션 한정 예외·HTTP 기본 인증 창), 탭 닫기 전 beforeunload 확인, 미리보기 320px JPEG·잠든 탭 썸네일.
+  - **B 권한·네트워크**: 카메라·마이크·위치·알림을 **묻지 않고 허용하던 것** → 크롬식 권한 말풍선(PermissionPrompt, 기억·60초 무응답 거부). 무효였던 서드파티 쿠키 차단 실구현(eTLD+1 근사). **webRequest 단일 디스패처**(web-request-dispatcher.ts)가 세션당 리스너를 단독 소유 — 부팅 즉시 확장 DNR 적용(adblock 1.5초 지연 공백 제거). adblock perHost 상한. **B2** 검증 하네스 8/8 + 탭 소멸 시 말풍선이 영원히 남던 결함 수정.
+  - **C 주소창·단축키**: "탭으로 전환" 제안이 실제 전환, Ctrl+휠 줌 배지, 강력 새로고침·소스보기·페이지 저장·F3·Alt+Home·주소창 Alt/Ctrl+Enter·Shift+Delete, Ctrl+D 북마크 말풍선(확인 없이 삭제하던 토글 제거), bang 설정 반영.
+  - **D 탭바·메뉴·접근성**: Electron 미지원 `window.prompt()` 로 **무동작이던 버튼**(그룹·북마크 폴더 이름) 인라인 입력화, 탭 우클릭 메뉴 보강, "새 창/시크릿 창에서 링크 열기", 맞춤법 제안·사전 추가, 미리보기 캐시 LRU, 탭바 roving tabIndex·aria.
+  - **E IPC 보안**: browser:// 로 열린 탭이 외부 사이트로 가도 `internalAPI` 가 남던 것 차단(protocol 가드), `handleTrusted` 헬퍼로 무가드 채널 일괄 보호(채널 분류표는 lane 보고).
+  - **F 부팅·저장·유휴**: 이력 DB 복사 없는 export·5초 디바운스, db close 누수, **보관 기간 설정 실구현**, 부팅 init 병렬화, 대상 0개면 AI 트리거·수집 타이머 미가동, DNR 폴링 완화, 세션 30초 저장은 내용 같으면 쓰기 생략, iframe 영상 폴링 축소, AI pageCache 누수. (AI 지연 로드는 근거 부족으로 기각.)
+  - **G Mod·매크로**: **Mod 샌드박스 탈출 재현·수정**(`mod.storage.get.constructor('return process')()` 로 Node 획득 → 컨텍스트 realm 래퍼 + JSON 브리지), mod fetch 사설망 차단, **URL 매크로 무한 루프**(4초 238회 재현) 쿨다운, 단축키 트리거·스크린샷 액션·interval 트리거.
+  - **H 백업·비밀번호**: 백업 암호(scrypt+AES-256-GCM)로 **다른 PC 에서도 비밀번호 복원**, 가져오기 시 실행 코드 항목 명시 동의(메인 강제), "저장 안 함" 영속화, 생성기, 크롬 CSV 가져오기/내보내기(평문은 렌더러로 안 보냄).
+  - **I Userscript**: GM 값을 페이지 localStorage → 메인 저장소 + **격리 월드 실행**, 진짜 document-start(페이지 head 스크립트보다 먼저), `GM_xmlhttpRequest`(@connect·사설망 규칙), `@grant` 강제, `@require/@resource`, 매치 패턴 재작성. 메뉴 명령 UI 연결은 미완.
+  - **J 확장**: 팝업을 앵커 창으로(웹스토어 8종 실측), **설치 전 권한 동의**(crx·웹스토어·폴더), 룰셋 on/off, 접근성. 세션 DNR 룰은 여전히 GAP(확장 SW preload 미실행 재확인).
+  - **K AI 사이드바**: `React.lazy` 로 AI 뷰 지연 로드(외피 초기 gzip 120→85KB), AiTab 2,388→1,878줄 분할.
+  - **L0/M1~M5 다국어**: `ui.language`(auto/ko/en/vi) + 공용 페이지 로더(`browser://shared/i18n.js`) + `tMain` → 외피·AI·내부 페이지 24종·메인 문구 이관, **ko/en/vi 2,440키**. 에이전트 프롬프트·게이트 정규식·트레이스 문구는 안전·하네스 의존 때문에 의도적 제외. ⚠ CSP host-source 는 밑줄 호스트(`browser://_shared`)를 조용히 무효화한다.
+  - **통합 뒤 지휘자 직접 수정**: ① beforeunload 확인이 `showMessageBoxSync` 로 **브라우저 전체를 멈추던** 것 → 비동기(T8 해결) ② 세 언어 사전을 모두 번들·부팅 로드하던 것 → 현재 언어만(외피 초기 JS 615→267KB) ③ **일시정지→탭 닫기→이어가기에서 작업이 '실행 중' 단계 0 으로 영구 정지**하던 기존 결함 → 구간 중 탭 파괴 감시(task-target-ui 간헐 실패의 진짜 원인, 7/7·5분→43초) ④ 가속 다운로드 병합 전 `.part` 실측·재다운로드(ENOENT 간헐, 원인 미확정) ⑤ 하네스 2건(IR3 문구·dl-matrix 복원 모달 시드).
+  - **검증**: `verify:full` 64/70(06:21, 수정 전) → 실패 6단계 재실행: omnibox 21/21 · interruption-recovery 7/7 · tab-engine 8/8 · task-target-ui 7/7 · task-runtime 15/15 · task-ui 21/21 · window-tabs 10/10 · dl-matrix 10/11(S8 yt-dlp SKIP) · `npm run verify` 21/21. 산출물 `dist/ezBrowser-0.2.0-rc.19-win-x64.exe`(122,187,935B, sha256 `f50443309e8d28a7e336ce4c366f773d90eaef3b470d95fc1f0168e5b00354a1`, 미서명, `--publish never`).
+  - **남은 것(정직)**: ① **성능 예산 초과** — adblock 제외 빈 창 158MB > 155MB(라운드 전 150MB, +8MB 출처 미상; 교대 4회+ 측정 필요 → 사용자 부재 시) ② Ctrl+휠 줌·확장 팝업 blur/Esc·node 권한 대화상자·CSV 네이티브 대화상자는 CDP 로 자동화 불가(수동 확인 필요) ③ 확장 세션 DNR 룰 GAP, userscript 메뉴 명령 UI, 웹스토어 "추가" 칩 ④ 목록 카드를 HTML 문자열로 그리는 페이지(extensions·macros·passwords) 한국어 231건 ⑤ 규칙 위반 기록: 사용자 사용 중 `verify:full`(53분) 실행 — 지적받음, 메모리에 재명시.
