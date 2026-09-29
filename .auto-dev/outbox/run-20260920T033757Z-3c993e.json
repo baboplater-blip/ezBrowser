@@ -1,0 +1,202 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260920T033757Z-3c993e",
+  "recorded_at": "2026-09-20T04:18:56Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260920T033757Z-3c993e",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260920T033757Z-3c993e)의 구조화 완료 기록: pass (합격 기준 14건 전건 통과, 부정 사례 7건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "0d32e55d-a635-439b-b0ff-5b2c62c1c965",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "탭 두 개를 서로 다른 로컬 주소로 열고 1.5초 뒤 강제 종료한 뒤 다시 켜면 두 탭이 그대로 돌아온다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "제목이 300ms 마다 바뀌는 페이지가 열려 있어도 탭 목록 저장이 무한정 미뤄지지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "복원한 직후 다시 강제 종료해도 탭이 남아 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "last-stable 쓰기가 실패하면 옛 복구 자료를 지우지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "세션 파일의 항목 하나가 손상돼도 나머지 유효한 탭은 복원되고 원본은 증거로 남는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "사용자가 직접 닫은 탭은 크래시 복원으로 되살아나지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "세션 스냅샷에 비밀번호가 적히지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "시크릿 창 탭은 디스크에도 복원에도 없다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "정상 종료 뒤 재기동하면 탭이 복원되고 last-stable 이 기록되며 current.json 은 정리된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "탭 그룹·분할 화면·스크롤 위치·폼 입력·lazy 복원이 크래시 뒤에도 그대로다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "복원 직후에도 디스크에 복구 가능한 자료가 남아 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "잡음성 변경이 구조 변경의 저장 기한을 뒤로 밀지 못하고, 그렇다고 매 이벤트마다 저장하지도 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c13",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "복원이 여는 스킴이 넓어지지 않는다(javascript:·file:·data: 거부)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c14",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "기존 기능 전반에 회귀가 없다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "스크롤·폼은 마지막 상호작용 약 5초 뒤·30초 주기에 저장된다 — 그 사이 강제 종료 시 탭은 전부 돌아오지만 스크롤은 조금 전 것일 수 있다(이전에는 같은 구간에서 탭 자체가 사라졌다)",
+        "다중 창을 동시에 띄운 상태의 크래시 복원은 시나리오에 없다(단일 창 기준)",
+        "rc.16 설치파일의 설치→부팅→제거는 시험하지 않았다 — 이 PC 에 사용자 실설치본이 등록돼 있어 무인 설치·제거가 그것을 덮어쓴다. 우회하지 않았다(설치 흐름 실증의 정본은 rc.2)",
+        "코드 서명 인증서(.pfx) 미제공 — rc.16 미서명(SmartScreen 경고)"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260920T033757Z-3c993e"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 2458.1,
+        "context_chars": 12123,
+        "total_tokens": 1221939,
+        "cache_read_tokens": 82416934
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9473,
+          "output": 14,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 342,
+          "output": 151599,
+          "cache_read": 67239843,
+          "cache_creation": 505040
+        },
+        "claude-sonnet-5": {
+          "input": 84,
+          "output": 108305,
+          "cache_read": 15177091,
+          "cache_creation": 447082
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\session-recovery-20260920\\run-20260920T033757Z-3c993e-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\session-recovery-20260920\\run-20260920T033757Z-3c993e-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "**판정: pass** — 합격 기준 14건 전건 통과(부정 사례 7건), 잔여 작업 없음. 구조화 완료 기록은 `.auto-dev/completions/run-20260920T033757Z-3c993e.json`.\n\n## 무엇이 실제로 망가져 있었나\n\n먼저 재현했고, **보고가 과소평가였다**는 걸 확인했습니다. \"두 번째 탭이 안 돌아온다\"가 아니라 — 탭 두 개를 열고 1.5초 뒤 강제 종료하면 `sessions/current.json`이 **아예 없었고 두 탭 다** 사라졌습니다.\n\n원인 다섯 가지, 전부 재현 후 확정:\n\n| | 원인 | 증거(고치기 전 → 고친 뒤) |\n|---|---|---|\n| C1 | 저장 타이머가 **하나**라, 제목·파비콘 변경(5초)이 탭 추가의 **1초 기한을 계속 다시 깔았다** | 세션 파일 없음 → 두 탭 모두 기록·복원 / 제목 변동 중 저장: **12초 내 안 됨 → 845ms** |\n| C2 | 항목 하나가 문자열이 아니면 `createTab`이 던져 **그 창의 나머지 탭 전부** 유실 | `[newtab]` → `[p?n=1, p?n=3]` |\n| C3 | 복원 직후 `current.json`을 지워, 재크래시 시 복구 자료 **0개** | 두 번째 종료 후 전멸 → 탭 유지 |\n| C4 | 쓰기 실패를 삼킨 채 옛 복구 자료를 지움 | `(없음 — 유실)` → `current.json` 생존 |\n| C5 | 주소 커밋 전 탭이 스냅샷에서 통째로 빠짐 | `pendingUrl`로 그 공백만 메움 |\n\n## 정직하게 적을 것 두 가지\n\n**하나 — 제 수정이 회귀를 만들었고, 하네스가 잡았습니다.** 저장이 빨라지자 `session-restore`의 스크롤·폼 복원이 FAIL로 돌아섰습니다. 추측으로 고치지 않고 **대기 버퍼만 늘린 진단 실행**으로 원인을 갈랐습니다 — 같은 빌드에서 18/18이 나왔으니 복원 경로는 멀쩡하고 **종료 시점**이 문제였습니다. 제품에는 \"정착 저장\"(구조 변경으로 일찍 뜬 저장 뒤 한 번 더, 활동 묶음당 최대 2회)을 덧붙이고, 하네스 조건은 **느슨하게가 아니라 `savedAt` 하한으로 조여서** 고쳤습니다.\n\n덤으로, `'복원 후 current.json 정리됨'` 판정이 **정상 종료 뒤에** 측정되고 있어 무엇을 넣어도 통과하던 빈 검사였습니다 — 복원 직후 측정 + 탭 URL 포함 확인으로 교체했습니다.\n\n**둘 — 남은 한계.** 스크롤 위치와 입력 중인 글자는 탭 목록만큼 자주 저장되지 않습니다(마지막 상호작용 약 5초 뒤 + 30초 주기). 그 사이 강제 종료되면 **탭은 전부 돌아오지만 스크롤은 조금 전 것**일 수 있습니다. 스크롤·타자가 메인 프로세스에 이벤트를 내지 않고 Chromium의 pageState 반영도 지연되기 때문입니다. 이전에는 같은 구간에서 **탭 자체가** 사라졌습니다.\n\n## 검증\n\n`npm run verify` **19/19 · 1분 8초**(status.md 자동 기록) · durability **9/9** · session-restore **18/18** · session-schema **15/15** · 패키징 후 스모크 **16/16**.\n\n음성 대조로 검출력을 확인했습니다 — 컴파일 산출물에 옛 동작을 되돌리면 SS1의 기한이 1,000ms → **9,000ms**로 밀리고 SS3·SS5·SS8·SS9가 빨개집니다. SD8은 대조군이 함께 들어 있어, 같은 파일에서 **일반 텍스트 칸은 찾히고 비밀번호는 안 찾힙니다**.\n\n산출물 `dist\\ezBrowser-0.2.0-rc.16-win-x64.exe` · 121,940,979 B · sha256 `758b9493…` · 2026-09-20 13:10:47 · `--publish never`(GitHub 최신 릴리스는 여전히 `0.1.0`). 커밋 2건, **푸시하지 않았습니다**. 사용자 실제 프로필은 무접촉입니다(`sessions/last-stable.json`이 어제 22:51 그대로).\n\n선택적 후속: 다중 창 동시 크",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260920T033757Z-3c993e\\stream.jsonl",
+    "error": null
+  }
+}

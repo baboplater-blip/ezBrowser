@@ -1,0 +1,15 @@
+{
+  "opus": {
+    "requested": "opus",
+    "resolved": null,
+    "verified": false,
+    "method": "error",
+    "candidates": [
+      "claude-haiku-4-5-20251001",
+      "claude-opus-5",
+      "claude-sonnet-5"
+    ],
+    "reason": "CLI 호출이 오류를 반환함(is_error=True)",
+    "checked_at": "2026-09-20T08:21:41.270551+00:00"
+  }
+}

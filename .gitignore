@@ -14,6 +14,7 @@ dist-renderer/
 app/renderer/design/tokens.gen.css
 app/renderer/design/tokens.gen.ts
 app/main/storage/oss-licenses.json
+app/main/storage/perf-baseline.json
 
 # IDE
 .vscode/
@@ -34,7 +35,12 @@ build/sign.local.js
 app/dist/
 smoke-out*/
 verify-out/
+perf-out/
+perf-breakdown-out/
 logs/
 설치파일/
 resources/brand/
 *.tmp
+
+# 결함 재현용 "수정 전" 빌드 스냅샷(임시) — 커밋 대상 아님
+dist-before-*/

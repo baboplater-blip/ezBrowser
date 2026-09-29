@@ -1,0 +1,507 @@
+import { app, type WebContents } from 'electron'
+import { createHash } from 'node:crypto'
+import { listPageImages, readUrlInPage, type PageImage } from './page-actions'
+import { saveArtifactBytes, importDownloadedFile, type CaptureResult } from './artifacts'
+import { listDownloads, downloadEvents } from '../downloads'
+import { createJsonStore, loadJsonObject } from './json-store'
+import { getTab } from '../../tabs/tab-service'
+import type { DownloadItem } from '../../../shared/types'
+
+// 생성물 수집 — "AI 사이트가 방금 만들어 준 그림"을 가려내 작업 산출물로 저장한다.
+//
+// 왜 어려운가: 페이지에는 로고·광고·썸네일·이전 결과물이 이미 잔뜩 있다. "이미지를 하나 가져와라"
+// 라고만 하면 모델은 화면에서 가장 눈에 띄는 것을 집는데, 그게 광고 배너인 경우가 실제로 흔하다.
+// 그래서 **생성 전 기준선**을 잡고 그 뒤에 새로 나타난 것만 후보로 본다. 그래도 여럿이면
+// 임의로 고르지 않고 사용자에게 묻는다(요구: "불명확하면 선택요청").
+//
+// 기준선은 (작업 taskId, 페이지 origin) 단위다 — tabId 가 아니다. tabId 는 프로세스가 재시작되면
+// 재발급되어, 재시작을 넘겨서는 아무것도 매칭하지 못한다. taskId+origin 은 "이 작업이 이 사이트에서
+// 무엇을 봤는가"라는, 재시작에도 의미가 유지되는 신원이다.
+//
+// **영속화(2026-09, 장시간 작업 재시작 대응)**: 예전엔 기준선이 메모리 Map 뿐이라 앱이 재시작되면
+// 사라졌다. 그러면 findNewImages 가 "기준선 없음"으로 화면의 큰 이미지 전체를 후보로 돌려주고,
+// 그 후보는 **큰 순**이라 페이지의 광고·배너가 index 0 이 되어 생성물 대신 광고가 저장되는 사고가
+// 났다. 이제 userData/ai-image-baselines.json 에 저장하고 부팅 시 되살린다.
+//
+// **민감 데이터를 저장하지 않는다**: 이미지 주소는 서명 URL·토큰을 포함할 수 있어 원본 src 를 그대로
+// 적지 않고 sha256(src) 앞 32자만 남긴다. 메모리 표현도 같은 해시를 쓴다 — 저장 경로와 실시간 경로가
+// 다른 자료구조를 쓰면 둘 중 하나가 낡기 마련이라 코드 경로를 하나로 유지한다.
+//
+// **복원은 자동 채택되지 않는다**: 디스크 기준선은 같은 (taskId, origin) 일 때만 쓰고, 다르면
+// "기준선 없음"이되 이유(원래 없음 vs origin 이 달라 못 씀)를 구분해 돌려준다 — 호출자가
+// 사용자에게 정확히 설명할 수 있게.
+//
+// **덮어쓰기 방지(soft 모드)**: 재시작 후 그 페이지로 돌아오면 화면엔 이미 생성물이 그려져 있다.
+// 거기서 기준선을 다시 잡으면 생성물이 "원래 있던 것"으로 분류돼 영영 못 찾는다. navigate 뒤·새 탭처럼
+// **에이전트가 자동으로** 잡는 기준선은 soft:true — 이미 기준선이 있으면 덮어쓰지 않는다. 모델이
+// 명시적으로 mark_baseline 을 부른 경우만 덮어쓴다(사용자/모델이 "지금이 기준"이라고 확정한 순간).
+
+/** 이보다 작은 그림은 후보에서 뺀다 — 로고·아이콘·아바타·썸네일의 실제 크기대다. */
+const MIN_SIDE = 256
+/** 한 번에 받아들일 최대 바이트(생성 이미지는 보통 수백 KB~수 MB). */
+const MAX_BYTES = 50 * 1024 * 1024
+/** 다운로드 완료를 기다리는 기본 상한. */
+export const DOWNLOAD_TIMEOUT_MS = 180_000
+
+// ===== 영속화 =====
+
+const FILE_NAME = 'ai-image-baselines.json'
+const STORE_LABEL = '이미지 기준선'
+/** 저장 레코드 상한 — 넘으면 오래된 것부터(마지막 갱신 기준) 정리한다. */
+const MAX_RECORDS = 200
+/** 레코드 하나가 담을 수 있는 이미지 해시 상한. */
+const MAX_HASHES_PER_RECORD = 500
+const HASH_RE = /^[0-9a-f]{32}$/
+const MAX_ID_LEN = 200
+const MAX_ORIGIN_LEN = 300
+/** taskId/origin 결합 키 구분자 — 둘 다 사람이 만드는 문자열엔 나오지 않는 제어문자를 쓴다. */
+const KEY_SEP = String.fromCharCode(0)
+
+interface BaselineRecord {
+  v: 1
+  taskId: string
+  origin: string
+  tabId?: string
+  workspaceId?: string
+  hashes: string[]
+  updatedAt: number
+}
+
+interface MemEntry {
+  hashes: Set<string>
+  /** 이번 프로세스에서 새로 잡은 게 아니라 디스크에서 되살아난(그리고 아직 갱신 안 된) 항목인가. */
+  restored: boolean
+  tabId?: string
+  workspaceId?: string
+  updatedAt: number
+}
+
+function memKey(taskId: string, origin: string): string { return taskId + KEY_SEP + origin }
+function splitKey(key: string): { taskId: string; origin: string } {
+  const i = key.indexOf(KEY_SEP)
+  return i < 0 ? { taskId: key, origin: '' } : { taskId: key.slice(0, i), origin: key.slice(i + 1) }
+}
+
+/** (taskId, origin) → 그 시점에 존재하던 이미지들의 해시. */
+const baselines = new Map<string, MemEntry>()
+let loaded = false
+let quitHooked = false
+
+function snapshotRecords(): BaselineRecord[] {
+  const out: BaselineRecord[] = []
+  for (const [key, entry] of baselines) {
+    const { taskId, origin } = splitKey(key)
+    if (!taskId || !origin) continue
+    out.push({
+      v: 1,
+      taskId,
+      origin,
+      ...(entry.tabId ? { tabId: entry.tabId } : {}),
+      ...(entry.workspaceId ? { workspaceId: entry.workspaceId } : {}),
+      hashes: Array.from(entry.hashes).slice(0, MAX_HASHES_PER_RECORD),
+      updatedAt: entry.updatedAt,
+    })
+  }
+  out.sort((a, b) => b.updatedAt - a.updatedAt) // 최신 우선
+  return out.slice(0, MAX_RECORDS)
+}
+
+const store = createJsonStore({
+  fileName: FILE_NAME,
+  label: STORE_LABEL,
+  debounceMs: 400,
+  snapshot: () => ({ version: 1, records: snapshotRecords() }),
+})
+
+function isValidRecordShape(
+  r: unknown,
+): r is Record<string, unknown> & { taskId: string; origin: string; hashes: unknown[]; updatedAt: number } {
+  if (!r || typeof r !== 'object') return false
+  const o = r as Record<string, unknown>
+  if (o.v !== 1) return false
+  if (typeof o.taskId !== 'string' || !o.taskId) return false
+  if (typeof o.origin !== 'string' || !o.origin) return false
+  if (!Array.isArray(o.hashes)) return false
+  if (typeof o.updatedAt !== 'number' || !Number.isFinite(o.updatedAt)) return false
+  if (o.tabId !== undefined && typeof o.tabId !== 'string') return false
+  if (o.workspaceId !== undefined && typeof o.workspaceId !== 'string') return false
+  return true
+}
+
+/** 부팅 시 1회 로드. 여러 번 불려도 안전(멱등) — 실제 접근 지점(markBaseline 등)마다 방어적으로 호출한다. */
+export function initImageBaselines(): void {
+  // 종료 시 디바운스 대기 중이던 저장을 동기 flush(정상 종료 데이터 손실 방지).
+  if (!quitHooked) { quitHooked = true; try { app.on('before-quit', () => store.flush()) } catch { /* ignore */ } }
+  if (loaded) return
+  loaded = true
+
+  const raw = loadJsonObject(FILE_NAME, STORE_LABEL, 'records')
+  if (!raw) return
+  const rawRecords = Array.isArray(raw.records) ? raw.records : []
+
+  const validRecords: BaselineRecord[] = []
+  for (const r of rawRecords) {
+    if (!isValidRecordShape(r)) continue
+    const hashes = r.hashes.filter((h): h is string => typeof h === 'string' && HASH_RE.test(h)).slice(0, MAX_HASHES_PER_RECORD)
+    validRecords.push({
+      v: 1,
+      taskId: r.taskId.slice(0, MAX_ID_LEN),
+      origin: r.origin.slice(0, MAX_ORIGIN_LEN),
+      ...(typeof r.tabId === 'string' && r.tabId ? { tabId: r.tabId.slice(0, MAX_ID_LEN) } : {}),
+      ...(typeof r.workspaceId === 'string' && r.workspaceId ? { workspaceId: r.workspaceId.slice(0, MAX_ID_LEN) } : {}),
+      hashes,
+      updatedAt: r.updatedAt,
+    })
+  }
+
+  const invalidDropped = rawRecords.length - validRecords.length
+  if (invalidDropped > 0) store.reportDropped(invalidDropped, validRecords.length)
+
+  validRecords.sort((a, b) => a.updatedAt - b.updatedAt) // 오래된 것 먼저 — 넘치면 앞부터 버림
+  const overflow = Math.max(0, validRecords.length - MAX_RECORDS)
+  if (overflow > 0) console.warn(`[ai] ${STORE_LABEL} 상한(${MAX_RECORDS})을 넘어 오래된 ${overflow}개를 정리했습니다.`)
+  const kept = overflow > 0 ? validRecords.slice(overflow) : validRecords
+
+  for (const rec of kept) {
+    baselines.set(memKey(rec.taskId, rec.origin), {
+      hashes: new Set(rec.hashes),
+      restored: true,
+      ...(rec.tabId ? { tabId: rec.tabId } : {}),
+      ...(rec.workspaceId ? { workspaceId: rec.workspaceId } : {}),
+      updatedAt: rec.updatedAt,
+    })
+  }
+}
+
+/** 메모리 항목도 디스크와 같은 상한을 지킨다 — 아주 긴 세션에서 무한히 자라지 않도록. */
+function pruneMemoryIfNeeded(): void {
+  if (baselines.size <= MAX_RECORDS) return
+  const entries = Array.from(baselines.entries()).sort((a, b) => a[1].updatedAt - b[1].updatedAt)
+  const excess = entries.length - MAX_RECORDS
+  for (let i = 0; i < excess; i++) {
+    const e = entries[i]
+    if (e) baselines.delete(e[0])
+  }
+}
+
+function hashSrc(src: string): string {
+  return createHash('sha256').update(src).digest('hex').slice(0, 32)
+}
+
+function originOfUrl(url: string): string | null {
+  try {
+    const u = new URL(url)
+    return u.origin && u.origin !== 'null' ? u.origin : null
+  } catch {
+    return null
+  }
+}
+
+function originOf(wc: WebContents): string | null {
+  try {
+    return originOfUrl(wc.getURL())
+  } catch {
+    return null
+  }
+}
+
+/** tabId 로 워크스페이스를 찾아본다 — 실패해도 기준선 저장 자체는 계속된다(기록용 부가 정보일 뿐). */
+function safeWorkspaceId(tabId: string): string | undefined {
+  try {
+    const t = getTab(tabId)
+    return t?.workspaceId ? String(t.workspaceId).slice(0, MAX_ID_LEN) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 이 (작업, 페이지) 에 쓸 수 있는 기준선이 있는지 — 자동 채택 없이 상태만 알려준다. */
+export interface BaselineInfo {
+  /** 이 페이지에 쓸 수 있는 기준선이 있는가. */
+  present: boolean
+  /** 디스크에서 되살린 것인가(이번 프로세스에서 잡은 게 아니라). */
+  restored: boolean
+  /** 저장된 기준선은 있으나 지금 페이지 origin 이 달라 쓰지 않았다. */
+  originMismatch: boolean
+  /** 기준선에 담긴 이미지 수(present 일 때만 의미). */
+  count: number
+}
+
+export function baselineInfo(taskId: string, pageUrl: string): BaselineInfo {
+  initImageBaselines()
+  const bucket = String(taskId ?? '').trim()
+  const origin = originOfUrl(pageUrl)
+  if (!bucket || !origin) return { present: false, restored: false, originMismatch: false, count: 0 }
+
+  const exact = baselines.get(memKey(bucket, origin))
+  if (exact) return { present: true, restored: exact.restored, originMismatch: false, count: exact.hashes.size }
+
+  // 같은 작업의 기준선이 **다른 origin** 으로 존재하는가 — 있으면 "기준선이 없다" 가 아니라
+  // "다른 페이지 것이라 못 쓴다" 로 구분해 알려준다.
+  const prefix = bucket + KEY_SEP
+  for (const key of baselines.keys()) {
+    if (key.startsWith(prefix)) return { present: false, restored: false, originMismatch: true, count: 0 }
+  }
+  return { present: false, restored: false, originMismatch: false, count: 0 }
+}
+
+export function clearImageBaselines(bucket: string): void {
+  initImageBaselines()
+  const prefix = String(bucket ?? '') + KEY_SEP
+  let changed = false
+  for (const key of [...baselines.keys()]) {
+    if (key.startsWith(prefix)) { baselines.delete(key); changed = true }
+  }
+  if (changed) store.markDirty()
+}
+
+/**
+ * 지금 화면의 이미지를 기준선으로 기록. 생성 버튼을 누르기 **전에** 부른다.
+ *
+ * opts.soft — true 면 같은 (taskId, origin) 기준선이 **이미 있을 때 덮어쓰지 않는다**
+ * (자동 기준선용: navigate 뒤·새 탭 등, 재시작 후 되돌아온 페이지의 생성물을 "원래 있던 것"으로
+ * 오분류하지 않기 위함). false/미지정이면 항상 덮어쓴다(모델이 명시적으로 mark_baseline 을 부른 경우).
+ *
+ * origin 을 구할 수 없으면(about:blank 등) 기준선을 저장하지 않는다 — 대신 지금 화면의 이미지
+ * 목록은 그대로 돌려준다(호출자가 판단할 재료는 준다).
+ */
+export async function markBaseline(
+  wc: WebContents, bucket: string, tabId: string, allowedHosts?: string[],
+  opts?: { soft?: boolean },
+): Promise<{ count: number; images: PageImage[]; skipped: boolean; restored: boolean }> {
+  initImageBaselines()
+  const images = await listPageImages(wc, allowedHosts)
+  const taskId = String(bucket ?? '').trim()
+  const origin = originOf(wc)
+  if (!taskId || !origin) return { count: 0, images, skipped: false, restored: false }
+
+  const key = memKey(taskId, origin)
+  const existing = baselines.get(key)
+  if (opts?.soft && existing) {
+    return { count: existing.hashes.size, images, skipped: true, restored: existing.restored }
+  }
+
+  const hashes = new Set(images.map((i) => hashSrc(i.src)))
+  const isNewKey = !existing
+  const workspaceId = safeWorkspaceId(tabId)
+  baselines.set(key, {
+    hashes,
+    restored: false,
+    ...(tabId ? { tabId: String(tabId).slice(0, MAX_ID_LEN) } : {}),
+    ...(workspaceId ? { workspaceId } : {}),
+    updatedAt: Date.now(),
+  })
+  if (isNewKey) pruneMemoryIfNeeded()
+  store.markDirty()
+  return { count: hashes.size, images, skipped: false, restored: false }
+}
+
+export interface CaptureCandidate {
+  index: number
+  src: string
+  width: number
+  height: number
+  frameId?: string
+  frameUrl?: string
+}
+
+/**
+ * 기준선 이후 새로 나타난, 충분히 큰 이미지들. 큰 순.
+ *
+ * 기준선이 아직 없으면 **빈 배열이 아니라 전체 큰 이미지**를 후보로 준다 — 다만 이 경우 호출자가
+ * "기준선 없음" 을 사용자·모델에게 알려 판단을 맡긴다. 기준선이 없다고 조용히 아무거나 집으면
+ * 광고를 생성물로 올리는 사고가 난다.
+ *
+ * restored/originMismatch 는 baselineInfo 와 같은 의미 — 호출자가 "재시작으로 되살린 기준선이라
+ * 생성 버튼을 또 누를 필요 없다" 또는 "이 기준선은 다른 페이지 것이라 못 쓴다" 를 모델에게 정확히
+ * 전달할 수 있게 한다.
+ */
+export async function findNewImages(
+  wc: WebContents, bucket: string, tabId: string, allowedHosts?: string[],
+): Promise<{
+  candidates: CaptureCandidate[]; hadBaseline: boolean; fallback: boolean; totalSeen: number
+  restored: boolean; originMismatch: boolean
+}> {
+  initImageBaselines()
+  const images = await listPageImages(wc, allowedHosts)
+  const taskId = String(bucket ?? '').trim()
+  const origin = originOf(wc)
+
+  let base: MemEntry | undefined
+  let originMismatch = false
+  if (taskId && origin) {
+    base = baselines.get(memKey(taskId, origin))
+    if (!base) {
+      const prefix = taskId + KEY_SEP
+      for (const key of baselines.keys()) { if (key.startsWith(prefix)) { originMismatch = true; break } }
+    }
+  }
+  const hadBaseline = !!base
+  const restored = !!base?.restored
+
+  const big = images.filter((i) => i.width >= MIN_SIDE && i.height >= MIN_SIDE)
+  const fresh = base ? big.filter((i) => !base!.hashes.has(hashSrc(i.src))) : big
+  // 기준선 이후 새로 생긴 게 없으면 **막다른 길로 만들지 않는다** — 큰 이미지 전체를 후보로 보여주되
+  // fallback 을 세워 호출자가 **자동 선택을 금지**하게 한다(사용자/모델이 명시적으로 골라야 한다).
+  // 이미 결과가 그려진 페이지로 되돌아온 경우가 실제로 있어서다.
+  const fallback = hadBaseline && fresh.length === 0 && big.length > 0
+  const pool = fresh.length > 0 ? fresh : (fallback ? big : fresh)
+  const candidates = pool.map((i, n) => ({
+    index: n, src: i.src, width: i.width, height: i.height,
+    ...(i.frameId ? { frameId: i.frameId } : {}),
+    ...(i.frameUrl ? { frameUrl: i.frameUrl } : {}),
+  }))
+  return { candidates, hadBaseline, fallback, totalSeen: images.length, restored, originMismatch }
+}
+
+/**
+ * 후보 하나의 실제 바이트를 받아 작업 산출물로 저장한다.
+ *
+ * 경로가 둘인 이유:
+ *  - `http(s)` → **메인에서 탭 세션으로** 받는다. 그래야 그 사이트의 로그인 쿠키와 Referer 가 그대로
+ *    실린다(토큰 CDN 은 Referer 없으면 403 HTML 을 준다 — 그걸 그냥 저장하면 "이미지인 줄 알았는데
+ *    HTML" 사고가 된다. 검증이 그걸 잡는다). 페이지 fetch 로 받으면 CORS 에 막힌다.
+ *  - `blob:` / `data:` / `canvas:` → 그 문서 안에서만 유효하므로 **페이지 컨텍스트**에서 읽는다.
+ *
+ * 어느 쪽이든 페이지가 막아 둔 것을 뚫지 않는다 — 브라우저가 "이미지 저장" 할 때와 같은 권한이다.
+ */
+export async function captureCandidate(args: {
+  wc: WebContents
+  bucket: string
+  tabId: string
+  pageUrl: string
+  candidate: CaptureCandidate
+  label?: string
+}): Promise<CaptureResult> {
+  const { wc, bucket, tabId, pageUrl, candidate } = args
+  const src = candidate.src
+  let data: Buffer | null = null
+
+  if (/^https?:/i.test(src)) {
+    try {
+      const res = await wc.session.fetch(src, {
+        credentials: 'include',                       // 로그인 쿠키 유지
+        headers: pageUrl ? { Referer: pageUrl } : {}, // 핫링크 차단 CDN 대응
+      })
+      if (!res.ok) return { ok: false, code: 'fetch-failed', error: `이미지를 받지 못했습니다(HTTP ${res.status})` }
+      const ab = await res.arrayBuffer()
+      if (ab.byteLength > MAX_BYTES) return { ok: false, code: 'too-large', error: '파일이 너무 큽니다' }
+      data = Buffer.from(ab)
+    } catch (e) {
+      return { ok: false, code: 'fetch-failed', error: `이미지를 받지 못했습니다: ${String(e).slice(0, 120)}` }
+    }
+  } else {
+    const r = await readUrlInPage(wc, src, MAX_BYTES, candidate.frameId, candidate.frameUrl)
+    if (!r.ok || !r.base64) return { ok: false, code: 'fetch-failed', error: r.error ?? '이미지를 읽지 못했습니다' }
+    data = Buffer.from(r.base64, 'base64')
+  }
+
+  return saveArtifactBytes({
+    taskId: bucket,
+    data,
+    sourceUrl: src,
+    sourcePageUrl: pageUrl,
+    sourceTabId: tabId,
+    ...(candidate.frameUrl ? { sourceFrameUrl: candidate.frameUrl } : {}),
+    expect: 'image',
+    origin: 'page-capture',
+    ...(args.label ? { label: args.label } : {}),
+  })
+}
+
+// ===== 다운로드 완료 대기 =====
+//
+// 예전 `download` 액션은 **시작만 하고 다음 단계로 갔다**. 그래서 에이전트는 파일이 실제로 저장됐는지,
+// 실패했는지, 얼마나 걸리는지 알 수 없었고 — 곧바로 "업로드하세요" 로 넘어가 빈 손으로 진행했다.
+// 이제 끝날 때까지 기다리고 결과(완료·실패·타임아웃·취소)를 돌려준다.
+
+export interface DownloadWaitResult {
+  ok: boolean
+  item?: DownloadItem
+  error?: string
+  code?: 'timeout' | 'cancelled' | 'failed'
+}
+
+function terminal(state: DownloadItem['state']): 'done' | 'failed' | null {
+  if (state === 'done' || state === 'seeding') return 'done'
+  if (state === 'failed' || state === 'cancelled') return 'failed'
+  return null
+}
+
+/**
+ * 이 호출 **이후에 새로 생긴** 다운로드 하나가 끝나기를 기다린다.
+ *
+ * 상관관계를 id 로 잡지 않고 "시작 전 목록에 없던 id" 로 잡는 이유: 다운로드 엔진의 진입점이
+ * 여럿이고(직접 미디어·HLS·yt-dlp·가속) 어느 것도 id 를 돌려주지 않는다. 시작 전 스냅샷과의
+ * 차집합이 그 엔진들을 모두 덮는 유일한 방법이다.
+ *
+ * 이벤트와 폴링을 **둘 다** 쓴다 — 실패 경로가 항상 이벤트를 내지는 않아서, 이벤트만 믿으면
+ * 실패한 다운로드를 타임아웃까지 기다리게 된다.
+ */
+export function waitForNewDownload(args: {
+  beforeIds: Set<string>
+  timeoutMs?: number
+  isCancelled: () => boolean
+}): Promise<DownloadWaitResult> {
+  const timeoutMs = args.timeoutMs ?? DOWNLOAD_TIMEOUT_MS
+  return new Promise<DownloadWaitResult>((resolve) => {
+    let settled = false
+    const finish = (r: DownloadWaitResult): void => {
+      if (settled) return
+      settled = true
+      downloadEvents.off('done', onDone)
+      clearInterval(timer)
+      clearTimeout(deadline)
+      resolve(r)
+    }
+    const consider = (item: DownloadItem | undefined): boolean => {
+      if (!item || args.beforeIds.has(item.id)) return false
+      const t = terminal(item.state)
+      if (!t) return false
+      if (t === 'done') finish({ ok: true, item })
+      else finish({ ok: false, code: 'failed', item, error: item.error || '다운로드가 실패했거나 취소되었습니다' })
+      return true
+    }
+    const onDone = (meta: DownloadItem): void => { consider(meta) }
+    downloadEvents.on('done', onDone)
+
+    const timer = setInterval(() => {
+      if (args.isCancelled()) { finish({ ok: false, code: 'cancelled', error: '사용자가 취소했습니다' }); return }
+      for (const it of listDownloads()) if (consider(it as DownloadItem)) return
+    }, 500)
+
+    const deadline = setTimeout(() => {
+      finish({ ok: false, code: 'timeout', error: `다운로드가 ${Math.round(timeoutMs / 1000)}초 안에 끝나지 않았습니다` })
+    }, timeoutMs)
+  })
+}
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif)(\?|#|$)/i
+
+/**
+ * 끝난 다운로드 파일을 작업 산출물로 **복사**해 온다(원본은 사용자 다운로드 폴더에 그대로 둔다).
+ *
+ * 검증 강도를 파일 종류로 나눈다: **이미지로 보이는 것은 실제 바이트까지 확인**하고(치수도 읽는다),
+ * 그 밖의 것(영상·압축·문서)은 형식 검증 없이 받는다.
+ * 이렇게 하지 않으면 `.png` 주소가 사실 "로그인이 필요합니다" HTML 을 돌려줬을 때 그것이 그대로
+ * 이미지 산출물이 되어 SNS 에 올라간다 — 토큰 CDN 에서 실제로 일어나는 일이다.
+ */
+export function importFinishedDownload(args: {
+  bucket: string; item: DownloadItem; pageUrl: string; tabId: string
+}): CaptureResult {
+  const looksImage = IMAGE_EXT_RE.test(args.item.filename) || IMAGE_EXT_RE.test(args.item.url)
+    || (args.item.mime ?? '').startsWith('image/')
+  return importDownloadedFile({
+    taskId: args.bucket,
+    filePath: args.item.savePath,
+    sourceUrl: args.item.url,
+    sourcePageUrl: args.pageUrl,
+    sourceTabId: args.tabId,
+    expect: looksImage ? 'image' : 'any',
+    label: args.item.filename,
+  })
+}
+
+export function snapshotDownloadIds(): Set<string> {
+  return new Set(listDownloads().map((d) => d.id))
+}

@@ -22,6 +22,18 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+  waitForTargetByUrlPredicate,
+} from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
+import { loadBudget } from './lib/budget.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -32,15 +44,20 @@ const DEFAULTS = {
   port: 9228,
   coldRuns: 3,
   idleMinutes: 3,
+  // 빈 창 baseline 은 한 시점이 아니라 여러 표본의 **중앙값**으로 판정한다(단일 시점은
+  // 그 순간의 GC·지연 초기화 상태에 좌우돼 예산선을 넘나든다 — 2026-09-07 실측).
+  baselineSamples: 5,
+  baselineIntervalMs: 4000,
+  forceCold: false,
+  // adblock 을 끈 baseline 도 함께 재서 "우리 코드"와 "adblock 비용"을 분리 판정한다.
+  // (2026-09-07 실측: adblock 이 빈 창 메모리의 110MB, 약 44% — 이걸 섞어 놓으면
+  //  게이트가 우리 코드의 회귀를 adblock 비용에 묻어 놓친다.)
+  dual: true,
 }
 
-const BUDGET = {
-  coldStartMs: 2000,
-  blankWindowMemoryMB: 250,
-  perTabMemoryMB: 80,
-  idleCpuPercent: 0.5,
-  rendererJsGzipKB: 500,
-}
+// 예산은 **단일 출처**(app/shared/perf-budget.json)에서 읽는다 — 근거·주의는 그 파일 안에 있다.
+// 여기에 숫자를 다시 적지 않는다(두 곳에 두면 한쪽만 고쳐져 화면과 판정이 어긋난다).
+const BUDGET = loadBudget()
 
 function parseArgs(argv) {
   const out = { ...DEFAULTS }
@@ -51,6 +68,10 @@ function parseArgs(argv) {
     else if (a === '--port') out.port = Number(argv[++i] ?? DEFAULTS.port)
     else if (a === '--cold-runs') out.coldRuns = Number(argv[++i] ?? DEFAULTS.coldRuns)
     else if (a === '--idle-minutes') out.idleMinutes = Number(argv[++i] ?? DEFAULTS.idleMinutes)
+    else if (a === '--baseline-samples') out.baselineSamples = Math.max(1, Number(argv[++i] ?? DEFAULTS.baselineSamples))
+    else if (a === '--cold') out.forceCold = true
+    else if (a === '--dual') out.dual = true
+    else if (a === '--no-dual') out.dual = false
     else if (a === '--help' || a === '-h') { printHelp(); process.exit(0) }
     else console.warn(`[perf-measure] 알 수 없는 인자 무시: ${a}`)
   }
@@ -70,6 +91,10 @@ perf-measure — 가벼움 예산(1원칙 #1) 정밀 측정 하네스
   --port <n>          --remote-debugging-port 값 (기본: 9228)
   --cold-runs <n>      콜드 스타트 반복 횟수 (기본: 3)
   --idle-minutes <n>  idle CPU 샘플링 시간(분) (기본: 3)
+  --baseline-samples <n>  빈 창 baseline 표본 수, 중앙값으로 판정 (기본: 5)
+  --cold              프로필을 비워 **콜드 경로**(adblock 캐시 없음)를 일부러 측정
+                      (기본은 웜 = 2번째 이후 실행, 실사용 절대다수)
+  --no-dual           adblock 제외 baseline 측정을 생략(기본은 측정 — 판정 1순위)
 `.trim())
 }
 
@@ -253,63 +278,19 @@ function seedProfile(profileDir, reset) {
   }
 }
 
+/** 프로필의 settings.json 을 부분 갱신한다(dual 모드에서 adblock 을 껐다 켜기 위함). */
+function patchProfileSettings(profileDir, patch) {
+  const settingsPath = path.join(profileDir, 'settings.json')
+  let cur = {}
+  try { cur = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) } catch { /* 없으면 새로 */ }
+  const merged = { ...cur }
+  for (const [k, v] of Object.entries(patch)) {
+    merged[k] = (v && typeof v === 'object' && !Array.isArray(v)) ? { ...(cur[k] ?? {}), ...v } : v
+  }
+  fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2))
+}
+
 // ── CDP 클라이언트 (smoke-cdp.mjs 와 동일) ────────────────────────────────
-
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-  }
-
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
-    })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-
-  close() {
-    try { this.ws?.close() } catch { /* ignore */ }
-  }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
 
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
@@ -334,36 +315,6 @@ function callApi(session, apiPath, args = [], opts) {
 function callInternal(session, apiPath, args = [], opts) {
   const argStr = args.map(argToLiteral).join(', ')
   return evaluate(session, `window.internalAPI.${apiPath}(${argStr})`, opts)
-}
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  const found = await pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 400, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-  return found
-}
-
-async function waitForTargetByUrlPredicate(port, predicate, label, timeoutMs = 15_000) {
-  return pollUntil(async () => {
-    const list = await getTargetList(port)
-    return list.find((t) => t.type === 'page' && typeof t.url === 'string' && predicate(t.url)) ?? null
-  }, { timeoutMs, intervalMs: 300, label })
 }
 
 // ── Windows WMI 를 통한 프로세스별 Private/전체 Working Set 측정 ──────────
@@ -463,11 +414,20 @@ async function measureColdStart(args) {
     await cleanupStaleProcess(args.out)
     seedProfile(args.profileDir, i === 1) // 첫 회차만 프로필 초기화, 이후는 재사용(정상 종료로 current.json 정리됨)
     const t0 = Date.now()
+    // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+    args.port = await preferFreePort(args.port, 'perf-measure.mjs')
+    if (!(await waitForPortFree(args.port))) {
+      // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+      // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+      throw new Error(`디버그 포트 ${args.port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+    }
     const { child, stdoutPath } = launchApp(args.exe, args.out, args.port, args.profileDir, `-cold${i}`)
     let record = { run: i, ok: false }
     try {
-      const shellTarget = await waitForShellTarget(args.port, 30_000)
-      const chromeSession = await connectSession(shellTarget, `chrome-cold${i}`)
+      const chromeSession = await connectShellSessionReady(args.port, {
+        label: `chrome-cold${i}`,
+        log: (msg) => console.log(`[perf-measure] ${msg}`),
+      })
       const windowId = await evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`)
       if (!windowId) throw new Error('windowId 를 읽지 못함')
 
@@ -524,18 +484,38 @@ async function measureColdStart(args) {
 async function measureLongSession(args) {
   console.log('\n[long-session] 시작 …')
   await cleanupStaleProcess(args.out)
-  seedProfile(args.profileDir, false) // cold-start 에서 이미 시드된 프로필 재사용
+  // 기본은 웜(콜드 스타트 단계에서 만들어진 프로필·adblock 캐시 재사용) — 실사용 절대다수가
+  // 겪는 "2번째 이후 실행"이 판정 기준이기 때문이다. --cold 는 캐시를 지워 콜드 경로를 강제한다.
+  seedProfile(args.profileDir, args.forceCold)
   // 콜드 스타트 마지막 회차의 graceful shutdown 직후라 OS 가 이전 프로세스의 디버그 포트 소켓을
   // 아직 완전히 회수하지 못했을 수 있음 — 다른 포트를 쓰고 약간의 여유를 둔다.
   const longPort = args.port + 1
   await sleep(1500)
+  if (!(await waitForPortFree(longPort))) {
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+    throw new Error(`디버그 포트 ${longPort} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+  }
+  // adblock 엔진 캐시(engine.bin)는 프로필 안에 산다. 이게 있으면 역직렬화만 하는 "웜",
+  // 없으면 필터 원문을 받아 빌드하는 "콜드"다. V4 실측으로 둘의 메모리 차이가 크다는 것이
+  // 확인됐으므로(웜 ≈226MB / 콜드 ≈285MB), 어느 경로를 쟀는지 **기록 없이 판정하면 안 된다**.
+  const adblockCachePath = path.join(args.profileDir, 'adblock', 'engine.bin')
+  let adblockCache = { existedAtLaunch: false, bytes: 0 }
+  try {
+    const st = fs.statSync(adblockCachePath)
+    adblockCache = { existedAtLaunch: true, bytes: st.size }
+  } catch { /* 없으면 콜드 */ }
+  console.log(`[long-session] adblock 캐시: ${adblockCache.existedAtLaunch ? `있음(${(adblockCache.bytes / 1048576).toFixed(1)}MB) → 웜 경로` : '없음 → 콜드 경로'}`)
+
   const { child, stdoutPath } = launchApp(args.exe, args.out, longPort, args.profileDir, '-long')
-  const result = { ok: false }
+  const result = { ok: false, adblockCache, measuredPath: adblockCache.existedAtLaunch ? 'warm' : 'cold' }
   let chromeSession = null
   let controlSession = null
   try {
-    const shellTarget = await waitForShellTarget(longPort, 30_000)
-    chromeSession = await connectSession(shellTarget, 'chrome-long')
+    chromeSession = await connectShellSessionReady(longPort, {
+      label: 'chrome-long',
+      log: (msg) => console.log(`[perf-measure] ${msg}`),
+    })
     // 드물게 타깃은 등장했지만 아직 location.href 가 목표 URL 로 커밋되기 전(레이스)일 수 있어 재시도.
     const windowId = await pollUntil(
       () => evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`),
@@ -571,8 +551,36 @@ async function measureLongSession(args) {
       console.warn('  ⚠ adblock 초기화 로그를 20s 내 확인하지 못함(설정에서 꺼졌거나 지연) — 폴백 고정 대기(8s) 사용')
       await sleep(8000)
     }
-    const baseline = await sampleMemory(controlSession, 'baseline(newtab x1)')
-    console.log(`  baseline: private=${baseline.totalPrivateWorkingSetMB}MB workingSet(electron)=${baseline.totalWorkingSetElectronMB}MB tabs=${baseline.tabs.total} procs=${baseline.processCount}`)
+    // 한 시점만 찍으면 그 순간의 GC·지연 초기화 상태가 판정을 좌우한다(실측: 같은 세션에서
+    // 242MB ↔ 254MB 로 예산선을 넘나들었다). 여러 번 재서 **분포**를 남기고 중앙값으로 판정한다.
+    const baselineSeries = []
+    for (let i = 0; i < args.baselineSamples; i++) {
+      if (i > 0) await sleep(args.baselineIntervalMs)
+      const smp = await sampleMemory(controlSession, `baseline(newtab x1) #${i + 1}`)
+      baselineSeries.push(smp)
+      console.log(`  baseline #${i + 1}: private=${smp.totalPrivateWorkingSetMB}MB workingSet(electron)=${smp.totalWorkingSetElectronMB}MB procs=${smp.processCount}`)
+    }
+    const privates = baselineSeries.map((b) => b.totalPrivateWorkingSetMB).sort((a, b) => a - b)
+    const medianPrivate = privates.length % 2
+      ? privates[(privates.length - 1) / 2]
+      : Math.round(((privates[privates.length / 2 - 1] + privates[privates.length / 2]) / 2) * 10) / 10
+    const baseline = { ...baselineSeries[baselineSeries.length - 1], totalPrivateWorkingSetMB: medianPrivate }
+    result.baselineSeries = {
+      samples: privates,
+      median: medianPrivate,
+      min: privates[0],
+      max: privates[privates.length - 1],
+      spread: Math.round((privates[privates.length - 1] - privates[0]) * 10) / 10,
+    }
+    console.log(`  baseline 확정(중앙값): private=${medianPrivate}MB (표본 ${privates.length}개, 최소 ${privates[0]} / 최대 ${privates[privates.length - 1]}, 폭 ${result.baselineSeries.spread}MB)`)
+
+    // dual 모드의 2회차(adblock 제외 baseline)는 baseline 만 필요하다 — 탭 증분·idle CPU 는
+    // adblock 유무와 무관하고, 반복하면 실행 시간만 배로 든다.
+    if (args.baselineOnly) {
+      result.ok = true
+      result.baseline = baseline
+      return result
+    }
 
     // ── 2) 탭당 RSS 증가 — about:blank 10개 (background) ──
     console.log('[long-session] about:blank 10탭 생성 …')
@@ -661,7 +669,7 @@ function judgeColdStart(runs) {
   return { avg, max, pass: avg !== null && avg <= BUDGET.coldStartMs, vals }
 }
 
-function printReport(args, coldRuns, longSession) {
+function printReport(args, coldRuns, longSession, noAdblock) {
   const cold = judgeColdStart(coldRuns)
   console.log('\n===================================================')
   console.log(' 가벼움 예산(1원칙 #1) 정밀 측정 결과')
@@ -713,14 +721,32 @@ function printReport(args, coldRuns, longSession) {
     { 항목: '콜드 스타트', 측정치_private: '-', 측정치_workingSet: `${cold.avg}ms (avg) / ${cold.max}ms (max)`, 예산: `${BUDGET.coldStartMs}ms`, 판정: cold.pass ? 'PASS' : 'FAIL' },
   ]
   if (longSession.ok) {
-    const blankPass = longSession.baseline.totalPrivateWorkingSetMB <= BUDGET.blankWindowMemoryMB
-    const blankPassWS = longSession.baseline.totalWorkingSetElectronMB <= BUDGET.blankWindowMemoryMB
+    // 어느 경로를 쟀는지에 따라 예산이 다르다 — 라벨 없이 판정하면 콜드 측정이 늘 실패한다.
+    const measuredPath = longSession.measuredPath ?? 'unknown'
+    const blankBudget = measuredPath === 'cold'
+      ? BUDGET.blankWindowMemoryMB + BUDGET.adblockColdAllowanceMB
+      : BUDGET.blankWindowMemoryMB
+    const noAdblockMB = noAdblock?.ok ? (noAdblock.baseline?.totalPrivateWorkingSetMB ?? null) : null
+    const noAdblockPass = noAdblockMB === null ? true : noAdblockMB <= BUDGET.blankWindowNoAdblockMB
+    const adblockCostMB = noAdblockMB === null ? null
+      : Math.round((longSession.baseline.totalPrivateWorkingSetMB - noAdblockMB) * 10) / 10
+    const blankPass = longSession.baseline.totalPrivateWorkingSetMB <= blankBudget
+    const blankPassWS = longSession.baseline.totalWorkingSetElectronMB <= blankBudget
     const perTabPass = longSession.perTabPrivateMB <= BUDGET.perTabMemoryMB
     const perTabPassWS = longSession.perTabWorkingSetElectronMB <= BUDGET.perTabMemoryMB
     const cpuPass = longSession.idle.avgSumCpuPercentSecondHalf <= BUDGET.idleCpuPercent
     const gzipPass = longSession.rendererJs?.gzipKB != null && longSession.rendererJs.gzipKB <= BUDGET.rendererJsGzipKB
     budgetRows.push(
-      { 항목: '빈 창 RSS(newtab 1개)', 측정치_private: `${longSession.baseline.totalPrivateWorkingSetMB}MB`, 측정치_workingSet: `${longSession.baseline.totalWorkingSetElectronMB}MB`, 예산: `${BUDGET.blankWindowMemoryMB}MB`, 판정: `private=${blankPass ? 'PASS' : 'FAIL'} / WS=${blankPassWS ? 'PASS' : 'FAIL'}` },
+      // 판정 1순위: adblock 제외(우리 코드). dual 측정이 없으면 이 행은 생략된다.
+      ...(noAdblockMB === null ? [] : [{
+        항목: '빈 창 RSS — adblock 제외 (판정 1순위)',
+        측정치_private: `${noAdblockMB}MB`,
+        측정치_workingSet: '-',
+        예산: `${BUDGET.blankWindowNoAdblockMB}MB`,
+        판정: noAdblockPass ? `PASS (여유 ${Math.round((BUDGET.blankWindowNoAdblockMB - noAdblockMB) * 10) / 10}MB)` : `FAIL (초과 ${Math.round((noAdblockMB - BUDGET.blankWindowNoAdblockMB) * 10) / 10}MB)`,
+      }]),
+      // 총계는 참고·추세용. adblock 실측 비용을 함께 적어 초과 사유가 보이게 한다.
+      { 항목: `빈 창 RSS(newtab 1개, ${measuredPath === 'cold' ? '콜드' : '웜'} 경로) — 총계(참고)`, 측정치_private: `${longSession.baseline.totalPrivateWorkingSetMB}MB${longSession.baselineSeries ? ` (중앙값, 표본 ${longSession.baselineSeries.samples.length}개 폭 ${longSession.baselineSeries.spread}MB)` : ''}${adblockCostMB === null ? '' : ` · 그중 adblock ${adblockCostMB}MB`}`, 측정치_workingSet: `${longSession.baseline.totalWorkingSetElectronMB}MB`, 예산: `${blankBudget}MB${measuredPath === 'cold' ? ` (250 + adblock 콜드 ${BUDGET.adblockColdAllowanceMB})` : ''}`, 판정: `private=${blankPass ? `PASS (여유 ${Math.round((blankBudget - longSession.baseline.totalPrivateWorkingSetMB) * 10) / 10}MB)` : (noAdblockMB === null ? `FAIL (초과 ${Math.round((longSession.baseline.totalPrivateWorkingSetMB - blankBudget) * 10) / 10}MB)` : `참고: 초과 ${Math.round((longSession.baseline.totalPrivateWorkingSetMB - blankBudget) * 10) / 10}MB`)} / WS=${blankPassWS ? 'PASS' : 'FAIL'}` },
       { 항목: '탭 추가당 RSS 증가', 측정치_private: `${longSession.perTabPrivateMB}MB/탭`, 측정치_workingSet: `${longSession.perTabWorkingSetElectronMB}MB/탭`, 예산: `${BUDGET.perTabMemoryMB}MB/탭`, 판정: `private=${perTabPass ? 'PASS' : 'FAIL'} / WS=${perTabPassWS ? 'PASS' : 'FAIL'}` },
       { 항목: `휴식 시 CPU(${longSession.idle.minutes}분 idle, 후반부 평균)`, 측정치_private: '-', 측정치_workingSet: `${longSession.idle.avgSumCpuPercentSecondHalf}%`, 예산: `${BUDGET.idleCpuPercent}%`, 판정: cpuPass ? 'PASS' : 'FAIL' },
       { 항목: '외피 초기 JS(gzip)', 측정치_private: '-', 측정치_workingSet: `${longSession.rendererJs?.gzipKB ?? 'N/A'}KB`, 예산: `${BUDGET.rendererJsGzipKB}KB`, 판정: gzipPass ? 'PASS' : 'FAIL' },
@@ -757,7 +783,28 @@ async function main() {
   const coldRuns = await measureColdStart(args)
   const longSession = await measureLongSession(args)
 
-  const { cold, budgetRows } = printReport(args, coldRuns, longSession)
+  // ── dual: adblock 을 끈 baseline 도 잰다 ────────────────────────────────
+  // 판정 1순위는 **adblock 제외** 값이다. adblock 은 콕콕 핵심이라 끌 수 없는 고정비이고
+  // (2026-09-07 실측 110MB), 그걸 섞어서 판정하면 우리 코드의 회귀가 묻힌다.
+  let noAdblock = null
+  if (args.dual && longSession.ok) {
+    console.log('\n[dual] adblock 을 끈 baseline 측정 …')
+    try {
+      patchProfileSettings(args.profileDir, { adblock: { enabled: false } })
+      noAdblock = await measureLongSession({ ...args, baselineOnly: true })
+    } catch (err) {
+      console.warn('[dual] adblock 제외 측정 실패(무시):', err.message)
+    } finally {
+      patchProfileSettings(args.profileDir, { adblock: { enabled: true } })
+    }
+    if (noAdblock?.ok) {
+      const total = longSession.baseline?.totalPrivateWorkingSetMB ?? 0
+      const base = noAdblock.baseline?.totalPrivateWorkingSetMB ?? 0
+      console.log(`[dual] adblock 제외 ${base}MB · adblock 포함 ${total}MB · adblock 비용 ${Math.round((total - base) * 10) / 10}MB`)
+    }
+  }
+
+  const { cold, budgetRows } = printReport(args, coldRuns, longSession, noAdblock)
 
   const resultsPath = path.join(args.out, 'perf-results.json')
   fs.writeFileSync(resultsPath, JSON.stringify({
@@ -766,12 +813,84 @@ async function main() {
     coldRuns,
     coldJudgement: cold,
     longSession,
+    noAdblock: noAdblock?.ok ? { baseline: noAdblock.baseline, path: noAdblock.measuredPath } : null,
     budgetTable: budgetRows,
   }, null, 2))
   console.log(`\n[perf-measure] 결과 저장: ${resultsPath}`)
 
-  const anyFail = budgetRows.some((r) => String(r.판정).includes('FAIL'))
-  return anyFail ? 1 : 0
+  // ── 기준선 이력 ────────────────────────────────────────────────────────
+  //
+  // 한 번의 측정값만으로는 "예산을 넘었다"를 말할 수 없다. 2026-09-07 실측에서 같은 빌드가
+  // 같은 머신에서 233~260MB 로 흔들렸다(실행 간 드리프트 ±13MB — 예산까지의 여유와 맞먹는다).
+  // 그래서 실행마다 이력을 남기고, **같은 경로(웜/콜드)의 과거 중앙값**과 비교해 보여준다.
+  // 회귀는 한 번의 초과가 아니라 **중앙값의 이동**으로 판단해야 한다.
+  // 이력은 --out 과 무관하게 **저장소 고정 위치**에 쌓는다. verify-all 은 단계별 out 디렉터리를
+  // 넘기므로(verify-out/all/perf), out 을 따라가면 수동 실행과 게이트 실행의 추세선이 갈라져
+  // "과거 표본 0개"만 반복된다(2026-09-07 full 실행에서 실제로 그랬다).
+  const historyDir = path.join(REPO_ROOT, 'perf-out')
+  fs.mkdirSync(historyDir, { recursive: true })
+  const historyPath = path.join(historyDir, 'perf-history.json')
+  let history = []
+  try {
+    const parsed = JSON.parse(fs.readFileSync(historyPath, 'utf8'))
+    // 손상된 이력(원소가 null·비객체·NaN)이 아래 계산에서 TypeError 를 내지 않도록 여기서 걸러낸다.
+    if (Array.isArray(parsed)) history = parsed.filter((h) => h && typeof h === 'object')
+  } catch { /* 첫 실행 */ }
+
+  const entry = {
+    at: new Date().toISOString(),
+    path: longSession.measuredPath ?? 'unknown',
+    blankPrivateMB: longSession.baseline?.totalPrivateWorkingSetMB ?? null,
+    perTabPrivateMB: longSession.perTabPrivateMB ?? null,
+    coldStartAvgMs: cold?.avg ?? null,
+    spreadMB: longSession.baselineSeries?.spread ?? null,
+    // 판정 1순위 축(adblock 제외)과 adblock 비용도 함께 남긴다 — 이력만 보고도 2축을 알 수 있게.
+    noAdblockMB: noAdblock?.ok ? (noAdblock.baseline?.totalPrivateWorkingSetMB ?? null) : null,
+    adblockCostMB: (noAdblock?.ok && longSession.baseline)
+      ? Math.round((longSession.baseline.totalPrivateWorkingSetMB - noAdblock.baseline.totalPrivateWorkingSetMB) * 10) / 10
+      : null,
+  }
+  const samePath = history.filter((h) => h.path === entry.path && Number.isFinite(h.blankPrivateMB))
+  if (samePath.length >= 2 && typeof entry.blankPrivateMB === 'number') {
+    const prev = samePath.slice(-9).map((h) => h.blankPrivateMB).sort((a, b) => a - b)
+    const prevMedian = prev.length % 2
+      ? prev[(prev.length - 1) / 2]
+      : (prev[prev.length / 2 - 1] + prev[prev.length / 2]) / 2
+    const delta = Math.round((entry.blankPrivateMB - prevMedian) * 10) / 10
+    const sign = delta >= 0 ? '+' : ''
+    console.log(`[perf-measure] 기준선 비교(${entry.path}, 과거 ${prev.length}회 중앙값 ${prevMedian}MB): ${sign}${delta}MB`)
+    if (delta >= 10) {
+      console.log(`  ⚠ 과거 중앙값 대비 ${sign}${delta}MB — 실행 간 드리프트(±13MB 관측)를 감안해도 큰 편이다. 추세를 확인할 것.`)
+    }
+    entry.deltaVsMedianMB = delta
+  } else {
+    console.log(`[perf-measure] 기준선 비교: 같은 경로(${entry.path}) 과거 표본 ${samePath.length}개 — 3회 이상 쌓이면 비교를 표시한다.`)
+  }
+  history.push(entry)
+  try {
+    // 원자적 쓰기(tmp + rename) — 중간에 죽어도 반쪽 파일이 남지 않는다.
+    const tmp = `${historyPath}.tmp`
+    fs.writeFileSync(tmp, JSON.stringify(history.slice(-50), null, 2))
+    fs.renameSync(tmp, historyPath)
+    console.log(`[perf-measure] 기준선 이력: ${historyPath} (${Math.min(history.length, 50)}회 보관)`)
+  } catch (err) {
+    console.warn('[perf-measure] 기준선 이력 저장 실패(무시):', err.message)
+  }
+
+  // 판정은 **Private WorkingSet 기준**이다(CLAUDE.md 가벼움 예산 표: Electron 의
+  // `getAppMetrics().workingSetSize` 는 공유 페이지를 중복 집계해 5~7배 과대평가하므로
+  // "판정에 쓰지 말 것"). 그런데 표의 판정 문자열에는 참고용 `WS=FAIL` 이 함께 들어 있어,
+  // 단순 includes('FAIL') 로 보면 **모든 예산을 통과해도 항상 실패**로 끝난다.
+  // 늘 빨간 게이트는 무시당하므로, private 판정만 실패로 센다(WS 는 표에 참고로 남긴다).
+  const failed = budgetRows.filter((r) => {
+    const v = String(r.판정)
+    if (v.includes('private=')) return /private=FAIL/.test(v)
+    return v.includes('FAIL')
+  })
+  if (failed.length) {
+    console.log(`\n[perf-measure] 예산 초과: ${failed.map((r) => r.항목).join(', ')}`)
+  }
+  return failed.length ? 1 : 0
 }
 
 main().then((code) => {

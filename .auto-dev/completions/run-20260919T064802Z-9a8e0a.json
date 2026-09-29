@@ -1,0 +1,64 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T064802Z-9a8e0a",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T07:08:31Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "게시 도중 앱이 강제 종료돼도 다시 켠 브라우저가 그 게시 작업을 기억하고 있다",
+      "check": "R3-DUR: raw ai-tasks.json 을 제품 코드 없이 직접 읽어 킬직전/킬직후/재부팅후 3시점 대조 — 수정 전 false/false/false(작업수 1→1), 수정 후 true/true/true(2→2), 같은 창 1150~1171ms",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "negative",
+      "behavior": "되살아난 게시 작업을 사용자가 아무 경고 없이 다시 시작할 수 없다(같은 글 두 번 방지)",
+      "check": "재시작 후 ptaskStart 3회·socialApprove 2회 시도 — 전부 사유와 함께 거부, 앱 밖 픽스처 서버 게시 1→1(추가 0건). 수정 전에는 ptaskStart 3/3 성공",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "이어가기가 막혔는데 화면에는 성공이라고 뜨지 않는다",
+      "check": "IPC 응답이 {ok:false,error:'게시 여부가 확인되지 않아…'} — 수정 전에는 차단이 걸려도 {ok:true}",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "실제 구독 Claude CLI 가 복구 상태에서 읽기 전용으로 게시 여부를 확인하고 영수증을 남긴다",
+      "check": "R3-REAL: claude-code 2.1.267, stage=done, 모델이 쓴 영수증 '게시됨: … 게시물 #1 — 문구: R3 테스트 캡션 …', 서버 게시 1→1(추가 쓰기 0), readOnly=true, host-resolver 격리로 인터넷 패킷 0",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "표지 없는 확인 결론은 완료로 인정되지 않는다",
+      "check": "R3-RO: 모델이 '아마 올라간 것 같기도'만 말하면 불확실 유지(stage=publish, publishUncertain=true), 추가 게시 0건",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": true,
+    "remaining_required": [],
+    "blockers": [],
+    "optional_next": [
+      "verify:full 전체 게이트(이번 마감 게이트는 npm run verify)",
+      "rc.10 설치파일 설치→부팅→제거 — 사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED(우회 안 함)",
+      "실제 인스타그램·블로그·Genspark 실화면 검증(로그인·크레딧 필요, 자율 범위 밖)"
+    ],
+    "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+  },
+  "verification": {
+    "command": "npm run verify (13/13) + node build/verify-recovery-cdp.mjs (7/7) + --real-verify R3-REAL(1) + typecheck 3/3",
+    "passed": 36,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "유실 원인을 측정으로 확정(never-written, 생성→킬 1157ms 창). raw/load 를 따로 재어 '썼는데 버려졌다'와 '안 쓰였다'를 갈랐고, 배리어를 넣어 false→true 로 뒤집히는 것으로 확증. 그 과정에서 제품 결함 2건 추가 발견·수정(queued 무경고 재시작, 거절을 ok:true 로 보고). 하네스 판정은 완화가 아니라 조였다(|| !pubTask 제거)."
+}

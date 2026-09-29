@@ -1,0 +1,91 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260920T061614Z-677962",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-20T06:54:41Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "사용자가 카드의 \"🎯 대상 탭 선택\" 버튼을 눌러 후보 목록을 연다",
+      "check": "TG1 실제 DOM 요소(.ai-target-open) 클릭, 대상선택 IPC 미사용 → 클릭=clicked, 후보 2개가 DOM 에 그려짐, \"원래 대상: .../page?slot=A-orig · 창 1 · 기본\" 표시",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "허용된 탭을 DOM 클릭으로 고르면 그 탭에 묶인다(실행은 아님)",
+      "check": "TG2 .ai-target-pick[data-tab-id] 클릭 후 상태 확인 → interrupted(실행 아님), waitCause 지워짐, 픽커 닫힘",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "고르기만 해서는 아무 페이지도 조작되지 않는다",
+      "check": "TG2 선택 후 3초 관찰, 픽스처 hit 카운터 불변 → {L1:0,L2:3,L3:0,L4:0} 그대로. 이어가기 전 조작 0",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "이어가기를 DOM 클릭하면 고른 바로 그 탭에서만 재개된다",
+      "check": "TG2 픽스처 서버 loadId 별 요청 수로 판정(페이지 변수·상태 문구 아님) → 고른 탭 L3=15회, 미끼 탭 L4=0, 옛 탭 L2=3 불변",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "고르지 않고 닫으면 아무것도 묶이지 않는다",
+      "check": "TG3 픽커 \"닫기\" DOM 클릭 후 상태·카운터 → waitCause=tab-target 유지, 선택버튼 복귀, 여분 탭 L6=0 조작 0",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "경계 밖 탭은 UI 에서 고를 수 없다",
+      "check": "TG4 다른 워크스페이스 탭·시크릿 창 탭 생성 후 DOM 후보목록과 클릭 시도 → 둘 다 목록에 없음(보임=false), DOM 클릭=not-in-list, 대기 유지",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "대상 선택은 위험 동작 승인이 아니다",
+      "check": "TG5 선택→이어가기 후 결제 클릭이 관문에 걸리는지와 실제 결제 실행 여부 → waitCause=confirm(\"금전 관련 동작\")에서 정지, 결제 실행 0회(L11=0)",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "negative",
+      "behavior": "확인 대기 중에는 대상 선택 UI 자체가 없다",
+      "check": "TG6 결제 관문 대기 상태의 카드 DOM 검사 → .ai-target-open 없음, 픽커 없음, 승인/거부만 노출. 선택으로 관문 통과 경로 없음",
+      "result": "pass"
+    },
+    {
+      "id": "c9",
+      "kind": "negative",
+      "behavior": "하네스가 \"아무것도 못 찾아서\" 통과하지 않는다",
+      "check": "TG7 없는 카드·없는 tabId 에 같은 조작 헬퍼 호출 → 읽기=null, 열기/후보클릭/이어가기 모두 no-card",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가",
+      "rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다"
+    ],
+    "optional_next": [],
+    "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — rc.17 미서명(SmartScreen 경고). 사용자 제공 필요, 자율 해결 불가, (차단) rc.17 설치파일의 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 스스로 BLOCKED(다른 PC/VM 필요). 우회하지 않았다; 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "node build/verify-task-target-ui-cdp.mjs (7/7) + node build/verify-all.mjs --quick --skip-build (16/16)",
+    "passed": 23,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "대상 선택 경로에 IPC 를 쓰지 않고 실제 DOM 클릭으로만 구동(React onClick 통과). 제품 소스 무변경이라 rc.17 유지 — 재패키징·버전 올림 없음. verify:full 에 task-target-ui 로 등록. 격리 프로필(--user-data-dir)로만 검증 — 사용자 설치본 무접촉."
+}

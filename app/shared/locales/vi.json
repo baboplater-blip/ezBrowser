@@ -1,0 +1,3406 @@
+{
+  "app": {
+    "name": "ezBrowser",
+    "tagline": "Trình duyệt nhẹ và tự do"
+  },
+  "menu": {
+    "file": "Tệp",
+    "edit": "Chỉnh sửa",
+    "view": "Xem",
+    "tab": "Thẻ",
+    "bookmarks": "Dấu trang",
+    "tools": "Công cụ",
+    "help": "Trợ giúp"
+  },
+  "action": {
+    "tab": {
+      "new": "Thẻ mới",
+      "close": "Đóng thẻ",
+      "restore": "Khôi phục thẻ đã đóng",
+      "next": "Thẻ tiếp theo",
+      "prev": "Thẻ trước",
+      "reader": "Chế độ đọc",
+      "duplicate": "Nhân bản thẻ",
+      "pin": "Ghim thẻ",
+      "goto": "Đi đến thẻ",
+      "search": "Tìm thẻ",
+      "recentClosed": "Thẻ đã đóng gần đây",
+      "mute": "Bật/tắt tiếng thẻ",
+      "muteOthers": "Tắt tiếng các thẻ khác",
+      "unmuteAll": "Bật tiếng tất cả thẻ",
+      "move": {
+        "next": {
+          "workspace": "Chuyển thẻ sang không gian làm việc kế tiếp"
+        },
+        "prev": {
+          "workspace": "Chuyển thẻ sang không gian làm việc trước"
+        }
+      }
+    },
+    "ai": {
+      "open": "Trợ lý AI",
+      "summarize": "Tóm tắt trang này",
+      "collectors": "Quản lý thu thập tự động",
+      "write": "Viết blog"
+    },
+    "omnibox": {
+      "focus": "Đến thanh địa chỉ"
+    },
+    "page": {
+      "reload": "Tải lại",
+      "reloadHard": "Tải lại mạnh (bỏ qua bộ nhớ đệm)",
+      "stop": "Dừng",
+      "print": "In",
+      "printPdf": "Lưu dưới dạng PDF",
+      "viewSource": "Xem mã nguồn",
+      "save": "Lưu trang với tên khác…",
+      "zoom": {
+        "in": "Phóng to",
+        "out": "Thu nhỏ",
+        "reset": "Đặt lại tỉ lệ"
+      }
+    },
+    "find": {
+      "toggle": "Tìm trong trang",
+      "next": "Tìm tiếp",
+      "prev": "Tìm trước"
+    },
+    "window": {
+      "incognito": "Cửa sổ ẩn danh mới",
+      "new": "Cửa sổ mới",
+      "close": "Đóng cửa sổ"
+    },
+    "history": {
+      "open": "Lịch sử",
+      "clear": "Xóa lịch sử duyệt web"
+    },
+    "downloads": {
+      "open": "Tải xuống",
+      "openPage": "Trang tải xuống"
+    },
+    "bookmark": {
+      "add": "Thêm / Sửa dấu trang",
+      "list": "Quản lý dấu trang",
+      "bar": {
+        "toggle": "Bật/tắt thanh dấu trang"
+      }
+    },
+    "devtools": {
+      "toggle": "Bật/tắt DevTools"
+    },
+    "nav": {
+      "back": "Quay lại",
+      "forward": "Tiến tới",
+      "home": "Trang chủ"
+    },
+    "palette": {
+      "open": "Bảng lệnh"
+    },
+    "userchrome": {
+      "reload": "Tải lại userChrome",
+      "edit": "Sửa userChrome.css"
+    },
+    "userscript": {
+      "toggle": "Bảng Userscript"
+    },
+    "sidepanel": {
+      "left": {
+        "toggle": "Bật/tắt bảng bên trái"
+      },
+      "right": {
+        "toggle": "Bật/tắt bảng bên phải"
+      }
+    },
+    "screenshot": {
+      "area": "Chụp vùng chọn",
+      "viewport": "Chụp toàn khung nhìn"
+    },
+    "translate": {
+      "page": "Dịch trang"
+    },
+    "darkmode": {
+      "toggle": "Bật/tắt chế độ tối bắt buộc",
+      "toggleSite": "Bật/tắt chế độ tối cho trang này",
+      "followSystem": "Theo chế độ tối hệ thống"
+    },
+    "tabbar": {
+      "cycle": "Xoay vị trí thanh thẻ (Trên→Trái→Phải)"
+    },
+    "gesture": {
+      "exec": "Cử chỉ chuột"
+    },
+    "quickSearch": {
+      "open": "Tìm kiếm văn bản đã chọn"
+    },
+    "qrcode": {
+      "show": "Hiện mã QR"
+    },
+    "pane": {
+      "split": {
+        "h": "Chia trái/phải",
+        "v": "Chia trên/dưới"
+      },
+      "unsplit": "Bỏ chia",
+      "focus": {
+        "next": "Chuyển sang khung tiếp theo"
+      }
+    },
+    "workspace": {
+      "next": "Không gian làm việc tiếp theo",
+      "prev": "Không gian làm việc trước",
+      "new": "Không gian làm việc mới",
+      "switch": "Chuyển không gian làm việc"
+    },
+    "app": {
+      "quit": "Thoát"
+    },
+    "help": {
+      "report": "Gửi phản hồi"
+    },
+    "readlater": {
+      "add": "Thêm/Xóa danh sách đọc sau",
+      "open": "Mở danh sách đọc sau"
+    },
+    "sitedata": {
+      "clear": "Xóa dữ liệu trang web"
+    },
+    "autofill": {
+      "page": "Tự động điền thông tin của tôi"
+    },
+    "settings": {
+      "open": "Mở cài đặt"
+    },
+    "policy": {
+      "open": "Chính sách trang web"
+    },
+    "macros": {
+      "open": "Macro tự động hóa",
+      "run": "Chạy macro"
+    },
+    "mods": {
+      "open": "Mod"
+    },
+    "memory": {
+      "open": "Bộ nhớ AI"
+    },
+    "extensions": {
+      "open": "Tiện ích mở rộng"
+    },
+    "adblock": {
+      "openPage": "Chặn quảng cáo",
+      "toggleSite": "Bật/tắt chặn quảng cáo cho trang này"
+    },
+    "perf": {
+      "open": "Hiệu năng"
+    },
+    "keymap": {
+      "open": "Phím tắt"
+    },
+    "update": {
+      "check": "Kiểm tra cập nhật"
+    },
+    "password": {
+      "open": "Mật khẩu"
+    }
+  },
+  "omnibox": {
+    "placeholder": "Tìm kiếm hoặc nhập URL"
+  },
+  "main": {
+    "toast": {
+      "bookmarkAdded": "Đã thêm dấu trang ★",
+      "webOnly": "Chỉ khả dụng trên trang web",
+      "profileEmpty": "Chưa có thông tin cá nhân — nhập trong Cài đặt > AI",
+      "autofillDone": "Đã tự động điền {count} trường ✍️",
+      "autofillNone": "Không tìm thấy trường biểu mẫu để điền",
+      "pageSaveOk": "Đã lưu trang 💾",
+      "pageSaveFail": "Lưu trang thất bại",
+      "readLaterRemoved": "Đã xóa khỏi danh sách đọc",
+      "readLaterAdded": "Đã thêm vào danh sách đọc 📚",
+      "pdfSaveOk": "Đã lưu PDF 📄",
+      "pdfSaveFail": "Lưu PDF thất bại",
+      "readerOn": "Chế độ đọc 📖",
+      "readerOff": "Xem bản gốc",
+      "translating": "Đang dịch… ⏳",
+      "translateRestored": "Đã khôi phục bản gốc",
+      "translateDone": "Dịch xong 🌐",
+      "translateFail": "Dịch thất bại",
+      "updateAvailable": "Đã tìm thấy phiên bản mới {version}",
+      "updateLatest": "Bạn đang dùng bản mới nhất ✓",
+      "updateReady": "Cập nhật đã sẵn sàng — áp dụng khi khởi động lại",
+      "updateDisabled": "Tự động cập nhật đã tắt",
+      "updateCheckFail": "Kiểm tra cập nhật thất bại: {error}",
+      "noTabUrl": "Không xác định được URL của thẻ hiện tại",
+      "adblockNotApplicable": "Không thể chặn quảng cáo trên trang này",
+      "adblockOffReload": "🛡️ {host} — Đã tắt chặn quảng cáo · đang tải lại…",
+      "adblockOnReload": "🛡️ {host} — Đã bật chặn quảng cáo · đang tải lại…",
+      "workspaceSwitched": "Không gian làm việc: {name}",
+      "workspaceCreated": "Đã tạo không gian làm việc mới \"{name}\"",
+      "workspaceOnlyOne": "Chỉ có một không gian làm việc",
+      "tabMoveFail": "Di chuyển thẻ thất bại",
+      "reloadSuffix": " · trang đã tải lại",
+      "tabMoved": "Đã chuyển thẻ → {name}{suffix}",
+      "darkForceOn": "Đã bật chế độ tối cưỡng bức 🌙",
+      "darkForceOff": "Đã tắt chế độ tối cưỡng bức ☀",
+      "darkSiteNotApplicable": "Không thể áp dụng chế độ tối riêng cho trang này",
+      "siteDarkOn": "Đã bật chế độ tối cho trang 🌙 ({origin})",
+      "siteDarkOff": "Đã tắt chế độ tối cho trang ☀ ({origin})",
+      "siteDarkDefault": "Trang theo mặc định chế độ tối ({origin})",
+      "followSystemOn": "Đã bật theo chế độ tối hệ điều hành 🌓",
+      "followSystemOff": "Đã tắt theo chế độ tối hệ điều hành",
+      "splitH": "Chia trái/phải ⫾",
+      "splitV": "Chia trên/dưới ⫿",
+      "unsplit": "Bỏ chia màn hình",
+      "muteOthersDone": "Đã tắt tiếng {count} thẻ khác 🔇",
+      "muteOthersNone": "Không có thẻ nào khác để tắt tiếng",
+      "unmuteAllDone": "Đã bật tiếng {count} thẻ 🔊",
+      "unmuteAllNone": "Không có thẻ nào bị tắt tiếng",
+      "siteDataNotApplicable": "Không thể xóa dữ liệu của trang này",
+      "siteDataCleared": "Đã xóa dữ liệu trang · đang tải lại… 🗑"
+    },
+    "download": {
+      "completeTitle": "Tải xuống hoàn tất",
+      "completeToast": "✓ Đã tải xong {filename}",
+      "failedToast": "✗ Tải {filename} thất bại",
+      "resuming": "Đang tiếp tục {count} lượt tải trước đó ⬇"
+    },
+    "menu": {
+      "tab": {
+        "new": "Thẻ mới",
+        "duplicate": "Nhân đôi thẻ",
+        "pin": "Ghim / Bỏ ghim thẻ",
+        "close": "Đóng thẻ",
+        "recentClosed": "Thẻ vừa đóng",
+        "restore": "Mở lại thẻ vừa đóng",
+        "move": {
+          "next": {
+            "workspace": "Chuyển thẻ sang không gian tiếp theo"
+          },
+          "prev": {
+            "workspace": "Chuyển thẻ sang không gian trước"
+          }
+        },
+        "reader": "Chế độ đọc",
+        "next": "Thẻ tiếp theo",
+        "prev": "Thẻ trước",
+        "search": "Tìm kiếm thẻ"
+      },
+      "window": {
+        "new": "Cửa sổ mới",
+        "incognito": "Cửa sổ ẩn danh mới"
+      },
+      "workspace": {
+        "new": "Không gian làm việc mới",
+        "next": "Không gian làm việc tiếp theo",
+        "prev": "Không gian làm việc trước"
+      },
+      "page": {
+        "print": "In",
+        "printPdf": "Lưu dưới dạng PDF",
+        "reload": "Tải lại",
+        "stop": "Dừng",
+        "zoom": {
+          "in": "Phóng to",
+          "out": "Thu nhỏ",
+          "reset": "Đặt lại thu phóng"
+        }
+      },
+      "app": {
+        "quit": "Thoát"
+      },
+      "find": {
+        "toggle": "Tìm trên trang"
+      },
+      "omnibox": {
+        "focus": "Thanh địa chỉ"
+      },
+      "autofill": {
+        "page": "Tự động điền biểu mẫu (thông tin của tôi)"
+      },
+      "password": {
+        "open": "Trình quản lý mật khẩu"
+      },
+      "darkmode": {
+        "toggle": "Bật/tắt chế độ tối cưỡng bức",
+        "toggleSite": "Bật/tắt chế độ tối cho trang này",
+        "followSystem": "Theo cài đặt hệ điều hành"
+      },
+      "sidepanel": {
+        "left": {
+          "toggle": "Bật/tắt bảng trái"
+        },
+        "right": {
+          "toggle": "Bật/tắt bảng phải"
+        }
+      },
+      "bookmark": {
+        "bar": {
+          "toggle": "Hiện / Ẩn thanh dấu trang"
+        },
+        "add": "Đánh dấu trang này",
+        "list": "Quản lý dấu trang"
+      },
+      "devtools": {
+        "toggle": "Công cụ nhà phát triển"
+      },
+      "nav": {
+        "back": "Quay lại",
+        "forward": "Tiến tới"
+      },
+      "pane": {
+        "split": {
+          "h": "Chia trái / phải",
+          "v": "Chia trên / dưới"
+        },
+        "unsplit": "Bỏ chia màn hình",
+        "focus": {
+          "next": "Chuyển tiêu điểm sang ô tiếp theo"
+        }
+      },
+      "tabbar": {
+        "cycle": "Đổi vị trí thanh thẻ (trên/trái/phải)"
+      },
+      "readlater": {
+        "add": "Thêm vào danh sách đọc",
+        "open": "Mở danh sách đọc"
+      },
+      "history": {
+        "open": "Lịch sử",
+        "clear": "Xóa lịch sử duyệt web"
+      },
+      "ai": {
+        "open": "Mở trợ lý AI",
+        "summarize": "Tóm tắt trang này",
+        "write": "✍️  Xưởng viết blog",
+        "collectors": "📥  Tự động thu thập hằng ngày"
+      },
+      "memory": {
+        "open": "🧠  Quản lý bộ nhớ AI"
+      },
+      "palette": {
+        "open": "Bảng lệnh"
+      },
+      "translate": {
+        "page": "Dịch trang"
+      },
+      "screenshot": {
+        "viewport": "Chụp màn hình"
+      },
+      "qrcode": {
+        "show": "Mã QR"
+      },
+      "downloads": {
+        "openPage": "Tải xuống"
+      },
+      "extensions": {
+        "open": "Tiện ích mở rộng"
+      },
+      "adblock": {
+        "openPage": "Thống kê chặn quảng cáo",
+        "toggleSite": "Bật/tắt chặn quảng cáo cho trang này"
+      },
+      "sitedata": {
+        "clear": "Xóa dữ liệu trang này"
+      },
+      "userchrome": {
+        "edit": "Chỉnh sửa userChrome.css",
+        "reload": "Áp dụng lại userChrome"
+      },
+      "userscript": {
+        "toggle": "Userscript"
+      },
+      "policy": {
+        "open": "Công cụ chính sách trang"
+      },
+      "macros": {
+        "open": "Macro tự động hóa"
+      },
+      "mods": {
+        "open": "Mod mở rộng"
+      },
+      "keymap": {
+        "open": "Chỉnh sửa phím tắt"
+      },
+      "perf": {
+        "open": "Cổng hiệu năng"
+      },
+      "settings": {
+        "open": "Mở cài đặt"
+      },
+      "update": {
+        "check": "Kiểm tra cập nhật"
+      },
+      "help": {
+        "report": "Gửi phản hồi"
+      },
+      "top": {
+        "file": "Tệp",
+        "edit": "Chỉnh sửa",
+        "view": "Xem",
+        "nav": "Điều hướng",
+        "bookmarks": "Dấu trang",
+        "tools": "Công cụ",
+        "customize": "Tùy chỉnh",
+        "settings": "⚙ Cài đặt",
+        "help": "Trợ giúp"
+      },
+      "group": {
+        "workspace": "Không gian làm việc",
+        "darkmode": "Chế độ tối",
+        "sidepanel": "Bảng bên",
+        "split": "Chia màn hình (Tiling)",
+        "adblock": "Chặn quảng cáo"
+      },
+      "edit": {
+        "undo": "Hoàn tác",
+        "redo": "Làm lại",
+        "cut": "Cắt",
+        "copy": "Sao chép",
+        "paste": "Dán",
+        "selectAll": "Chọn tất cả"
+      },
+      "view": {
+        "fullscreen": "Toàn màn hình"
+      }
+    },
+    "extensions": {
+      "sessionDefault": "Mặc định",
+      "sessionIncognito": "Ẩn danh",
+      "sessionWorkspace": "Không gian làm việc: {name}",
+      "sessionWorkspaceUnnamed": "Không gian làm việc ({id})",
+      "partitionUnknown": "(không rõ)",
+      "sessionUnknown": "Phiên không xác định",
+      "reasonManifest": "Không thể đọc manifest.json hoặc định dạng sai.",
+      "reasonVersion": "Định dạng phiên bản của tiện ích không hợp lệ.",
+      "reasonNotFound": "Không tìm thấy tệp tiện ích.",
+      "reasonPermission": "Không thể đọc do quyền tệp.",
+      "reasonLocale": "Có vấn đề với tệp bản dịch (_locales).",
+      "reasonUnknown": "Không thể tải tiện ích trong phiên này.",
+      "errorUnknown": "Lỗi không xác định",
+      "errorLoadFailed": "Tải thất bại",
+      "errorManifestRead": "Không thể đọc manifest.json: {detail}",
+      "errorInstallExpired": "Yêu cầu cài đặt đã hết hạn hoặc không tồn tại. Vui lòng thử lại.",
+      "errorUnzipFailed": "Giải nén thất bại: {detail}",
+      "errorManifestUnreadable": "Không thể đọc manifest.json.",
+      "errorUnsupportedUrl": "URL không được hỗ trợ — phải là URL chi tiết Web Store hoặc liên kết .crx trực tiếp.",
+      "errorDownloadFailed": "Tải xuống thất bại ({status})",
+      "errorNetwork": "Lỗi mạng: {detail}",
+      "errorNoOptionsPage": "Không có trang tùy chọn",
+      "errorManifestMissing": "Thiếu manifest.json (đây có phải thư mục chưa nén?)",
+      "errorCopyFailed": "Sao chép thất bại: {detail}",
+      "pickCrxTitle": "Chọn tiện ích (.crx)",
+      "pickUnpackedTitle": "Chọn thư mục tiện ích chưa nén"
+    },
+    "pageError": {
+      "net": {
+        "ERR_NAME_NOT_RESOLVED": "Không tìm thấy địa chỉ",
+        "ERR_CONNECTION_REFUSED": "Kết nối bị từ chối",
+        "ERR_CONNECTION_RESET": "Kết nối đã được đặt lại",
+        "ERR_CONNECTION_CLOSED": "Kết nối đã bị ngắt",
+        "ERR_CONNECTION_TIMED_OUT": "Kết nối đã hết thời gian chờ",
+        "ERR_INTERNET_DISCONNECTED": "Không có kết nối internet",
+        "ERR_ADDRESS_UNREACHABLE": "Không thể truy cập địa chỉ",
+        "ERR_EMPTY_RESPONSE": "Máy chủ không phản hồi",
+        "ERR_SSL_PROTOCOL_ERROR": "Lỗi kết nối SSL",
+        "ERR_NETWORK_CHANGED": "Mạng đã thay đổi",
+        "ERR_FILE_NOT_FOUND": "Không tìm thấy tệp",
+        "ERR_TOO_MANY_REDIRECTS": "Quá nhiều lượt chuyển hướng",
+        "ERR_BLOCKED_BY_CLIENT": "Trình duyệt này đã chặn yêu cầu"
+      },
+      "crash": {
+        "crashed": "Sự cố",
+        "oom": "Hết bộ nhớ",
+        "launch-failed": "Khởi chạy thất bại",
+        "killed": "Đã bị buộc dừng",
+        "integrity-failure": "Lỗi toàn vẹn"
+      },
+      "unknown": "Lỗi không xác định",
+      "crashDesc": "Thẻ đã ngừng hoạt động ({label})",
+      "certUntrusted": "Chứng chỉ bảo mật của trang này không đáng tin cậy",
+      "auth": {
+        "title": "Cần đăng nhập",
+        "heading": "{host} yêu cầu xác thực",
+        "username": "Tên đăng nhập",
+        "password": "Mật khẩu",
+        "cancel": "Hủy",
+        "submit": "Đăng nhập"
+      }
+    },
+    "contextMenu": {
+      "link": {
+        "openNewTab": "Mở liên kết trong thẻ mới",
+        "openNewWindow": "Mở liên kết trong cửa sổ mới",
+        "openIncognito": "Mở liên kết trong cửa sổ ẩn danh",
+        "copyAddress": "Sao chép địa chỉ liên kết",
+        "copyText": "Sao chép văn bản liên kết"
+      },
+      "image": {
+        "openNewTab": "Mở hình ảnh trong thẻ mới",
+        "copy": "Sao chép hình ảnh",
+        "copyAddress": "Sao chép địa chỉ hình ảnh",
+        "download": "Tải hình ảnh xuống"
+      },
+      "media": {
+        "download": "Tải video xuống",
+        "copyAddress": "Sao chép địa chỉ phương tiện"
+      },
+      "selection": {
+        "copy": "Sao chép",
+        "searchWith": "Tìm \"{query}\" trên {engine}",
+        "findInPage": "Tìm trong lựa chọn"
+      },
+      "spelling": {
+        "none": "Không có gợi ý chính tả",
+        "addToDictionary": "Thêm vào từ điển"
+      },
+      "edit": {
+        "undo": "Hoàn tác",
+        "redo": "Làm lại",
+        "cut": "Cắt",
+        "copy": "Sao chép",
+        "paste": "Dán",
+        "selectAll": "Chọn tất cả"
+      },
+      "page": {
+        "back": "Quay lại",
+        "forward": "Tiến tới",
+        "reload": "Tải lại",
+        "addBookmark": "Đánh dấu trang này ★"
+      },
+      "mods": "Mod",
+      "viewSource": "Xem mã nguồn trang",
+      "inspect": "Kiểm tra"
+    },
+    "video": {
+      "extractingYtdlp": "Đang trích xuất video… (yt-dlp, xem tiến trình tại Tải xuống Ctrl+J)",
+      "downloadStarted": "Đã bắt đầu tải xuống ⬇ (xem bảng Tải xuống Ctrl+J)",
+      "extractingYtdlpShort": "Đang trích xuất video… (yt-dlp, xem tiến trình tại Tải xuống)",
+      "startFailed": "Không thể bắt đầu tải xuống — đã từ chối cài yt-dlp hoặc có lỗi",
+      "downloadingDash": "Đang tải video… (DASH, xem tiến trình tại Tải xuống Ctrl+J)",
+      "downloadingHls": "Đang tải video… (HLS, xem tiến trình tại Tải xuống Ctrl+J)",
+      "extractingYtdlpFallback": "Đang trích xuất video… (dự phòng yt-dlp, xem tiến trình tại Tải xuống)",
+      "ytdlpConsent": {
+        "get": "Tải",
+        "cancel": "Hủy",
+        "title": "Cần có yt-dlp",
+        "message": "yt-dlp sẽ được tải xuống để hỗ trợ tải video.",
+        "detail": "Khoảng 15 MB. Tải từ bản phát hành chính thức GitHub yt-dlp/yt-dlp (mới nhất). Sau đó sẽ tự động cập nhật."
+      },
+      "ytdlpDownloadFailed": "Tải yt-dlp thất bại",
+      "ytdlpStarting": "Đang khởi động yt-dlp…",
+      "preparingDownload": "Đang chuẩn bị tải video…"
+    },
+    "torrent": {
+      "consent": {
+        "accept": "Đồng ý & Tải xuống",
+        "cancel": "Hủy",
+        "title": "Thông báo tải torrent",
+        "message": "Vui lòng tôn trọng bản quyền.",
+        "detail": "Chỉ sử dụng cho nội dung bạn có quyền, hoặc nội dung cấp phép tự do (Creative Commons, public domain, ISO Linux, v.v). Bạn chịu trách nhiệm về những gì bạn tải xuống.\n\nTiếp tục sẽ kích hoạt WebTorrent (BitTorrent phân tán). Windows Firewall có thể hỏi quyền trong lần sử dụng đầu tiên."
+      },
+      "notInstalled": {
+        "ok": "Đồng ý",
+        "title": "Chưa cài mô-đun torrent",
+        "message": "Gói webtorrent chưa được cài đặt.",
+        "detail": "Cài đặt bằng \"npm install webtorrent\" rồi thử lại. (phụ thuộc tùy chọn)"
+      },
+      "loadingMetadata": "Đang tải siêu dữ liệu…"
+    },
+    "session": {
+      "restorePrompt": {
+        "restore": "Khôi phục phiên",
+        "newTab": "Bắt đầu với thẻ mới",
+        "title": "Khôi phục phiên trước",
+        "message": "Trình duyệt dường như đã đóng đột ngột.",
+        "detail": "Khôi phục {count} thẻ từ phiên trước?"
+      }
+    },
+    "modApi": {
+      "nodeGrant": {
+        "deny": "Từ chối",
+        "allow": "Cho phép quyền Node",
+        "title": "Yêu cầu quyền Node",
+        "message": "Mod \"{name}\" đang yêu cầu quyền truy cập hệ thống Node.js.",
+        "detail": "Quyền này có thể truy cập toàn bộ máy tính — tệp hệ thống, tiến trình, v.v — mạnh và rủi ro hơn tiện ích mở rộng. Chỉ cho phép với mod bạn tin tưởng. (Lựa chọn này được lưu và có thể thay đổi trên trang Mod)"
+      }
+    },
+    "password": {
+      "writeError": {
+        "unavailable": "Máy tính này không thể dùng mã hóa hệ điều hành (safeStorage), nên mật khẩu chưa được lưu. Không bao giờ lưu ở dạng văn bản thô.",
+        "invalid-origin": "Địa chỉ trang không hợp lệ. Phải là địa chỉ https (ví dụ: https://example.com).",
+        "invalid": "Vui lòng nhập cả tên đăng nhập và mật khẩu.",
+        "duplicate": "Tên đăng nhập này đã được đăng ký cho trang này. Vui lòng sửa mục hiện có.",
+        "not-found": "Không tìm thấy tài khoản đó."
+      }
+    },
+    "screenshot": {
+      "saveTitle": "Lưu ảnh chụp màn hình"
+    },
+    "pageTools": {
+      "webpageFilter": "Trang web"
+    },
+    "downloads": {
+      "pickFolderTitle": "Chọn thư mục tải xuống mặc định"
+    },
+    "reader": {
+      "badge": "Chế độ đọc",
+      "originalView": "Xem bản gốc"
+    },
+    "omnibox": {
+      "searchWith": "Tìm kiếm {engine}: {query}"
+    },
+    "workspace": {
+      "defaultName": "Không gian {n}",
+      "unnamed": "Không gian chưa đặt tên",
+      "defaultFirst": "Mặc định"
+    },
+    "automation": {
+      "screenshotNoTab": "Chụp màn hình thất bại — không có thẻ mục tiêu",
+      "screenshotTabGone": "Chụp màn hình thất bại — không tìm thấy thẻ",
+      "screenshotSaved": "Đã lưu ảnh chụp màn hình 📸 ({path})",
+      "screenshotFailed": "Chụp màn hình thất bại"
+    },
+    "designTokens": {
+      "label": {
+        "color": {
+          "accent": {
+            "primary": "Điểm nhấn",
+            "hover": "Điểm nhấn khi hover"
+          },
+          "bg": {
+            "base": "Nền",
+            "elevated": "Nền thẻ"
+          },
+          "text": {
+            "primary": "Văn bản chính",
+            "secondary": "Văn bản phụ"
+          },
+          "border": {
+            "subtle": "Đường viền"
+          }
+        },
+        "radius": {
+          "sm": "Bo góc nhỏ",
+          "md": "Bo góc vừa",
+          "lg": "Bo góc lớn",
+          "tab": "Bo góc thẻ"
+        },
+        "density": {
+          "tabbar-h": "Chiều cao thanh thẻ",
+          "toolbar-h": "Chiều cao thanh công cụ",
+          "font-size": "Cỡ chữ cơ bản"
+        },
+        "motion": {
+          "normal": "Tốc độ hoạt ảnh"
+        }
+      }
+    },
+    "profile": {
+      "field": {
+        "fullName": "Họ và tên",
+        "firstName": "Tên",
+        "lastName": "Họ",
+        "email": "Email",
+        "phone": "Số điện thoại",
+        "postalCode": "Mã bưu chính",
+        "address": "Địa chỉ",
+        "addressDetail": "Địa chỉ chi tiết",
+        "city": "Thành phố",
+        "country": "Quốc gia",
+        "birthday": "Ngày sinh (YYYY-MM-DD)",
+        "organization": "Công ty / Tổ chức",
+        "username": "Tên đăng nhập",
+        "cardNumber": "Số thẻ",
+        "cardExp": "Ngày hết hạn thẻ (MM/YY)",
+        "cardCVC": "Mã CVC thẻ"
+      }
+    },
+    "ai": {
+      "error": {
+        "auth": "Xác thực thất bại ({status}). Kiểm tra khóa API trong Cài đặt.\n{detail}",
+        "modelNotFound": "Không tìm thấy mô hình (404). Kiểm tra tên mô hình trong Cài đặt.\n{detail}",
+        "badRequest": "Lỗi yêu cầu (400). Kiểm tra khóa API hoặc tên mô hình.\n{detail}",
+        "rateLimit": "Vượt quá giới hạn yêu cầu (429). Vui lòng thử lại sau.\n{detail}",
+        "ollamaUnreachable": "Không thể kết nối đến máy chủ Ollama cục bộ. Kiểm tra Ollama đang chạy và đã cài mô hình.\n{detail}",
+        "generic": "Yêu cầu AI thất bại ({status}).\n{detail}",
+        "unknownCliProvider": "Nhà cung cấp CLI không xác định",
+        "timeout": "Hết thời gian chờ (120s). Vui lòng thử lại.",
+        "ollamaConnectFailed": "Kết nối đến máy chủ Ollama cục bộ thất bại. Kiểm tra nó đang chạy.\n{detail}",
+        "claudeCodeResponse": "Lỗi phản hồi Claude Code ({subtype}){detail}",
+        "claudeCodeSessionEnded": "Phiên Claude Code đã kết thúc (mã {code}).{detail}",
+        "claudeCodeSessionDead": "Phiên Claude Code không còn hoạt động.",
+        "turnInProgress": "Lượt trước vẫn đang xử lý.",
+        "timeoutReopen": "Hết thời gian chờ (120s). Đang mở lại phiên.",
+        "codexSessionClosed": "Phiên Codex đã đóng.",
+        "timeoutPlain": "Hết thời gian chờ (120s).",
+        "codexResponse": "Lỗi phản hồi Codex: {detail}",
+        "cliHint": "\n\n(Kiểm tra {name} đã được cài đặt và đăng nhập bằng tài khoản/gói đăng ký. Bạn có thể đặt đường dẫn thực thi và mô hình trong Cài đặt > AI.)",
+        "cliNotFound": "Không tìm thấy CLI {name}.{hint}",
+        "cliRunError": "Lỗi chạy {name}.{detail}{hint}",
+        "sessionClosed": "Phiên đã đóng.",
+        "exitCode": "mã thoát {code}"
+      },
+      "diag": {
+        "cliMissing": {
+          "message": "Không tìm thấy lệnh '{bin}'.",
+          "fix": "Cài đặt CLI {bin} và thêm vào PATH. Bạn cũng có thể đặt đường dẫn thực thi trực tiếp trong Cài đặt > AI."
+        },
+        "notLoggedIn": {
+          "cliMessage": "Cần đăng nhập cho '{bin}'.",
+          "cliFix": "Chạy '{bin}' một lần trong terminal để đăng nhập (liên kết tài khoản đăng ký).",
+          "message": "Xác thực thất bại.",
+          "fix": "Kiểm tra lại khóa API trong Cài đặt > AI."
+        },
+        "modelDefault": "(mặc định)",
+        "modelMissing": {
+          "message": "Mô hình '{model}' không khả dụng.",
+          "fix": "Đổi tên mô hình trong Cài đặt > AI cho khớp với tài khoản hoặc bản cài đặt của bạn."
+        },
+        "notConnected": {
+          "message": "Không thể kết nối đến máy chủ AI.",
+          "fix": "Kiểm tra kết nối internet hoặc máy chủ cục bộ (Ollama) có đang chạy không."
+        },
+        "genericError": {
+          "message": "Đã xảy ra lỗi.",
+          "fix": "Thử lại sau, hoặc chuyển sang nhà cung cấp khác."
+        },
+        "noKey": {
+          "message": "Không có khóa API cho {label}.",
+          "fix": "Nhập khóa API trong Cài đặt > AI."
+        },
+        "empty": {
+          "message": "Phản hồi trống.",
+          "fix": "Thử mô hình khác, hoặc thử lại sau."
+        },
+        "ok": {
+          "message": "Bình thường — đã nhận phản hồi ({seconds}s)."
+        },
+        "disabled": {
+          "message": "Tính năng AI đang tắt.",
+          "fix": "Bật AI trong Cài đặt > AI."
+        },
+        "ollamaNotConnected": {
+          "message": "Không thể kết nối đến Ollama.",
+          "detail": "Không có phản hồi từ {url}",
+          "fix": "Khởi động ứng dụng Ollama hoặc chạy `ollama serve` trong terminal. Nếu địa chỉ khác, kiểm tra URL Ollama trong Cài đặt > AI."
+        },
+        "ollamaModelMissing": {
+          "message": "Mô hình đã đặt '{model}' chưa được cài đặt.",
+          "fix": "Chuyển sang một trong các mô hình đã cài bên dưới, hoặc cài bằng `ollama pull {model}` trong terminal."
+        }
+      },
+      "ipc": {
+        "diagCheckError": "Lỗi khi kiểm tra",
+        "unknownProvider": "Nhà cung cấp không xác định",
+        "pickAgentFilesFolder": "Chọn thư mục tệp của trợ lý",
+        "memoryAdded": "🧠 Đã thêm vào bộ nhớ: {text}{more}",
+        "reportSaved": "Đã lưu báo cáo ⤓ {filename}",
+        "webhookUrlMissing": "Chưa đặt URL webhook (Cài đặt > AI).",
+        "webhookTimeout": "Hết thời gian chờ",
+        "webhookResponseError": "Lỗi phản hồi",
+        "topicRequired": "Vui lòng nhập chủ đề.",
+        "bodyInstructionRequired": "Cần có nội dung và hướng dẫn.",
+        "unknownChoice": "Lựa chọn không xác định.",
+        "conversationExported": "Đã xuất hội thoại ⤓ {filename}",
+        "conversationsExported": "Đã xuất {count} hội thoại ⤓ {filename}",
+        "taskNotFound": "Không tìm thấy tác vụ (có thể đã bị xóa).",
+        "taskWrongWindow": "Tác vụ này chỉ có thể được điều khiển từ cửa sổ đã khởi tạo nó."
+      }
+    },
+    "dataSov": {
+      "errorBundleFormat": "Phiên bản hoặc định dạng gói dữ liệu không hợp lệ",
+      "errorRejected": "Đã từ chối: {path}",
+      "errorPassphraseMissing": "Có dữ liệu mật khẩu nhưng chưa nhập mật khẩu sao lưu nên đã bỏ qua.",
+      "errorWrongPassphrase": "Mật khẩu sao lưu không đúng nên không thể khôi phục mật khẩu.",
+      "errorPassphraseTooShort": "Mật khẩu sao lưu phải có ít nhất {min} ký tự."
+    },
+    "import": {
+      "unnamedFolder": "Thư mục",
+      "bookmarksReadFailed": "Không thể đọc tệp dấu trang: {detail}",
+      "rootFolderName": "Dấu trang nhập từ {browser}",
+      "otherBookmarks": "Dấu trang khác",
+      "mobileBookmarks": "Dấu trang di động",
+      "historyCopyFailed": "Không thể sao chép lịch sử duyệt web. Vui lòng đóng hoàn toàn trình duyệt đó rồi thử lại. ({detail})",
+      "historyReadFailed": "Không thể đọc lịch sử duyệt web: {detail}",
+      "profileNotFound": "Không tìm thấy hồ sơ để nhập.",
+      "bookmarksImportFailed": "Nhập dấu trang thất bại: {detail}"
+    },
+    "tabs": {
+      "beforeUnload": {
+        "title": "Rời khỏi trang web?",
+        "message": "Các thay đổi bạn đã thực hiện có thể không được lưu.",
+        "stay": "Ở lại",
+        "leave": "Rời đi"
+      }
+    }
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "label": "Ngôn ngữ",
+        "desc": "Chọn ngôn ngữ cho khung ngoài và các trang nội bộ. Tự động sẽ theo ngôn ngữ hệ thống.",
+        "auto": "Tự động (theo hệ thống)",
+        "ko": "한국어",
+        "en": "English",
+        "vi": "Tiếng Việt"
+      },
+      "title": "Giao diện",
+      "section": {
+        "theme": "Chủ đề chung",
+        "layout": "Bố cục khung",
+        "startup": "Hành vi khởi động",
+        "tabs": "Hành vi thẻ"
+      },
+      "theme": {
+        "label": "Chủ đề",
+        "desc": "Hệ thống / Sáng / Tối (giao diện khung)",
+        "system": "Hệ thống",
+        "light": "Sáng",
+        "dark": "Tối"
+      },
+      "density": {
+        "label": "Mật độ",
+        "desc": "Khoảng cách / đệm",
+        "compact": "Gọn",
+        "regular": "Thường",
+        "comfy": "Thoải mái"
+      },
+      "forcePageDark": {
+        "label": "Ép chế độ tối cho trang",
+        "desc": "Đảo màu CSS filter trên mọi trang web (Ctrl+Shift+D)"
+      },
+      "pageDarkFollowSystem": {
+        "label": "Theo chế độ tối của hệ điều hành",
+        "desc": "Chỉ tự áp dụng chế độ tối cho trang khi chủ đề hệ thống là tối"
+      },
+      "mouseGestures": {
+        "label": "Cử chỉ chuột",
+        "desc": "Kéo chuột phải — ←Quay lại →Tiến ↑Tải lại ↓Thẻ mới ↓→ Đóng thẻ"
+      },
+      "quickSearch": {
+        "label": "Tìm kiếm nhanh",
+        "desc": "Hiện nút tìm kiếm nổi khi chọn văn bản"
+      },
+      "hoverTranslate": {
+        "label": "Dịch từ khi di chuột",
+        "desc": "Giữ Alt và di chuột lên từ → hiện bảng dịch"
+      },
+      "tabbarOrientation": {
+        "label": "Vị trí thanh thẻ",
+        "desc": "Trên / Trái / Phải (Ctrl+Alt+T để chuyển)",
+        "top": "Trên",
+        "left": "Trái (dọc)",
+        "right": "Phải (dọc)"
+      },
+      "bookmarkBarShow": {
+        "label": "Hiện thanh dấu trang",
+        "desc": "Thanh yêu thích bên dưới thanh công cụ (Ctrl+Shift+B)"
+      },
+      "workspaceRailOpen": {
+        "label": "Thanh bên không gian làm việc",
+        "desc": "Dải chip màu bên trái"
+      },
+      "sidepanelLeftOpen": {
+        "label": "Bảng bên trái",
+        "desc": "Dấu trang · Lịch sử · Ghi chú (Ctrl+B)"
+      },
+      "sidepanelRightOpen": {
+        "label": "Bảng bên phải",
+        "desc": "Dấu trang · Lịch sử · Ghi chú (Ctrl+Alt+B)"
+      },
+      "startupMode": {
+        "label": "Khi mở trình duyệt",
+        "desc": "Hiển thị gì khi khởi động ứng dụng — sau khi thoát bất thường, luôn được hỏi có khôi phục hay không",
+        "newtab": "Thẻ mới (mặc định)",
+        "lastSession": "Khôi phục phiên trước (thẻ, nhóm, chia đôi, cuộn)",
+        "urls": "Mở các trang chỉ định"
+      },
+      "startupUrls": {
+        "label": "Danh sách trang khởi động",
+        "desc": "Mỗi dòng một URL (http(s):// hoặc browser://)"
+      },
+      "tabsOpenBehavior": {
+        "label": "Khi liên kết yêu cầu cửa sổ mới",
+        "desc": "Hành vi khi trang web cố mở cửa sổ mới qua target=\"_blank\" hoặc window.open() — ảnh hưởng đến các trường hợp như biểu tượng Naver Mail buộc mở thẻ mới",
+        "newTab": "Thẻ mới (tiền cảnh) — mặc định",
+        "sameTab": "Chuyển hướng trong thẻ hiện tại",
+        "backgroundTab": "Thẻ mới (nền, giữ tiêu điểm)"
+      }
+    },
+    "nav": {
+      "appearance": "Giao diện",
+      "ai": "✨ AI",
+      "widgets": "Thẻ mới",
+      "adblock": "Chặn quảng cáo & theo dõi",
+      "search": "Tìm kiếm",
+      "privacy": "Quyền riêng tư",
+      "permissions": "Quyền theo trang",
+      "accounts": "🔐 Tài khoản đăng nhập",
+      "downloads": "Tải xuống",
+      "freedom": "Mô-đun tự do",
+      "workspace": "Không gian làm việc",
+      "keymap": "Phím tắt",
+      "design": "Design Token",
+      "update": "Cập nhật",
+      "data": "Quản lý dữ liệu",
+      "about": "Giới thiệu"
+    },
+    "common": {
+      "internalApiMissing": "internalAPI chưa được cung cấp",
+      "loading": "Đang tải…",
+      "save": "Lưu",
+      "delete": "Xóa",
+      "default": "Mặc định",
+      "allow": "Cho phép",
+      "deny": "Chặn",
+      "done": "Hoàn tất",
+      "failed": "Thất bại",
+      "error": "Lỗi",
+      "cancel": "Hủy"
+    },
+    "ai": {
+      "apiKey": {
+        "label": "Khóa API",
+        "unavailable": "Thiết bị này không thể dùng lưu trữ khóa an toàn (safeStorage), nên không thể lưu khóa.",
+        "unavailableBadge": "Không thể lưu",
+        "setBadge": "✓ Đã thiết lập",
+        "unsetBadge": "Chưa thiết lập",
+        "replacePlaceholder": "Nhập khóa mới để thay thế",
+        "pastePlaceholder": "Dán khóa API",
+        "desc": "Chỉ lưu qua mã hóa hệ điều hành (safeStorage) — không bao giờ lưu dạng văn bản thuần",
+        "confirmClear": "Xóa khóa API đã lưu?"
+      },
+      "title": "✨ Trợ lý AI",
+      "section": {
+        "basic": "Cơ bản",
+        "agentAutomation": "Tự động hóa tác tử",
+        "advanced": "Nâng cao"
+      },
+      "enabled": {
+        "label": "Bật tính năng AI",
+        "desc": "Tóm tắt trang, hỏi đáp, trò chuyện trong bảng bên (thanh công cụ ✨ hoặc Ctrl+Shift+Space)"
+      },
+      "provider": {
+        "label": "Nhà cung cấp AI",
+        "desc": "Giống aside, dùng khóa API riêng hoặc mô hình cục bộ — chi phí do khóa của bạn chi trả",
+        "claudeCode": "Claude Code (chạy qua gói Claude)",
+        "codex": "Codex (chạy qua gói ChatGPT)",
+        "geminiCli": "Gemini CLI (tài khoản Google)",
+        "anthropic": "Claude (khóa API Anthropic)",
+        "openai": "OpenAI (khóa API ChatGPT)",
+        "google": "Google Gemini (khóa miễn phí)",
+        "ollama": "Ollama cục bộ (miễn phí, riêng tư)"
+      },
+      "diag": {
+        "label": "Kiểm tra trạng thái AI",
+        "desc": "Kiểm tra AI đã cấu hình có hoạt động thật hay không. Nếu không, sẽ cho biết nguyên nhân và cách khắc phục.",
+        "button": "🩺 Kiểm tra",
+        "checking": "Đang kiểm tra…",
+        "requesting": "Đang gửi yêu cầu thật tới nhà cung cấp hiện tại…",
+        "failedToRun": "Không thể chạy kiểm tra.",
+        "installedModels": "Mô hình đã cài:"
+      },
+      "includePageByDefault": {
+        "label": "Kèm nội dung trang khi hỏi",
+        "desc": "Mặc định gửi kèm nội dung trang hiện tại (có thể tắt trong bảng bên)"
+      },
+      "memoryEnabled": {
+        "label": "Sử dụng bộ nhớ",
+        "desc": "Tham khảo ngữ cảnh cá nhân AI đã lưu khi trả lời — không cần giải thích lại mỗi lần (<a href=\"browser://ai-memory\" data-link>Quản lý bộ nhớ</a>)"
+      },
+      "autoMemory": {
+        "label": "Tự trích xuất bộ nhớ (Dreaming)",
+        "desc": "Khi trò chuyện kết thúc, tự trích xuất các sự kiện đáng nhớ và lưu lại (mặc định tắt — bật sẽ phát sinh yêu cầu thêm mỗi cuộc trò chuyện)"
+      },
+      "nativeToolUse": {
+        "label": "Gọi hàm gốc cho tác tử",
+        "desc": "Trên các mô hình hỗ trợ (Claude, GPT, Gemini, Ollama qwen/llama3.1+, v.v.), tác tử hoạt động ổn định hơn nhờ gọi hàm có cấu trúc. Tự động: dùng nếu được hỗ trợ, nếu không thì quay lại phương pháp JSON",
+        "auto": "Tự động (dùng nếu hỗ trợ)",
+        "off": "Tắt (luôn dùng phương pháp JSON)"
+      },
+      "agentVision": {
+        "label": "Nhận thức màn hình của tác tử (thị giác)",
+        "desc": "Tác tử xem ảnh chụp màn hình hiện tại để đưa ra quyết định (hữu ích với trang có hình ảnh phức tạp). <b>Tự động (khuyên dùng)</b> chỉ chụp khi màn hình thay đổi hoặc bị kẹt, tiết kiệm hạn mức và thời gian. <b>Luôn luôn</b> chụp ở mỗi bước (độ chính xác cao nhất, tốn hạn mức nhiều). Hỗ trợ: Claude, GPT, Gemini (khóa API), mô hình thị giác cục bộ (llava, llama3.2-vision, v.v.), <b>Claude Code (gói thuê bao)</b>. Tự động tắt với codex/gemini-cli và các mô hình văn bản thuần.",
+        "auto": "Tự động (thông minh — tiết kiệm hạn mức, khuyên dùng)",
+        "always": "Luôn luôn (chụp mỗi bước)",
+        "off": "Tắt"
+      },
+      "triggers": {
+        "label": "Trình kích hoạt AI (tự động hóa)",
+        "desc": "Tự động chạy tác tử khi vào một trang, vào giờ cố định mỗi ngày, hoặc khi phát hiện thay đổi trang. Được giữ lại sau khi khởi động lại. (<a href=\"browser://ai-triggers\" data-link>Mở trình quản lý trigger</a>)"
+      },
+      "collectors": {
+        "label": "Tự thu thập hằng ngày",
+        "desc": "Âm thầm mở các trang chỉ định mỗi ngày, chỉ thu thập mục mới và gửi bản tóm tắt AI dưới dạng thông báo. (<a href=\"browser://ai-collectors\" data-link>Mở trình quản lý thu thập</a>)"
+      },
+      "profile": {
+        "label": "Thông tin của tôi (tự điền)",
+        "desc": "Lưu an toàn tên, địa chỉ, email, thẻ, v.v. và mọi biểu mẫu sẽ được tự điền (giá trị không bao giờ gửi cho AI). (<a href=\"browser://ai-profile\" data-link>Quản lý thông tin của tôi</a>)"
+      },
+      "webhookUrl": {
+        "label": "Webhook dữ liệu thu thập",
+        "desc": "Gửi dữ liệu do tác tử thu thập tới địa chỉ này dưới dạng JSON. Kết nối với Zapier, Make, IFTTT, Google Sheets (Apps Script), Notion, email, v.v. Gửi qua nút \"🔗 Gửi\" trong bảng dữ liệu."
+      },
+      "anthropic": {
+        "title": "Claude (Anthropic)",
+        "model": {
+          "label": "Mô hình",
+          "desc": "Tên mô hình khả dụng trên tài khoản của bạn (ví dụ: claude-sonnet-4-5)"
+        },
+        "keyHint": "Lấy khóa API tại: console.anthropic.com → API Keys"
+      },
+      "openai": {
+        "title": "OpenAI (ChatGPT)",
+        "model": {
+          "label": "Mô hình",
+          "desc": "Ví dụ: gpt-4o, gpt-4o-mini"
+        },
+        "keyHint": "Lấy khóa API tại: platform.openai.com → API keys"
+      },
+      "google": {
+        "title": "Google Gemini <span style=\"font-size:11px;color:var(--accent)\">gói miễn phí</span>",
+        "desc": "Lấy khóa API <b>miễn phí</b> từ Google AI Studio và dán vào (giới hạn số yêu cầu mỗi phút nhưng không mất phí). Không cần thẻ tín dụng.",
+        "model": {
+          "label": "Mô hình",
+          "desc": "Ví dụ: gemini-2.0-flash (nhanh, gói miễn phí), gemini-2.5-flash"
+        },
+        "keyHint": "Lấy khóa API miễn phí: aistudio.google.com → Get API key"
+      },
+      "claudeCode": {
+        "title": "Claude Code <span style=\"font-size:11px;color:var(--accent)\">chạy qua gói thuê bao</span>",
+        "desc": "Chạy tác tử bằng <b>gói thuê bao Claude Pro/Max</b> thay vì API trả theo mức dùng. Cài <b>Claude Code</b> ở máy tính (claude.com/claude-code), chạy <code>claude</code> một lần để đăng nhập bằng gói thuê bao, trình duyệt này sẽ gọi CLI đó. Không cần khóa API.",
+        "path": {
+          "label": "Đường dẫn thực thi",
+          "desc": "Để trống để dùng <code>claude</code> từ PATH. Chỉ định đường dẫn nếu cần (ví dụ: C:\\\\Users\\\\toi\\\\AppData\\\\Roaming\\\\npm\\\\claude)"
+        },
+        "model": {
+          "label": "Mô hình",
+          "desc": "Để trống để dùng mặc định của Claude Code. Muốn chỉ định, dùng opus / sonnet / haiku hoặc ID mô hình đầy đủ"
+        },
+        "checkHint": "Kiểm tra: <code>claude --version</code> chạy được trong terminal, và <code>echo hi | claude -p</code> có phản hồi — vậy là sẵn sàng."
+      },
+      "codex": {
+        "title": "Codex <span style=\"font-size:11px;color:var(--accent)\">chạy qua gói ChatGPT</span>",
+        "desc": "Chạy bằng <b>gói thuê bao ChatGPT Plus/Pro</b> thay vì API trả theo mức dùng. Cài <b>Codex CLI</b> ở máy tính (<code>npm i -g @openai/codex</code>), chạy <code>codex</code> và <b>đăng nhập bằng ChatGPT</b>, trình duyệt này sẽ gọi qua <code>codex exec</code>.",
+        "path": {
+          "label": "Đường dẫn thực thi",
+          "desc": "Để trống để dùng <code>codex</code> từ PATH"
+        },
+        "model": {
+          "label": "Mô hình",
+          "desc": "Bạn phải chỉ định mô hình <b>được phép trên tài khoản ChatGPT</b> của mình (tùy tài khoản/gói). Nếu để trống, mặc định của codex có thể bị tài khoản từ chối."
+        },
+        "checkHint": "Kiểm tra: <code>echo hi | codex exec --skip-git-repo-check -</code> có phản hồi — vậy là sẵn sàng. Nếu gặp lỗi \"model is not supported\", đổi sang mô hình tài khoản của bạn cho phép."
+      },
+      "geminiCli": {
+        "title": "Gemini CLI <span style=\"font-size:11px;color:var(--accent)\">tài khoản Google</span>",
+        "desc": "Cài <b>Gemini CLI</b> ở máy tính (<code>npm i -g @google/gemini-cli</code>), chạy <code>gemini</code> và <b>đăng nhập bằng tài khoản Google</b> (gói miễn phí), trình duyệt này sẽ gọi nó. Chạy bằng tài khoản, không cần khóa API.",
+        "path": {
+          "label": "Đường dẫn thực thi",
+          "desc": "Để trống để dùng <code>gemini</code> từ PATH"
+        },
+        "model": {
+          "label": "Mô hình",
+          "desc": "Ví dụ: gemini-2.5-flash (để trống để dùng mặc định)"
+        },
+        "checkHint": "Kiểm tra: <code>gemini --version</code> chạy được và <code>echo hi | gemini</code> có phản hồi — vậy là sẵn sàng."
+      },
+      "ollama": {
+        "title": "Ollama cục bộ",
+        "desc": "Cài Ollama (ollama.com) và tải mô hình về để chạy hoàn toàn cục bộ, không cần khóa API. Ví dụ trong terminal: <code>ollama pull llama3.2</code>",
+        "url": {
+          "label": "Địa chỉ máy chủ",
+          "desc": "Mặc định http://localhost:11434"
+        },
+        "model": {
+          "label": "Mô hình",
+          "desc": "Tên mô hình đã cài (ví dụ: llama3.2, qwen2.5)"
+        }
+      },
+      "agentFilesDir": {
+        "label": "Thư mục tài liệu",
+        "desc": "Thư mục chứa các tệp tác tử có thể tải lên (<b>bao gồm thư mục con</b>). <b>Mọi thứ ngoài thư mục này bị chặn</b>. Khi đã đặt, tác tử có thể tự tải lên — ví dụ \"đăng cat.jpg lên Instagram\" — mà không cần hộp thoại chọn tệp.",
+        "unset": "Chưa đặt",
+        "pick": "Chọn thư mục…",
+        "clear": "Xóa",
+        "fileCount": "{count} tệp",
+        "empty": " (trống — hãy thêm tệp)"
+      },
+      "agentHumanInput": {
+        "label": "Thao tác như người (tránh bị phát hiện là bot)",
+        "desc": "Tác tử thao tác bằng <b>đường di chuyển chuột thật và cú nhấp/phím tin cậy</b>. Giúp trông giống người thật trên các trang phát hiện bot như Instagram, Facebook, YouTube (khuyên dùng). Tắt sẽ dùng sự kiện tổng hợp nhanh hơn nhưng có thể bị chặn trên một số trang."
+      },
+      "agentInputMode": {
+        "label": "Tốc độ thao tác",
+        "desc": "Thời gian giống con người (đường di chuột, khoảng cách phím) cần thiết để tránh bị phát hiện bot nhưng chậm hơn. <b>Tự động</b> (khuyên dùng): tốc độ người chỉ trên các trang có phát hiện bot như Instagram/TikTok, còn lại dùng nhập liệu thật nhanh (nhấp nhanh hơn ~3 lần, gõ nhanh hơn ~2.5 lần). <b>Luôn tốc độ người</b>: an toàn nhất nhưng chậm. <b>Luôn nhanh</b>: nhanh nhất nhưng có thể bị phát hiện trên một số trang.",
+        "auto": "Tự động (tùy trang)",
+        "human": "Luôn tốc độ người",
+        "fast": "Luôn nhanh"
+      },
+      "agentCollapsePanels": {
+        "label": "Tự thu gọn bảng khi đang chạy",
+        "desc": "Trong khi tác tử chạy, sẽ thu gọn <b>dock tải xuống/video và bảng bên trái</b> để mở rộng vùng trang, rồi khôi phục khi xong (bảng AI vẫn giữ nguyên). Giảm tình trạng hộp thoại lớn, như cửa sổ đăng bài Instagram, bị cắt che mất nút."
+      },
+      "cliSession": {
+        "label": "Giữ phiên CLI (Claude Code · Codex)",
+        "desc": "Khi chạy tác tử qua Claude Code hoặc Codex, giữ <b>một tiến trình CLI cho mỗi tác vụ</b> và gửi liên tục các bước tới đó. Loại bỏ thời gian khởi động và mất bộ nhớ đệm khi khởi động lại mỗi bước, nên <b>độ trễ mỗi bước giảm mạnh và tiết kiệm token</b>. Tắt nếu gặp sự cố (quay lại khởi động lại mỗi bước)."
+      },
+      "agentAutoApprove": {
+        "label": "Tự duyệt hành động nhạy cảm (chạy không giám sát)",
+        "desc": "Mặc định chỉ <b>các hành động tốn tiền hoặc làm mất dữ liệu, như thanh toán, mua hàng, chuyển tiền, xóa</b> mới cần xác nhận (tìm kiếm, đăng nhập, gửi biểu mẫu, và <b>đăng bài/xuất bản/tải lên tiến hành mà không cần xác nhận</b> — để không cản trở tự động đăng bài). Bật tùy chọn này sẽ khiến cả những hành động rủi ro đó <b>tự động tiến hành mà không cần xác nhận</b>. Tiện lợi nhưng rủi ro — chỉ bật cho các tác vụ bạn tin tưởng."
+      },
+      "agentMaxSteps": {
+        "label": "Số bước tối đa của tác tử",
+        "desc": "Số bước tối đa tác tử thử cho một tác vụ. Đặt cao hơn cho tác vụ dài như đăng nhập → tải lên → đăng (mặc định 25, phạm vi 6–80)"
+      },
+      "maxTokens": {
+        "label": "Độ dài phản hồi tối đa (token)",
+        "desc": "Số token tối đa tạo ra trong một câu trả lời"
+      },
+      "maxContextChars": {
+        "label": "Số ký tự ngữ cảnh trang tối đa",
+        "desc": "Số ký tự nội dung trang gửi cho AI"
+      }
+    },
+    "adblock": {
+      "title": "Chặn quảng cáo & theo dõi",
+      "enabled": {
+        "label": "Kích hoạt",
+        "desc": "EasyList + EasyPrivacy + bộ lọc Hàn Quốc KR"
+      },
+      "level": {
+        "label": "Mức độ",
+        "desc": "lite / standard / strict",
+        "lite": "Nhẹ (chỉ EasyList)",
+        "standard": "Chuẩn (+ EasyPrivacy + List-KR)",
+        "strict": "Mạnh (+ Fanboy)"
+      },
+      "applyHint": "Thay đổi có hiệu lực từ lần khởi động hoặc tải trang tiếp theo."
+    },
+    "search": {
+      "title": "Tìm kiếm",
+      "defaultEngine": {
+        "label": "Công cụ tìm kiếm mặc định",
+        "desc": "Dùng khi nhập từ khóa tìm kiếm trên thanh địa chỉ"
+      },
+      "suggestEnabled": {
+        "label": "Tự động hoàn tất",
+        "desc": "Hiện gợi ý khi gõ trên thanh địa chỉ"
+      },
+      "bangsEnabled": {
+        "label": "Từ viết tắt Bang",
+        "desc": "Từ viết tắt kiểu DuckDuckGo như !yt, !gh"
+      },
+      "section": {
+        "engines": "Công cụ tìm kiếm đã đăng ký"
+      },
+      "engine": {
+        "keywordDesc": "Từ khóa {keyword} · {url}"
+      }
+    },
+    "privacy": {
+      "title": "Quyền riêng tư",
+      "historyRetention": {
+        "label": "Thời gian lưu lịch sử",
+        "desc": "Dùng cho tự động hoàn tất thanh địa chỉ và trang lịch sử",
+        "unlimited": "Không giới hạn",
+        "1y": "1 năm",
+        "3m": "3 tháng",
+        "1m": "1 tháng",
+        "1w": "1 tuần"
+      },
+      "blockThirdPartyCookies": {
+        "label": "Chặn cookie bên thứ ba",
+        "desc": "Ảnh hưởng lớn đến quảng cáo và trình theo dõi"
+      },
+      "passkeyAutoPrompt": {
+        "label": "Tự động yêu cầu passkey",
+        "desc": "Yêu cầu passkey (WebAuthn) tự động mà trang web gửi ngay khi mở. Chrome âm thầm thêm vào danh sách tự điền, nhưng trình duyệt này không có giao diện đó nên cửa sổ <b>\"Đăng nhập bằng khóa bảo mật\" của Windows</b> bật lên. <b>Chặn</b> (mặc định) chỉ từ chối yêu cầu tự động đó, còn yêu cầu người dùng chủ động bấm \"Đăng nhập bằng passkey\" vẫn được giữ nguyên. Ngoại lệ theo từng trang ở biểu tượng khóa trên thanh địa chỉ.",
+        "block": "Chặn yêu cầu tự động (khuyên dùng)",
+        "allow": "Cho phép (có thể xuất hiện cửa sổ hệ điều hành)"
+      }
+    },
+    "permissions": {
+      "col": {
+        "media": "Camera · Micro",
+        "geolocation": "Vị trí",
+        "notifications": "Thông báo",
+        "clipboardRead": "Clipboard",
+        "passkey": "Cửa sổ đăng nhập passkey",
+        "origin": "Trang"
+      },
+      "title": "Quyền theo trang",
+      "intro": "Cho phép/chặn quyền camera, micro, vị trí, thông báo, clipboard theo từng trang. \"Mặc định\" theo hành vi chuẩn (thường cho phép khi được yêu cầu). Chỉ hiện các trang bạn đã cấu hình.",
+      "empty": "Chưa có thiết lập quyền theo trang nào.",
+      "clearAll": "Đặt lại tất cả",
+      "confirmClearAll": "Đặt lại thiết lập quyền cho tất cả các trang?"
+    },
+    "accounts": {
+      "title": "🔐 Tài khoản đăng nhập",
+      "intro1": "Với ID và mật khẩu đã đăng ký sẵn, tác tử có thể tự vượt qua màn hình đăng nhập. Thêm tài khoản không tự bật tính năng này — chỉ hoạt động khi <b>bạn chủ động bật \"Cho phép tự đăng nhập\" cho từng tài khoản</b>.",
+      "intro2": "CAPTCHA và mã xác minh (xác thực hai bước) không được xử lý tự động — những trường hợp đó sẽ chuyển cho bạn.",
+      "manage": {
+        "label": "Quản lý tài khoản đăng nhập",
+        "desc": "Thêm/sửa/xóa tài khoản, bật/tắt tự đăng nhập, xem mật khẩu đã lưu",
+        "open": "Mở trình quản lý tài khoản"
+      }
+    },
+    "downloads": {
+      "defaultPath": {
+        "pick": "Chọn thư mục…",
+        "label": "Vị trí lưu mặc định",
+        "desc": "Để trống để dùng thư mục Downloads của hệ điều hành"
+      },
+      "title": "Tải xuống",
+      "askEveryTime": {
+        "label": "Hỏi mỗi lần",
+        "desc": "Hiện hộp thoại khi bắt đầu tải xuống"
+      },
+      "accelerator": {
+        "label": "Tăng tốc (đa kết nối)",
+        "desc": "4 kết nối song song (HTTP)"
+      },
+      "torrentDht": {
+        "label": "Torrent DHT",
+        "desc": "Trình theo dõi P2P ẩn danh — thường TẮT"
+      },
+      "torrentMaxSeedRatio": {
+        "label": "Tỉ lệ seed torrent tối đa",
+        "desc": "Tỉ lệ tải lên sau khi hoàn tất (1.0–10.0)"
+      },
+      "video": {
+        "title": "Tải video (yt-dlp)"
+      },
+      "ytdlpAutoUpdate": {
+        "label": "Tự cập nhật yt-dlp",
+        "desc": "YouTube và các trang khác thay đổi thường xuyên nên cần cập nhật — kiểm tra mỗi ngày một lần"
+      },
+      "ytdlpUpdateNow": {
+        "label": "Cập nhật ngay",
+        "desc": "Thay bằng bản mới nhất nếu đã cài, nếu chưa thì tải bản mới nhất",
+        "button": "Cập nhật ngay",
+        "checking": "Đang kiểm tra…",
+        "result": {
+          "updated": "Đã cập nhật lên bản mới nhất ✓",
+          "upToDate": "Đã là bản mới nhất ✓",
+          "skipped": "Chưa thể cập nhật lúc này (đang tải hoặc lỗi mạng)",
+          "failed": "Thất bại — kiểm tra kết nối mạng",
+          "failedWithError": "Thất bại — {error}"
+        }
+      }
+    },
+    "freedom": {
+      "title": "Mô-đun tự do",
+      "userChromeCss": {
+        "desc": "Tải lại nóng CSS khung ngoài (Ctrl+Alt+Shift+R)"
+      },
+      "userChromeJs": {
+        "desc": "Chèn JS người dùng vào khung ngoài (thử nghiệm, chú ý bảo mật)"
+      },
+      "userscripts": {
+        "desc": "Tương thích Tampermonkey (Ctrl+Shift+U)"
+      },
+      "commandPalette": {
+        "label": "Bảng lệnh"
+      },
+      "modApi": {
+        "desc": "Móc nối plugin sâu (thử nghiệm, chỉ mô-đun tin cậy)"
+      },
+      "managePages": "Trang quản lý: <a href=\"browser://userscripts\" data-link>Userscript</a> · <a href=\"browser://policies\" data-link>Chính sách trang</a>"
+    },
+    "workspace": {
+      "title": "Không gian làm việc",
+      "count": "Hiện có {count} — chuyển đổi bằng chip màu ở thanh bên trái. ",
+      "new": "+ Không gian mới",
+      "active": "Đang hoạt động",
+      "field": {
+        "name": "Tên",
+        "homeUrl": "URL trang chủ",
+        "color": "Màu"
+      },
+      "confirmRemove": "Xóa không gian làm việc \"{name}\"?\n(Tất cả thẻ và phiên trong không gian này sẽ mất.)"
+    },
+    "keymap": {
+      "title": "Phím tắt",
+      "conflicts": "{count} xung đột",
+      "addBinding": "+ Thêm liên kết phím",
+      "resetDefault": "Khôi phục mặc định",
+      "col": {
+        "action": "Hành động",
+        "key": "Phím",
+        "context": "Ngữ cảnh"
+      },
+      "unset": "(chưa đặt — nhấp vào)",
+      "hint": "Nhấp vào ô phím rồi nhấn tổ hợp phím mong muốn. Esc để hủy. Có thể tìm ID hành động bằng cách tìm trong bảng lệnh (Ctrl+Shift+P).",
+      "confirmReset": "Khôi phục tất cả phím tắt về mặc định?",
+      "pressKey": "Nhấn một phím…"
+    },
+    "design": {
+      "resetToDefault": "Đặt về mặc định",
+      "tokenDesc": "<code>{key}</code> · mặc định <code>{value}</code>",
+      "title": "Design Token",
+      "intro": "Thay đổi ngay lập tức màu sắc, kích thước, bo góc, và chuyển động của giao diện khung. Thay đổi tự động áp dụng cho mọi cửa sổ và được giữ sau khi khởi động lại.",
+      "resetAll": "Khôi phục tất cả token về mặc định",
+      "section": {
+        "color": "Màu",
+        "size": "Kích thước · bo góc",
+        "duration": "Chuyển động"
+      },
+      "confirmResetAll": "Khôi phục tất cả design token về mặc định?"
+    },
+    "data": {
+      "title": "Quản lý dữ liệu",
+      "intro": "Sao lưu và khôi phục cài đặt, keymap, không gian làm việc, dấu trang, lịch sử, userscript, chính sách, userChrome, macro, design token, danh sách đọc sau, tiện ích thẻ mới (ghi chú, việc cần làm, lối tắt), và AI (hội thoại, bộ nhớ, tác vụ tác tử) thành một gói JSON duy nhất.",
+      "passwordNote": "<b>Mật khẩu bị loại trừ theo mặc định.</b> Mã hóa safeStorage chỉ giải mã được trên chính máy tính này, nên xuất mà không có mật khẩu sẽ để lại các giá trị không thể khôi phục ở đâu cả. Nhập mật khẩu sao lưu bên dưới (tối thiểu 6 ký tự) để mã hóa lại và có thể khôi phục trên máy khác.",
+      "backupPwPlaceholder": "Mật khẩu sao lưu (tùy chọn — nhập để kèm mật khẩu, tối thiểu 6 ký tự)",
+      "exportButton": "📤 Xuất toàn bộ dữ liệu (JSON)",
+      "importButton": "📥 Nhập",
+      "restartHint": "Sau khi nhập, nên khởi động lại ứng dụng để thay đổi có hiệu lực đầy đủ.",
+      "section": {
+        "importBrowser": "Nhập từ trình duyệt khác",
+        "managePages": "Trang quản lý"
+      },
+      "importBrowser": {
+        "desc": "Nhập dấu trang và lịch sử từ Chrome, Edge, Brave, hoặc Whale. Để nhập lịch sử, hãy thoát hoàn toàn trình duyệt đó trước.",
+        "scan": "🌐 Tìm trình duyệt đã cài",
+        "scanning": "Đang tìm trình duyệt đã cài…",
+        "notFound": "Không tìm thấy trình duyệt nào có thể nhập (Chrome, Edge, Brave, Whale).",
+        "pickProfile": "Chọn hồ sơ để nhập:",
+        "tagBookmarks": "Dấu trang",
+        "tagHistory": "Lịch sử",
+        "importing": "Đang nhập…",
+        "done": "✓ Đã nhập {bookmarks} dấu trang và {history} mục lịch sử.",
+        "failed": "Nhập thất bại: {error}"
+      },
+      "link": {
+        "macros": "Macro tự động hóa",
+        "mods": "Mod (thử nghiệm)"
+      },
+      "codeItem": {
+        "userChromeJs": "userChrome.js (JS được chèn vào khung ngoài)",
+        "macros": "Macro (chuỗi hành động tự động)",
+        "userscript": "Userscript — {rel}",
+        "policy": "Chính sách trang (có thể gồm customJs) — {rel}"
+      },
+      "pwTooShort": "⚠ Mật khẩu sao lưu phải có ít nhất 6 ký tự.",
+      "exportDone": {
+        "withPw": "✓ Xuất hoàn tất (kèm mật khẩu — đã mã hóa lại bằng mật khẩu sao lưu)",
+        "noPw": "✓ Xuất hoàn tất (không kèm mật khẩu)"
+      },
+      "jsonParseFailed": "⚠ Phân tích JSON thất bại: {error}",
+      "importConfirm": {
+        "title": "Xác nhận nhập",
+        "itemCount": "Bản sao lưu này có {count} mục. Một phần dữ liệu hiện có sẽ bị ghi đè.",
+        "codeWarning": "<b>⚠ Có {count} mục có thể chứa mã thực thi</b> — chỉ nên bao gồm từ bản sao lưu đáng tin cậy.",
+        "includeCode": "Nhập cả các mục mã lệnh",
+        "hasPasswords": "Bản sao lưu này chứa mật khẩu. Nhập mật khẩu sao lưu bạn đã đặt khi xuất.",
+        "pwPlaceholder": "Mật khẩu sao lưu",
+        "proceed": "Tiến hành nhập"
+      },
+      "pwStatus": {
+        "skippedNoPassword": " · Mật khẩu: bỏ qua, chưa nhập mật khẩu",
+        "wrongPassword": " · Mật khẩu: sai mật khẩu",
+        "invalidPassphrase": " · Mật khẩu: mật khẩu quá ngắn",
+        "imported": " · đã thêm {added} mật khẩu, cập nhật {updated}"
+      },
+      "codeItemsSkipped": " · đã loại trừ {count} mục mã lệnh",
+      "restoreDone": "✓ Khôi phục hoàn tất: {count} mục",
+      "restoreErrors": " · {count} lỗi",
+      "importFailed": "⚠ Nhập thất bại: {errors}"
+    },
+    "about": {
+      "title": "Giới thiệu",
+      "userData": "Dữ liệu người dùng: <code>%APPDATA%/browser-build/</code>",
+      "storageLocations1": "Quy tắc chính sách: <code>policies/</code> · Userscript: <code>userscripts/</code> · Không gian làm việc: <code>workspaces.json</code>",
+      "storageLocations2": "Dấu trang · Lịch sử: sql.js (WASM) · <code>data/bookmarks.db</code>, <code>data/history.db</code>",
+      "storageLocations3": "Cài đặt: <code>settings.json</code> · Design token: <code>user-tokens.json</code> · Macro: <code>macros.json</code> · Mod: <code>mods/</code>",
+      "section": {
+        "manage": "Quản lý",
+        "legal": "Pháp lý"
+      },
+      "link": {
+        "policies": "Chính sách trang",
+        "passwords": "Mật khẩu",
+        "bookmarks": "Quản lý dấu trang",
+        "history": "Lịch sử",
+        "downloads": "Tải xuống",
+        "macros": "Macro",
+        "privacy": "Chính sách quyền riêng tư",
+        "terms": "Điều khoản sử dụng",
+        "licenses": "Giấy phép mã nguồn mở"
+      },
+      "privacyNote": "ezBrowser không thu thập số liệu sử dụng hay dữ liệu đo từ xa — mọi dữ liệu chỉ lưu trên máy tính này."
+    },
+    "widgets": {
+      "title": "Tiện ích thẻ mới",
+      "section": {
+        "buddy": "Bạn đồng hành pixel",
+        "weather": "Thời tiết",
+        "news": "Tin tức",
+        "notes": "Ghi chú · Việc cần làm · Đọc sau",
+        "fx": "Tỷ giá"
+      },
+      "buddyEnabled": {
+        "label": "Hiện bạn đồng hành pixel",
+        "desc": "Chú chim logo đi lại và chào bạn phía trên ô tìm kiếm (ngủ vào ban đêm, mang ô khi trời mưa). Không tải khi tắt."
+      },
+      "weatherEnabled": {
+        "label": "Hiện thẻ thời tiết",
+        "desc": "Hiện thời tiết hiện tại và dự báo 3 ngày trên thẻ mới"
+      },
+      "locationMode": {
+        "label": "Vị trí",
+        "desc": "Tự động (dựa trên IP) hoặc tọa độ thủ công",
+        "auto": "Tự động (vị trí theo IP)",
+        "manual": "Thủ công (nhập tọa độ)"
+      },
+      "manualPlace": {
+        "label": "Tên địa điểm",
+        "desc": "Tên hiển thị trên thẻ (ví dụ: Seoul)"
+      },
+      "manualLat": {
+        "label": "Vĩ độ",
+        "desc": "-90 đến 90"
+      },
+      "manualLon": {
+        "label": "Kinh độ",
+        "desc": "-180 đến 180"
+      },
+      "units": {
+        "label": "Đơn vị nhiệt độ",
+        "desc": "Độ C / Độ F",
+        "metric": "Độ C (°C)",
+        "imperial": "Độ F (°F)"
+      },
+      "newsEnabled": {
+        "label": "Hiện thẻ tin tức",
+        "desc": "Hiện tiêu đề Google News"
+      },
+      "newsTopic": {
+        "label": "Chủ đề",
+        "desc": "Danh mục tin tức hiển thị",
+        "headlines": "Tin nổi bật",
+        "world": "Thế giới",
+        "nation": "Trong nước",
+        "business": "Kinh doanh",
+        "technology": "Công nghệ",
+        "entertainment": "Giải trí",
+        "sports": "Thể thao",
+        "science": "Khoa học",
+        "health": "Sức khỏe"
+      },
+      "notesEnabled": {
+        "label": "Thẻ ghi chú",
+        "desc": "Sổ ghi chú tự do trên thẻ mới (tự lưu)"
+      },
+      "todoEnabled": {
+        "label": "Thẻ việc cần làm",
+        "desc": "Danh sách kiểm tra (thêm, hoàn tất, xóa)"
+      },
+      "readLaterEnabled": {
+        "label": "Thẻ đọc sau",
+        "desc": "Xem trước các trang lưu để đọc sau (📖) — tối đa 6 mục chưa đọc"
+      },
+      "fxEnabled": {
+        "label": "Thẻ tỷ giá",
+        "desc": "Hiện tỷ giá Frankfurter (ECB) — không cần khóa"
+      },
+      "fxBase": {
+        "label": "Đơn vị tiền tệ gốc",
+        "desc": "Mã 3 chữ cái (ví dụ: USD, KRW, EUR)"
+      },
+      "fxSymbols": {
+        "label": "Đơn vị tiền tệ hiển thị",
+        "desc": "Phân tách bằng dấu phẩy (ví dụ: KRW,JPY,EUR,CNY)"
+      },
+      "sourceNote": "Thời tiết dùng Open-Meteo, tin tức dùng Google News RSS, tỷ giá dùng Frankfurter (ECB) — không cần khóa API. Ghi chú và việc cần làm được lưu trên thiết bị này. Mở lại thẻ mới sau khi thay đổi để áp dụng."
+    },
+    "update": {
+      "title": "Cập nhật",
+      "section": {
+        "status": "Trạng thái",
+        "channel": "Kênh · tùy chọn"
+      },
+      "checking": "Đang kiểm tra…",
+      "checkNow": "Kiểm tra cập nhật ngay",
+      "installButton": "Khởi động lại để cài đặt",
+      "channel": {
+        "label": "Kênh cập nhật",
+        "desc": "Ổn định (latest) / Beta / Nightly — beta và nightly bao gồm bản prerelease trên GitHub",
+        "latest": "Ổn định (latest)",
+        "beta": "Beta",
+        "nightly": "Nightly"
+      },
+      "autoCheck": {
+        "label": "Tự kiểm tra",
+        "desc": "Kiểm tra phiên bản mới 1 phút sau khi khởi động, rồi mỗi 6 giờ"
+      },
+      "autoDownload": {
+        "label": "Tự tải xuống",
+        "desc": "Tự động tải phiên bản mới và thông báo"
+      },
+      "notifyOnUpdate": {
+        "label": "Thông báo cập nhật",
+        "desc": "Hiện biểu ngữ khi có phiên bản mới"
+      },
+      "packagedOnlyNote": "Tự động cập nhật chỉ hoạt động trên bản cài đặt (đóng gói). Thay đổi kênh có hiệu lực ngay và áp dụng từ lần kiểm tra tiếp theo.",
+      "state": {
+        "idle": "Chờ",
+        "checking": "Đang kiểm tra…",
+        "available": "Có phiên bản mới",
+        "notAvailable": "Bạn đang dùng bản mới nhất",
+        "downloading": "Đang tải xuống",
+        "downloaded": "Đã tải xong — khởi động lại để cài đặt",
+        "error": "Lỗi",
+        "disabled": "Vô hiệu (chế độ phát triển hoặc chưa cài đặt)"
+      },
+      "currentVersion": "Hiện tại v{version} · {label}"
+    },
+    "pageTitle": "Cài đặt"
+  },
+  "ui": {
+    "toolbar": {
+      "ai": {
+        "label": "Trợ lý AI",
+        "title": "Trợ lý AI (Ctrl+Shift+Space) — Tóm tắt/hỏi về trang này"
+      },
+      "downloads": {
+        "label": "Tải xuống",
+        "labelClose": "Đóng thanh bên tải xuống",
+        "labelOpen": "Mở thanh bên tải xuống",
+        "title": "Tải xuống (Ctrl+J) — bật/tắt thanh bên"
+      },
+      "palette": {
+        "label": "Bảng lệnh",
+        "title": "Bảng lệnh (Ctrl+Shift+P)"
+      },
+      "workspaceRail": {
+        "collapse": "Thu gọn thanh không gian làm việc",
+        "expand": "Mở rộng thanh không gian làm việc",
+        "title": "Thanh không gian làm việc (trái) — chuyển đổi bằng chip màu, + để thêm không gian mới"
+      },
+      "nav": {
+        "back": "Quay lại",
+        "forward": "Tiến tới",
+        "stop": "Dừng",
+        "reload": "Tải lại"
+      },
+      "incognito": {
+        "title": "Cửa sổ ẩn danh — không lưu lịch sử · mật khẩu",
+        "label": "🕶 Ẩn danh"
+      },
+      "siteInfo": {
+        "label": "Thông tin trang",
+        "title": "Thông tin trang · quyền"
+      },
+      "omnibox": {
+        "placeholder": "Tìm kiếm hoặc nhập URL · lệnh (vd: !yt từ khóa)"
+      },
+      "zoom": {
+        "label": "Thu phóng {percent}% — bấm để về 100%",
+        "title": "Thu phóng {percent}% — bấm để về mặc định"
+      },
+      "sidepanel": {
+        "leftOpen": "Mở bảng bên trái",
+        "leftClose": "Đóng bảng bên trái",
+        "leftTitle": "Bảng bên trái (Ctrl+B) — dấu trang · lịch sử · ghi chú",
+        "rightOpen": "Mở bảng bên phải",
+        "rightClose": "Đóng bảng bên phải",
+        "rightTitle": "Bảng bên phải (Ctrl+Alt+B) — dấu trang · lịch sử · ghi chú"
+      },
+      "bookmark": {
+        "add": "Thêm dấu trang",
+        "edit": "Sửa dấu trang",
+        "addTitle": "Thêm dấu trang (Ctrl+D)",
+        "editTitle": "Sửa dấu trang (Ctrl+D)"
+      },
+      "readlater": {
+        "add": "Thêm vào danh sách đọc sau",
+        "remove": "Xóa khỏi danh sách đọc sau",
+        "addTitle": "Thêm vào danh sách đọc sau"
+      },
+      "video": {
+        "open": "Mở bảng video",
+        "close": "Đóng bảng video",
+        "title": "Phát hiện {count} video — mở/đóng bảng"
+      }
+    },
+    "app": {
+      "downloadsBadge": "Đang tải {count} tệp"
+    },
+    "errorBoundary": {
+      "title": "Đã xảy ra lỗi ở {where}",
+      "retry": "Thử lại",
+      "reload": "Tải lại giao diện",
+      "hint": "Các tab và trang đang mở vẫn còn nguyên.",
+      "scope": {
+        "default": "giao diện",
+        "sidePanel": "bảng bên",
+        "videoPanel": "bảng video",
+        "downloadPanel": "bảng tải xuống"
+      }
+    },
+    "tabbar": {
+      "newTab": "Tab mới",
+      "closeTab": "Đóng tab",
+      "mute": "Tắt tiếng",
+      "unmute": "Bật tiếng",
+      "mutedHint": "Đã tắt tiếng — bấm để bật lại",
+      "audibleHint": "Đang phát âm thanh — bấm để tắt tiếng",
+      "pinnedSuffix": " (đã ghim)",
+      "mutedSuffix": " (đã tắt tiếng)",
+      "discardedBadge": "Tab đang ngủ",
+      "discardedTitle": "{url}\n(Tab đang ngủ — bấm để tải lại)",
+      "group": {
+        "expand": "Mở rộng",
+        "collapse": "Thu gọn",
+        "headerTitle": "{title} — bấm để {action}, chuột phải để mở menu",
+        "color": {
+          "red": "Đỏ",
+          "orange": "Cam",
+          "yellow": "Vàng",
+          "green": "Xanh lá",
+          "blue": "Xanh dương",
+          "purple": "Tím",
+          "pink": "Hồng",
+          "gray": "Xám"
+        }
+      },
+      "ctx": {
+        "selectedCount": "Đã chọn {count} tab",
+        "groupSelected": "Gộp thành nhóm mới",
+        "moveToGroup": "Chuyển sang nhóm {title}",
+        "addBookmark": "Thêm vào dấu trang",
+        "addReadLater": "Thêm vào danh sách đọc sau",
+        "closeCount": "Đóng {count} tab",
+        "clearSelection": "Bỏ chọn",
+        "reload": "Tải lại",
+        "duplicate": "Nhân bản tab",
+        "addThisBookmark": "Thêm tab này vào dấu trang",
+        "pin": "Ghim tab",
+        "unpin": "Bỏ ghim tab",
+        "muteTab": "Tắt tiếng tab",
+        "muteOthers": "Tắt tiếng các tab khác",
+        "unmuteAll": "Bật tiếng tất cả tab",
+        "moveToNewGroup": "Chuyển sang nhóm mới",
+        "removeFromGroup": "Bỏ khỏi nhóm",
+        "reopenClosed": "Mở lại tab đã đóng",
+        "closeOthers": "Đóng các tab khác",
+        "closeRight": "Đóng các tab bên phải",
+        "groupNameLabel": "Tên nhóm",
+        "rename": "Đổi tên",
+        "ungroup": "Bỏ nhóm"
+      },
+      "preview": {
+        "capturing": "Đang chụp…",
+        "none": "Không có bản xem trước"
+      }
+    },
+    "sidepanel": {
+      "loading": "Đang tải…",
+      "close": "Đóng",
+      "closeAria": "Đóng bảng bên",
+      "tab": {
+        "bookmarks": "Dấu trang",
+        "history": "Lịch sử",
+        "notes": "Ghi chú",
+        "readlater": "Danh sách đọc sau",
+        "briefing": "Bản tóm tắt hằng ngày"
+      },
+      "bookmarks": {
+        "empty": "Chưa có dấu trang nào. Nhấn Ctrl+D để thêm.",
+        "searchPlaceholder": "Tìm theo tiêu đề · URL"
+      },
+      "history": {
+        "searchPlaceholder": "Tìm trong lịch sử",
+        "noResults": "Không có kết quả",
+        "empty": "Chưa có lịch sử truy cập.",
+        "removeItem": "Xóa mục này"
+      },
+      "readlater": {
+        "empty": "Danh sách đọc sau đang trống. Lưu trang bằng nút 📖 cạnh thanh địa chỉ.",
+        "countLine": "{unread} chưa đọc · tổng {total}",
+        "toggleTitle": "Chuyển hiển thị mục đã đọc",
+        "unreadOnly": "Chỉ chưa đọc",
+        "showAll": "Xem tất cả",
+        "clearReadTitle": "Xóa hết mục đã đọc",
+        "clearRead": "Xóa mục đã đọc",
+        "noUnread": "Không có mục chưa đọc.",
+        "markUnread": "Đánh dấu chưa đọc",
+        "markRead": "Đánh dấu đã đọc",
+        "removeTitle": "Xóa khỏi danh sách"
+      },
+      "notes": {
+        "placeholder": "Ghi chú tự do ở đây. Tự động lưu khi bạn gõ."
+      },
+      "briefing": {
+        "empty": "Chưa có bộ thu thập nào.",
+        "createLink": "+ Tạo thu thập hằng ngày",
+        "off": "Tắt",
+        "runNowTitle": "Thu thập ngay",
+        "runNow": "Thu thập ngay",
+        "running": "Đang thu thập…",
+        "neverRun": "Chưa từng chạy",
+        "newCount": " · {count} mục mới",
+        "filterLabel": " · lọc: {keyword}",
+        "noDigest": "Chưa có bản tóm tắt. Hãy thử “Thu thập ngay”.",
+        "collapseItems": "▾ Thu gọn mục",
+        "expandItems": "▸ Xem các mục đã thu thập",
+        "noItems": "Không có mục nào."
+      },
+      "relTime": {
+        "justNow": "vừa xong",
+        "minutesAgo": "{n} phút trước",
+        "hoursAgo": "{n} giờ trước",
+        "daysAgo": "{n} ngày trước"
+      }
+    },
+    "siteinfo": {
+      "internalPage": "Trang nội bộ",
+      "secure": "Kết nối an toàn",
+      "insecure": "Kết nối không an toàn",
+      "internalEmpty": "Trang này không có quyền theo trang.",
+      "permissionsTitle": "Quyền",
+      "permDefault": "Mặc định",
+      "permAllow": "Cho phép",
+      "permDeny": "Chặn",
+      "adblockSite": "Chặn quảng cáo trên trang này",
+      "dataTitle": "Dữ liệu trang",
+      "dataCleared": "Đã xóa",
+      "dataChecking": "Đang kiểm tra…",
+      "cookieCount": "{count} cookie",
+      "clearDataTitle": "Xóa cookie · bộ nhớ cục bộ · bộ nhớ đệm của trang này",
+      "clearing": "Đang xóa…",
+      "clearedDone": "✓ Xong",
+      "clearDataBtn": "Xóa dữ liệu",
+      "clearHint": "Xóa cookie · localStorage · IndexedDB · service worker · bộ nhớ đệm rồi tải lại trang. Bạn có thể bị đăng xuất.",
+      "manageAll": "Quản lý tất cả quyền theo trang →",
+      "perm": {
+        "media": "Camera · micro",
+        "geolocation": "Vị trí",
+        "notifications": "Thông báo",
+        "clipboard-read": "Bảng nhớ tạm",
+        "passkey": "Hộp thoại đăng nhập passkey"
+      }
+    },
+    "downloads": {
+      "header": "Tải xuống",
+      "closeAria": "Đóng",
+      "closeTitle": "Đóng bảng tải xuống",
+      "addPlaceholder": "magnet:?xt=... hoặc URL .torrent",
+      "addTorrent": "Thêm torrent",
+      "searchPlaceholder": "Tìm theo tên tệp · URL",
+      "searchClearAria": "Xóa tìm kiếm",
+      "clearFinishedTitle": "Xóa tất cả mục đã hoàn tất, lỗi hoặc đã hủy",
+      "clearFinished": "Xóa mục đã xong",
+      "emptyNone": "Chưa có tệp nào được tải.",
+      "emptyFiltered": "Không có kết quả.",
+      "accelBadge": "{count} kết nối",
+      "etaSuffix": "⏱ còn {eta}",
+      "peers": "{n} peer",
+      "ratio": "tỉ lệ {n}",
+      "pause": "Tạm dừng",
+      "resume": "Tiếp tục",
+      "cancel": "Hủy",
+      "remove": "Xóa",
+      "removeWithFiles": "Xóa + xóa tệp",
+      "openFolder": "Mở thư mục",
+      "hideFiles": "Ẩn tệp",
+      "showFiles": "Tệp ({count})",
+      "eta": {
+        "seconds": "{n} giây",
+        "minutesSeconds": "{m} phút {s} giây",
+        "hoursMinutes": "{h} giờ {m} phút"
+      },
+      "state": {
+        "active": "Đang tải",
+        "paused": "Đã tạm dừng",
+        "metadata": "Siêu dữ liệu",
+        "done": "Hoàn tất",
+        "seeding": "Đang chia sẻ",
+        "failed": "Thất bại",
+        "cancelled": "Đã hủy",
+        "queued": "Đang chờ"
+      },
+      "filter": {
+        "all": "Tất cả",
+        "active": "Đang tải",
+        "done": "Hoàn tất",
+        "failed": "Thất bại"
+      },
+      "ctx": {
+        "openFile": "📂 Mở tệp",
+        "retry": "↻ Thử lại",
+        "showInFolder": "🗂 Hiện trong thư mục",
+        "copyPath": "📋 Sao chép đường dẫn",
+        "removeFromList": "🗑 Xóa khỏi danh sách"
+      }
+    },
+    "palette": {
+      "placeholder": "Tìm lệnh — nhập tên (vd: tối, cài đặt)  ·  bấm ? để xem trợ giúp",
+      "hintPrefix": "Lệnh thường dùng · nhập tên để tìm trong tất cả (",
+      "hintSuffix": "trợ giúp)",
+      "emptyPrefix": "Không có kết quả — thử từ khóa khác hoặc ",
+      "emptySuffix": " để xem trợ giúp",
+      "help": {
+        "title": "Hướng dẫn dùng bảng lệnh",
+        "move": "Di chuyển",
+        "run": "Chạy",
+        "close": "Đóng",
+        "narrowSection": "Thu hẹp phạm vi tìm",
+        "actionsOnlyLabel": "Chỉ hành động (vd: ",
+        "actionsOnlyExample": ">tối",
+        "tabsOnlyLabel": "Chỉ tab đang mở (vd: ",
+        "tabsOnlyExample": "#github",
+        "savedMacros": "Macro đã lưu",
+        "tipsSection": "Mẹo tìm kiếm",
+        "chosungTip": "Cũng có thể tìm bằng phụ âm đầu tiếng Hàn — ",
+        "chosungExample": "ㅂㅁㅋ",
+        "chosungResult": "dấu trang",
+        "mruTip": "Lệnh dùng thường xuyên tự động lên đầu (MRU)"
+      }
+    },
+    "workspaceRail": {
+      "activeSuffix": " (đang hoạt động)",
+      "chipHint": "\nChuột phải = menu, bấm đúp = đổi tên",
+      "chipAria": "Không gian làm việc {name}",
+      "newTitle": "Không gian mới (Ctrl+Alt+N)",
+      "newAria": "Không gian làm việc mới",
+      "alertLastSpace": "Không thể xóa không gian cuối cùng.",
+      "confirmDelete": "Xóa không gian \"{name}\"?\n(Tất cả tab và phiên trong không gian này sẽ mất.)",
+      "color": {
+        "red": "Đỏ",
+        "orange": "Cam",
+        "yellow": "Vàng",
+        "green": "Xanh lá",
+        "blue": "Xanh dương",
+        "purple": "Tím",
+        "pink": "Hồng",
+        "gray": "Xám"
+      },
+      "menu": {
+        "rename": "Đổi tên…",
+        "setHome": "Đặt trang chủ…",
+        "colorSection": "Màu",
+        "delete": "Xóa",
+        "namePlaceholder": "Tên không gian",
+        "homePlaceholder": "https://… (để trống để mở tab mới)",
+        "confirm": "OK",
+        "cancel": "Hủy"
+      }
+    },
+    "paneStage": {
+      "dropHint": "Chia tại đây",
+      "emptyPane": "Ô trống",
+      "newTabHere": "Tab mới trong ô này",
+      "unsplit": "Bỏ chia (Ctrl+Alt+0)",
+      "left": "Trái",
+      "right": "Phải",
+      "top": "Trên",
+      "bottom": "Dưới",
+      "splitterTitle": "Kéo = chỉnh tỉ lệ · bấm đúp = 50:50"
+    },
+    "permPrompt": {
+      "requestSuffix": " muốn {label}",
+      "remember": "Ghi nhớ lựa chọn này",
+      "queueMore": "Còn {count} yêu cầu đang chờ",
+      "allow": "Cho phép",
+      "deny": "Chặn",
+      "perm": {
+        "media": "dùng camera · micro",
+        "geolocation": "dùng vị trí của bạn",
+        "notifications": "hiển thị thông báo",
+        "clipboard-read": "đọc bảng nhớ tạm"
+      }
+    },
+    "video": {
+      "downloadFailed": "Không khởi động được tải video — bạn từ chối cài yt-dlp hoặc có lỗi xảy ra.",
+      "detected": "Phát hiện {count} video",
+      "none": "Không phát hiện video nào.",
+      "ytdlpHint": "Ứng viên HLS/DASH/trang được yt-dlp tự xử lý (tải khoảng 15MB lần đầu, sau khi bạn đồng ý).",
+      "kind": {
+        "video": "Video",
+        "site": "Trang"
+      }
+    },
+    "extActions": {
+      "overflowTitle": "{count} tiện ích khác",
+      "overflowAria": "Xem thêm {count} tiện ích",
+      "hiddenGroupAria": "Biểu tượng tiện ích ẩn",
+      "menuAria": "Menu {name}",
+      "options": "Tùy chọn",
+      "manage": "Quản lý tiện ích",
+      "confirmRemove": "Gỡ tiện ích \"{name}\"?",
+      "remove": "Gỡ bỏ"
+    },
+    "tabSearch": {
+      "placeholder": "Tìm trong {count} tab đang mở — tiêu đề · URL · phụ âm đầu  ·  Enter chuyển, Ctrl+Enter/Del đóng",
+      "noMatch": "Không có tab phù hợp",
+      "pinned": "Đã ghim",
+      "groupTitle": "Nhóm: {name}",
+      "current": "Hiện tại"
+    },
+    "findBar": {
+      "noResults": "Không có kết quả",
+      "searching": "Đang tìm…",
+      "placeholder": "Tìm trong trang",
+      "matchCase": "Phân biệt hoa thường",
+      "prev": "Trước (Shift+Enter)",
+      "next": "Sau (Enter)",
+      "close": "Đóng (Esc)"
+    },
+    "bookmarkBar": {
+      "empty": "Chưa có dấu trang nào. Thêm bằng Ctrl+D trên bất kỳ trang nào.",
+      "manage": "Quản lý",
+      "emptyFolder": "Thư mục trống"
+    },
+    "pwPrompt": {
+      "updateTitle": "Cập nhật mật khẩu này?",
+      "saveTitle": "Lưu mật khẩu này?",
+      "update": "Cập nhật",
+      "save": "Lưu",
+      "discard": "Không phải lúc này",
+      "never": "Không dùng cho trang này",
+      "queueMore": "Còn {count} yêu cầu đang chờ"
+    },
+    "clearData": {
+      "title": "Xóa dữ liệu duyệt web",
+      "done": "✓ Đã xóa lịch sử duyệt web.",
+      "range": "Khoảng thời gian",
+      "note": "Lịch sử trong khoảng đã chọn sẽ bị xóa. Không thể hoàn tác.",
+      "cancel": "Hủy",
+      "clearing": "Đang xóa…",
+      "clear": "Xóa",
+      "ranges": {
+        "lastHour": "1 giờ qua",
+        "last24h": "24 giờ qua",
+        "last7d": "7 ngày qua",
+        "last4w": "4 tuần qua",
+        "allTime": "Toàn bộ thời gian"
+      }
+    },
+    "bookmarkBubble": {
+      "added": "Đã thêm dấu trang",
+      "saving": "Đang lưu…",
+      "name": "Tên",
+      "folder": "Thư mục",
+      "bookmarkBar": "Thanh dấu trang",
+      "remove": "Xóa",
+      "done": "Xong"
+    },
+    "updateBanner": {
+      "availablePrefix": "Phiên bản mới ",
+      "availableSuffix": " đã có (hiện tại v{current})",
+      "downloading": "Đang tải bản cập nhật… ",
+      "readyPrefix": "Bản cập nhật ",
+      "readySuffix": " đã sẵn sàng — sẽ áp dụng khi khởi động lại",
+      "download": "Tải xuống",
+      "install": "Khởi động lại & cài đặt",
+      "dismiss": "Đóng thông báo"
+    },
+    "qrModal": {
+      "title": "Mã QR của trang hiện tại",
+      "generating": "Đang tạo…",
+      "close": "Đóng"
+    },
+    "userChrome": {
+      "close": "Đóng",
+      "enabled": "Bật",
+      "openExternal": "Mở bằng trình soạn thảo ngoài",
+      "hotReload": "Tải lại nhanh",
+      "saveApply": "Lưu + áp dụng",
+      "hintSummary": "Bộ chọn · biến an toàn khả dụng"
+    },
+    "recentlyClosed": {
+      "justNow": "vừa xong",
+      "secondsAgo": "{n} giây trước",
+      "minutesAgo": "{n} phút trước",
+      "hoursAgo": "{n} giờ trước",
+      "daysAgo": "{n} ngày trước",
+      "title": "Tab vừa đóng",
+      "clearAll": "Xóa tất cả",
+      "empty": "Không có tab nào vừa đóng"
+    },
+    "omnibox": {
+      "source": {
+        "url": "URL",
+        "history": "Lịch sử",
+        "bookmark": "Dấu trang",
+        "tab": "Tab đang mở",
+        "search": "Tìm kiếm",
+        "action": "Lệnh"
+      }
+    }
+  },
+  "page": {
+    "ai-collectors": {
+      "a1": "📥 Thu thập tự động hằng ngày",
+      "a2": "Tự động mở các trang bạn chỉ định hằng ngày (hoặc định kỳ) một cách âm thầm, chỉ thu thập bài viết/mục mới, và để AI viết bản tóm tắt gửi qua thông báo. Vẫn tồn tại sau khi khởi động lại. (Chạy trong cửa sổ ẩn — không làm gián đoạn công việc của bạn.)",
+      "a3": "＋ Bộ thu thập mới",
+      "a4": "Tên",
+      "a5": "URL nguồn (mỗi dòng một URL)",
+      "a6": "Lịch trình",
+      "a7": "Vào giờ cố định mỗi ngày",
+      "a8": "Định kỳ (phút)",
+      "a9": "Giờ (HH:MM, 24 giờ)",
+      "a10": "Chu kỳ (phút)",
+      "a11": "Bộ lọc từ khóa (tùy chọn, ngăn cách bằng dấu phẩy — chỉ lấy mục chứa các từ này)",
+      "a12": "▸ Nâng cao (bộ chọn trích xuất)",
+      "a13": "Bộ chọn CSS cho mục lặp lại (để trống để tự động: tiêu đề+liên kết)",
+      "a14": "Số mục tối đa mỗi nguồn",
+      "a15": "Ánh xạ trường (JSON, tùy chọn — ví dụ {\"title\":\".title\",\"link\":\"a@href\"})",
+      "a16": "Thêm",
+      "a17": "Webhook gửi JSON đến URL tích hợp trong Cài đặt > AI (Google Sheets, Notion, email, v.v.).",
+      "a18": "vd: Tin công nghệ hôm nay",
+      "a19": "vd: AI, bán dẫn, Samsung",
+      "t5": "Thu thập ngay",
+      "t6": "Đang thu thập…",
+      "t7": "Thu thập ngay",
+      "t8": "Xóa",
+      "d1": "Xóa bộ thu thập này?",
+      "d2": "Nhập ít nhất một URL nguồn.",
+      "d3": "Nhập giờ theo định dạng HH:MM.",
+      "d4": "JSON ánh xạ trường không hợp lệ."
+    },
+    "adblock": {
+      "a1": "Chặn quảng cáo",
+      "a2": "Thống kê chặn quảng cáo và cài đặt theo trang/bộ lọc.",
+      "a3": "Yêu cầu đã chặn",
+      "a4": "Số tên miền bị chặn",
+      "a5": "Số trang được cho phép",
+      "a6": "Bật chặn quảng cáo",
+      "a7": "Bộ lọc dựng sẵn — chế độ Tùy chỉnh theo các công tắc bên dưới",
+      "a8": "Nhẹ (EasyList)",
+      "a9": "Tiêu chuẩn (EasyList + Privacy + KR)",
+      "a10": "Nghiêm ngặt (+ Annoyance + Social)",
+      "a11": "Tùy chỉnh",
+      "a12": "Bộ lọc (áp dụng riêng lẻ ở chế độ Tùy chỉnh)",
+      "a13": "Thống kê chặn — Top 20 tên miền",
+      "a14": "Chưa có yêu cầu nào bị chặn.",
+      "a15": "Trang được cho phép (tắt chặn quảng cáo)",
+      "a16": "+ Thêm trang cho phép",
+      "a17": "Yêu cầu bị chặn gần đây (tối đa 50)",
+      "a18": "Chưa có bản ghi chặn gần đây."
+    },
+    "mods": {
+      "a1": "Mod (thử nghiệm)",
+      "a2": "Móc nối sâu hơn tiện ích mở rộng — điều khiển trực tiếp menu, vòng đời thẻ và bộ nhớ.\n        Chỉ kích hoạt mã nguồn đáng tin cậy làm Mod."
+    },
+    "macros": {
+      "a1": "Macro tự động hóa",
+      "a2": "+ Macro mới",
+      "a3": "Đang tải…",
+      "a4": "Chọn một macro bên trái hoặc tạo mới.",
+      "d1": "Hãy lưu trước"
+    },
+    "history": {
+      "a1": "Lịch sử",
+      "a2": "Xóa hôm nay",
+      "a3": "Xóa tất cả",
+      "a4": "Tìm lịch sử (tiêu đề·URL)",
+      "d1": "Xóa lịch sử duyệt web hôm nay?",
+      "d2": "Xóa toàn bộ lịch sử duyệt web? Không thể hoàn tác."
+    },
+    "userscripts": {
+      "a1": "Tương thích Tampermonkey",
+      "a2": "+ Script mới",
+      "a3": "Đang tải…",
+      "a4": "Chọn một script bên trái hoặc tạo mới.",
+      "a8": "Xóa",
+      "t3": "Script mới",
+      "t4": "Đã bật ✓",
+      "d1": "Script trống sẽ không được lưu.",
+      "t5": "Đang lưu… (kiểm tra @require)",
+      "t6": "Lưu",
+      "d2": "Xóa script này?"
+    },
+    "extensions": {
+      "a1": "Tiện ích mở rộng",
+      "a2": "một phiên riêng cho mỗi không gian làm việc",
+      "a3": "các trang mở sau đó",
+      "a4": "Chọn tệp .crx…",
+      "a5": "Thêm thư mục unpacked",
+      "a6": "Cài từ URL",
+      "a7": "Quyền mà tiện ích này yêu cầu",
+      "a8": "Trang có thể truy cập",
+      "a9": "Hủy",
+      "a10": "Cài đặt"
+    },
+    "bookmarks": {
+      "a1": "Dấu trang",
+      "a2": "+ Dấu trang mới",
+      "a3": "Nhập",
+      "a4": "Xuất",
+      "a5": "Thư mục",
+      "a6": "Thư mục mới",
+      "a7": "Đổi tên",
+      "a8": "Xóa thư mục",
+      "a11": "Thêm dấu trang mới",
+      "a12": "Tiêu đề",
+      "a13": "Thư mục",
+      "a14": "Hủy",
+      "a15": "Thêm",
+      "a16": "Tìm tiêu đề·URL",
+      "d1": "Xóa dấu trang này?",
+      "d2": "Không thể đổi tên thư mục gốc. Hãy chọn một thư mục.",
+      "d3": "Không thể xóa thư mục gốc.",
+      "d4": "Xóa thư mục và toàn bộ dấu trang bên trong?",
+      "d5": "Nhập một URL.",
+      "d6": "Thêm các dấu trang từ tệp này vào danh sách hiện tại? (Các mục hiện có được giữ nguyên.)"
+    },
+    "ai-memory": {
+      "a1": "🧠 Bộ nhớ AI",
+      "a2": "Đây là những gì AI ghi nhớ về bạn. Trò chuyện và tác nhân sẽ tham khảo nội dung này khi trả lời, nên bạn không cần giải thích lại mỗi lần.",
+      "a3": "Lưu",
+      "a4": "Xóa tất cả",
+      "t2": "internalAPI chưa được cấp",
+      "d1": "Xóa toàn bộ nội dung AI đang ghi nhớ?"
+    },
+    "policies": {
+      "a1": "Chính sách trang",
+      "a2": "UA · tiêu đề · CSP · cookie · quyền · móc JS theo từng trang",
+      "a3": "Xuất",
+      "a4": "Nhập",
+      "a5": "+ Quy tắc mới",
+      "a6": "Đang tải…",
+      "a7": "Chọn một quy tắc bên trái hoặc tạo mới.",
+      "a9": "Lưu",
+      "a10": "Xóa",
+      "a11": "Ghi đè User-Agent (để trống để tắt)",
+      "a12": "Đặt tiêu đề yêu cầu (set/overwrite)",
+      "a13": "+ Thêm tiêu đề",
+      "a14": "Xóa tiêu đề yêu cầu (mỗi dòng một tên tiêu đề)",
+      "a15": "Đặt tiêu đề phản hồi (set/overwrite)",
+      "a16": "+ Thêm tiêu đề",
+      "a17": "Xóa tiêu đề phản hồi",
+      "a18": "Công tắc nhanh",
+      "a19": "Xóa CSP là cách xử lý khi script bên ngoài bị chặn. Chặn cookie sẽ loại bỏ cả Cookie trong yêu cầu và Set-Cookie trong phản hồi.",
+      "a20": "Quyền theo trang (mặc định → cho phép/từ chối rõ ràng)",
+      "a21": "'Mặc định' áp dụng danh sách trắng toàn cục (media · geolocation · notifications · clipboard-read · fullscreen · pointerLock). Nếu bất kỳ quy tắc nào là 'từ chối', nó sẽ bị từ chối ngay lập tức.",
+      "a22": "Nâng cao: JS trong ngữ cảnh trang (chạy khi dom-ready, lối thoát nâng cao)",
+      "a23": "⚠ Đoạn JS này chạy trên mọi trang khớp. Hãy viết cẩn thận.",
+      "d1": "Định dạng JSON không hợp lệ. Phải là {rules:[...]} hoặc một mảng.",
+      "d2": "Nhập ít nhất một mẫu URL.",
+      "d3": "Xóa quy tắc này?"
+    },
+    "terms": {
+      "a1": "Điều khoản sử dụng",
+      "a2": "ezBrowser · Cập nhật lần cuối 2026-07-23",
+      "a3": "Tóm tắt:",
+      "a4": "nguyên trạng (as-is)",
+      "a5": "1. Bản chất của dịch vụ",
+      "a6": "miễn phí",
+      "a7": "nguyên trạng",
+      "a8": "Các tính năng có thể được thêm, thay đổi hoặc gỡ bỏ mà không cần thông báo trước.",
+      "a9": "2. Thông báo về tính năng lưu video·phương tiện (tải xuống)",
+      "a10": "⚠ Quan trọng — Trách nhiệm đối với tính năng tải xuống hoàn toàn thuộc về người dùng.",
+      "a11": "công cụ đa năng",
+      "a12": "do người dùng tự quyết định",
+      "a13": "Việc kiểm tra bản quyền·quyền lợi là trách nhiệm của người dùng.",
+      "a14": "Toàn bộ trách nhiệm pháp lý thuộc về người dùng",
+      "a15": "Tuân thủ điều khoản của nền tảng.",
+      "a16": "Torrent",
+      "a17": "tải lên (phân phối)",
+      "a18": "sử dụng cá nhân, hợp pháp",
+      "a19": "Chúng tôi cũng không chịu trách nhiệm về bất kỳ tranh chấp pháp lý, thiệt hại hay khiếu nại nào.",
+      "a20": "3. Trách nhiệm của người dùng",
+      "a21": "trong khi tuân thủ luật pháp hiện hành và điều khoản của các trang bạn truy cập",
+      "a22": "tự động hóa·macro·tác nhân",
+      "a23": "Không sử dụng những tính năng này để lạm dụng như truy cập trái phép hệ thống của người khác hoặc gửi yêu cầu tự động quá mức.",
+      "a24": "4. Tính năng AI (BYOK)",
+      "a25": "khóa API của riêng bạn",
+      "a26": "điều khoản·chính sách của nhà cung cấp đó",
+      "a27": "Độ chính xác của kết quả do AI tạo ra không được đảm bảo, và trách nhiệm khi tin tưởng và sử dụng kết quả đó thuộc về người dùng.",
+      "a28": "5. Dịch vụ·tiện ích bên thứ ba",
+      "a29": "Tìm kiếm·dịch thuật·thời tiết·tin tức·tiện ích Chrome, v.v. đều do các nhà cung cấp riêng vận hành và tuân theo điều khoản, chính sách riêng của họ.",
+      "a30": "Trách nhiệm về hành vi và độ an toàn của các tiện ích đã cài đặt thuộc về nhà cung cấp tiện ích và người dùng đã cài đặt nó.",
+      "a31": "6. Giới hạn trách nhiệm",
+      "a32": "7. Giấy phép·mã nguồn mở",
+      "a33": "Giấy phép mã nguồn mở",
+      "a34": "8. Quyền riêng tư",
+      "a35": "Chính sách quyền riêng tư",
+      "a36": "9. Thay đổi điều khoản",
+      "a37": "Các điều khoản này có thể được cập nhật khi sản phẩm thay đổi, và các thay đổi sẽ được phản ánh trên trang này. Việc tiếp tục sử dụng sau khi thay đổi được coi là đồng ý với điều khoản đã sửa đổi."
+    },
+    "downloads": {
+      "a1": "Tải xuống",
+      "a2": "Tất cả",
+      "a3": "Đang tải",
+      "a4": "Hoàn tất",
+      "a5": "Thất bại",
+      "a6": "Torrent",
+      "a7": "Tìm tên tệp·tên miền…"
+    },
+    "perf": {
+      "a1": "Cổng hiệu năng",
+      "a2": "Đo thời gian khởi động lạnh và bộ nhớ cửa sổ trống để theo dõi việc vượt ngân sách.",
+      "a3": "Lịch sử khởi động gần đây (tối đa 30)",
+      "a4": "Chưa có bản ghi — mục đầu tiên sẽ được lưu sau 30 giây."
+    },
+    "ai-triggers": {
+      "a1": "🤖 Kích hoạt AI",
+      "a2": "Trình duyệt tự làm việc — tự động chạy tác vụ khi bạn vào một trang, vào giờ cố định mỗi ngày, hoặc khi nội dung trang thay đổi. Vẫn tồn tại sau khi khởi động lại.",
+      "a3": "＋ Kích hoạt mới",
+      "a4": "Tên",
+      "a5": "Loại",
+      "a6": "Khi vào trang (mẫu URL)",
+      "a7": "Vào giờ cố định mỗi ngày",
+      "a8": "Phát hiện thay đổi trang",
+      "a9": "Mẫu URL (dùng ký tự đại diện *, vd: https://mail.google.com/*)",
+      "a10": "Giờ (HH:MM, 24 giờ)",
+      "a11": "URL trang để mở (tùy chọn)",
+      "a12": "URL trang cần kiểm tra",
+      "a13": "Bộ chọn CSS của phần tử cần kiểm tra (tùy chọn, để trống là toàn trang)",
+      "a14": "Chu kỳ kiểm tra (phút)",
+      "a15": "Chỉ thị tác vụ (việc tác nhân cần thực hiện)",
+      "a16": "Thêm",
+      "a17": "vd: Tự động đăng nhập email công ty",
+      "a18": "vd: Tìm biểu mẫu đăng nhập và đăng nhập bằng tài khoản đã lưu.",
+      "t6": "Xóa",
+      "d1": "Xóa kích hoạt này?",
+      "d2": "Nhập chỉ thị tác vụ.",
+      "d3": "Nhập mẫu URL.",
+      "d4": "Nhập giờ theo định dạng HH:MM.",
+      "d5": "Nhập URL trang cần kiểm tra."
+    },
+    "licenses": {
+      "a1": "Giấy phép mã nguồn mở",
+      "a2": "ezBrowser được xây dựng bằng các phần mềm mã nguồn mở dưới đây. Mỗi thành phần được sử dụng theo điều khoản giấy phép riêng. Lõi engine (Chromium·V8·Electron) tuân theo một bộ giấy phép riêng (BSD-3-Clause và các giấy phép khác).",
+      "a3": "Thành phần lõi",
+      "a4": "BSD-3-Clause và các giấy phép khác",
+      "a5": "MIT và các giấy phép khác",
+      "a6": "Gói",
+      "a7": "Phiên bản",
+      "a8": "Giấy phép",
+      "a9": "Kho lưu trữ",
+      "a10": "Tìm tên gói·giấy phép…"
+    },
+    "keymap": {
+      "a1": "Phím tắt",
+      "a2": "Tự do thay đổi tổ hợp phím cho mọi hành động. Xung đột được đánh dấu bằng hàng màu vàng.",
+      "a3": "Khôi phục mặc định",
+      "a4": "Danh sách hành động",
+      "a5": "Hành động",
+      "a6": "Danh mục",
+      "a7": "Phím",
+      "a8": "Tìm theo hành động hoặc phím…",
+      "d1": "Đặt lại tất cả tổ hợp phím về mặc định?"
+    },
+    "privacy": {
+      "a1": "Chính sách quyền riêng tư",
+      "a2": "ezBrowser · Cập nhật lần cuối 2026-06-21",
+      "a3": "Tóm tắt: ezBrowser không theo dõi bạn.",
+      "a4": "Chỉ trên máy tính này",
+      "a5": "Không có.",
+      "a6": "1. Dữ liệu chỉ lưu cục bộ",
+      "a7": "Lịch sử duyệt web·dấu trang·danh sách đọc·danh sách tải xuống",
+      "a8": "Cài đặt·phím tắt·không gian làm việc·nhóm thẻ·phiên (thẻ đang mở)",
+      "a9": "Được mã hóa",
+      "a10": "Cookie·dữ liệu trang — được lưu theo từng trang như trình duyệt thông thường, và có thể xóa từ menu biểu tượng khóa hoặc Cài đặt.",
+      "a11": "2. Giao tiếp ra bên ngoài (tối thiểu cần thiết cho tính năng)",
+      "a12": "Chỉ khi bạn sử dụng tính năng",
+      "a13": "Tính năng",
+      "a14": "Gửi đến",
+      "a15": "Nội dung gửi",
+      "a16": "Gợi ý thanh địa chỉ",
+      "a17": "Công cụ tìm kiếm đã chọn (Google/Naver/Bing, v.v.)",
+      "a18": "Văn bản đang gõ trong thanh địa chỉ",
+      "a19": "Tìm kiếm web",
+      "a20": "Công cụ tìm kiếm đã chọn",
+      "a21": "Từ khóa tìm kiếm (giống trình duyệt thông thường)",
+      "a22": "Dịch trang",
+      "a23": "Điểm cuối công khai của Google Translate",
+      "a24": "Văn bản của trang đang được dịch",
+      "a25": "Tiện ích thời tiết",
+      "a26": "Vị trí ước tính (dựa trên IP) hoặc tọa độ nhập thủ công",
+      "a27": "Tiện ích tin tức",
+      "a28": "Chủ đề tin tức đã chọn (không có thông tin cá nhân)",
+      "a29": "Tiện ích tỷ giá",
+      "a30": "Mã tiền tệ đã chọn (không có thông tin cá nhân)",
+      "a31": "Cập nhật tự động",
+      "a32": "Yêu cầu kiểm tra phiên bản hiện tại (không có thông tin cá nhân)",
+      "a33": "Favicon·biểu tượng gợi ý tìm kiếm",
+      "a34": "Chính trang đó / dịch vụ favicon của Google",
+      "a35": "Tên miền của trang cần hiển thị",
+      "a36": "Ngoài những điều trên, không có dữ liệu nào được gửi đến máy chủ phân tích hay mạng quảng cáo do nhà phát triển vận hành. Các dịch vụ bên thứ ba nêu trên tuân theo chính sách quyền riêng tư của riêng họ.",
+      "a37": "3. Chặn quảng cáo và trình theo dõi",
+      "a38": "ezBrowser mặc định chặn quảng cáo và trình theo dõi (EasyList·EasyPrivacy·bộ lọc KR của Hàn Quốc). Điều này chặn các script bên thứ ba cố theo dõi bạn, thực sự bảo vệ quyền riêng tư của bạn.",
+      "a39": "4. Cửa sổ ẩn danh",
+      "a40": "Lịch sử duyệt web·cookie·phiên trong cửa sổ ẩn danh chỉ được giữ trong bộ nhớ và bị xóa khi đóng cửa sổ.",
+      "a41": "5. Xuất·xóa dữ liệu",
+      "a42": "6. Liên hệ",
+      "a43": "Chính sách này có thể được cập nhật khi sản phẩm thay đổi, và các thay đổi sẽ được phản ánh trên trang này."
+    },
+    "ai-profile": {
+      "a1": "🪪 Thông tin của tôi (Tự động điền)",
+      "a2": "Được lưu mã hóa an toàn (keychain của hệ điều hành)",
+      "a3": "Không được gửi đến AI (máy chủ bên ngoài).",
+      "a4": "⚠ Môi trường này không hỗ trợ mã hóa hệ điều hành nên thông tin được lưu dạng văn bản thô. Tránh nhập thông tin nhạy cảm (thẻ).",
+      "a5": "Lưu",
+      "a6": "Xóa tất cả",
+      "a7": "Đã lưu ✓",
+      "t2": "Thông tin cơ bản",
+      "t3": "Thông tin thanh toán (tùy chọn — nhạy cảm)",
+      "d1": "Xóa toàn bộ thông tin đã lưu?"
+    },
+    "passwords": {
+      "a1": "Quản lý mật khẩu",
+      "a2": "Mã hóa cấp hệ điều hành qua safeStorage (Windows DPAPI · macOS Keychain · Linux libsecret)",
+      "a3": "Với các tài khoản đã đăng ký trước ở đây, tác nhân có thể tự vượt qua màn hình đăng nhập. Mật khẩu chỉ được lưu qua mã hóa hệ điều hành (safeStorage) và không bao giờ được chuyển cho mô hình AI hay script của trang.",
+      "a4": "＋ Thêm tài khoản",
+      "a5": "🎲 Tạo mật khẩu",
+      "a6": "⬇ Xuất ra CSV",
+      "a7": "⬆ Nhập CSV",
+      "a8": "Chữ hoa (A-Z)",
+      "a9": "Chữ thường (a-z)",
+      "a10": "Số (0-9)",
+      "a11": "Ký hiệu (!@#$…)",
+      "a12": "Tạo lại",
+      "a14": "Được tạo bằng bộ sinh số ngẫu nhiên mật mã học tích hợp của trình duyệt (Web Crypto) — không bao giờ gửi lên máy chủ.",
+      "a15": "Địa chỉ trang",
+      "a16": "Chỉ có thể đăng ký các trang https.",
+      "a17": "Tên người dùng (ID)",
+      "a18": "Mật khẩu",
+      "a20": "Cho phép tự động đăng nhập bằng tài khoản này",
+      "a21": "Khi bật, tác nhân sẽ tự điền tài khoản này và thậm chí nhấn nút đăng nhập trên màn hình đăng nhập của trang này. Mật khẩu không bao giờ được gửi cho mô hình AI. Mặc định tắt — chỉ lưu không tự bật.",
+      "a22": "Lưu",
+      "a23": "Hủy",
+      "a24": "Đang tải…",
+      "a25": "Trang đã tắt gợi ý lưu",
+      "a26": "Các trang bạn đã chọn \"Không dùng trên trang này\". Bỏ chọn ở đây sẽ gợi ý lưu lại vào lần truy cập tiếp theo.",
+      "a27": "Tìm tên miền hoặc tên người dùng…",
+      "d1": "Giải mã thất bại.",
+      "d2": "Giải mã thất bại",
+      "t6": "Đã sao chép ✓",
+      "d3": "Truy cập bộ nhớ tạm thất bại",
+      "t7": "Nhập mật khẩu.",
+      "t8": "Hiện",
+      "t9": "Nhập địa chỉ trang, tên người dùng và mật khẩu.",
+      "t10": "Chọn ít nhất một loại.",
+      "t11": "Đã sao chép ✓",
+      "d4": "Truy cập bộ nhớ tạm thất bại",
+      "d5": "Nhập tài khoản từ tệp CSV này? Các mục hiện có cùng trang·tên người dùng sẽ bị ghi đè bằng giá trị trong CSV."
+    },
+    "newtab": {
+      "title": "Tab mới",
+      "buddy": {
+        "ariaLabel": "Bạn nhỏ pixel",
+        "base": {
+          "0": "Xin chào!",
+          "1": "Hôm nay cũng nhẹ nhàng thôi 🪶",
+          "2": "Bạn đang tìm gì vậy?",
+          "3": "Hehe",
+          "4": "Cùng khám phá nào!"
+        },
+        "sleepWake": "Ừm… vẫn còn là ban đêm mà 😴",
+        "sleepTalkPrefix": "Zzz… ",
+        "hello": {
+          "morning": "Chào buổi sáng!",
+          "day": "Xin chào!",
+          "evening": "Chào buổi tối!"
+        },
+        "events": {
+          "newyear": {
+            "greet": "Chúc mừng năm mới! 🎉",
+            "lines": {
+              "0": "Chúc mừng năm mới!",
+              "1": "Mong được đồng hành cùng bạn năm nay!",
+              "2": "🎉"
+            }
+          },
+          "seollal": {
+            "greet": "Tết Seollal rồi! Chúc mừng năm mới 🧧",
+            "lines": {
+              "0": "Bạn muốn cúi chào không?",
+              "1": "Bạn đã ăn canh bánh gạo chưa?",
+              "2": "Túi may mắn đầy ắp!"
+            }
+          },
+          "chuseok": {
+            "greet": "Chúc bạn Chuseok đầy đủ 🌕",
+            "lines": {
+              "0": "Ăn một cái songpyeon nhé!",
+              "1": "Bạn đã ước nguyện dưới trăng tròn chưa?",
+              "2": "Trăng sáng quá"
+            }
+          },
+          "halloween": {
+            "greet": "Trick or treat! 🎃",
+            "lines": {
+              "0": "Cho kẹo đi!",
+              "1": "Hù~ 👻",
+              "2": "🎃"
+            }
+          },
+          "christmas": {
+            "greet": "Giáng sinh vui vẻ! 🎄",
+            "lines": {
+              "0": "Bạn đã nhận quà chưa?",
+              "1": "Ho ho ho!",
+              "2": "🎁"
+            }
+          }
+        }
+      },
+      "date": {
+        "loading": "Đang tải…"
+      },
+      "greet": {
+        "night": "Đã khuya rồi",
+        "morning": "Chào buổi sáng",
+        "afternoon": "Chào buổi chiều",
+        "evening": "Chúc buổi tối an lành"
+      },
+      "search": {
+        "placeholder": "Tìm kiếm hoặc nhập URL · lệnh  (Ctrl+Shift+P = Bảng lệnh)"
+      },
+      "error": {
+        "noApi": "internalAPI chưa được chèn"
+      },
+      "topSites": {
+        "title": "Trang truy cập thường xuyên",
+        "history": "Lịch sử →",
+        "empty": "Chưa có lịch sử duyệt web. Thẻ sẽ xuất hiện ở đây khi bạn truy cập các trang."
+      },
+      "bookmarks": {
+        "title": "Thanh dấu trang",
+        "manageAll": "Quản lý tất cả →"
+      },
+      "recent": {
+        "title": "Truy cập gần đây"
+      },
+      "weather": {
+        "title": "Thời tiết",
+        "refresh": "Làm mới",
+        "error": "Không thể tải thời tiết.",
+        "wind": "Gió {value}"
+      },
+      "news": {
+        "title": "Tin tức",
+        "more": "Xem thêm →",
+        "error": "Không thể tải tin tức.",
+        "titleWithTopic": "Tin tức · {topic}",
+        "topic": {
+          "headlines": "Tin nổi bật",
+          "world": "Thế giới",
+          "nation": "Trong nước",
+          "business": "Kinh doanh",
+          "technology": "Công nghệ",
+          "entertainment": "Giải trí",
+          "sports": "Thể thao",
+          "science": "Khoa học",
+          "health": "Sức khỏe"
+        }
+      },
+      "memo": {
+        "title": "Ghi chú",
+        "placeholder": "Ghi chú tự do ở đây…",
+        "saving": "Đang lưu…",
+        "saved": "Đã lưu ✓",
+        "failed": "Lưu thất bại"
+      },
+      "todo": {
+        "title": "Việc cần làm",
+        "addPlaceholder": "Thêm việc rồi nhấn Enter",
+        "empty": "Chưa có việc cần làm."
+      },
+      "fx": {
+        "title": "Tỷ giá",
+        "refresh": "Làm mới",
+        "error": "Không thể tải tỷ giá.",
+        "base": "Cơ sở 1 {base}"
+      },
+      "readlater": {
+        "title": "Đọc sau",
+        "unread": "{count} chưa đọc",
+        "empty": "Chưa có trang nào được lưu. Thêm bằng biểu tượng 📖 cạnh thanh địa chỉ.",
+        "markRead": "Đánh dấu đã đọc"
+      },
+      "shortcuts": {
+        "title": "Lối tắt",
+        "add": "+ Thêm",
+        "edit": "Sửa",
+        "remove": "Xóa",
+        "addTile": "Thêm lối tắt",
+        "addLabel": "Thêm"
+      },
+      "shortcutModal": {
+        "addTitle": "Thêm lối tắt",
+        "editTitle": "Sửa lối tắt",
+        "nameLabel": "Tên",
+        "namePlaceholder": "vd: YouTube",
+        "urlLabel": "Địa chỉ",
+        "urlPlaceholder": "vd: youtube.com",
+        "cancel": "Hủy",
+        "save": "Lưu"
+      },
+      "tips": {
+        "palette": "Bảng lệnh",
+        "split": "Chia màn hình",
+        "extensions": "Tiện ích",
+        "dark": "Chế độ tối cho trang",
+        "adblock": "Chặn quảng cáo cho trang"
+      },
+      "footer": {
+        "settings": "Cài đặt",
+        "privacy": "Chính sách quyền riêng tư",
+        "terms": "Điều khoản",
+        "licenses": "Giấy phép mã nguồn mở"
+      }
+    },
+    "welcome": {
+      "pageTitle": "Chào mừng đến với ezBrowser",
+      "tagline": "Trình duyệt nhẹ và tự do",
+      "step0": {
+        "title": "Công cụ tìm kiếm mặc định",
+        "desc": "Chọn công cụ tìm kiếm dùng khi bạn nhập từ khóa vào thanh địa chỉ. Bạn có thể đổi sau trong Cài đặt.",
+        "google": "Tìm kiếm · hình ảnh · tin tức",
+        "naver": "Mạnh về tìm kiếm tiếng Hàn",
+        "bing": "Tích hợp câu trả lời AI",
+        "ddg": "Không theo dõi"
+      },
+      "step1": {
+        "title": "Nhập dữ liệu",
+        "desc": "Bạn có thể chuyển dấu trang và lịch sử duyệt web từ trình duyệt cũ sang. Để nhập lịch sử, hãy đóng hoàn toàn trình duyệt đó trước."
+      },
+      "import": {
+        "loading": "Đang tìm trình duyệt đã cài đặt…",
+        "notFound": "Không tìm thấy trình duyệt nào để nhập (Chrome, Edge, Brave, Whale). Bạn có thể bỏ qua bước này.",
+        "tagBookmarks": "Dấu trang",
+        "tagHistory": "Lịch sử",
+        "optBookmarks": "Nhập dấu trang",
+        "optHistory": "Nhập lịch sử duyệt web",
+        "running": "Đang nhập…",
+        "runButton": "Nhập dữ liệu đã chọn",
+        "resultOk": "✓ Đã nhập {bookmarks} dấu trang và {history} mục lịch sử.",
+        "failed": "Nhập dữ liệu thất bại: {error}"
+      },
+      "step2": {
+        "title": "Giao diện",
+        "desc": "Chọn cách xử lý màu sắc giao diện và chế độ tối trên trang web.",
+        "systemTitle": "Theo hệ thống",
+        "systemSub": "Đồng bộ sáng/tối với hệ điều hành",
+        "lightTitle": "Sáng",
+        "lightSub": "Luôn sáng",
+        "darkTitle": "Tối",
+        "darkSub": "Luôn tối",
+        "darkPageTitle": "Tối + trang web tối",
+        "darkPageSub": "Ép chế độ tối trên mọi trang web"
+      },
+      "step3": {
+        "title": "Tính năng tiện lợi",
+        "desc": "Khuyến nghị bật mặc định — bạn có thể tắt bất cứ lúc nào.",
+        "adblockLabel": "Chặn quảng cáo & trình theo dõi",
+        "adblockHelp": "EasyList + EasyPrivacy + bộ lọc Hàn Quốc (KR)",
+        "gesturesLabel": "Cử chỉ chuột",
+        "gesturesHelp": "Kéo chuột phải — ← Quay lại, → Tiến tới, ↑ Tải lại, ↓ Tab mới",
+        "quickSearchLabel": "Tìm kiếm nhanh",
+        "quickSearchHelp": "Nút tìm kiếm nổi khi bạn chọn văn bản",
+        "hoverTranslateLabel": "Dịch khi di chuột",
+        "hoverTranslateHelp": "Giữ Alt và di chuột qua từ → bật cửa sổ dịch"
+      },
+      "step4": {
+        "title": "Kết nối AI",
+        "desc": "AI của trình duyệt này chạy bằng <b>tài khoản và máy tính của chính bạn</b>. Chúng tôi đã tìm sẵn vài cách để bạn dùng ngay — chọn một cách và chúng tôi sẽ kiểm tra xem nó có hoạt động thật không. Bạn cũng có thể làm việc này sau."
+      },
+      "ai": {
+        "costSubscription": "Tài khoản đăng ký · không tốn thêm phí",
+        "costFreeLocal": "Trên máy tính của bạn · miễn phí",
+        "costFreeTier": "Gói miễn phí",
+        "costPaidKey": "Trả theo mức sử dụng",
+        "connected": "✓ Đã kết nối với <b>{label}</b>. Dùng nút ✨ ở thanh bên để bắt đầu.",
+        "loading": "Đang tìm AI có thể dùng trên máy tính này…",
+        "notFound": "Chúng tôi không tìm thấy AI nào có thể dùng ngay lúc này. Bạn có thể kết nối sau trong Cài đặt &gt; AI, và trình duyệt vẫn hoạt động bình thường mà không cần AI.",
+        "connecting": "Đang kiểm tra kết nối…",
+        "connectFailed": "Không thể kết nối."
+      },
+      "step5": {
+        "title": "Phím tắt cốt lõi",
+        "desc": "Chỉ cần nhớ các phím tắt này là đủ dùng 80% thời gian. Mọi phím đều có thể gán lại tại <code style=\"background:var(--bg);padding:1px 4px;border-radius:3px;\">browser://keymap</code>."
+      },
+      "shortcut": {
+        "newTab": "Tab mới",
+        "closeTab": "Đóng tab",
+        "focusAddress": "Focus thanh địa chỉ",
+        "commandPalette": "Bảng lệnh",
+        "splitH": "Chia trái/phải",
+        "splitV": "Chia trên/dưới",
+        "extensions": "Quản lý tiện ích",
+        "pageDarkToggle": "Bật/tắt chế độ tối trang web",
+        "siteDark": "Chế độ tối cho trang này",
+        "siteAdblock": "Chặn quảng cáo cho trang này"
+      },
+      "nav": {
+        "skip": "Bỏ qua",
+        "prev": "‹ Quay lại",
+        "next": "Tiếp theo ›",
+        "start": "✓ Bắt đầu"
+      }
+    },
+    "error": {
+      "docTitle": "Không thể mở trang này",
+      "title": {
+        "loadFail": "Không thể mở trang này",
+        "crash": "Tab đã ngừng phản hồi",
+        "cert": "Kết nối này không ở chế độ riêng tư"
+      },
+      "desc": {
+        "certUntrusted": "Chứng chỉ bảo mật của trang này không đáng tin cậy",
+        "crashTemplate": "Tab đã ngừng phản hồi ({label})",
+        "net": {
+          "nameNotResolved": "Không tìm thấy địa chỉ",
+          "connectionRefused": "Kết nối bị từ chối",
+          "connectionReset": "Kết nối đã bị đặt lại",
+          "connectionClosed": "Kết nối đã bị đóng",
+          "connectionTimedOut": "Kết nối đã hết thời gian chờ",
+          "internetDisconnected": "Bạn chưa kết nối internet",
+          "addressUnreachable": "Không thể truy cập địa chỉ này",
+          "emptyResponse": "Máy chủ không phản hồi",
+          "sslProtocolError": "Lỗi kết nối SSL",
+          "networkChanged": "Mạng đã thay đổi",
+          "fileNotFound": "Không tìm thấy tệp",
+          "tooManyRedirects": "Quá nhiều lần chuyển hướng",
+          "blockedByClient": "Trình duyệt này đã chặn yêu cầu"
+        }
+      },
+      "crashReason": {
+        "crashed": "sự cố",
+        "oom": "hết bộ nhớ",
+        "launchFailed": "khởi chạy thất bại",
+        "killed": "bị buộc dừng",
+        "integrityFailure": "lỗi toàn vẹn"
+      },
+      "codeLabel": "Mã lỗi: {code}",
+      "retry": {
+        "default": "Thử lại",
+        "reload": "Tải lại"
+      },
+      "risk": "Tiếp tục và tự chịu rủi ro"
+    },
+    "memory": {
+      "title": "📊 Bộ nhớ & Hiệu năng",
+      "subtitle": "Bộ nhớ/CPU theo từng tiến trình và trạng thái ngủ nền của tab theo thời gian thực. Cập nhật mỗi giây.",
+      "loading": "Đang tải…",
+      "internalApiMissing": "internalAPI chưa được nạp",
+      "fmt": {
+        "seconds": "{s} giây",
+        "minSec": "{m} phút {s} giây",
+        "hourMin": "{h} giờ {m} phút"
+      },
+      "unit": {
+        "count": "",
+        "minutes": " phút"
+      },
+      "stat": {
+        "mainPrivate": "Tiến trình chính (private bytes)",
+        "workingSetAll": "Tổng WorkingSet (tham khảo · cao hơn thực tế)",
+        "processes": "Tiến trình",
+        "avgCpu": "CPU trung bình",
+        "uptime": "Thời gian hoạt động",
+        "tabsTotal": "Tab (tổng)",
+        "tabsAwake": "Đang hoạt động",
+        "tabsSleep": "💤 Đang ngủ",
+        "sleepThreshold": "Ngưỡng ngủ"
+      },
+      "sweepBtn": "💤 Cho tab không hoạt động ngủ ngay",
+      "refreshBtn": "↻ Làm mới",
+      "sleepOn": "Tự động ngủ: BẬT ({min} phút)",
+      "sleepOff": "Tự động ngủ: TẮT — bật trong Cài đặt",
+      "budgetSectionTitle": "Nguyên tắc #1 — Ngân sách nhẹ nhàng (CLAUDE.md)",
+      "hint1": "RSS cửa sổ trống được đo theo <b>private working set</b> nên trang này không đo chính xác được (Electron tự tính lặp các trang dùng chung). Kết quả chính xác đến từ bước perf của <code>npm run verify:full</code> (đo bằng WMI). Bên dưới là <b>mốc chuẩn</b> và giá trị đo gần nhất.",
+      "hint2": "Thẻ <b>private bytes</b> ở trên là chỉ số <i>theo commit</i> do Electron cung cấp, khác với <i>private working set</i> của WMI dùng để tính ngân sách (thường cao hơn). Đừng so sánh trực tiếp hai chỉ số này.",
+      "budget": {
+        "emptyLabel": "Mốc chuẩn RSS cửa sổ trống",
+        "emptyTarget": "Cần đo",
+        "emptyCurrent": "Chạy npm run verify:full để ghi lại kết quả đo tại đây",
+        "timeUnknown": "không rõ thời điểm",
+        "medianSuffix": " (trung vị {n} lần gần nhất: {v})",
+        "noAdMissing": "Chưa đo — sẽ được ghi từ lần verify:full tiếp theo",
+        "adblockCostSuffix": " · trong đó adblock {v}MB",
+        "totalMissing": "Chưa đo",
+        "noAdblockLabel": "RSS cửa sổ trống — không tính adblock (căn cứ chính)",
+        "totalLabel": "RSS cửa sổ trống — tổng (tham khảo/xu hướng)",
+        "coldStartLabel": "Khởi động nguội (đo lần gần nhất)",
+        "footnote": "Ba dòng trên là kết quả đo bằng harness lúc <b>{when}</b> (nạp sẵn lúc build — chạy <code>npm run verify:full</code> để cập nhật).",
+        "mainPrivNowLabel": "Private bytes tiến trình chính (hiện tại)",
+        "refLabel": "Chỉ số tham khảo",
+        "cpuLabel": "CPU khi nghỉ",
+        "sleepLabel": "Ngủ nền",
+        "sleepTarget": "30 phút không hoạt động → discard",
+        "sleepOnMark": "✓ Đang bật",
+        "sleepOffMark": "✗ Đang tắt",
+        "targetPrefix": "Mục tiêu: "
+      },
+      "processSectionTitle": "Theo tiến trình ({n})",
+      "table": {
+        "pid": "PID",
+        "type": "Loại",
+        "memoryMb": "Bộ nhớ (MB)",
+        "cpuPercent": "CPU %"
+      },
+      "envSectionTitle": "Môi trường",
+      "env": {
+        "appVersion": "Phiên bản ứng dụng",
+        "platform": "Nền tảng"
+      },
+      "alert": {
+        "sweepResult": "Đã cho {discarded} tab không hoạt động ngủ (bỏ qua: {skipped})"
+      },
+      "docTitle": "Bộ nhớ & Hiệu năng"
+    }
+  },
+  "ai": {
+    "shared": {
+      "cost": {
+        "freeLocal": "Máy tính của tôi · Miễn phí",
+        "freeTier": "Gói miễn phí",
+        "paidKey": "Trả tiền theo mức sử dụng",
+        "subscription": "Tài khoản đăng ký · Không phí thêm"
+      },
+      "duration": {
+        "hourMin": "{h} giờ {m} phút",
+        "minSec": "{m} phút {s} giây",
+        "seconds": "{s} giây"
+      },
+      "example": {
+        "csv": "Gom danh sách thành bảng CSV",
+        "find": "Tìm thông tin cần thiết",
+        "form": "Tự động điền biểu mẫu",
+        "mail": "Tóm tắt thư chưa đọc",
+        "orders": "Sắp xếp đơn hàng/đặt chỗ",
+        "reply": "Soạn bản nháp trả lời"
+      },
+      "relTime": {
+        "daysAgo": "{d} ngày trước",
+        "hoursAgo": "{h} giờ trước",
+        "minutesAgo": "{m} phút trước",
+        "now": "vừa xong"
+      },
+      "repeat": {
+        "countOf": "{done}/{total} lần",
+        "countUnlimited": "{done} lần (không giới hạn)",
+        "finished": "Hoàn tất · {of}",
+        "nextInMin": "{m} phút",
+        "nextInSec": "{s} giây",
+        "running": "Đang chạy · {of}",
+        "stopped": "Đã dừng · {of}",
+        "waiting": "Đang chờ · {of} · tiếp theo sau {nextIn}"
+      },
+      "retryKind": {
+        "cliDead": "Mất kết nối CLI",
+        "login": "Cần đăng nhập",
+        "model": "Lỗi mô hình",
+        "network": "Lỗi mạng",
+        "rateLimit": "Vượt quá giới hạn yêu cầu",
+        "tabGone": "Tab của tác vụ đã bị đóng",
+        "unknown": "Lỗi không xác định"
+      },
+      "runStatus": {
+        "cancelled": "Đã hủy",
+        "done": "Hoàn tất",
+        "error": "Lỗi",
+        "interrupted": "Chưa hoàn tất",
+        "paused": "Tạm dừng",
+        "running": "Đang thực hiện"
+      },
+      "taskState": {
+        "cancelled": "Đã hủy",
+        "completed": "Hoàn tất",
+        "failed": "Thất bại",
+        "interrupted": "Chưa hoàn tất",
+        "needsVerify": "Cần kiểm tra",
+        "paused": "Tạm dừng",
+        "queued": "Đang chờ",
+        "retrying": "Đang thử lại",
+        "running": "Đang chạy",
+        "waitingUser": "Chờ xác nhận"
+      },
+      "waitCause": {
+        "ask": {
+          "title": "Dừng lại để chờ câu trả lời"
+        },
+        "captcha": {
+          "hint": "Bạn hãy tự xử lý, sau đó tiếp tục.",
+          "title": "Cần xác minh của con người"
+        },
+        "confirm": {
+          "hint": "Tiếp tục sẽ không tự động phê duyệt — sẽ được hỏi xác nhận lại.",
+          "title": "Dừng lại ở hành động cần được phê duyệt"
+        },
+        "ledger": {
+          "hint": "Nếu đã đăng rồi, hãy dừng lại thay vì tiếp tục.",
+          "title": "Không thể xác nhận đã đăng hay chưa"
+        },
+        "login": {
+          "hint": "Hãy tự đăng nhập trong trình duyệt rồi tiếp tục.",
+          "title": "Cần đăng nhập"
+        },
+        "tabTarget": {
+          "hint": "Hãy tự chọn tab để tiếp tục — sẽ không đoán một tab tương tự.",
+          "title": "Không tìm thấy tab đang thao tác"
+        },
+        "userFix": {
+          "title": "Cần xử lý thủ công"
+        }
+      }
+    },
+    "social": {
+      "aboutToPublishAlt": "Hình ảnh sắp đăng",
+      "account": {
+        "changeFailed": "Không thể đổi tài khoản.",
+        "changed": "Đã đổi tài khoản — hình ảnh và chú thích vẫn giữ nguyên.",
+        "covered": "Tài khoản của tác vụ này đã được chỉnh tay, nên dù đã phê duyệt trước vẫn sẽ được xác nhận một lần trước khi đăng.",
+        "hint": "Nhập tài khoản để tự động kiểm tra \"có thực sự đăng lên tài khoản của tôi không\" sau khi đăng.",
+        "label": "Tài khoản",
+        "notCovered": "Tài khoản này nằm ngoài phạm vi phê duyệt trước để tự động đăng — sẽ được xác nhận trước khi đăng.",
+        "notHandleShaped": "Có vẻ không phải dạng tên tài khoản, nên việc tự động kiểm tra đăng bài chỉ dừng ở \"không rõ\" (vui lòng nhập ID không có @).",
+        "placeholder": "ID tài khoản (không có @)",
+        "save": "Lưu tài khoản",
+        "saveTitle": "Chỉ đổi tài khoản — hình ảnh và chú thích đã tạo vẫn giữ nguyên",
+        "toPost": "Tài khoản để đăng"
+      },
+      "accountDisplayNameOptional": "Tên hiển thị tài khoản (tùy chọn)",
+      "accountIdHint1": "Khi kiểm tra \"có thực sự đã đăng chưa\" trên màn hình sau khi đăng, nó được đối chiếu với ",
+      "accountIdHint2": " bài viết có thuộc tài khoản này không.",
+      "accountIdHint3": "Nếu để trống, sẽ không thể phân biệt với bài viết cùng nội dung của người khác, nên bạn cần tự chọn kết quả kiểm tra.",
+      "accountIdHintBold": "bài viết có thuộc tài khoản này không",
+      "accountIdOptional": "ID tài khoản (tùy chọn)",
+      "accountIdPlaceholder": "vd: my_account (không có @)",
+      "actForRealAttach": "Thực sự đăng",
+      "activityLog": "Nhật ký hoạt động",
+      "allowedHostsRemove": "Trang web được phép — xóa những trang không cần",
+      "alreadyPublished": "Đã đăng rồi",
+      "alreadyPublishedTitle": "Tôi đã tự kiểm tra và nó đã được đăng",
+      "ambiguousCandidates": "Có nhiều hình ảnh ứng viên nên cần xác nhận — sẽ không tự động đăng.",
+      "autoPublishWarning2": "⚠ {platform} · sẽ đăng tối đa {max} bài lên tài khoản \"{account}\" trong vòng {minutes} phút ",
+      "autoPublishing": "Trong phạm vi đã phê duyệt trước nên đang đăng mà không cần xác nhận…",
+      "cancelled": "Đã hủy",
+      "cancelledDot": "Đã hủy.",
+      "cannotUndo": "Không thể hoàn tác.",
+      "caption": "Chú thích",
+      "captionLabel": "Chú thích:",
+      "captionToneOptional": "Giọng điệu chú thích (tùy chọn)",
+      "checking": "Đang kiểm tra…",
+      "clearLog": "Xóa nhật ký",
+      "confirmClearLedger": "Xóa toàn bộ nhật ký hoạt động?",
+      "deadlineHint": "Sau khoảng thời gian này, sẽ không thêm bình luận/thích nữa dù còn bài viết.",
+      "deadlineMinutes": "Thời hạn (phút) — 0 nghĩa là không giới hạn",
+      "directInput": "Nhập trực tiếp",
+      "draftOnly": "Chỉ đến bản nháp",
+      "duplicateRisk": "Tiếp tục mà không kiểm tra có thể đăng trùng lặp.",
+      "edit2": "Sửa",
+      "engageStarted": "Đã bắt đầu tác vụ — xem tiến độ ở mục 📌 Tác vụ trong tab 🤖 Trợ lý.",
+      "enterCustomUrl": "Nhập URL dịch vụ tạo tùy chỉnh.",
+      "failed": "Thất bại",
+      "failedDot": "Đã thất bại.",
+      "generatedImageAlt": "Hình ảnh đã tạo",
+      "generatingImage": "Đang tạo hình ảnh… (có thể mất vài chục giây đến vài phút)",
+      "grantUsed": "Đã dùng phê duyệt trước {used}/{max}",
+      "hashtags": "Hashtag (phân cách bằng dấu phẩy)",
+      "internalPageHint": "Hiện đang ở trang nội bộ như tab mới — khi bắt đầu sẽ chuyển đến địa chỉ tìm kiếm.",
+      "intervalHint1": "Các lần nhấp trước khi hết khoảng thời gian sẽ bị ",
+      "intervalHint2": " (bộ đếm riêng cho từng tác vụ được kiểm tra trên đĩa — vẫn giữ nguyên kể cả sau khi dừng và tiếp tục).",
+      "intervalHintBold": "mã nguồn từ chối",
+      "loadingPreview": "Đang tải bản xem trước…",
+      "mode": "Chế độ",
+      "myBlogUrlOptional": "Địa chỉ blog của tôi (tùy chọn)",
+      "needAtLeastOneHost": "Cần ít nhất một trang web.",
+      "needBlogOrTopic": "Hãy nhập địa chỉ blog hoặc chủ đề.",
+      "needCommentOrLike": "Hãy chọn bình luận hoặc thích.",
+      "needSetup": "Hãy hoàn tất thiết lập AI trước để dùng tính năng tạo/đăng hình ảnh và tự động tham gia blog.",
+      "nextConfirmTarget": "Tiếp theo: xác nhận mục tiêu →",
+      "noActivityYet": "Chưa có hoạt động nào.",
+      "noHostsOutside": "Sẽ không truy cập các trang không có trong danh sách này.",
+      "notPublishedProceed": "Chưa đăng · tiếp tục",
+      "notPublishedTitle": "Tôi đã tự kiểm tra và chưa được đăng — tiếp tục",
+      "pickOneOfCandidates": "Chọn một trong số các ứng viên.",
+      "platform": {
+        "instagram": "Instagram",
+        "tiktok": "TikTok",
+        "youtube": "YouTube"
+      },
+      "postsToHandle": "Số bài viết cần xử lý",
+      "previewLoadFailed": "Không thể tải bản xem trước.",
+      "priorRecordsCount": "{n} bản ghi trước đó",
+      "proceedAsIs": "Tiếp tục nguyên trạng",
+      "promote": {
+        "confirm": "Xác nhận đăng",
+        "confirmFailed": "Không thể xác nhận việc đăng.",
+        "confirmTitle": "Bạn có chắc muốn đăng?",
+        "destination": "Điểm đến",
+        "image": "Hình ảnh",
+        "notRegenerated": "Hình ảnh và chú thích sẽ không được tạo lại — nội dung ở trên sẽ được đăng nguyên vẹn.",
+        "publishing": "Đang đăng…"
+      },
+      "promotedFromDraft": "Đã nâng từ bản nháp lên đăng chính thức",
+      "prompt": "Câu lệnh",
+      "promptPlaceholder": "vd: tách cà phê trên bãi biển lúc hoàng hôn, cảm giác ấm áp",
+      "publishAsIs": "Đăng nguyên trạng",
+      "publishDraft": "Đăng bản nháp này",
+      "publishDraftTitle": "Đăng nguyên trạng mà không tạo lại hình ảnh hoặc chú thích / Publishes as-is — no image or caption is regenerated",
+      "publishing": "Đang đăng…",
+      "receipt": {
+        "needsCheck": "Cần kiểm tra — ",
+        "userConfirmed": "Người dùng đã xác nhận — "
+      },
+      "refresh": "Làm mới",
+      "requesting": "Đang gửi yêu cầu…",
+      "retryCaption": "Tạo lại chú thích",
+      "retryCaptionTitle": "Chỉ tạo lại chú thích với cùng hình ảnh",
+      "retrySameSettings": "Thử lại",
+      "retrySameSettingsTitle": "Thử lại với cùng thiết lập",
+      "revokeGrant": "Thu hồi phê duyệt trước",
+      "searchUrlOptional": "Địa chỉ bắt đầu tìm kiếm (tùy chọn)",
+      "searchUrlPlaceholder": "Để trống để dùng tìm kiếm blog Naver mặc định",
+      "start": "Bắt đầu",
+      "starting": "Đang bắt đầu…",
+      "stepGenerate": "Tạo",
+      "stepPublish": "Đăng",
+      "stepReview": "Xem lại",
+      "stoppedAt": "Dừng tại: {where}",
+      "stopsHere": "Dừng lại ở đây — nhấn nút bên dưới để tiếp tục.",
+      "subtabEngage": "Tham gia blog",
+      "subtabGenerate": "Tạo & đăng hình ảnh",
+      "tagsPlaceholder": "thẻ1, thẻ2",
+      "title": "Tạo & đăng",
+      "toPublish": "Đến khi đăng",
+      "toneCustomPlaceholder": "Nhập giọng điệu tùy chỉnh (tùy chọn)",
+      "topicOptional": "Chủ đề (tùy chọn — cần một trong hai)",
+      "useThisCaption": "Dùng chú thích này",
+      "useThisCaptionTitle": "Lưu chú thích bạn vừa nhập (bản nháp tự động đến muộn sẽ không ghi đè)",
+      "verifyPublished": "Kiểm tra trạng thái đăng (chỉ đọc)",
+      "verifyReadOnlyTitle": "Kiểm tra xem đã đăng chưa bằng cách chỉ đọc, không đăng bài mới",
+      "verifying": "Đang kiểm tra…",
+      "writingCaption": "Đang viết chú thích…"
+    },
+    "tab": {
+      "account": "Tài khoản",
+      "accountDisplayName": "Tên hiển thị tài khoản để đăng",
+      "accountUnset": "(chưa đặt tài khoản)",
+      "actForReal": "Thực sự đăng",
+      "addTagPlaceholder": "Thêm thẻ rồi nhấn Enter…",
+      "advanced": "Tùy chọn nâng cao",
+      "advancedTitle": "Tùy chọn nâng cao như tự lặp, lặp theo dữ liệu, trang web cho phép",
+      "agentDesc": "Tự thực hiện tác vụ thay bạn trên tab hiện tại. Nó tự nhấp, gõ và điều hướng, và sẽ hỏi xác nhận trước các hành động như ",
+      "agentDescBold": "thanh toán, xóa, gửi",
+      "agentDescTail": ".",
+      "agentFilesDirTitle": "Chỉ có thể đính kèm tệp trong Cài đặt > AI > Thư mục tệp trợ lý",
+      "agentInputOnlyTitle": "Trợ lý chỉ nhập nội dung — bạn tự lưu/đăng",
+      "agentInputPlaceholder": "Hãy yêu cầu bất cứ điều gì (vd: tìm biểu mẫu đăng nhập và nhấp vào ô email)",
+      "agentQuickFindKey": "Tìm thông tin quan trọng",
+      "agentQuickStructure": "Nắm cấu trúc trang",
+      "agentWebOnly": "Chỉ chạy được trên trang web (http/https).",
+      "agentWebOnlyPlaceholder": "Chỉ chạy được trên trang web",
+      "aiNotSetup": "Vui lòng hoàn tất thiết lập AI trước",
+      "all": "Tất cả",
+      "allowedHosts": "Trang web được phép (tùy chọn)",
+      "allowedHostsPlaceholder": "example.com\nshop.example.com\n(cách nhau bằng xuống dòng hoặc dấu phẩy · để trống nếu không giới hạn)",
+      "allowedHostsTitle": "Trang web mà lần chạy này được phép điều hướng đến. Để trống nếu không giới hạn.",
+      "analyze": "Phân tích & so sánh",
+      "analyzeTitle": "Để AI so sánh và phân tích dữ liệu đã thu thập thành báo cáo",
+      "autoApproveWarn": "Tự động phê duyệt các hành động khó hoàn tác như đăng bài hoặc xóa mà không cần xác nhận.",
+      "autoApproveWarnRisky": "Tự động phê duyệt các hành động khó hoàn tác như đăng bài hoặc xóa mà không cần xác nhận. Việc này rủi ro, chỉ bật cho tác vụ bạn tin tưởng.",
+      "autoApproved": "Tự động phê duyệt không giám sát",
+      "autoOpenWriteHint": "Khi bật, nếu màn hình hiện tại không phải trang viết bài (như tab mới), trợ lý sẽ tự chuyển đến trang viết bài Naver trước (bạn phải đã đăng nhập sẵn).",
+      "autoPublishEntrust": "Giao phó và tự động đăng",
+      "autoPublishWarning": "⚠ Sẽ đăng tối đa {max} bài lên tài khoản \"{account}\" trên {platform} trong vòng {minutes} phút ",
+      "autoPublishWarningBold": "mà không cần xác nhận",
+      "autoPublishWarningTail": ". Nếu hình ảnh mơ hồ hoặc tạo chú thích thất bại, sẽ không tự động đăng mà chờ xác nhận.",
+      "autoRepeat": "Tự động lặp",
+      "back": "Quay lại",
+      "batchDataPlaceholder": "CSV (dòng đầu là tiêu đề) hoặc mỗi dòng một mục.\nVí dụ:\nten,email\nAn,a@b.com\nBinh,c@d.com\n\nDùng {ten} trong chỉ dẫn để điền giá trị của cột đó.",
+      "batchOnTitle": "Tự động lặp lại cùng tác vụ cho mỗi hàng dữ liệu (CSV hoặc danh sách)",
+      "batchRepeat": "Lặp theo dữ liệu",
+      "callsLabel": "lượt gọi",
+      "cancel": "Hủy",
+      "chatInputPlaceholder": "Hỏi về trang này… (nhấn Enter để gửi)",
+      "clear": "Xóa",
+      "clearAll": "Xóa tất cả",
+      "close": "Đóng",
+      "collectedData": "Dữ liệu đã thu thập: {n}",
+      "colorTitle": "Màu: {c}",
+      "comment": "Bình luận",
+      "commentNamePlaceholder": "Tên dùng trong bình luận",
+      "commentNamePlaceholderOpt": "Tên dùng trong bình luận (tùy chọn)",
+      "compact": "Rút gọn",
+      "compactTitle": "Tóm tắt và gấp phần đầu cuộc trò chuyện dài (tiết kiệm ngữ cảnh)",
+      "compacting": "Đang rút gọn…",
+      "completeScreenAlt": "Màn hình hoàn tất",
+      "confirmClearHistory": "Xóa toàn bộ cuộc trò chuyện đã lưu?",
+      "confirmClearRuns": "Xóa toàn bộ lịch sử tác vụ đã lưu?",
+      "connectFailed": "Không thể kết nối.",
+      "convCount": "{n} cuộc trò chuyện",
+      "copy": "Sao chép",
+      "countUnit": "",
+      "currentTab": "tab hiện tại",
+      "dataMore": "Bảng hiển thị {shown}/{total} · khi xuất sẽ có đủ {total}",
+      "delete": "Xóa",
+      "describeImage": "Mô tả hình ảnh cần tạo",
+      "directInput": "Nhập trực tiếp",
+      "doneCount": "Đã hoàn tất {n} lần",
+      "draftOnly": "Chỉ đến bản nháp",
+      "draftOnly2": "Chỉ bản nháp",
+      "dragToReorder": "Kéo để sắp xếp lại.",
+      "dropToMoveFolder": "Kéo thả cuộc trò chuyện vào đây để chuyển vào thư mục này",
+      "dropToUncategorize": "Kéo thả vào đây để bỏ phân loại",
+      "edit": "Sửa",
+      "editInStudioTitle": "Chỉnh sửa và trau chuốt trong Studio viết bài",
+      "engageWarning": "Bình luận/thích sẽ thực sự được đăng. Không thể hoàn tác.",
+      "every": "mỗi",
+      "examplesHead": "Bạn cũng có thể yêu cầu những việc như thế này",
+      "examplesHint": "(nhấp để chỉnh sửa rồi chạy)",
+      "excludeHosts": "Trang web loại trừ (tùy chọn, phân cách dấu phẩy)",
+      "excludeHostsComma": "Trang web loại trừ (phân cách dấu phẩy)",
+      "execLong": "Chạy lâu dài",
+      "execLongTitle": "Tác vụ tiếp tục chạy lâu dài kể cả khi đóng thanh bên hoặc để trình duyệt mở lâu",
+      "execLongWarn": "⚠ Sẽ tiếp tục thử trong tối đa {h} giờ khi trình duyệt còn mở.",
+      "execMode": "Chế độ chạy",
+      "execNormal": "Thông thường",
+      "executeAsPlainAgent": "Chạy như trợ lý thông thường",
+      "executeAsTask": "Chạy như tác vụ này",
+      "executing": "Đang chạy…",
+      "export": "Xuất",
+      "exportConv": "Xuất cuộc trò chuyện này thành .md",
+      "exportConvTitle": "Lưu cuộc trò chuyện này thành tệp markdown",
+      "exportListTitle": "Xuất danh sách hiện tại thành một tệp markdown",
+      "fold": "Gấp lại",
+      "foldShowOriginal": "Hiện bản gốc đã gấp",
+      "foldToSummary": "Gấp thành tóm tắt",
+      "foldedCount": "{n} tin nhắn trước đã được tóm tắt",
+      "folder": "Thư mục",
+      "folderAndTags": "Thư mục & thẻ",
+      "folderFallbackName": "thư mục",
+      "folderManage": "Quản lý thư mục",
+      "genService": "Dịch vụ tạo",
+      "genServiceUrl": "URL dịch vụ tạo",
+      "history": "Trò chuyện",
+      "historyHeading": "Cuộc trò chuyện trước",
+      "historyTitle": "Cuộc trò chuyện trước",
+      "hoursUnit": "giờ",
+      "howToProceed": "Cách tiến hành",
+      "iconTitle": "Biểu tượng: {em}",
+      "imageToMake": "Hình ảnh cần tạo",
+      "includePageTitle": "Gửi kèm nội dung trang hiện tại cùng với câu hỏi",
+      "intent": {
+        "autoPublishGrantFailed": "Không thể đăng ký phê duyệt trước để tự động đăng — sẽ tiến hành theo cách xác nhận rồi đăng.",
+        "createFailed": "Không thể tạo tác vụ.",
+        "startFailed": "Không thể bắt đầu tác vụ.",
+        "started": "Đã bắt đầu tác vụ — xem tiến độ trong mục 📌 Tác vụ."
+      },
+      "intentHead": "Chạy yêu cầu này như tác vụ {kind}?",
+      "intentKindBlogEngage": "bình luận/thích blog",
+      "intentKindImagePost": "tạo hình ảnh → đăng lên mạng xã hội",
+      "internalNotSupported": "(không khả dụng trên trang nội bộ)",
+      "intervalSeconds": "Khoảng cách giữa các bài (giây)",
+      "intervalSecondsShort": "Khoảng cách (giây)",
+      "like": "Thích",
+      "loading": "Đang tải…",
+      "maxCount": "Số lượng tối đa",
+      "maxHoursLabel": "tối đa",
+      "me": "Tôi",
+      "memory": "Bộ nhớ",
+      "memoryTitle": "Xem/sửa bộ nhớ AI",
+      "messageCount": "{n} tin nhắn",
+      "minutesUnit": "phút",
+      "mode": {
+        "agent": "Trợ lý",
+        "agentTitle": "Tự động thực hiện tác vụ",
+        "chat": "Trò chuyện",
+        "chatTitle": "Trò chuyện với trang",
+        "write": "Viết bài",
+        "writeTitle": "Viết bài blog"
+      },
+      "myBlogUrl": "Địa chỉ blog của tôi (tùy chọn — cần một trong hai)",
+      "needActiveTab": "Cần có một tab đang hoạt động.",
+      "newChat": "Trò chuyện mới",
+      "newChatTitle": "Bắt đầu cuộc trò chuyện mới",
+      "newFolderPlaceholder": "Tên thư mục mới…",
+      "newTask": "Tác vụ mới",
+      "newTaskTitle": "Tác vụ mới",
+      "noFolders": "Chưa có thư mục nào. Hãy tạo ở trên.",
+      "noIcon": "Không có biểu tượng (chấm màu)",
+      "noPtasks": "Chưa có tác vụ lâu dài nào. Chạy tác vụ từ ô nhập để thấy tại đây.",
+      "noRunsYet": "Chưa chạy tác vụ nào.",
+      "noSavedConvs": "Chưa có cuộc trò chuyện nào được lưu.",
+      "noSearchResults": "Không có kết quả tìm kiếm.",
+      "noSteps": "Không có bước nào được ghi lại.",
+      "notice": {
+        "agentNeedsWeb": "Thao tác trình duyệt chạy trên trang web. Hãy mở một trang rồi thử lại.",
+        "summarizeNeedsWeb": "Bạn có thể tóm tắt sau khi mở một trang web."
+      },
+      "on": "Đang bật",
+      "pageContext": "Ngữ cảnh trang",
+      "pasteData": "Dán dữ liệu vào đây (CSV/danh sách)",
+      "pin": "Ghim",
+      "platformInstagram": "Instagram",
+      "platformTiktok": "TikTok",
+      "platformUnset": "(chưa chọn nơi đăng)",
+      "platformYoutube": "YouTube",
+      "postCount": "Số bài viết",
+      "ptasks": "Tác vụ",
+      "ptasksHeading": "Tác vụ lâu dài",
+      "ptasksTitle": "Tác vụ lâu dài — tạm dừng/tiếp tục, vẫn chạy dù đóng thanh bên",
+      "publishAfterConfirm": "Đăng sau khi xác nhận",
+      "publishNoConfirm": "Đăng mà không xác nhận chú thích (chỉ tác vụ này)",
+      "publishWarning": "Sẽ đăng lên tài khoản thật. Không thể hoàn tác.",
+      "quickExplainSelection": "Giải thích phần đã chọn",
+      "quickExtractFacts": "Trích xuất thông tin chính",
+      "quickSummarize": "Tóm tắt trang này",
+      "remove": "Gỡ",
+      "rename": "Đổi tên",
+      "repeatOnTitle": "Tự động lặp lại tác vụ theo khoảng thời gian đã đặt",
+      "repeatStopTitle": "Dừng lặp",
+      "reportBrief": "Nhanh",
+      "reportBriefTitle": "Tập trung vào trang chính, nhanh chóng",
+      "reportFull": "Chi tiết",
+      "reportFullTitle": "Bao quát các trang chính (cần nhiều bước hơn)",
+      "requestFailed": "Không thể xử lý yêu cầu.",
+      "rerun": "Chạy lại",
+      "rerunThisTitle": "Chạy lại tác vụ này",
+      "resumeTitle": "Bắt đầu lại",
+      "retryInMin": "Thử lại sau {m} phút",
+      "retryInSec": "Thử lại sau {s} giây",
+      "rowsDetected": "Phát hiện {n} hàng — sẽ chạy tác vụ cho từng hàng",
+      "runBatchTitle": "Chạy lặp theo dữ liệu",
+      "runTitle": "Chạy",
+      "runs": "Lịch sử",
+      "runsHeading": "Lịch sử tác vụ",
+      "runsTitle": "Lịch sử tác vụ",
+      "saveFailed": "Lưu thất bại",
+      "saveMdTitle": "Lưu thành .md trong thư mục tải xuống",
+      "saveTask": "Lưu",
+      "saveTaskTitle": "Lưu tác vụ hiện tại thành macro",
+      "savedAt": "⤓ Đã lưu: {path}",
+      "savedTasks": "Tác vụ đã lưu",
+      "searchHistoryPlaceholder": "Tìm cuộc trò chuyện (tiêu đề/nội dung)…",
+      "searchStepsPlaceholder": "Tìm bước…",
+      "searchTasksPlaceholder": "Tìm tác vụ…",
+      "send": "Gửi",
+      "send2": "Gửi",
+      "seoSummaryTitle": "Tóm tắt để hiển thị trên tìm kiếm",
+      "setup": {
+        "connectTitle": "Kết nối AI",
+        "connecting": "Đang kiểm tra kết nối…",
+        "detecting": "Đang tìm những gì khả dụng trên máy tính này…",
+        "disabledDesc": "Bật AI trong Cài đặt để đặt câu hỏi và nhận tóm tắt về trang này.",
+        "disabledTitle": "AI đang tắt",
+        "noneUsable": "Không tìm thấy AI nào dùng ngay được trên máy tính này. Hãy thiết lập một trong các lựa chọn bên dưới.",
+        "notReadyCount": "Hiện {n} lựa chọn chưa sẵn sàng",
+        "openSettings": "Mở cài đặt",
+        "pickManually": "Tự chọn trong Cài đặt",
+        "retryDetect": "Tìm lại",
+        "usableFound": "Đã tìm thấy cách dùng ngay. Chọn một để xác nhận kết nối."
+      },
+      "siteReport": "Báo cáo phân tích trang này",
+      "siteReportTitle": "Duyệt qua nhiều trang của trang web đã đăng nhập này và viết báo cáo phân tích (chỉ đọc).",
+      "social": "Tạo",
+      "socialTitle": "Tạo hình ảnh → đăng bài, tự động bình luận/thích blog quan tâm",
+      "sourcesVisited": "Đã xem {n} trang",
+      "startRepeatTitle": "Bắt đầu lặp",
+      "stepCount": "{n} bước",
+      "stepsLabel": "Bước",
+      "stop": "Dừng",
+      "stop2": "Dừng",
+      "stoppedResume": "Đã dừng do khởi động lại — hãy bắt đầu lại",
+      "tags": "Thẻ",
+      "taskCreateFailedEmpty": "Không thể tạo tác vụ (chỉ dẫn trống).",
+      "timesUnit": "lần",
+      "toPublish": "Đến khi đăng",
+      "toggleTitle": "Thu gọn/mở rộng",
+      "topic": "Chủ đề",
+      "topicPlaceholder": "vd: tập gym tại nhà, đồ cắm trại",
+      "trace": {
+        "answer": "Trả lời: {text}",
+        "batchRow": "Đang xử lý hàng {n}/{total}",
+        "batchRowDone": "Hàng {n} xong: {outcome}",
+        "batchStart": "Bắt đầu xử lý hàng loạt — {total} hàng",
+        "cancelled": "Đã hủy",
+        "challengeCaptcha": "Màn hình xác minh con người (CAPTCHA) — vui lòng tự xử lý trong trình duyệt (bằng chứng: {evidence})",
+        "challengeCaptchaShort": "Phát hiện màn hình CAPTCHA — vui lòng tự xử lý trong trình duyệt",
+        "challengeLogin": "Màn hình đăng nhập — vui lòng tự xử lý trong trình duyệt (bằng chứng: {evidence})",
+        "challengeLoginShort": "Phát hiện màn hình đăng nhập — vui lòng tự xử lý trong trình duyệt",
+        "confirmNeeded": "Cần xác nhận: {label}",
+        "done": "Hoàn tất",
+        "error": "Lỗi",
+        "exhausted": "Đã đến bước {steps} — chưa hoàn tất",
+        "needMoreInfo": "Cần thêm thông tin.",
+        "observe": "Quan sát · bước {step} · {elements} thành phần",
+        "observeShort": "Quan sát · bước {step}",
+        "observeVision": "Quan sát · bước {step} · {elements} thành phần · nhận diện hình ảnh",
+        "paused": "Tạm dừng — ngừng thao tác trên trang",
+        "publishPending": "Đã nhấn đăng nhưng không xác nhận được tín hiệu hoàn tất — vui lòng kiểm tra xem đã đăng thật chưa",
+        "reportDefaultTitle": "Báo cáo phân tích trang",
+        "reportWritten": "Đã viết báo cáo — {title}",
+        "resumed": "Đã tiếp tục",
+        "start": "Bắt đầu tác vụ: {task}",
+        "thisAction": "hành động này"
+      },
+      "uncategorized": "Chưa phân loại",
+      "unfold": "Mở rộng",
+      "unlimitedHint": "(0 = không giới hạn)",
+      "unpin": "Bỏ ghim",
+      "validMinutes": "Hiệu lực trong (phút)",
+      "webOnly": "Chỉ chạy trên trang web",
+      "webhookFailed": "Gửi webhook thất bại: {detail}",
+      "webhookSent": "🔗 Đã gửi webhook ({detail})",
+      "webhookTitle": "Gửi qua webhook đã cấu hình (Zapier · Google Sheets · Notion · email)",
+      "welcomeNeedsWeb": "Mở một trang web để xem nội dung của nó tại đây.",
+      "welcomeTitle": "Trò chuyện với trang này",
+      "whatToDo": "Việc cần làm",
+      "whatToDoShort": "Việc gì",
+      "whereToPost": "Nơi đăng",
+      "working": "Đang thực hiện…"
+    },
+    "taskcard": {
+      "acceptResult": "Chấp nhận kết quả",
+      "acceptResultTitle": "Kiểm tra và phê duyệt hoàn tất",
+      "answerDirectPlaceholder": "Hoặc trả lời trực tiếp…",
+      "answerPlaceholder": "Nhập câu trả lời…",
+      "approve": "Phê duyệt",
+      "calls": "lượt gọi",
+      "confirmNeeded": "Cần xác nhận.",
+      "confirmRun": "Chạy {label}?",
+      "deleteFromList": "Xóa khỏi danh sách",
+      "loadingEvidence": "Đang tải bằng chứng…",
+      "longMode": "Chạy lâu dài",
+      "notFinished": "Chưa hoàn tất — có thể tiếp tục.",
+      "openSettings": "Mở cài đặt",
+      "pause": "Tạm dừng",
+      "picker": {
+        "close": "Đóng",
+        "currentTab": "tab hiện tại",
+        "empty": "Không có tab nào để chọn — hãy mở trang đang thao tác rồi tải lại bằng ↻.",
+        "heading": "Nên tiếp tục ở tab nào?",
+        "loading": "Đang tải…",
+        "openButton": "Chọn tab mục tiêu",
+        "originalTarget": "Mục tiêu ban đầu:",
+        "samePage": "cùng trang",
+        "setFailed": "Không thể đặt mục tiêu."
+      },
+      "pleaseVerify": "Vui lòng xác nhận hoàn tất.",
+      "reject": "Từ chối",
+      "rerun": "Chạy lại",
+      "rerunTitle": "Chạy lại cùng tác vụ",
+      "resume": "Tiếp tục",
+      "resume2": "Tiếp tục",
+      "resumeAfterManual": "Đã xử lý — tiếp tục",
+      "resumeAfterManualTitle": "Nhấn sau khi hoàn tất bước thủ công",
+      "resumeSameTab": "Tiếp tục nguyên trạng",
+      "resumeSameTabOnlyTitle": "Chỉ tiếp tục được nếu tab gốc vẫn còn mở — nếu không hãy chọn tab mục tiêu ở trên",
+      "retryNth": "lần thử thứ {n}",
+      "segment": "đoạn",
+      "send": "Gửi",
+      "step": "bước",
+      "stop": "Dừng"
+    },
+    "write": {
+      "attachFileLabel": "Tệp đính kèm (tên trong thư mục tệp trợ lý)",
+      "autoOpenPublishPage": "Tự động mở trang đăng bài",
+      "autoOpenWritePage": "Tự động mở trang viết bài",
+      "blogDraftBtnTitle": "Trợ lý viết bài rồi lưu thành bản nháp (không đăng)",
+      "blogDraftNotice": "Trợ lý sẽ viết bài rồi lưu thành bản nháp.",
+      "blogInsertNotice": "Trợ lý chỉ nhập nội dung vào.",
+      "blogPublishBtnTitle": "Trợ lý viết bài trong trình soạn thảo và đăng luôn (sẽ hỏi xác nhận ngay lúc đăng)",
+      "blogPublishNotice": "Trợ lý sẽ viết bài rồi đăng (xác nhận ngay lúc đăng).",
+      "body": "Nội dung",
+      "copied": "Đã sao chép.",
+      "drafts": "Bản nháp",
+      "edit": "Sửa",
+      "editParen": "(sửa)",
+      "enterSeriesTopicFirst": "Trước tiên hãy nhập chủ đề series bên dưới.",
+      "extraPlaceholder": "Yêu cầu thêm (vd: tập trung 3 mẹo, có bảng)",
+      "generate": "Tạo bài viết",
+      "generateFailed": "Tạo bản nháp thất bại.",
+      "generating": "Đang tạo… (có thể mất vài chục giây)",
+      "hint2": " nhận diện Naver SmartEditor, điền tiêu đề, nội dung và thẻ rồi đăng, và sẽ hỏi xác nhận một lần ngay lúc nhấn ",
+      "hint3": " nút đăng khó hoàn tác này. ",
+      "hint4": " chỉ lưu mà không đăng. Naver yêu cầu bạn phải ",
+      "hint5": " từ trước.",
+      "hintBold1": "Viết và đăng",
+      "hintBold2": "nút đăng",
+      "hintBold3": "Lưu nháp",
+      "hintBold4": "đăng nhập sẵn",
+      "inputOnly": "Chỉ nhập",
+      "keywordsExtraTitle": "Từ khóa & yêu cầu thêm",
+      "keywordsPlaceholder": "Từ khóa chính (phân cách dấu phẩy, để hiển thị trên tìm kiếm)",
+      "length": {
+        "long": "Dài",
+        "medium": "Vừa",
+        "short": "Ngắn"
+      },
+      "lengthLabel": "Độ dài",
+      "loadDraftTitle": "Tải bản nháp đã lưu",
+      "loaded": "Đã tải.",
+      "naverParen": "(Naver)",
+      "needAttachFile": "Nhập tên tệp cần đính kèm (trong thư mục tệp trợ lý). vd: photos/cat.jpg",
+      "needSetup": "Hãy hoàn tất thiết lập AI trước, sau đó chỉ cần nhập chủ đề để tạo bài blog hoàn chỉnh.",
+      "needWritePage": "Hãy mở trang viết bài blog trước, hoặc bật \"Tự động mở trang viết bài\".",
+      "noDrafts": "Chưa có bản nháp nào.",
+      "nothingToSave": "Không có gì để lưu.",
+      "options": "Tùy chọn",
+      "partN": "Phần {n}",
+      "partNsm": "Phần {n}",
+      "parts": "phần",
+      "plan": "Lên kế hoạch",
+      "planning": "Đang lên kế hoạch…",
+      "platform": {
+        "generic": "Chung",
+        "instagram": "Instagram (bài đăng)",
+        "naver": "Naver Blog",
+        "tiktok": "TikTok (video)",
+        "tistory": "Tistory",
+        "wordpress": "WordPress",
+        "youtube": "YouTube (video)"
+      },
+      "platformSeoTitle": "Nền tảng đăng (tối ưu SEO)",
+      "preview": "Xem trước",
+      "previewParen": "(xem trước)",
+      "publish": "Đăng",
+      "refine": {
+        "detailed": "Chi tiết hơn",
+        "easier": "Dễ hơn",
+        "faq": "Thêm FAQ",
+        "intro": "Mở đầu ấn tượng hơn",
+        "shorter": "Ngắn hơn",
+        "table": "Thêm bảng"
+      },
+      "refineBtn": "Trau chuốt",
+      "refineFailed": "Trau chuốt thất bại.",
+      "refineInputPlaceholder": "Cần trau chuốt thế nào? (vd: thêm ví dụ vào đoạn thứ 3)",
+      "refineTitle": "Trau chuốt bài viết",
+      "refined": "Đã trau chuốt.",
+      "regenerate": "Tạo lại",
+      "save": "Lưu",
+      "saveAsDraft": "Lưu bản nháp",
+      "saveDraft": "Lưu nháp",
+      "saveDraftTitle": "Lưu bản nháp hiện tại",
+      "saved": "Đã lưu.",
+      "savedBadge": "Đã lưu",
+      "series": "Series",
+      "seriesPlanFailed": "Lên kế hoạch series thất bại.",
+      "seriesPlanHead": "Lên kế hoạch series từ chủ đề —",
+      "seriesPlanTitle": "Lên kế hoạch series",
+      "snsBodyIsCaptionHint": "Ô nội dung sẽ trở thành chú thích. Thẻ sẽ gắn thành hashtag.",
+      "snsDraftBtnTitle": "Chỉ chuẩn bị đến ngay trước khi đăng (sẽ không nhấn nút đăng)",
+      "snsDraftNotice": "Trợ lý chỉ chuẩn bị đến ngay trước khi đăng (sẽ không nhấn nút đăng).",
+      "snsPublishBtnTitle": "Trợ lý đính kèm tệp, điền chú thích rồi đăng",
+      "snsPublishNotice": "Trợ lý sẽ đính kèm tệp và điền chú thích rồi đăng. Sẽ tự kết thúc khi thấy thông báo hoàn tất.",
+      "tagsComma": "Thẻ (phân cách dấu phẩy)",
+      "title": "Viết bài blog",
+      "titleLabel": "Tiêu đề (chọn từ ứng viên · có thể sửa)",
+      "titlePlaceholder": "Tiêu đề",
+      "tone": "Giọng điệu",
+      "topicLabel": "Chủ đề / bài viết về điều gì?",
+      "topicPlaceholder": "vd: cách người mới bắt đầu tập gym tại nhà",
+      "undo": "Hoàn tác",
+      "undoRefineTitle": "Quay lại trước khi trau chuốt",
+      "undone": "Đã hoàn tác.",
+      "untitled": "Chưa có tiêu đề",
+      "upToBeforePublish": "Đến ngay trước khi đăng",
+      "writeAndPublish": "Viết và đăng",
+      "writeThisPart": "Viết",
+      "writeThisPartTitle": "Viết phần này",
+      "youtubeFieldHint": "Dùng ô tiêu đề ở trên cho tiêu đề, ô nội dung cho mô tả."
+    }
+  }
+}

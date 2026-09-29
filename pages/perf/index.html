@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>성능</title>
     <style>
       :root { color-scheme: light dark;
@@ -55,16 +57,16 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>성능 게이트</h1>
-      <div class="lead">콜드 스타트와 빈 창 메모리를 측정해 예산을 초과하지 않는지 감시합니다.</div>
+      <h1 data-i18n="page.perf.a1">성능 게이트</h1>
+      <div class="lead" data-i18n="page.perf.a2">콜드 스타트와 빈 창 메모리를 측정해 예산을 초과하지 않는지 감시합니다.</div>
 
       <div id="gate"></div>
 
       <div class="stat-grid" id="stats"></div>
 
-      <h2>최근 부팅 기록 (최대 30회)</h2>
+      <h2 data-i18n="page.perf.a3">최근 부팅 기록 (최대 30회)</h2>
       <div class="section" id="history-section">
-        <div class="meta">아직 기록이 없습니다 — 30초 후 첫 항목이 저장됩니다.</div>
+        <div class="meta" data-i18n="page.perf.a4">아직 기록이 없습니다 — 30초 후 첫 항목이 저장됩니다.</div>
       </div>
     </div>
     <script>

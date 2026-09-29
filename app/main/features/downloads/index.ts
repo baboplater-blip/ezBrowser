@@ -1,6 +1,5 @@
-import { app, dialog, shell, session, Notification, type Session } from 'electron'
+import { dialog, shell, session, Notification, type Session } from 'electron'
 import { EventEmitter } from 'node:events'
-import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import type { DownloadItem as DownloadDto } from '../../../shared/types'
 import { IPC } from '../../../shared/ipc-channels'
@@ -8,12 +7,14 @@ import { getAllWindows, broadcastToInternalPages } from '../../windows/window-se
 import { getSetting } from '../../storage/settings'
 import { addSessionInitHook, setupSessionByPartition } from '../../session-bootstrap'
 import { findTabIdByWebContentsId, getTabPartition } from '../../tabs/tab-service'
+import { tMain } from '../../i18n'
 import {
   type AcceleratorJob, cancelJob as cancelAcceleratorJob, metaFromJob,
   pauseJob as pauseAcceleratorJob, probeUrl, resumeAcceleratedDownload,
   resumeJob as resumeAcceleratorJob, startAcceleratedDownload,
 } from './multi-connection'
 import { type AccelPending, installPendingQuitHook, putPending, removePending } from './pending-store'
+import { defaultDownloadDir } from './dir'
 
 interface HttpTracked {
   id: string
@@ -94,22 +95,9 @@ export function nextDownloadId(prefix: string): string {
   return `${prefix}-${counter}-${Date.now()}`
 }
 
-/**
- * 다운로드 기본 저장 위치 — settings.downloads.defaultPath 를 우선 사용(존재하는 디렉터리일 때만),
- * 비어있거나 유효하지 않으면 OS Downloads 폴더로 폴백. subfolder 는 그 base 아래에 join(영상/토렌트용).
- */
-export function defaultDownloadDir(subfolder?: string): string {
-  let base = app.getPath('downloads')
-  const configured = (() => {
-    try { return getSetting('downloads').defaultPath } catch { return '' }
-  })()
-  if (configured && configured.trim()) {
-    try {
-      if (existsSync(configured) && statSync(configured).isDirectory()) base = configured
-    } catch { /* 유효하지 않은 경로 — OS 기본값 폴백 */ }
-  }
-  return subfolder ? path.join(base, subfolder) : base
-}
+// 저장 위치 규칙은 ./dir 하나가 갖는다(부작용 없는 모듈이라 AI 내보내기 쪽에서도 같은 규칙을 쓴다).
+// 기존 import 경로(`from '../downloads'`)를 깨지 않도록 여기서 그대로 다시 내보낸다.
+export { defaultDownloadDir } from './dir'
 
 async function tryStartAccelerator(args: {
   id: string; url: string; filename: string; savePath: string;
@@ -399,7 +387,9 @@ function installCompletionFeedback(): void {
   downloadEvents.on('done', (meta: DownloadDto) => {
     const ok = meta.state === 'done'
     if (!ok && meta.state !== 'failed') return // cancelled 는 알리지 않음
-    const msg = ok ? `✓ ${meta.filename} 다운로드 완료` : `✗ ${meta.filename} 다운로드 실패`
+    const msg = ok
+      ? tMain('main.download.completeToast', `✓ ${meta.filename} 다운로드 완료`, { filename: meta.filename })
+      : tMain('main.download.failedToast', `✗ ${meta.filename} 다운로드 실패`, { filename: meta.filename })
     for (const ctx of getAllWindows()) {
       if (!ctx.chrome.webContents.isDestroyed()) {
         ctx.chrome.webContents.send('toast:show', { message: msg, ts: Date.now() })
@@ -408,7 +398,7 @@ function installCompletionFeedback(): void {
     if (ok) {
       try {
         if (Notification.isSupported()) {
-          const n = new Notification({ title: '다운로드 완료', body: meta.filename })
+          const n = new Notification({ title: tMain('main.download.completeTitle', '다운로드 완료'), body: meta.filename })
           n.on('click', () => { try { openDownloadFolder(meta.id) } catch { /* ignore */ } })
           n.show()
         }
@@ -627,5 +617,6 @@ export function openDownloadFolder(id: string): void {
     if (ext.kind === 'torrent') { void shell.openPath(ext.savePath); return }
     shell.showItemInFolder(ext.savePath); return
   }
-  void shell.openPath(app.getPath('downloads'))
+  // 항목을 못 찾았을 때의 폴백 — 사용자가 설정한 저장 위치를 연다(OS 기본 폴더 고정이 아니라).
+  void shell.openPath(defaultDownloadDir())
 }

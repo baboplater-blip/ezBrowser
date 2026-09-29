@@ -1,0 +1,82 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T051348Z-4f8c92",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T05:42:36Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "'그림 만들어 인스타에 올려줘' 를 끝까지 맡기면, 브라우저가 스스로 탭을 게시 사이트로 옮긴 뒤 올리고 게시 영수증까지 간다 (전에는 여기서 '작업할 탭을 열어주세요' 로 멈췄다)",
+      "check": "실제 구독 Claude CLI + 생산 UI/IPC/워크플로 경로(socialGrant→socialStart→자동선택→자동게시) R-SNS PASS — 게시탭=https://www.instagram.com/(호스트일치) · 게시단계 모델호출 7회(수정 전 0회) · stage=done · 94초",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "올라간 파일이 내가 만든 그림 그대로이고, 캡션도 AI 가 쓴 것이 해시태그와 함께 올라간다",
+      "check": "픽스처 서버가 실제로 받은 것으로 판정 — 산출물 sha256 = 업로드 sha256 바이트 일치 · 캡션 모델 작성 한국어 + #test 포함 · 하네스가 캡션을 대신 쓰지 않음",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "positive",
+      "behavior": "게시는 내가 허용한 사이트에서만 일어나고, 같은 창·같은 스페이스라 로그인 상태가 유지된다",
+      "check": "범위 밖 호스트 0건 · allowedHosts 는 게시 호스트 1개로 불변(단위검사) · 탭이 닫혔을 때만 새 탭을 열되 생성 작업과 같은 workspaceId 로만 연다",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "탭을 옮기는 도중 취소하거나 자동 게시 선승인을 거두면 아무것도 올라가지 않는다",
+      "check": "verify-auto-publish 51/51 — 이동 중 취소 → 게시작업 0건·stage=cancelled / 이동 중 철회 → 0건·failed·선승인 건수 환불 / 기한 만료 → 0건",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "승인 버튼을 두 번 눌러도, 앱이 꺼졌다 켜져도 같은 그림이 두 번 올라가지 않는다",
+      "check": "이동 중 중복 승인 → 거부(ok:false) + 게시작업 1건뿐 / 준비 중 종료된 작업은 복원 시 failed 로 되돌리고 '게시는 진행되지 않았습니다' 표시 · 실측 게시 1건",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "게시 사이트가 아닌 곳(로그인 리다이렉트 등)에 도착하면 거기서 진행하지 않는다",
+      "check": "landsAt=login.example.com 일 때 게시작업 0건·failed·사유에 도착 호스트 표시. 호스트 판정은 에이전트가 쓰는 hostAllowed 그대로 — 허용 목록을 넓혀 통과시키지 않음",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "이 수정이 기존 동작을 깨지 않는다",
+      "check": "npm run verify 13/13(53s) · rc.7 포터블 스모크 16/16 · typecheck 3/3. 수정 전 빌드에서는 신규 검사 중 12종이 실패하는 것을 먼저 확인(검출력 확인)",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [
+      "rc.7 설치파일 설치→부팅→제거 검증(사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED — 우회하지 않음)"
+    ],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — rc.7 미서명",
+      "실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처)"
+    ],
+    "optional_next": [
+      "이미지 생성 단계에도 같은 앱-주도 탭 이동 적용 여부 판단(현재는 '보던 페이지에서 시작' 전제 — 창에 http 탭이 없으면 생성 단계가 같은 가드로 멈춘다)",
+      "R-BLOG 실모델 재확인(이번엔 직전 통과라 SKIP)"
+    ],
+    "korean_line": "남은 작업: rc.7 설치파일 설치→부팅→제거 검증(사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED — 우회하지 않음), (차단) 코드 서명 인증서(.pfx) 없음 — rc.7 미서명, (차단) 실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "npm run verify(13/13) + verify-auto-publish(51/51) + verify-social-realmodel --only r-sns(R-SNS PASS, R-CLEAN PASS) + smoke-cdp(16/16)",
+    "passed": 80,
+    "failed": 0,
+    "reran_only_failed": true
+  },
+  "notes": "직전 run042628 의 필수 잔여 1건(게시 단계 탭 미이동)을 수정하고 같은 생산 경로로 실모델 재검증. 게시는 비가역이라 '0건 또는 1건' 을 코드로 보장하는 선점+재확인 구조로 설계했고, 허용 목록·체크포인트 검증을 약화시키지 않았다."
+}

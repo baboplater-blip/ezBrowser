@@ -19,6 +19,15 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+} from './lib/cdp.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -45,6 +54,19 @@ function parseArgs(argv) {
     else if (a === '--warmup-ms') out.warmupMs = Number(argv[++i] ?? DEFAULTS.warmupMs)
     else if (a === '--stabilize-ms') out.stabilizeMs = Number(argv[++i] ?? DEFAULTS.stabilizeMs)
     else if (a === '--single-boot') out.singleBoot = true
+    else if (a === '--ab') out.ab = true
+    else if (a === '--runs') out.runs = Math.max(2, Number(argv[++i] ?? 4))
+    else if (a === '--settle-ms') out.settleMs = Math.max(0, Number(argv[++i] ?? 15000))
+    else if (a === '--a-label') out.aLabel = argv[++i] ?? 'A'
+    else if (a === '--b-label') out.bLabel = argv[++i] ?? 'B'
+    else if (a === '--a-settings') out.aSettings = argv[++i] ?? '{}'
+    else if (a === '--b-settings') out.bSettings = argv[++i] ?? '{}'
+    else if (a === '--a-env' || a === '--b-env') {
+      const which = a === '--a-env' ? 'aEnv' : 'bEnv'
+      const kv = argv[++i] ?? ''
+      const eq = kv.indexOf('=')
+      if (eq > 0) (out[which] ??= {})[kv.slice(0, eq)] = kv.slice(eq + 1)
+    }
     else if (a === '--env') {
       const kv = argv[++i] ?? ''
       const eq = kv.indexOf('=')
@@ -162,41 +184,6 @@ async function killApp(child, port, outDir) {
   removeProcFile(outDir)
 }
 
-class CDPSession {
-  constructor(wsUrl, label) { this.wsUrl = wsUrl; this.label = label; this.ws = null; this._id = 0; this.pending = new Map() }
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => { for (const [, p] of this.pending) p.reject(new Error('ws closed')); this.pending.clear() })
-  }
-  _onMessage(ev) {
-    let msg; try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`)); else resolve(msg.result)
-    }
-  }
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1) return Promise.reject(new Error(`CDP session not open (${this.label})`))
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }))
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-  close() { try { this.ws?.close() } catch {} }
-}
-
-async function connectSession(target, label) {
-  const s = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await s.connect()
-  return s
-}
-
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
   const result = await session.send('Runtime.evaluate', { expression, awaitPromise, returnByValue, userGesture: true }, timeoutMs)
@@ -214,22 +201,6 @@ function callApi(session, apiPath, args = []) {
 function callInternal(session, apiPath, args = []) {
   const argStr = args.map((a) => (a === undefined ? 'undefined' : JSON.stringify(a))).join(', ')
   return evaluate(session, `window.internalAPI.${apiPath}(${argStr})`)
-}
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string' && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  return pollUntil(async () => { lastList = await getTargetList(port); return lastList.find(isShellTarget) ?? null },
-    { timeoutMs, intervalMs: 400, label: 'shell CDP target' }).catch((err) => {
-      throw new Error(`${err.message}\n마지막 타깃: ${lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')}`)
-    })
 }
 
 function queryProcessCounters(pids) {
@@ -292,9 +263,16 @@ function seedProfile(profileDir, settingsPatch) {
 }
 
 async function bootAndGetSessions(exe, out, port, profileDir, tag, extraEnv) {
+  if (!(await waitForPortFree(port))) {
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+    throw new Error(`디버그 포트 ${port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+  }
   const child = launchApp(exe, out, port, profileDir, tag, extraEnv)
-  const shellTarget = await waitForShellTarget(port, 30_000)
-  const chromeSession = await connectSession(shellTarget, `chrome${tag}`)
+  const chromeSession = await connectShellSessionReady(port, {
+    label: `chrome${tag}`,
+    log: (msg) => console.log(`[perf-breakdown] ${msg}`),
+  })
   const windowId = await pollUntil(
     () => evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`),
     { timeoutMs: 8_000, intervalMs: 300, label: 'windowId' },
@@ -366,6 +344,84 @@ async function runOne(args) {
   return result
 }
 
+// ── A/B 비교 모드 ────────────────────────────────────────────────────────
+//
+// 왜 있는가 (2026-09-07, auto-dev 임무 5의 뼈아픈 교훈):
+//   메모리 기여도를 손으로 A/B 하다 **두 번 잘못된 결론**을 냈다. 1회씩·2회씩 비교했을 때
+//   "AI 레이어가 15MB" 라는 차이가 보였지만, 4회씩 교대로 늘리자 사라졌다. 이 머신의 빈 창
+//   측정에는 실행 간 ±13MB 드리프트가 있고 그 폭이 예산 여유와 맞먹기 때문이다.
+//   그래서 **표본 수와 교대 실행을 코드가 강제**하고, 차이가 산포보다 작으면 "차이 없음"으로
+//   못 박는다. 사람이 눈으로 두 숫자를 비교하는 순간 같은 실수가 반복된다.
+
+function stats(values) {
+  const v = [...values].sort((a, b) => a - b)
+  const median = v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2
+  return { n: v.length, median, min: v[0], max: v[v.length - 1], spread: v[v.length - 1] - v[0], values: v }
+}
+
+async function runAb(args) {
+  const runs = args.runs ?? 4
+  const aVals = []
+  const bVals = []
+  console.log(`[perf-breakdown:AB] ${args.aLabel} vs ${args.bLabel} — 각 ${runs}회 **교대** 실행`)
+  // 탐지 한계를 **측정 전에** 알린다. 이 값보다 작은 기여도는 이 조건에서 구분할 수 없고,
+  // 그걸 모른 채 시작하면 "차이 없음"을 원인 부재로 오해하게 된다(2026-09-07: 실제로 두 번 그랬다).
+  // 이 머신의 부팅 간 산포는 관측상 10~20MB 였다. 표본이 늘면 중앙값이 안정되므로 대략 산포/√n 로 잡는다.
+  const assumedSpread = 18
+  const detectable = Math.round((assumedSpread / Math.sqrt(runs)) * 10) / 10
+  console.log(`[perf-breakdown:AB] 예상 탐지 한계 ≈ ${detectable}MB (관측 산포 ${assumedSpread}MB 가정, 표본 ${runs}회)`)
+  console.log('[perf-breakdown:AB] 이보다 작은 기여도는 이 조건에서 "차이 없음"으로 나온다 — 더 작은 것을 보려면')
+  console.log('[perf-breakdown:AB] 표본을 늘리거나, 한 부팅 안에서 재는 방식(초기화 전후 rss 증분)을 쓸 것.')
+  for (let i = 1; i <= runs; i++) {
+    for (const side of ['a', 'b']) {
+      const cfg = {
+        ...args,
+        label: `${side === 'a' ? args.aLabel : args.bLabel}#${i}`,
+        settings: side === 'a' ? (args.aSettings ?? '{}') : (args.bSettings ?? '{}'),
+        extraEnv: side === 'a' ? args.aEnv : args.bEnv,
+      }
+      const r = await runOne(cfg)
+      if (!r.ok) { console.warn(`  ⚠ ${cfg.label} 실패: ${r.error}`); continue }
+      // 부팅을 연달아 하면 그 자체가 부하가 되어 산포를 키운다(2026-09-07 실측: 대조군에서
+      // 산포 8~16MB → 10MB 미만 기여도는 탐지 불가). 측정 사이에 머신을 식힌다.
+      await sleep(args.settleMs ?? 15000)
+      ;(side === 'a' ? aVals : bVals).push(r.sample.totalPrivateWorkingSetMB)
+    }
+  }
+  if (aVals.length < 2 || bVals.length < 2) {
+    console.error('[perf-breakdown:AB] 유효 표본이 부족해 비교할 수 없습니다.')
+    return { ok: false }
+  }
+  const A = stats(aVals)
+  const B = stats(bVals)
+  const delta = Math.round((B.median - A.median) * 10) / 10
+  const noise = Math.max(A.spread, B.spread)
+
+  console.log('\n===== A/B 비교 (전체 private WS, MB) =====')
+  console.table([
+    { 구성: args.aLabel, 표본: A.n, 중앙값: A.median, 최소: A.min, 최대: A.max, 산포: A.spread },
+    { 구성: args.bLabel, 표본: B.n, 중앙값: B.median, 최소: B.min, 최대: B.max, 산포: B.spread },
+  ])
+  console.log(`중앙값 차이(${args.bLabel} − ${args.aLabel}) = ${delta >= 0 ? '+' : ''}${delta}MB · 관측 산포(최대) = ${noise}MB`)
+  if (Math.abs(delta) <= noise) {
+    console.log('판정: **차이 없음** — 중앙값 차이가 실행 간 산포 이내다. 이 데이터로 기여도를 주장하면 안 된다.')
+    console.log(`      (이 조건의 탐지 한계 ≈ ${detectable}MB — 그보다 작은 차이는 애초에 보이지 않는다)`)
+    console.log(`      (주장하려면 표본을 늘리거나(--runs ${runs * 2}) 더 조용한 환경에서 측정할 것)`)
+  } else {
+    console.log(`판정: **차이 있음** — 산포(${noise}MB)를 넘는 ${Math.abs(delta)}MB 차이. ${delta > 0 ? args.bLabel : args.aLabel} 쪽이 더 많이 쓴다.`)
+  }
+  const outPath = path.join(args.out, 'ab-result.json')
+  fs.writeFileSync(outPath, JSON.stringify({
+    at: new Date().toISOString(), runs,
+    a: { label: args.aLabel, settings: args.aSettings ?? '{}', env: args.aEnv ?? null, ...A },
+    b: { label: args.bLabel, settings: args.bSettings ?? '{}', env: args.bEnv ?? null, ...B },
+    deltaMedianMB: delta, noiseMB: noise,
+    verdict: Math.abs(delta) <= noise ? 'no-difference' : 'difference',
+  }, null, 2))
+  console.log(`결과: ${outPath}`)
+  return { ok: true }
+}
+
 async function main() {
   if (typeof WebSocket === 'undefined') {
     console.error('[perf-breakdown] Node 22+ 필요 (전역 WebSocket 없음).')
@@ -376,7 +432,7 @@ async function main() {
     console.error(`[perf-breakdown] exe 를 찾을 수 없음: ${args.exe}`)
     process.exit(1)
   }
-  const result = await runOne(args)
+  const result = args.ab ? await runAb(args) : await runOne(args)
   process.exit(result.ok ? 0 : 1)
 }
 

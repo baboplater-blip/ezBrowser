@@ -1,0 +1,138 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T071013Z-10952b",
+  "recorded_at": "2026-09-19T07:15:55Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T071013Z-10952b",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T071013Z-10952b)의 구조화 완료 기록: pass (합격 기준 6건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "bb614d9c-95ac-4f96-a9cb-fb4f4c0c590b",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 더블클릭할 rc.10 설치파일이 실제로 디스크에 있고, 그 exe 에 박힌 버전이 package.json 과 같은 0.2.0-rc.10 이다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "안내서에 적힌 설치파일 경로·크기·해시가 디스크의 그 파일과 그대로 맞는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "안내서가 다른 빌드의 해시를 이 빌드 것이라고 말하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "빌드가 원격 저장소에 아무것도 올리지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "사용자가 지금 쓰고 있는 설치본과 실행 중인 앱을 건드리지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "이번 실행이 앱 코드를 바꾸지 않는다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "rc.10 설치파일 설치→부팅→제거 실검증 — 이번 지시가 금지한 범위(사용자 실설치본 가동 중). 실측은 rc.2 가 마지막",
+        "마감 게이트의 package 단계를 --dir 로만 두는 한 설치파일은 계속 자동 생성되지 않는다 — 게이트에 NSIS 단계를 넣을지는 제품 결정"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T071013Z-10952b"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 342.4,
+        "context_chars": 10099,
+        "total_tokens": 338588,
+        "cache_read_tokens": 7045917
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9350,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 50,
+          "output": 26979,
+          "cache_read": 7045917,
+          "cache_creation": 302187
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\recovery-flow-20260919\\run-20260919T071013Z-10952b-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\recovery-flow-20260919\\run-20260919T071013Z-10952b-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "마감했습니다. 지적하신 불일치가 실제로 존재했고, 원인까지 확정했습니다.\n\n## 발견 — 지적이 전부 맞았습니다\n\n| 주장 | 실제 (직접 읽음) |\n|---|---|\n| dist 에 rc.10 있음 | **없었음** — rc.1~rc.9 까지만 |\n| QUICKSTART rc.9 해시 `ffc3734b…` | **rc.8 의 해시**. rc.9 실제는 `a6cd5b02…` |\n| 470행 | `rc.6` 문구가 \"이 설치파일\"로 현재를 가리키듯 잔존 |\n\n**왜 매번 빠졌나(원인 확정)**: 마감 게이트의 package 단계는 `build/verify-all.mjs:59` 에서 `electron-builder --win **--dir**` 를 돕니다. `--dir` 는 `win-unpacked` 만 만들고 **NSIS 설치파일을 만들지 않습니다.** 그래서 `package ✅ PASS` 가 찍혔고 그걸 \"설치파일 생성됨\"으로 읽어 영수증이 없는 rc.10 을 언급했습니다.\n\n**추가로 드러난 것**: rc.9 exe(15:44)는 게시 작업 유실을 고친 **마지막 수정(15:58)을 담고 있지 않습니다.** 마감 게이트 verify 13/13 은 16:04 — 즉 **검사를 통과한 코드가 담긴 첫 설치파일이 rc.10** 입니다.\n\n## 산출물 (실측)\n\n```\n경로   C:\\Users\\molma\\Desktop\\하네스\\browser-build\\dist\\ezBrowser-0.2.0-rc.10-win-x64.exe\n크기   121,903,289 바이트 (116.3 MB)\n생성   2026-09-19 16:11:38\nSHA256 ea6ee034edfcb6eeceedb5fddbdf3de165a31caecb8990b9538c15e00ba1ec5e\n내장버전 ProductVersion/FileVersion = 0.2.0-rc.10  (package.json 일치)\n포터블 dist\\win-unpacked\\ezBrowser.exe 16:11:20 · app.asar 16:11:16 — 같은 빌드\n빌드   npm run build → npx electron-builder --win --publish never (exit 0)\n```\n\n## 검증 범위와 한계\n\n- **업로드 0** — 로그에 `uploading`/`publishing` 라인 없음(`publish` 히트 4건은 전부 `publisherName` 사용중단 경고). GitHub 릴리스 무변경.\n- **사용자 앱 무접촉** — ezBrowser 5 프로세스가 `%LOCALAPPDATA%` 에서 계속 가동 중(빌드 전후 5→5). 종료·설치·제거 0회. 빌드 대상이 `dist` 뿐이라 잠금 충돌 없었습니다.\n- **검사 재실행 안 함** — 마감 게이트(16:04) 이후 손으로 고친 소스 0. 그 뒤 바뀐 `perf-baseline.json`·`tokens.gen.css` 는 이번 빌드가 스스로 생성한 산출물입니다.\n- **설치→부팅→제거는 미검증** — 지시가 금지한 범위이고, 사용자 실설치본이 가동 중이라 우회하지 않았습니다. 따라서 보증 범위는 **\"올바른 소스로 설치파일이 만들어졌다\"까지**이고 \"설치하면 뜬다\"는 아닙니다(실측은 rc.2 가 마지막). 이 한계를 QUICKSTART 에 명시했습니다.\n\n## 고친 문서\n\n- **`docs/QUICKSTART.md`** — 기준 빌드·설치 경로·표(경로/크기/시각/해시)를 rc.10 실측값으로. rc.8 해시 오기 정정 문장 추가, rc.9 를 쓰지 말라는 경고, rc.6 잔재 제거, 설치 미검증 한계 명시.\n- **`.auto-dev/recovery-flow-20260919-final.md`** — 마감 절 추가: 불일치 대조표 / `--dir` 원인 확정 / flush 원인 최종 정리(2000ms 는 보장이 아니라 최악 지연 상한) / **미계측 실제 모델** / 산출물 일치.\n\n**미계측 실제 모델**: R3-REAL 이 쓴 구독 CLI(`claude` 2.1.267)는 오케스트레이터 토큰 집계를 거치지 않아 **",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T071013Z-10952b\\stream.jsonl",
+    "error": null
+  }
+}

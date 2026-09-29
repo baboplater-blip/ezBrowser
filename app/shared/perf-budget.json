@@ -1,0 +1,24 @@
+{
+  "_설명": "가벼움 예산(1원칙 #1)의 **기계가 읽는 단일 출처**. CLAUDE.md 의 예산 표는 사람이 읽는 설명이고, 판정에 쓰이는 값은 여기 하나뿐이다.",
+  "_사용처": [
+    "build/perf-measure.mjs — 측정·판정",
+    "build/gen-perf-baseline.mjs — 앱에 주입할 perf-baseline.json 에 그대로 복사",
+    "pages/memory/index.html — 주입된 baseline.budgets 를 통해 간접 사용"
+  ],
+  "_값을_바꿀_때": "숫자를 올리기 전에 왜 늘었는지부터 조사할 것. 예산 완화는 측정으로 근거를 만든 뒤에만 한다(2026-09-07 임무 8 참고).",
+
+  "coldStartMs": 2000,
+
+  "blankWindowNoAdblockMB": 155,
+  "_blankWindowNoAdblockMB": "판정 1순위 — adblock 을 제외한 빈 창(우리가 통제하는 코드). 근거: 2026-09-07 dual 실측 149·146·149MB(노이즈 ±1.5MB) → 중앙값 149 + 6MB(노이즈 3배).",
+
+  "blankWindowMemoryMB": 250,
+  "_blankWindowMemoryMB": "총계(adblock 포함) — **참고·추세**. 초과해도 실패로 보지 않는다. adblock 하나가 103~110MB(빈 창의 42~44%)라 이 축만 보면 우리 코드의 회귀가 묻힌다.",
+
+  "adblockColdAllowanceMB": 60,
+  "_adblockColdAllowanceMB": "콜드(설치 후 첫 실행)는 adblock 이 필터 원문으로 엔진을 빌드해 고정비가 더 붙는다. 콜드 예산 = 250 + 60 = 310MB. 근거: V4 콜드285/웜226(차 59), 2026-09-07 콜드289/웜243~249(차 40~46).",
+
+  "perTabMemoryMB": 80,
+  "idleCpuPercent": 0.5,
+  "rendererJsGzipKB": 500
+}

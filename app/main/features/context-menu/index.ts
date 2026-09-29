@@ -5,11 +5,16 @@ import { createTab, getTab } from '../../tabs/tab-service'
 import { buildSearchUrl, getDefaultEngine } from '../../storage/search-engines'
 import { addBookmark } from '../../storage/bookmarks'
 import { startFind } from '../find'
-import { getWindow } from '../../windows/window-service'
+import { createBrowserWindow, getWindow } from '../../windows/window-service'
 import { collectMenuItems } from '../mod-api'
 import { handleOverlayDownload } from '../video-download'
+import { tMain } from '../../i18n'
 
 const SEARCH_LABEL_MAX = 24
+
+function M(suffix: string, fallback: string, vars?: Record<string, string | number>): string {
+  return tMain(`main.contextMenu.${suffix}`, fallback, vars)
+}
 
 function truncate(text: string, max: number): string {
   const t = text.trim().replace(/\s+/g, ' ')
@@ -48,12 +53,25 @@ function buildTemplate(
   if (params.linkURL) {
     const link = params.linkURL
     template.push(
-      { label: '새 탭에서 링크 열기', click: () => { createTab({ windowId, url: link, background: true }) } },
-      { label: '새 창에서 링크 열기', click: () => { createTab({ windowId, url: link }) } },
-      { label: '링크 주소 복사', click: () => clipboard.writeText(link) },
+      { label: M('link.openNewTab', '새 탭에서 링크 열기'), click: () => { createTab({ windowId, url: link, background: true }) } },
+      {
+        label: M('link.openNewWindow', '새 창에서 링크 열기'),
+        click: () => {
+          const ctx = createBrowserWindow()
+          createTab({ windowId: ctx.id, url: link })
+        },
+      },
+      {
+        label: M('link.openIncognito', '시크릿 창에서 링크 열기'),
+        click: () => {
+          const ctx = createBrowserWindow({ incognito: true })
+          createTab({ windowId: ctx.id, url: link })
+        },
+      },
+      { label: M('link.copyAddress', '링크 주소 복사'), click: () => clipboard.writeText(link) },
     )
     if (params.linkText) {
-      template.push({ label: '링크 텍스트 복사', click: () => clipboard.writeText(params.linkText) })
+      template.push({ label: M('link.copyText', '링크 텍스트 복사'), click: () => clipboard.writeText(params.linkText) })
     }
     sep()
   }
@@ -62,10 +80,10 @@ function buildTemplate(
   if (params.mediaType === 'image' && params.srcURL) {
     const src = params.srcURL
     template.push(
-      { label: '새 탭에서 이미지 열기', click: () => { createTab({ windowId, url: src, background: true }) } },
-      { label: '이미지 복사', click: () => { void copyImageToClipboard(src) } },
-      { label: '이미지 주소 복사', click: () => clipboard.writeText(src) },
-      { label: '이미지 다운로드', click: () => wc.downloadURL(src) },
+      { label: M('image.openNewTab', '새 탭에서 이미지 열기'), click: () => { createTab({ windowId, url: src, background: true }) } },
+      { label: M('image.copy', '이미지 복사'), click: () => { void copyImageToClipboard(src) } },
+      { label: M('image.copyAddress', '이미지 주소 복사'), click: () => clipboard.writeText(src) },
+      { label: M('image.download', '이미지 다운로드'), click: () => wc.downloadURL(src) },
     )
     sep()
   }
@@ -74,14 +92,14 @@ function buildTemplate(
   if (params.mediaType === 'video' || params.mediaType === 'audio') {
     const src = params.srcURL || ''
     template.push({
-      label: '동영상 다운로드',
+      label: M('media.download', '동영상 다운로드'),
       click: () => {
         // 스트림(HLS/blob)·직접 파일을 자동 판별해 yt-dlp/직접 다운로드로 라우팅
         void handleOverlayDownload({ videoSrc: src, pageUrl: wc.getURL(), senderWcId: wc.id })
       },
     })
     if (src && !src.startsWith('blob:')) {
-      template.push({ label: '미디어 주소 복사', click: () => clipboard.writeText(src) })
+      template.push({ label: M('media.copyAddress', '미디어 주소 복사'), click: () => clipboard.writeText(src) })
     }
     sep()
   }
@@ -89,14 +107,14 @@ function buildTemplate(
   // ===== 선택 텍스트 =====
   if (params.selectionText && params.selectionText.trim()) {
     const sel = params.selectionText.trim()
-    template.push({ label: '복사', role: 'copy', enabled: params.editFlags.canCopy })
+    template.push({ label: M('selection.copy', '복사'), role: 'copy', enabled: params.editFlags.canCopy })
     const engine = getDefaultEngine()
     template.push({
-      label: `${engine.name}에서 "${truncate(sel, SEARCH_LABEL_MAX)}" 검색`,
+      label: M('selection.searchWith', `${engine.name}에서 "${truncate(sel, SEARCH_LABEL_MAX)}" 검색`, { engine: engine.name, query: truncate(sel, SEARCH_LABEL_MAX) }),
       click: () => { createTab({ windowId, url: buildSearchUrl(sel, engine), background: false }) },
     })
     template.push({
-      label: '선택 영역에서 찾기',
+      label: M('selection.findInPage', '선택 영역에서 찾기'),
       click: () => {
         const ctx = getWindow(windowId)
         ctx?.chrome.webContents.send(IPC.find.open, { initialText: sel.slice(0, 200) })
@@ -106,16 +124,33 @@ function buildTemplate(
     sep()
   }
 
+  // ===== 맞춤법 제안 (오타 위에서 우클릭) =====
+  if (params.isEditable && params.misspelledWord) {
+    const suggestions = params.dictionarySuggestions.slice(0, 5)
+    if (suggestions.length > 0) {
+      for (const s of suggestions) {
+        template.push({ label: s, click: () => wc.replaceMisspelling(s) })
+      }
+    } else {
+      template.push({ label: M('spelling.none', '맞춤법 제안 없음'), enabled: false })
+    }
+    template.push({
+      label: M('spelling.addToDictionary', '사전에 추가'),
+      click: () => { wc.session.addWordToSpellCheckerDictionary(params.misspelledWord) },
+    })
+    sep()
+  }
+
   // ===== 편집 가능한 입력 =====
   if (params.isEditable) {
     template.push(
-      { label: '실행 취소', role: 'undo', enabled: params.editFlags.canUndo },
-      { label: '다시 실행', role: 'redo', enabled: params.editFlags.canRedo },
+      { label: M('edit.undo', '실행 취소'), role: 'undo', enabled: params.editFlags.canUndo },
+      { label: M('edit.redo', '다시 실행'), role: 'redo', enabled: params.editFlags.canRedo },
       { type: 'separator' },
-      { label: '잘라내기', role: 'cut', enabled: params.editFlags.canCut },
-      { label: '복사', role: 'copy', enabled: params.editFlags.canCopy },
-      { label: '붙여넣기', role: 'paste', enabled: params.editFlags.canPaste },
-      { label: '모두 선택', role: 'selectAll', enabled: params.editFlags.canSelectAll },
+      { label: M('edit.cut', '잘라내기'), role: 'cut', enabled: params.editFlags.canCut },
+      { label: M('edit.copy', '복사'), role: 'copy', enabled: params.editFlags.canCopy },
+      { label: M('edit.paste', '붙여넣기'), role: 'paste', enabled: params.editFlags.canPaste },
+      { label: M('edit.selectAll', '모두 선택'), role: 'selectAll', enabled: params.editFlags.canSelectAll },
     )
     sep()
   }
@@ -125,18 +160,18 @@ function buildTemplate(
     && !(params.selectionText && params.selectionText.trim()) && !params.isEditable
   if (isPlainPage) {
     template.push(
-      { label: '뒤로', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
-      { label: '앞으로', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
-      { label: '새로고침', click: () => wc.reload() },
+      { label: M('page.back', '뒤로'), enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
+      { label: M('page.forward', '앞으로'), enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
+      { label: M('page.reload', '새로고침'), click: () => wc.reload() },
       { type: 'separator' },
       {
-        label: '이 페이지 북마크 추가 ★',
+        label: M('page.addBookmark', '이 페이지 북마크 추가 ★'),
         click: () => {
           const t = getTab(tabId)
           if (t?.url && !/^browser:|^chrome:|^about:/i.test(t.url)) {
             addBookmark({ url: t.url, title: t.title || t.url })
             const ctx = getWindow(windowId)
-            ctx?.chrome.webContents.send('toast:show', { message: '북마크에 추가됨 ★', ts: 0 })
+            ctx?.chrome.webContents.send('toast:show', { message: tMain('main.toast.bookmarkAdded', '북마크에 추가됨 ★'), ts: 0 })
           }
         },
       },
@@ -148,7 +183,7 @@ function buildTemplate(
   const modItems = collectMenuItems()
   if (modItems.length > 0) {
     template.push({
-      label: '모드',
+      label: M('mods', '모드'),
       submenu: modItems.map((m) => ({
         label: m.label,
         click: () => {
@@ -161,14 +196,14 @@ function buildTemplate(
 
   // ===== 항상 표시 =====
   template.push({
-    label: '페이지 소스 보기',
+    label: M('viewSource', '페이지 소스 보기'),
     click: () => {
       const url = wc.getURL()
       if (/^https?:|^file:/i.test(url)) createTab({ windowId, url: `view-source:${url}`, background: true })
     },
   })
   template.push({
-    label: '검사',
+    label: M('inspect', '검사'),
     click: () => {
       wc.inspectElement(params.x, params.y)
       if (!wc.isDevToolsOpened()) wc.openDevTools({ mode: 'detach' })

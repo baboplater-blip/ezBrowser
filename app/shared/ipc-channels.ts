@@ -41,6 +41,12 @@ export const IPC = {
     all: 'settings:all',
     changed: 'settings:changed',
   },
+  i18n: {
+    // 현재 로케일 + 평탄화된 사전을 한 번에 준다 — 페이지 로더(pages/shared/i18n.js)와
+    // 렌더러 초기 부팅(비-쿼리 경로) 양쪽이 쓰는 단일 출처. 언어가 바뀌면 changed 로 재조회 유도.
+    get: 'i18n:get',
+    changed: 'i18n:changed',
+  },
   actions: {
     list: 'actions:list',
     run: 'actions:run',
@@ -106,6 +112,7 @@ export const IPC = {
     download: 'video:download',
     ytdlpStatus: 'video:ytdlp-status',
     ytdlpEnsure: 'video:ytdlp-ensure',
+    ytdlpUpdate: 'video:ytdlp-update',
     downloadFromOverlay: 'video:download-from-overlay',
   },
   screenshot: {
@@ -131,12 +138,16 @@ export const IPC = {
     stop: 'find:stop',
     result: 'find:result',
     open: 'find:open',
+    // F3/Shift+F3/Ctrl+G — 찾기 바가 열려 있으면 다음/이전 매치로, 닫혀 있으면 여는 것으로 처리.
+    step: 'find:step',
   },
   page: {
     print: 'page:print',
     printToPdf: 'page:print-to-pdf',
     zoomGet: 'page:zoom-get',
     zoomSet: 'page:zoom-set',
+    // Ctrl+휠·핀치 줌 또는 키보드 배율 변경 시 활성 탭의 새 배율을 외피에 알림(배지 표시용).
+    zoomChanged: 'page:zoom-changed',
   },
   translate: {
     batch: 'translate:batch',
@@ -152,6 +163,18 @@ export const IPC = {
     remove: 'userscript:remove',
     setEnabled: 'userscript:set-enabled',
     changed: 'userscript:changed',
+    // ===== 콘텐츠(preload) 전용 채널 — isTrustedSender 대신 e.senderFrame 의 실제 URL/프레임으로 검증 =====
+    // (묶음 I: isolated world 주입 + GM_* 브릿지. content.js/internal.ts → external-features.ts 만 호출)
+    contextSync: 'userscript:context-sync', // ipcRenderer.sendSync — document-start 타이밍용(동기)
+    context: 'userscript:context', // 위와 동일 계산의 비동기 버전(테스트 하네스 등 sendSync 트리거가 어려운 환경용)
+    gmSetValue: 'userscript:gm-set-value',
+    gmDeleteValue: 'userscript:gm-delete-value',
+    gmXhr: 'userscript:gm-xhr',
+    menuRegister: 'userscript:menu-register',
+    menuRunEvent: 'userscript:menu-run-event', // main → 콘텐츠(broadcast, 탭 한정): 사용자가 메뉴 명령 실행
+    // ===== browser:// 전용(신뢰 발신자) — 메뉴 명령 조회/실행 플러밍. UI 연결은 다른 묶음 몫 =====
+    menuList: 'userscript:menu-list',
+    menuRun: 'userscript:menu-run',
   },
   policy: {
     list: 'policy:list',
@@ -172,6 +195,16 @@ export const IPC = {
     remove: 'password:remove',
     changed: 'password:changed',
     available: 'password:available',
+    // 선등록(사용자가 설정에서 직접 추가/수정) — 신뢰된 내부 페이지만.
+    add: 'password:add',
+    update: 'password:update',
+    // "이 사이트는 저장 안 함" 목록 — 관리 페이지 전용.
+    neverList: 'password:never-list',
+    neverRemove: 'password:never-remove',
+    neverChanged: 'password:never-changed',
+    // 크롬/엣지 호환 CSV 내보내기·가져오기 — 신뢰된 내부 페이지만, 다이얼로그로 경로 선택.
+    csvExport: 'password:csv-export',
+    csvImport: 'password:csv-import',
   },
   workspace: {
     list: 'workspace:list',
@@ -197,6 +230,8 @@ export const IPC = {
     exportHtml: 'bookmarks:export-html',
     importHtml: 'bookmarks:import-html',
     changed: 'bookmarks:changed',
+    // 별 버튼/Ctrl+D 로 북마크를 추가(또는 이미 있으면 그대로 두고) 직후 편집 말풍선을 띄우라는 신호.
+    bubbleOpen: 'bookmarks:bubble-open',
   },
   history: {
     recent: 'history:recent',
@@ -209,6 +244,9 @@ export const IPC = {
   data: {
     export: 'data:export',
     import: 'data:import',
+    // 가져오기 전 "코드 실행 항목"(userChrome.js·매크로·userscript·정책의 customJs)이
+    // 번들에 있는지 미리 알아본다 — 기본은 비포함, 사용자가 명시로 켜야 가져와진다.
+    previewCode: 'data:preview-code',
   },
   tokens: {
     get: 'tokens:get',
@@ -258,6 +296,8 @@ export const IPC = {
     list: 'extensions:list',
     installFromCrx: 'extensions:install-from-crx',
     installFromUrl: 'extensions:install-from-url',
+    confirmInstall: 'extensions:confirm-install',
+    cancelInstall: 'extensions:cancel-install',
     remove: 'extensions:remove',
     setEnabled: 'extensions:set-enabled',
     openOptions: 'extensions:open-options',
@@ -287,6 +327,14 @@ export const IPC = {
     clearOrigin: 'permissions:clear-origin',
     clearAll: 'permissions:clear-all',
     changed: 'permissions:changed',
+    // 사이트가 media/geolocation/notifications/clipboard-read 를 요청했는데 저장된 결정이
+    // 없을 때 — 메인이 이 채널로 외피에 프롬프트를 띄우고, 외피는 promptRespond 로 답한다.
+    promptOpen: 'permissions:prompt-open',
+    promptRespond: 'permissions:prompt-respond',
+    // 사용자 응답 없이(60초 타임아웃·탭 소멸) 메인이 스스로 거부를 확정했을 때 — 외피의 큐에
+    // 그 promptId 가 아직 남아 있으면(응답 안 한 상태) 지우라는 신호. 없으면 이미 사라진 탭에
+    // 대한 프롬프트 말풍선이 화면에 영원히 남는다(항목 B2).
+    promptClosed: 'permissions:prompt-closed',
   },
   readlater: {
     list: 'readlater:list',
@@ -332,6 +380,8 @@ export const IPC = {
     agentReset: 'ai:agent-reset',
     summarize: 'ai:summarize',
     diagnose: 'ai:diagnose',
+    detectProviders: 'ai:detect-providers',
+    connectProvider: 'ai:connect-provider',
     triggerList: 'ai:trigger-list',
     triggerAdd: 'ai:trigger-add',
     triggerUpdate: 'ai:trigger-update',
@@ -344,6 +394,7 @@ export const IPC = {
     exportWebhook: 'ai:export-webhook',
     blogGenerate: 'ai:blog-generate',
     blogBuildTask: 'ai:blog-build-task',
+    snsBuildTask: 'ai:sns-build-task',
     reportBuildTask: 'ai:report-build-task',
     reportExport: 'ai:report-export',
     blogRefine: 'ai:blog-refine',
@@ -353,6 +404,37 @@ export const IPC = {
     blogDraftSave: 'ai:blog-draft-save',
     blogDraftRemove: 'ai:blog-draft-remove',
     blogDraftChanged: 'ai:blog-draft-changed',
+    // 생성→캡션→게시 워크플로 (묶음 SOCIAL-1)
+    socialList: 'ai:social-list',
+    socialStart: 'ai:social-start',
+    socialApprove: 'ai:social-approve',
+    socialChoose: 'ai:social-choose',
+    socialCancel: 'ai:social-cancel',
+    socialDelete: 'ai:social-delete',
+    socialChanged: 'ai:social-changed',
+    socialGrant: 'ai:social-grant',
+    socialGrantGet: 'ai:social-grant-get',
+    socialGrantRevoke: 'ai:social-grant-revoke',
+    // 중단 후 복구 (묶음 RECOVERY-1) — 캡션 재시도·직접 입력, 게시 여부 불확실 해소
+    socialRetryCaption: 'ai:social-retry-caption',
+    socialSetCaption: 'ai:social-set-caption',
+    // 확인 단계에서 계정 고치기 — 계정을 빠뜨리거나 잘못 넣었을 때 워크플로를 다시 만들지 않아도 된다.
+    socialSetAccount: 'ai:social-set-account',
+    socialResolvePublish: 'ai:social-resolve-publish',
+    // 초안 승격 — 만들어 둔 초안을 다시 만들지 않고 게시로 올린다. prepare 는 **확인 화면을 만들 뿐**
+    // 아무것도 게시하지 않고 디스크에 쓰지도 않는다. 실제 게시는 confirm 한 경로에서만 시작된다.
+    socialPromotePrepare: 'ai:social-promote-prepare',
+    socialPromoteConfirm: 'ai:social-promote-confirm',
+    socialPromoteCancel: 'ai:social-promote-cancel',
+    // 작업 산출물(캡처한 이미지·받은 파일)
+    artifactList: 'ai:artifact-list',
+    artifactData: 'ai:artifact-data',
+    // 관심 블로그 댓글·좋아요
+    intentDetect: 'ai:intent-detect',
+
+    engageBuildTask: 'ai:engage-build-task',
+    engageLedger: 'ai:engage-ledger',
+    engageLedgerClear: 'ai:engage-ledger-clear',
     collectorList: 'ai:collector-list',
     collectorAdd: 'ai:collector-add',
     collectorUpdate: 'ai:collector-update',
@@ -404,6 +486,29 @@ export const IPC = {
     repeatList: 'ai:repeat-list',
     repeatChanged: 'ai:repeat-changed',
     repeatEvent: 'ai:repeat-event',
+    // ===== 영속 작업 런타임(구간 단위로 이어가는 장기 에이전트 작업) =====
+    // 주의: `ai:task-*` 는 위의 taskList/taskAdd/... (에이전트 작업 매크로 · SavedAgentTask) 가
+    // 이미 쓰고 있다. 같은 이름을 쓰면 object literal 키 충돌로 조용히 macro 기능이 덮이거나,
+    // ipcMain.handle 이 같은 채널에 두 번째 핸들러를 등록해 부팅 시 throw 한다.
+    // 그래서 새 런타임은 `ptask*`(persistent task) 접두로 분리한다 — 이름이 design.md 의
+    // `ai.taskList` 등과 다르니 팀장이 UI 작업자에게 이 접두를 알려줘야 한다.
+    ptaskList: 'ai:ptask-list',
+    ptaskGet: 'ai:ptask-get',
+    ptaskCreate: 'ai:ptask-create',
+    ptaskStart: 'ai:ptask-start',
+    ptaskPause: 'ai:ptask-pause',
+    ptaskResume: 'ai:ptask-resume',
+    ptaskCancel: 'ai:ptask-cancel',
+    ptaskDelete: 'ai:ptask-delete',
+    ptaskConfirm: 'ai:ptask-confirm',
+    ptaskAnswer: 'ai:ptask-answer',
+    ptaskAccept: 'ai:ptask-accept',
+    // 대상 탭을 다시 찾지 못했을 때(waitCause 'tab-target') 사용자가 직접 고르는 경로.
+    ptaskTargets: 'ai:ptask-targets',
+    ptaskSetTarget: 'ai:ptask-set-target',
+    ptaskChanged: 'ai:ptask-changed',
+    ptaskEvent: 'ai:ptask-event',
+    scheduleResume: 'ai:schedule-resume',
   },
 } as const
 
@@ -412,6 +517,7 @@ export type IpcChannel =
   | typeof IPC.tabs[keyof typeof IPC.tabs]
   | typeof IPC.omnibox[keyof typeof IPC.omnibox]
   | typeof IPC.settings[keyof typeof IPC.settings]
+  | typeof IPC.i18n[keyof typeof IPC.i18n]
   | typeof IPC.actions[keyof typeof IPC.actions]
   | typeof IPC.keymap[keyof typeof IPC.keymap]
   | typeof IPC.palette[keyof typeof IPC.palette]

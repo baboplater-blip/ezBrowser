@@ -1,0 +1,206 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T071658Z-a991dc",
+  "recorded_at": "2026-09-18T09:09:41Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T071658Z-a991dc",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T071658Z-a991dc)의 구조화 완료 기록: pass (합격 기준 11건 전건 통과, 부정 사례 8건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx)가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인했다(다른 기기 필요), (차단) 이번 0.2.0-rc.1 설치파일의 설치→제거 흐름은 돌리지 않았다(사용자 실제 설치 환경 무접촉 원칙). 설치 검증은 이전 0.1.0 빌드에서만 통과했고 QUICKSTART 에 그대로 명시했다, (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이고 24시간 경계는 가상시계로만 확인했다. 실제 하루 실행은 사용자 환경 관찰이 필요하다; 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "ae838272-5c5a-44bb-8429-36d8f3f409ee",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "긴 작업을 맡기면 80단계에서 멈추지 않고 정한 예산까지 구간을 이어 계속 진행한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "단계를 다 써서 끝나지 않은 작업이 완료(✅)로 보이거나 기록되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "모델이 근거 없이 '다 했다'고 해도 완료로 확정되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "일시정지·중단을 누르면 그 순간 이후 페이지 부작용이 0이다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "강제 종료 후 재시작이 민감 동작을 자동 승인하거나 자동 실행하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "탭 전환·SPA 재렌더 후 옛 참조로 엉뚱한 요소를 클릭하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "발행 완료가 불확실할 때 자동으로 다시 시도하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "실행별로 정한 허용 사이트 범위 밖으로 나가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 화면에서 실제로 상태를 보고 조작·승인할 수 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "기존 안전장치(프롬프트 인젝션·확인 거부 우회·읽기전용·자료폴더 경계)가 회귀하지 않았다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "최신 Windows 설치파일·즉시실행 폴더·정확한 버전·해시·사용법을 제공한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "코드 서명 인증서(.pfx)가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가)",
+        "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인했다(다른 기기 필요)",
+        "이번 0.2.0-rc.1 설치파일의 설치→제거 흐름은 돌리지 않았다(사용자 실제 설치 환경 무접촉 원칙). 설치 검증은 이전 0.1.0 빌드에서만 통과했고 QUICKSTART 에 그대로 명시했다",
+        "실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이고 24시간 경계는 가상시계로만 확인했다. 실제 하루 실행은 사용자 환경 관찰이 필요하다"
+      ],
+      "optional_next": [
+        "CAPTCHA 전용 감지기(U10 GAP) — 현재는 범용 \"진전 없는 반복 → 사용자 질문\" 경로로 수렴하고 우회·지문 은폐 코드는 0건이다",
+        "ptask 구간을 실행 이력(runList) UI 에도 기록 — 지금은 작업 카드 라이브 트레이스로만 보인다",
+        "cross-origin iframe 내부 관찰·조작 — WebFrameMain 기반 별도 아키텍처 필요(현재는 crossOriginFrames 로 못 보는 영역만 알림)"
+      ],
+      "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx)가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인했다(다른 기기 필요), (차단) 이번 0.2.0-rc.1 설치파일의 설치→제거 흐름은 돌리지 않았다(사용자 실제 설치 환경 무접촉 원칙). 설치 검증은 이전 0.1.0 빌드에서만 통과했고 QUICKSTART 에 그대로 명시했다, (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이고 24시간 경계는 가상시계로만 확인했다. 실제 하루 실행은 사용자 환경 관찰이 필요하다; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T071658Z-a991dc"
+      ],
+      "decision": {
+        "should_roll": false,
+        "code": "no-handoff",
+        "reason": "안전한 체크포인트 인계 문서가 없다 — 실행을 끊고 갈아타지 않는다",
+        "triggers": [],
+        "measured": {
+          "elapsed_seconds": 6762.7,
+          "context_chars": 12252,
+          "total_tokens": 4961301,
+          "cache_read_tokens": 359263584
+        },
+        "thresholds": {
+          "elapsed_seconds": null,
+          "context_chars": null,
+          "total_tokens": null,
+          "cache_read_tokens": null,
+          "max_rollovers": 2,
+          "force": false
+        },
+        "handoff_id": null,
+        "rollover_index": null
+      },
+      "measured": {
+        "elapsed_seconds": 6762.7,
+        "context_chars": 12252,
+        "total_tokens": 4961301,
+        "cache_read_tokens": 359263584
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 11124,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 804,
+          "output": 422269,
+          "cache_read": 182392727,
+          "cache_creation": 1555063
+        },
+        "claude-sonnet-5": {
+          "input": 916,
+          "output": 514066,
+          "cache_read": 176870857,
+          "cache_creation": 2457037
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\durable-agent-20260918\\run-20260918T071658Z-a991dc-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\durable-agent-20260918\\run-20260918T071658Z-a991dc-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "완료했습니다. 요청하신 \"들어갈 수 있는 사이트를 범용 자동화하고, 원하면 하루 종일 실행하는 제품\"을 구현·검증하고 Windows 설치본까지 냈습니다.\n\n## 구조를 바꿨습니다 (래퍼가 아니라)\n\nAstra가 지목한 세 결함이 전부 같은 뿌리 — **에이전트가 단일 for 루프였다**는 것 — 였습니다.\n\n| 전 | 후 |\n|---|---|\n| `for (step=1; step<=80)` 하드 천장 | **구간(12단계)을 이어 붙여** 예산까지 진행 |\n| **단계 다 쓰면 `done` → 이력에 ✅ 성공** | `exhausted` → **⏳ \"미완료 — 이어가기\"** |\n| 재시작 시 `running`→`cancelled` (이어갈 수 없음) | **interrupted(이어가기 가능)**, 자동 부활 없음 |\n| 반복 예약 메모리 Map (재시작 소실) | 영속 + 재발화 억제 |\n\n신규 `task-runtime.ts`가 상태 10종·예산(단계/시간/호출/허용사이트)·체크포인트·원인별 backoff·**외부쓰기 원장**을 관리합니다. 모델이 \"다 했다\"고 해도 **근거를 못 대면 `needs-verify`**로 남고 사용자가 승인해야 완료입니다.\n\n## 실제로 돌려서 증명한 것\n\n**실사이트 4/4** (패키징된 앱 + 실제 claude-code 구독, 읽기 전용):\n- MDN이 `Array` → `/map` → `/sort`를 스스로 골라 비교 보고서 작성 (55초)\n- **실제 시계 25.8분 연속 — 26구간 312단계**, 114페이지, 허용 사이트 밖 **0건**\n\n312단계는 옛 80단계 천장의 **3.9배**입니다. 구간이 1→5→9→26으로 꾸준히 증가한 게 핵심 증거입니다.\n\n**총 137 PASS · 0 FAIL · 1 GAP.** 신규 하네스 3종(T1~T15 / U1~U10 / UI1~UI9는 IPC가 아니라 **DOM 클릭**으로) + 기존 회귀 6종 + `npm run verify` 9/9.\n\n## 하네스가 잡아서 고친 제품 결함 6건\n\n가장 중요한 두 가지:\n- **`sameTarget`이 질의문자열을 무시** → `watch?v=A`와 `?v=B`를 같은 대상으로 판정. 재개 시 **엉뚱한 영상/글에 작업이 붙을 수 있었습니다.**\n- **25분 실행이 다운로드 폴더에 부분 보고서 25개**를 남김 (구간마다 하나). 작업이 끝날 때 1개만 쓰도록 고치고 실측 재확인했습니다.\n\n**판정 기준을 3곳(T6·L9·PS4) 바꿨습니다** — 옛 결함을 기대하던 기준이라 고쳐진 제품을 실패로 잡았습니다. 완화만 하지 않고 조건을 하나씩 **추가**했고, 그 사실과 이유를 코드 주석·커밋·verification.md에 남겼습니다.\n\n## 받으실 것\n\n- `dist\\ezBrowser-0.2.0-rc.1-win-x64.exe` · 116.2MB · SHA256 `822656d5fbebdd186e5e4db57d70c60de6941789c967253355a4722ba2d25421`\n- 설치 없이: `dist\\win-unpacked\\ezBrowser.exe`\n- 사용법: `docs/QUICKSTART.md` (긴 작업·작업 카드 절 신설)\n- `--publish never` · GitHub 릴리스 여전히 0.1.0 · **사용자 설치본 무접촉**(앱 강제 종료도 안 했습니다)\n\n## 꾸미지 않은 부분\n\n- **모든 사이트 100% 자동화는 주장하지 않습니다.** 로그인·CAPTCHA는 사용자에게 넘기고 기다립니다. cross-origin iframe 내부와 closed shadow DOM은 브라우저 구조상 불가라, 대신 \"**못 보는 영역이 있다**\"를 알리게 했습니다.\n- **실제 24시간 연속 실행은 하지 않았습니다.** 실제 시계 증거는 25.8분이고, 24시간 경계는 **가상시계**로만 확인했습니다. 이 둘을 섞어 말하지 않겠습니다.\n- 실사이트는 **읽기 전용 공개 3곳**만입니다. 발행·결제·전송은 격리 fixture에서만 시험했습니다.\n- **이번 설치파일의 설치→제거 흐름은 돌리지",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T071658Z-a991dc\\stream.jsonl",
+    "error": null
+  }
+}

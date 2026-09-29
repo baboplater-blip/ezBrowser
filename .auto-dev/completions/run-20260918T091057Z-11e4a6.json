@@ -1,0 +1,116 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260918T091057Z-11e4a6",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-18T10:04:55Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "다른 출처 iframe 안의 입력칸·드롭다운·버튼을 에이전트가 조작하면 그 프레임 페이지가 실제로 바뀐다",
+      "check": "verify-frames-cdp.mjs F2: 프레임 안 type→select→click 후 프레임이 FRAME_SUBMITTED:홍길동:c 를 표시(프레임이 postMessage 로 보고한 실제 DOM 상태)",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "positive",
+      "behavior": "프레임 안 요소에 키·스크롤이 그 프레임으로 간다",
+      "check": "F3 프레임이 받은 키=Enter · F4 프레임 scrollY=317",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "positive",
+      "behavior": "사람 입력(실제 마우스)으로 프레임 버튼을 정확히 누르고, 관찰이 DOM 에 흔적을 남기지 않는다",
+      "check": "F8 프레임 버튼 눌림=true · MutationObserver 가 센 속성 변형 0건",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "관찰 뒤 프레임이 다른 문서로 바뀌면 옛 번호는 거부되고 결제가 실행되지 않는다",
+      "check": "F5 확인 대기 중 프레임 교체 후 승인 → '그 요소가 있던 프레임이 사라지거나 다른 주소로 바뀌었습니다' 로 거부, 프레임의 __framePaid=false",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "허용 사이트 밖 프레임의 텍스트가 모델 프롬프트에 한 글자도 가지 않는다",
+      "check": "F6 가짜 LLM 이 받은 프롬프트 전문에 SECRET_C_TEXT_MUST_NOT_LEAK 0건, 대신 '[열지 않은 프레임] localhost' 로 호스트만 보고",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "허용 범위는 사용자가 승인해야만 넓어진다",
+      "check": "F7 request_scope 거부 시 비밀 프레임 미열람, 승인 시에만 열람",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "ref 를 준 키 동작은 대상 검증에 실패하면 키를 한 개도 보내지 않는다",
+      "check": "K2 무효 ref + 확인 승인 → ok=false '키를 보내지 않았습니다', 프레임이 받은 키 없음. 음성 대조: 옛 동작 복원 시 K2 가 ok=true 로 FAIL(검출력 확인)",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "positive",
+      "behavior": "로그인/CAPTCHA 화면에서는 예산을 태우지 않고 곧바로 사용자 대기로 넘어간다",
+      "check": "C1·C3 모델 호출 0회로 challenge+ask, C-UI 작업 카드가 waiting-user + '사람 확인이 필요합니다' 사유 표시",
+      "result": "pass"
+    },
+    {
+      "id": "c9",
+      "kind": "positive",
+      "behavior": "사용자가 직접 처리한 뒤 '계속' 하면 그 화면부터 이어간다",
+      "check": "C2 대기→사용자 처리→답변→/after 화면 관찰 후 완료",
+      "result": "pass"
+    },
+    {
+      "id": "c10",
+      "kind": "negative",
+      "behavior": "'로그인'·'verify'·'인증' 단어만 있는 평범한 문서에서는 멈추지 않는다",
+      "check": "C4 대조군 페이지에서 challenge 이벤트 0건, 정상 완료",
+      "result": "pass"
+    },
+    {
+      "id": "c11",
+      "kind": "negative",
+      "behavior": "CAPTCHA 우회·솔버·지문 은폐 코드를 추가하지 않았다",
+      "check": "universal-ops U10: grep 0건 + 전용 감지기 실재 확인 → 기존 GAP 해소(PASS)",
+      "result": "pass"
+    },
+    {
+      "id": "c12",
+      "kind": "positive",
+      "behavior": "최종 설치파일이 설치→부팅→제거까지 동작하고 사용자 실제 프로필을 건드리지 않는다",
+      "check": "verify-install 9/9 on ezBrowser-0.2.0-rc.2-win-x64.exe(SHA256 4ae5aa3e…): 설치본 app.asar 부팅·탭·뒤로/앞으로·북마크·세션복원·무인제거, 사용자 프로필 47→47",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드(자율 해결 불가)",
+      "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요)",
+      "실제 24시간 연속 실행 미실시 — 실제 시계 증거는 이전 라운드의 25.8분이 최대, 24시간 경계는 가상시계로만 확인"
+    ],
+    "optional_next": [
+      "실제 상용 사이트의 교차 출처 프레임(결제창·소셜 로그인) 실사용 관찰 — 이번엔 로컬 2오리진 fixture 로만 실증했다",
+      "verify-agent-safety A13(아이콘 드롭존 오탐) 기존 flake — 시나리오가 한 페이지를 공유하는 구조적 원인, 이번 변경과 무관"
+    ],
+    "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 이전 라운드의 25.8분이 최대, 24시간 경계는 가상시계로만 확인; 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "node build/verify-frames-cdp.mjs(15) · verify-agent-loop(35) · verify-universal-ops(10) · verify-agent-safety(15) · verify-install(9) · npm run verify(9)",
+    "passed": 93,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "필수 A~D 전건 마감. 부수로 제품 결함 2건(프레임 내 scrollIntoView 가 부모까지 스크롤해 좌표가 낡아 엉뚱한 자리를 누르며 성공 보고 / 프레임 열거 불가 환경에서 '못 보는 프레임' 신호가 조용히 소실)과 설치 하네스 결함 2건(버전 0.1.0 하드코딩으로 몇 달 전 파일을 검사 / 사용자 실설치를 덮어쓰고 제거할 수 있던 경로)도 함께 수정."
+}

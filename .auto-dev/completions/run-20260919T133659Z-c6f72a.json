@@ -1,0 +1,135 @@
+{
+ "schema": "auto-dev/completion-record@1",
+ "run_id": "run-20260919T133659Z-c6f72a",
+ "project_id": "browser-build-36466a626d",
+ "verdict": "pass",
+ "written_at": "2026-09-19T14:36:39Z",
+ "criteria": [
+  {
+   "id": "c1",
+   "kind": "positive",
+   "behavior": "댓글·좋아요 버튼을 누르는 그 순간, '이 글엔 이미 했다'는 기록이 이미 디스크에 있다",
+   "check": "ED1: persistEngageBoundary() → {ok:true} 직후 디바운스를 기다리지 않고 ai-engage-ledger.json·ai-engage-quota.json 둘 다 존재하고 해당 항목을 담고 있다. 수정 전 같은 지점에서는 파일 자체가 없었다(600ms 뒤 도착)",
+   "result": "pass"
+  },
+  {
+   "id": "c2",
+   "kind": "positive",
+   "behavior": "중단 뒤 다시 켜도 같은 글에 댓글을 또 달지 않는다",
+   "check": "ED2: 경계를 통과한 뒤 별도 프로세스로 같은 userData 를 읽으면 alreadyDid===true. 부정 대조(경계 없이 즉시 종료)에서는 alreadyDid===false 로 결함이 실제 재현됐다",
+   "result": "pass"
+  },
+  {
+   "id": "c3",
+   "kind": "positive",
+   "behavior": "'이 작업에서 N건까지' 한도가 재시작을 넘어 유지되고, 초과분이 실제로 막힌다",
+   "check": "ED3 + 제품 경로 직접 확인: 1회차 comment=3 기록 후 2회차 부팅에서 engageQuotaUsed={comment:3}, engageQuotaCheck → {ok:false,'허용된 댓글 3건을 이미 모두 사용'}, .corrupt-*.bak 0개. 수정 전에는 정상 파일이 매 부팅 격리돼 항상 0이었다",
+   "result": "pass"
+  },
+  {
+   "id": "c4",
+   "kind": "positive",
+   "behavior": "읽기 전용 작업이 일시적 연결 오류를 만나도 알아서 회복한다(재시도를 끄지 않았다)",
+   "check": "IR1(실제 앱): 첫 요청 실패 → retrying(분류 network) → completed. 릴레이 총요청 2·중계 1",
+   "result": "pass"
+  },
+  {
+   "id": "c5",
+   "kind": "positive",
+   "behavior": "되돌릴 수 없는 일을 아직 하지 않았다면, 같은 오류에서도 그대로 재시도해 진행한다",
+   "check": "IR4(실제 앱): 비발행 클릭 뒤 같은 network 오류 → retrying → 자동 회복(needs-verify). ledger 대기로 가지 않았고 서버 게시 변화 없음(1→1)",
+   "result": "pass"
+  },
+  {
+   "id": "c6",
+   "kind": "positive",
+   "behavior": "로그인 때문에 멈춘 작업은 다시 켜도 '로그인이 필요하다'고 말하고, 갈 곳 버튼이 남아 있다",
+   "check": "IR6A(강제 종료→재기동): interrupted + waitCause=login, waitReason 에 🔐 원문 + '(재시작으로 중단됨)' + '직접 처리한 뒤 이어가세요' 전부 유지. 수정 전 빌드 재현(IR6A-OLD)에서는 '재시작으로 중단됐습니다…' 일반 문구로 완전히 덮이고 waitCause 필드 자체가 없었다",
+   "result": "pass"
+  },
+  {
+   "id": "c7",
+   "kind": "positive",
+   "behavior": "재시작 뒤 사용자가 화면의 이어가기 버튼을 눌러도, 게시 여부가 불확실하면 다시 멈춰 묻는다",
+   "check": "IR5: 재부팅 후 interrupted+ledger 보존 → AI 사이드바를 열고 '▶ 처리했습니다 — 이어가기' 버튼을 DOM 클릭(IPC 우회 아님) → 곧바로 waiting-user+ledger. 격리 HTTPS 서버가 센 게시 2→2(재실행 0)",
+   "result": "pass"
+  },
+  {
+   "id": "c8",
+   "kind": "positive",
+   "behavior": "버튼 이름이 '공유' 한 단어여도 발행으로 알아본다(원장·발행금지 하드블록이 걸린다)",
+   "check": "verify-agent-gate R9 양성 8건: 클릭 \"공유\"·\"Share\"·\"Post\"·화면 클릭 \"공유\" 등 전부 true. 음성 대조로 옛 판정을 되돌리면 같은 8건 중 5건을 놓친다(미탐 5·오탐 0)",
+   "result": "pass"
+  },
+  {
+   "id": "c9",
+   "kind": "positive",
+   "behavior": "AI 서버 연결이 끊기면 2·8·30초로 세 번 다시 시도한다(10초 한 번이 아니라)",
+   "check": "IR1·IR4 가 '관측된 재시도종류=network'로 판정(하네스가 assert). 격리 대조 10건: 제품이 실제 내보내는 '로컬 Ollama 서버에 연결할 수 없습니다'·'연결 실패' → network, 'claude CLI 를 찾을 수 없습니다' → unknown 유지",
+   "result": "pass"
+  },
+  {
+   "id": "c10",
+   "kind": "negative",
+   "behavior": "서버에는 올라갔는데 응답만 유실된 뒤 오류가 나면, 자동으로 다시 시도하지 않고 사람에게 묻는다 — 추가 게시 0",
+   "check": "IR3(격리 HTTPS, holdPublish): waiting-user + waitCause=ledger, waitReason 에 '발행이 됐는지 확실하지 않습니다' 포함. 서버 관측 게시 0→1, 4초 더 기다려도 추가 0. 수정 전 빌드 재현(IR3-OLD)은 게시 1건이 들어간 뒤에도 waitCause 없이 그냥 retrying(6초 후에도)",
+   "result": "pass"
+  },
+  {
+   "id": "c11",
+   "kind": "negative",
+   "behavior": "재시도를 기다리는 중에 중단하면 백오프가 끝나도 되살아나지 않고, 그 사이 모델을 부르지 않는다",
+   "check": "IR2: cancel 직후·8초 후 모두 cancelled. 릴레이 총요청 cancel 전후 1→1(추가 시도 0), fake-llm 수신 0",
+   "result": "pass"
+  },
+  {
+   "id": "c12",
+   "kind": "negative",
+   "behavior": "결제처럼 승인이 필요했던 동작은 재시작·이어가기로 자동 승인되지 않는다 — 결제 실행 0",
+   "check": "IR6B: 강제 종료 후 interrupted+waitCause=confirm 보존('자동으로 승인되지 않습니다' 포함) → 이어가기 → 같은 위험 클릭에 다시 확인 요청(waiting-user+confirm). 결제 실행 0→0. 하네스는 어떤 경우에도 승인(ptaskConfirm(true))을 누르지 않는다. UI 에도 자동 승인·자격증명 입력 경로를 만들지 않았다",
+   "result": "pass"
+  },
+  {
+   "id": "c13",
+   "kind": "negative",
+   "behavior": "기록을 저장하지 못하면 댓글·좋아요를 아예 누르지 않고, 어느 파일이 막혔는지 알려 준다",
+   "check": "ED4 3종(장부만 막음·한도만 막음·둘 다): 각각 {ok:false}와 막힌 파일만 정확히 담긴 failed. 문구에 실제 파일명(ai-engage-ledger.json / ai-engage-quota.json)이 들어간다. agent.ts 는 ok 가 아니면 클릭하지 않고 건너뛴다",
+   "result": "pass"
+  },
+  {
+   "id": "c14",
+   "kind": "negative",
+   "behavior": "발행 판정이 넓어지지 않았다 — 파일 선택 버튼·메뉴 이름·사용자가 친 값은 발행이 아니다",
+   "check": "verify-agent-gate R9 부정 16건 전부 false: 클릭 \"업로드\"/\"Upload\"(파일 선택 창을 여는 버튼 — 발행으로 보면 초안 모드가 첨부조차 못 한다) · \"게시물\" · \"새로운 게시물 만들기\" · \"게시 예약\" · \"공유 정책\" · 입력 \"공유\" → … · 드롭다운 선택 · 호버 등. 음성 대조에서 오탐 0",
+   "result": "pass"
+  },
+  {
+   "id": "c15",
+   "kind": "negative",
+   "behavior": "사유를 모르는 옛 저장본과 그냥 돌다 끊긴 작업은 화면이 예전과 똑같다(회귀 없음)",
+   "check": "수정 후 빌드에 running 상태 작업을 먹이면 '재시작으로 중단됐습니다 — 이어서 진행할 수 있습니다.' 그대로, waitCause 없음. AiTab 은 waitCause 가 없으면 기존 문구·기존 버튼을 렌더한다. 기존 순수 검사 151 PASS(engage-ledger 54·persistence-boundary 27·auto-publish 53·intent-routing 8·agent-gate 9)",
+   "result": "pass"
+  }
+ ],
+ "tests_passed": "npm run verify 18/18(57s) · verify-interruption-recovery 7/7 · verify-engage-durability 6/6 · verify-agent-gate 9/9(R9 신설) · 패키징 산출물 스모크 16/16 · typecheck 3/3",
+ "missing_work": {
+  "pending_owned_work": [],
+  "pending_background_prose": null,
+  "criteria_failed": []
+ },
+ "whole_task": {
+  "declared": true,
+  "all_requested_work_complete": true,
+  "remaining_required": [],
+  "blockers": [],
+  "optional_next": [
+   "세션/탭 복원 하위계통 관찰: 강제 종료 뒤 두 번째 탭이 last-session 복원으로 살아나지 않는 경우(하네스가 실측). task-runtime 결함이 아니라 session/index.ts·tab-service.ts 영역이라 이번 범위에서 손대지 않았다",
+   "engageGuard 없이 도는 일반 에이전트 작업의 댓글·좋아요는 여전히 장부 보호 밖(참여 레시피로 만든 작업만 보호)",
+   "PUBLISH_RE 의 upload$ 갈래는 클릭 라벨에 대해 여전히 닿지 않는다 — 초안 모드의 파일 첨부를 막지 않기 위해 알면서 뒀다",
+   "체크포인트(구간 진행요약)는 여전히 디바운스 — 크래시 시 그 구간의 읽기를 다시 한다(비가역은 원장이 막으므로 손실은 시간뿐)"
+  ],
+  "korean_line": "남은 작업: 없음(이번 범위); 전체 요청 완료: 예"
+ },
+ "scope_note": "코드 서명(.pfx 미제공) · rc.15 설치파일의 설치→부팅→제거 검증(이 PC 에 사용자 실설치본이 가동 중이라 무인 설치가 그것을 덮어쓴다 — 우회하지 않았다) · 실제 SNS·실제 블로그 게시(실계정·실게시 필요) · 24시간 실시계 연속 실행은 사용자 지시에서 이번 범위와 분리해 별도 보고하도록 명시된 이월 제한이다(이번 범위의 잔여가 아님). 상세는 .auto-dev/interruption-recovery-20260919-final.md 4·5절.",
+ "tool_note": "orchestrator.py 가 이 설치본에 없어 CLI(complete record/board update/note/efficiency)를 쓸 수 없었다. 같은 스키마로 직접 기록했고, 보드는 .auto-dev/board-card.py 로 갱신했다."
+}

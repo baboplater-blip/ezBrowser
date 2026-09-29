@@ -1,0 +1,121 @@
+{
+	"appearance": {
+		"theme": "system",
+		"density": "regular",
+		"forcePageDark": false,
+		"pageDarkFollowSystem": false,
+		"pageDarkSiteOverrides": {}
+	},
+	"startup": {
+		"mode": "newtab",
+		"urls": []
+	},
+	"search": {
+		"defaultEngine": "google",
+		"suggestEnabled": true,
+		"bangsEnabled": true
+	},
+	"privacy": {
+		"historyRetention": "1y",
+		"blockThirdPartyCookies": true
+	},
+	"adblock": {
+		"enabled": true,
+		"level": "standard",
+		"filters": {
+			"easylist": true,
+			"easyprivacy": true,
+			"kr": true,
+			"antiAdblock": true,
+			"fanboyAnnoyance": false,
+			"fanboySocial": false
+		},
+		"siteOverrides": {}
+	},
+	"downloads": {
+		"defaultPath": "",
+		"askEveryTime": false,
+		"accelerator": true,
+		"torrentDht": false,
+		"torrentMaxSeedRatio": 2,
+		"ytdlpAutoUpdate": true
+	},
+	"freedom": {
+		"userChromeCss": true,
+		"userChromeJs": false,
+		"userscripts": true,
+		"commandPalette": true,
+		"modApi": false,
+		"mouseGestures": true,
+		"quickSearch": true,
+		"hoverTranslate": false,
+		"hoverTranslateTarget": "ko"
+	},
+	"ui": {
+		"bookmarkBarShow": true,
+		"sidepanelLeftOpen": false,
+		"sidepanelRightOpen": false,
+		"tabbarOrientation": "top",
+		"workspaceRailOpen": true
+	},
+	"performance": {
+		"tabSleepEnabled": true,
+		"tabSleepMinutes": 30
+	},
+	"tabs": {
+		"openBehavior": "new-tab"
+	},
+	"update": {
+		"channel": "latest",
+		"autoCheck": true,
+		"autoDownload": false,
+		"notifyOnUpdate": true
+	},
+	"widgets": {
+		"weatherEnabled": true,
+		"newsEnabled": true,
+		"locationMode": "auto",
+		"manualLat": 37.5665,
+		"manualLon": 126.978,
+		"manualPlace": "서울",
+		"units": "metric",
+		"newsTopic": "headlines",
+		"notesEnabled": true,
+		"todoEnabled": true,
+		"fxEnabled": false,
+		"fxBase": "USD",
+		"fxSymbols": "KRW,JPY,EUR,CNY",
+		"readLaterEnabled": true
+	},
+	"setup": {
+		"completed": false
+	},
+	"ai": {
+		"enabled": true,
+		"provider": "anthropic",
+		"anthropicModel": "claude-sonnet-4-5",
+		"openaiModel": "gpt-4o-mini",
+		"ollamaUrl": "http://localhost:11434",
+		"ollamaModel": "llama3.2",
+		"googleModel": "gemini-2.0-flash",
+		"claudeCodePath": "",
+		"claudeCodeModel": "",
+		"codexPath": "",
+		"codexModel": "",
+		"geminiCliPath": "",
+		"geminiCliModel": "",
+		"maxTokens": 2048,
+		"maxContextChars": 12000,
+		"includePageByDefault": true,
+		"memoryEnabled": true,
+		"autoMemory": false,
+		"nativeToolUse": "auto",
+		"agentFilesDir": "",
+		"agentMaxSteps": 25,
+		"agentVision": "auto",
+		"agentAutoApprove": false,
+		"agentHumanInput": true,
+		"agentInputMode": "auto",
+		"webhookUrl": ""
+	}
+}

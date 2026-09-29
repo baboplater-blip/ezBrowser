@@ -1,0 +1,184 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T090518Z-84dee6",
+  "recorded_at": "2026-09-19T09:10:44Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T090518Z-84dee6",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T090518Z-84dee6)의 구조화 완료 기록: pass (합격 기준 12건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "01d05b83-18af-4bf8-9eae-f9748f6aea69",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "같은 사이트·같은 캡션이어도 **남의 계정 글**은 게시 근거가 되지 않는다. 프로필 링크 등 추정으로 읽은 경우 '모름'(uncertain)으로 남기고 읽은 값을 사유에 보여 주며, data-author 같은 명시 표기면 확정 거부한다 — 어느 쪽도 완료로 닫지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "내 계정 글이라도 **이번 게시 시도보다 오래된 글**(30일 전)은 확정 거부된다. 미래 시각(예약 게시) 역시 완료 근거가 아니다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "내 계정이 방금 올린 글은 근거로 인정되어 완료 확정되고, 영수증에 계정과 시각이 남는다 — 실제 앱 흐름에서 '@ez_test_account 계정의 글(방금)에서 이 캡션을 직접 확인했습니다'",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "화면 구조를 글 단위로 잡을 수 없으면 '아니다'가 아니라 **'모른다'**로 남아 사람이 확인한다(단정하면 사용자가 차단을 풀어 중복 게시한다)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "사이트 전역 막대의 **로그인한 내 계정 표기**, 캡션 속 **@멘션**, **댓글 작성자**가 글쓴이로 새지 않는다. 내 글에 남을 멘션하고 댓글이 달려 있어도 작성자는 내 계정으로 읽힌다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "게시 여부 확인 작업이 **도는 도중 강제 종료**돼도, 재시작 뒤 '확인하는 중…'에서 굳지 않고 확인을 다시 실행할 수 있다. 읽기 전용이므로 서버 게시는 전혀 늘지 않는다(3→3→3)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "ai-tasks.json / ai-social-workflows.json 저장이 막힌 상태로 게시를 승인하면 **서버 게시가 한 건도 나가지 않고**(증가 0), 재시작 전·후 모두 남은 게시 작업을 시작·재개로 우회할 수 없다. 저장을 되돌린 뒤 명시 재시도하면 **정확히 1건**만 ",
+        "behavior_truncated": true
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "차단을 기록하는 저장 자체가 실패해도 우회할 수 없다 — 게시 작업은 **태어날 때부터 차단**되어 만들어지고, 디스크에 적힌 queued 게시 작업 역시 차단된 상태이며 start·resume 두 경로 모두 거부된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "차단이 무조건적이지 않다 — 빗장을 풀면 같은 작업이 정상 시작되고, 빗장 없이 만든 작업은 디스크에서도 막혀 있지 않다(양성 대조)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "검사가 실제로 무언가를 잡는다 — 계정·게시시각을 보지 않는 옛 3필드 판정 복제본에 같은 근거를 먹이면 통과해 버리고, 실제 판정은 거부한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "기존 동작에 회귀가 없다 — 마감 게이트와 실제로 내보낸 바이너리의 스모크가 모두 통과한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "보고를 읽는 사람이 이 라운드의 범위와 범위 밖을 구분할 수 있다 — 증거 문서에 rc.12 산출물(크기·sha256·빌드체인 시각)과 함께 '주장하지 않는 것'(실계정 미검증·미서명·설치검증 미실행·모든 사이트/24시간 미달성)이 명시되고, 보드에서 그 셋이 차단이 아니라 선택적 후속",
+        "behavior_truncated": true
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "실계정(인스타그램·유튜브·틱톡) 게시 검증 — 비가역이고 사용자 승인·계정이 필요해 자율 범위 밖. 이번 블록 49건은 전부 로컬 픽스처 + 각본 LLM.",
+        "코드 서명 인증서(.pfx) 적용 — 사용자 제공 사항. rc.12 는 미서명(SmartScreen 경고).",
+        "rc.12 설치파일의 설치→부팅→제거 검증 — 이 PC 의 무인 설치·제거가 사용자 실설치본을 덮어쓰므로 돌리지 않았고 우회하지도 않았다. 다른 PC/VM 필요(설치 흐름 실증의 정본은 rc.2).",
+        "이미 만들어진 워크플로의 계정을 나중에 채우는 경로(현재는 새 작업 생성 시에만 입력 가능 — 리뷰 M5)",
+        "작성자 표기가 글 영역 밖에 있는 레이아웃 대응(현재는 '모름'으로 남는다)",
+        "타임존 없는 datetime 의 신뢰도 처리(현재는 파싱해 쓰되 미래 경계로만 방어)"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T090518Z-84dee6"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 326.6,
+        "context_chars": 10448,
+        "total_tokens": 347896,
+        "cache_read_tokens": 8460080
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9101,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 58,
+          "output": 23674,
+          "cache_read": 8460080,
+          "cache_creation": 315041
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\persistence-evidence-20260919\\run-20260919T090518Z-84dee6-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\persistence-evidence-20260919\\run-20260919T090518Z-84dee6-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "**영수증 — 형식·보고 전용 (run-20260919T090518Z-84dee6)**\n\n소스·빌드·검증·설치 **변경 0**. 로그 광역 조회 없음. 유료 측정·테스트 없음.\n\n**1. 완료 기록 모순 교정** → `complete validate` **exit 0 · 사유코드 ok**\n- 직전 기록은 `all_requested_work_complete=true` + 차단 3건을 동시에 선언해 `whole-task-inconsistent` → `unclear` 였다.\n- 이 라운드의 범위를 정직하게 다시 그었다: 요청 범위 = **저장 확정 경계 + 게시 확인 근거(계정·시각 축, 태어날 때부터 차단, 중단·저장실패 주입) + 격리 검증 + 미배포 rc.12 패키징** → 전부 완료.\n- 실계정 검증·코드 서명·설치→부팅→제거 검증은 **애초에 범위 밖**이므로 `blocker` 가 아니라 `optional_next`(6건)로 이동. 차단으로 적으면 \"이 라운드가 막혀서 못 했다\"로 잘못 읽힌다.\n- 합격 기준 **12건**(부정 6건) — 11건은 `run-…081120` 실측을 참조하며 각 `check` 에 `[이번 실행 재실행 없음]` 을 박아 두었다. `tests_passed=49`, `test_command` 에도 미실행 표기.\n\n**2. `.auto-dev/persistence-evidence-20260919-final.md`** (251→345행, 기존 본문 무수정)\n- 머리에 문서 위치 블록, 이제 사실이 아닌 한계 2줄(계정 구분 불가 · R3-VER-INT 미실행)에 **닫힌 run_id** 표시.\n- §마감(rc.12) 추가: 범위 표 · 근거 49 PASS/0 FAIL(전부 로컬 픽스처 + 각본 LLM) · 산출물 `dist/ezBrowser-0.2.0-rc.12-win-x64.exe` **121,920,416 B · sha256 `02a8469bfcacb9dcfe084da72d79e03e06e49fb2f769097de8891daddd363d44` · 2026-09-19 17:58 KST · `--publish never`(GitHub 최신 릴리스 여전히 0.1.0) · 미서명** · 빌드체인 시각 · **주장하지 않는 것** · 모델·토큰 실측표.\n- 원장 실측: `…072310` opus 522/197,385 · sonnet-5 136/96,299 · haiku-4-5 9,490/20 / `…081120` opus 470/225,422 · sonnet-5 232/183,587 · haiku-4-5 9,188/22 (전부 `measured:true`, **요청은 opus 였으나 sonnet·haiku 로 내려온 행 그대로 보존**). 이번 run 은 종료 시 기록 — **미계측**.\n\n**3. 보드** — 요약 `전체 요청 완료: 예 · 차단 0 · 남은 필수 0 · optional_next 6`\n- `install-verify-blocked` → 차단 해제·`required=false`·대기, `signing-cert-pending`·`realaccount-validation-pending` 신설(선택), `rc12-package` 에 해시·빌드체인 기입, `completion-record-fix` 완료.\n- 기록 정리(재검증 아님, 그렇게 표기): `production-flow-realmodel` 차단 해제(후속 `rsns-publish-tab` 실측이 이미 닫음), 정체돼 있던 `production-flow-start/design/impl` 완료.\n- 남은 `진행`/`차단` 카드는 전부 **런처의 과거 run 이력**이라 손대지 않았다.\n\n**명시적 비주장**: \"모든 사이트 자동화\"·\"24시간 연속 실행\" 달성은 주장하지 않는다 — 로그인·CAPTCHA·closed shadow DOM 은 구조적 한계이고, 24시간은 가상시계로만 확인했다(실제 시계 증거 25.8분). 실계정 게시 경험 없음, rc.12 미서명, 설치→부팅→제거 미실행(우회하지 않음 — 다른 PC/VM 필요, 설치 실",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T090518Z-84dee6\\stream.jsonl",
+    "error": null
+  }
+}

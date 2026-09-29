@@ -1,0 +1,112 @@
+{
+  "startedAt": "2026-09-19T05:37:43.716Z",
+  "ms": 52531,
+  "mode": "quick",
+  "notRun": 0,
+  "rows": [
+    {
+      "id": "typecheck",
+      "status": "PASS",
+      "ms": 4712,
+      "code": 0,
+      "detail": "종료코드 0",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\typecheck.log"
+    },
+    {
+      "id": "build",
+      "status": "PASS",
+      "ms": 5493,
+      "code": 0,
+      "detail": "종료코드 0",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\build.log"
+    },
+    {
+      "id": "package",
+      "status": "PASS",
+      "ms": 7230,
+      "code": 0,
+      "detail": "종료코드 0",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\package.log"
+    },
+    {
+      "id": "smoke",
+      "status": "PASS",
+      "ms": 13954,
+      "code": 0,
+      "detail": "PASS 16",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\smoke.log"
+    },
+    {
+      "id": "korean-regex",
+      "status": "PASS",
+      "ms": 109,
+      "code": 0,
+      "detail": "PASS 2",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\korean-regex.log"
+    },
+    {
+      "id": "editor-text",
+      "status": "PASS",
+      "ms": 49,
+      "code": 0,
+      "detail": "PASS 5",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\editor-text.log"
+    },
+    {
+      "id": "engage-ledger",
+      "status": "PASS",
+      "ms": 55,
+      "code": 0,
+      "detail": "종료코드 0",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\engage-ledger.log"
+    },
+    {
+      "id": "auto-publish",
+      "status": "PASS",
+      "ms": 1832,
+      "code": 0,
+      "detail": "종료코드 0",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\auto-publish.log"
+    },
+    {
+      "id": "artifacts",
+      "status": "PASS",
+      "ms": 107,
+      "code": 0,
+      "detail": "종료코드 0",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\artifacts.log"
+    },
+    {
+      "id": "agent-gate",
+      "status": "PASS",
+      "ms": 52,
+      "code": 0,
+      "detail": "PASS 8",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\agent-gate.log"
+    },
+    {
+      "id": "intent-routing",
+      "status": "PASS",
+      "ms": 52,
+      "code": 0,
+      "detail": "PASS 8",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\intent-routing.log"
+    },
+    {
+      "id": "ai-providers",
+      "status": "PASS",
+      "ms": 57,
+      "code": 0,
+      "detail": "PASS 4",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\ai-providers.log"
+    },
+    {
+      "id": "ai-connect",
+      "status": "PASS",
+      "ms": 8539,
+      "code": 0,
+      "detail": "PASS 9",
+      "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\verify-out\\all\\ai-connect.log"
+    }
+  ]
+}

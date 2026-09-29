@@ -1,0 +1,156 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T111313Z-cf641c",
+  "recorded_at": "2026-09-18T11:23:38Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T111313Z-cf641c",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T111313Z-cf641c)의 구조화 완료 기록: pass (합격 기준 8건 전건 통과, 부정 사례 3건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인, (차단) 저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지; 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "01eb08a8-a0d8-4575-a67f-cb4dced19a3d",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "다른 사이트 iframe 격리 검사가 그 프레임 안을 실제로 읽고 판정한다 — 격리 월드(같은 렌더러)로 alt 출처 문서를 읽었다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "프레임을 읽지 못하면 통과시키지 않는다(빈 검사 금지) — 판정을 조인 직후 실제로 FAIL 이 났고 원인(CDP 구독자 시그니처 오용)을 고친 뒤 통과했다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "다른 사이트 iframe 이 최상위 페이지의 저장 계정을 가져가지 못한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "양성 대조 — 같은 사이트 iframe 은 반대로 자동 입력된다(전부 안 채워져서 통과한 것이 아님)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "저장 계정 자동 로그인 기능 전체가 긍정·부정 양방향으로 동작한다(부정은 전부 비밀번호가 서버에 도달하지 않았는지로 판정)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "프로젝트 마감 게이트가 통과한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "배포 설치파일이 현재 소스보다 낡지 않았다 — 이번 라운드 변경은 하네스 1파일뿐이다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자 문서가 최종 산출물과 일치한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가)",
+        "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요)",
+        "실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인",
+        "저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지"
+      ],
+      "optional_next": [
+        "실사이트 첫 사용 시 화면을 보며 1회 동반 확인(사용자 승인 시)"
+      ],
+      "korean_line": "남은 작업: (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고. 사용자가 인증서를 주면 즉시 서명 빌드(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신 미검증 — 이 개발 PC 에서만 확인(다른 기기 필요), (차단) 실제 24시간 연속 실행 미실시 — 실제 시계 증거는 25.8분이 최대, 24시간 경계는 가상시계로만 확인, (차단) 저장 계정 자동 로그인의 실사이트(네이버·구글 등) 검증 미실시 — 사용자 실계정·공개 사이트 조작이 필요해 자율 수행 범위 밖. 확인 범위는 로컬 HTTPS 픽스처까지; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T111313Z-cf641c"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 625.1,
+        "context_chars": 10138,
+        "total_tokens": 369509,
+        "cache_read_tokens": 19381366
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9418,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 130,
+          "output": 40314,
+          "cache_read": 19381366,
+          "cache_creation": 319625
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\saved-login-20260918\\run-20260918T111313Z-cf641c-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\saved-login-20260918\\run-20260918T111313Z-cf641c-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "끝났습니다. 중단 지점(SL17)만 이어받아 마감했고, **앱 소스는 한 줄도 바꾸지 않았습니다** — 이번 변경은 하네스 1파일 + 문서 3개뿐입니다.\n\n## SL17이 실제로 빈 검사였습니다 — 고쳤습니다\n\n`SL17`은 *\"페이지 안의 다른 사이트 iframe이 이 사이트 저장 계정을 가져가지 못한다\"*를 봅니다. 그런데 교차 출처 iframe은 페이지 JS로 읽을 수 없어서, 판정이 **\"읽어 보니 비었다\"가 아니라 \"못 읽었다\"를 비어 있음으로 센 것**이었습니다. 제품이 통째로 깨져도 똑같이 통과합니다.\n\n1. **판정을 조였다** → 즉시 **FAIL**(`실제로 읽음=false`). 검사가 스스로 \"나는 아무것도 못 봤다\"고 말하게 된 것이 1차 성과입니다.\n2. **근본 원인**: `build/lib/cdp.mjs`의 이벤트 구독자는 `(_, method, params, sessionId)`로 불리는데 `(msg) => msg.method`로 썼습니다 → **예외 없이 아무 이벤트도 못 잡음**.\n3. **읽는 경로 3갈래**: 격리 월드 / OOPIF 자식 세션 / 실행 컨텍스트. **읽은 문서 주소가 alt 출처인지까지 대조**.\n4. 최종: `✓ SL17 PASS — 같은 출처 iframe 자동입력=true(양성 대조, user=\"demo-user\") · 다른 출처 iframe 실제로 읽음=true[격리 월드(같은 렌더러) https://127.0.0.1:61745/login] 비어 있음=true`\n\n## 검증 (29건, 이번에 실제로 돌린 것)\n\n| | 결과 |\n|---|---|\n| 저장 계정 자동 로그인 | **20 PASS / 0 FAIL** (긍정 6 · 부정 14 · 양성대조 2) |\n| `npm run verify` | **9/9 PASS · 44초** (smoke 16 포함) |\n\n회귀 7종(agent-loop 35 · frames 15 · task-runtime 15 · agent-safety 15 · internal-pages 26 · input-guards 9 · install 9)은 **rc.3과 동일한 코드에서 이미 통과**했고, 앱 소스 무변경이라 재실행하지 않았습니다.\n\n**증거 시각 대조**: rc.3 빌드(20:03) 이후 `app/`·`pages/` 소스 변경 **0건** — 설치파일과 현재 소스가 일치합니다.\n\n## 최종 산출물 · 사용법\n\n- `dist\\ezBrowser-0.2.0-rc.3-win-x64.exe` · 116.2 MB (121,855,049 바이트)\n- SHA256 `aa859ef76665c466fe8ef019f3a5cb80b28236b04b06d54a51d90d03178712ef`\n- 더블클릭 → 자동 설치·실행. 자동 로그인은 `browser://passwords`에서 계정을 등록하고 **계정마다 \"자동 로그인 허용\"을 켜야** 작동합니다(저장만으로는 켜지지 않습니다). 상세는 `docs/QUICKSTART.md`.\n\n## 문서\n\n`docs/QUICKSTART.md`(rc.3 경로·해시·19/19→**20/20**·SL17 설명) · `.auto-dev/saved-login-20260918-final.md`(신규: 변경 전후/검증/한계/재시도 기록) · `.auto-dev/verification.md`(SL 전수 표 + 교정 경위) · `lessons.md`.\n\n## 보드 (PID 44968, 살아 있음)\n\n```\n종료:   python -X utf8 C:/Users/molma/.agents/skills/auto-dev/runtime/orchestrator.py board stop --root .\n재시작: python -X utf8 C:/Users/molma/.agents/skills/auto-dev/runtime/orchestrator.py board serve --root . --port 8793\n```\n카드 `saved-login-autofill` → 완료로 갱신(revision 60). 제가 임의로 종료하지 않았습니다.\n\n## 완료 판",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T111313Z-cf641c\\stream.jsonl",
+    "error": null
+  }
+}

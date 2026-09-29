@@ -310,6 +310,27 @@ async function runJob(job: AcceleratorJob): Promise<void> {
     await Promise.all(pending.map((seg) => downloadSegment(job, seg)))
     const s = job.state as string
     if (s === 'cancelled' || s === 'failed' || s === 'paused') return
+    // 병합 직전 실측: 다 받은 세그먼트의 .part 가 디스크에서 사라졌거나 짧아진 경우가 있다
+    // (dl-matrix S1·S11 에서 4회 중 2회 `ENOENT .part1` — 실사용 다운로드 폴더라 백신·동기화 도구가
+    // 끼어드는 것으로 추정, 원인 미확정). 그대로 병합하면 실패하므로 그 세그먼트만 **한 번** 다시 받는다.
+    const lost: SegmentState[] = []
+    for (const seg of job.segments) {
+      const expected = seg.end - seg.start + 1
+      let size = -1
+      try { size = (await fs.stat(seg.tempPath)).size } catch { size = -1 }
+      if (size < expected) {
+        job.receivedBytes -= seg.received - Math.max(0, size)
+        seg.received = Math.max(0, size)
+        seg.done = false
+        lost.push(seg)
+      }
+    }
+    if (lost.length > 0) {
+      console.warn(`[downloads] 병합 전 세그먼트 ${lost.map((x) => x.index).join(',')} 파일이 없거나 짧음 — 다시 받는다`)
+      await Promise.all(lost.map((seg) => downloadSegment(job, seg)))
+      const s2 = job.state as string
+      if (s2 === 'cancelled' || s2 === 'failed' || s2 === 'paused') return
+    }
     // 각 세그먼트가 요청한 범위만큼 받았는지 검증 — CDN 이 206 을 짧게 끝내면 병합이 뒤 세그먼트를
     // 앞으로 밀어 파일이 조용히 손상된다. 부족하면 실패 처리(잘못된 "완료"보다 안전).
     for (const seg of job.segments) {

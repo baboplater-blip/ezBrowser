@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>확장</title>
     <style>
       :root { color-scheme: light dark;
@@ -57,11 +59,56 @@
       button.btn.danger { color: var(--danger); }
       button.btn.danger:hover { border-color: var(--danger); }
       .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+      /* 설정상 켬(토글) 과 실제 로드됨(아래 배지) 은 다른 값이다 — 섞어 보이면 안 된다. */
+      .pill { display: inline-block; padding: 2px 9px; border-radius: 11px; font-size: 11px;
+        border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+      .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+      .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+      .pill.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+      .sessions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 6px; }
+      .schip { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border);
+        color: var(--muted); background: var(--bg); }
+      .schip[data-loaded="true"] { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+      .schip[data-loaded="false"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+      .fail-box { border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 8px;
+        padding: 8px 10px; margin: 6px 0 8px; font-size: 12px; background: color-mix(in srgb, var(--warn) 7%, transparent); }
+      .fail-box .why { color: var(--fg); margin-bottom: 2px; }
+      .fail-box details { margin-top: 4px; }
+      .fail-box summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+      .fail-box pre { white-space: pre-wrap; word-break: break-all; font-size: 11px;
+        color: var(--muted); margin: 4px 0 0; }
       .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
         padding: 10px 18px; border-radius: 22px; background: rgba(0,0,0,.85); color: white;
         font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .15s ease; z-index: 9; }
       .toast.show { opacity: 1; }
       .toast.error { background: var(--danger); }
+
+      /* ===== 설치 전 동의(consent) 모달 — 묶음 J 항목 3 ===== */
+      .consent-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45);
+        display: flex; align-items: center; justify-content: center; z-index: 20;
+        opacity: 0; pointer-events: none; transition: opacity .15s ease; }
+      .consent-backdrop.show { opacity: 1; pointer-events: auto; }
+      .consent-card { width: 420px; max-width: calc(100vw - 48px); max-height: calc(100vh - 64px);
+        overflow-y: auto; background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+        padding: 20px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+        transform: translateY(6px) scale(.98); transition: transform .15s cubic-bezier(0.23,1,0.32,1); }
+      .consent-backdrop.show .consent-card { transform: translateY(0) scale(1); }
+      .consent-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+      .consent-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 8px; background: var(--hover);
+        display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted); }
+      .consent-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+      .consent-title { font-size: 15px; font-weight: 700; }
+      .consent-sub { color: var(--muted); font-size: 11px; font-family: 'Menlo', monospace; margin-top: 2px; }
+      .consent-desc { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.5; }
+      .consent-section-title { font-size: 12px; font-weight: 600; margin: 14px 0 6px; }
+      .consent-perm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+      .consent-perm-list li { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.4; }
+      .consent-perm-list li .dot { flex-shrink: 0; margin-top: 5px; width: 5px; height: 5px; border-radius: 50%;
+        background: var(--accent); }
+      .consent-perm-list.danger li .dot { background: var(--danger); }
+      .consent-none { color: var(--muted); font-size: 12px; }
+      .consent-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+      .consent-actions button.btn { height: 32px; padding: 0 16px; border-radius: 16px; font-size: 12px; }
     
       /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
       button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
@@ -73,15 +120,19 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>확장</h1>
-      <div class="lead">크롬 확장(.crx) 호환 — 드래그하거나 URL 로 설치하세요. (MV2/MV3 핵심 API 지원)</div>
+      <h1 data-i18n="page.extensions.a1">확장</h1>
+      <div class="lead">크롬 확장(.crx) 호환 — 드래그하거나 URL 로 설치하세요. (MV2/MV3 핵심 API 지원)<br>
+        확장은 <strong data-i18n="page.extensions.a2">워크스페이스마다 다른 세션</strong>에 각각 올라갑니다. 카드의 배지가 세션별로 실제 로드됐는지 보여 줍니다.
+        시크릿 창에서는 확장이 동작하지 않습니다(크롬과 같습니다).<br>
+        확장을 끄면 <strong data-i18n="page.extensions.a3">그 뒤에 여는 페이지</strong>부터 적용됩니다 — 이미 열려 있는 탭에 확장이 이미 바꿔 놓은 내용은
+        되돌아가지 않습니다(크롬과 같습니다). 지금 보고 있는 페이지에 바로 반영하려면 새로고침하세요.</div>
 
       <div class="install-bar">
-        <button class="btn primary" id="btn-crx">.crx 파일 선택…</button>
-        <button class="btn" id="btn-unpacked">unpacked 폴더 추가</button>
+        <button class="btn primary" id="btn-crx" data-i18n="page.extensions.a4">.crx 파일 선택…</button>
+        <button class="btn" id="btn-unpacked" data-i18n="page.extensions.a5">unpacked 폴더 추가</button>
         <div class="url-row">
           <input id="url-input" type="text" placeholder="https://chromewebstore.google.com/detail/...  또는  https://.../foo.crx" />
-          <button class="btn" id="btn-url">URL 설치</button>
+          <button class="btn" id="btn-url" data-i18n="page.extensions.a6">URL 설치</button>
         </div>
       </div>
 
@@ -92,6 +143,27 @@
       <div id="list"></div>
     </div>
     <div class="toast" id="toast"></div>
+
+    <div class="consent-backdrop" id="consent-backdrop" data-consent-backdrop="1">
+      <div class="consent-card" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+        <div class="consent-head">
+          <div class="consent-icon" id="consent-icon">⌬</div>
+          <div>
+            <div class="consent-title" id="consent-title"></div>
+            <div class="consent-sub" id="consent-sub"></div>
+          </div>
+        </div>
+        <div class="consent-desc" id="consent-desc"></div>
+        <div class="consent-section-title" data-i18n="page.extensions.a7">이 확장이 요청하는 권한</div>
+        <div id="consent-perms"></div>
+        <div class="consent-section-title" data-i18n="page.extensions.a8">접근 가능한 사이트</div>
+        <div id="consent-hosts"></div>
+        <div class="consent-actions">
+          <button class="btn" id="consent-cancel" data-i18n="page.extensions.a9">취소</button>
+          <button class="btn primary" id="consent-install" data-i18n="page.extensions.a10">설치</button>
+        </div>
+      </div>
+    </div>
     <script>
       let exts = []
       function escape(s) { return String(s ?? '').replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])) }
@@ -115,6 +187,38 @@
         render()
       }
 
+      // 설정상 켬(사용자가 켜 둠) 과 실제 로드됨(세션에 올라와 있음) 은 다른 값이다.
+      // 예전에는 토글 하나만 보여 줘서, 워크스페이스 세션에서 로드가 실패해도 정상으로 보였다.
+      function statusPill(e) {
+        const total = e.totalSessions ?? 0
+        const ok = e.loadedSessions ?? 0
+        if (!e.enabled) return '<span class="pill" data-status="off">꺼짐</span>'
+        if (total === 0) return '<span class="pill warn" data-status="unknown">로드 상태 확인 불가</span>'
+        if (ok === total) return '<span class="pill ok" data-status="all">실제 로드됨 · ' + ok + '/' + total + ' 세션</span>'
+        if (ok === 0) return '<span class="pill danger" data-status="none">로드 안 됨 · 0/' + total + ' 세션</span>'
+        return '<span class="pill warn" data-status="partial">일부 세션에서 실패 · ' + ok + '/' + total + ' 세션</span>'
+      }
+
+      function sessionChips(e) {
+        const list = e.sessions || []
+        if (list.length === 0) return ''
+        return '<div class="sessions">' + list.map((s) =>
+          '<span class="schip" data-kind="' + escape(s.kind) + '" data-loaded="' + (s.loaded ? 'true' : 'false') + '"'
+          + ' title="' + escape(s.loaded ? '이 세션에서 동작 중' : (s.reason || '불러오지 못함')) + '">'
+          + escape(s.label) + (s.loaded ? ' ✓' : ' ✗') + '</span>').join('') + '</div>'
+      }
+
+      // 켜 뒀는데 못 불러온 세션이 있을 때만 이유를 보여 준다(꺼 둔 확장은 실패가 아니다).
+      function failBox(e) {
+        if (!e.enabled) return ''
+        const bad = (e.sessions || []).filter((s) => !s.loaded)
+        if (bad.length === 0) return ''
+        return '<div class="fail-box">' + bad.map((s) =>
+          '<div class="why">‘' + escape(s.label) + '’ 에서 불러오지 못했습니다 — ' + escape(s.reason || '원인 불명') + '</div>'
+          + (s.error ? '<details><summary>원문 보기</summary><pre>' + escape(s.error) + '</pre></details>' : '')
+        ).join('') + '</div>'
+      }
+
       function render() {
         const el = document.getElementById('list')
         if (exts.length === 0) {
@@ -125,16 +229,23 @@
           const icon = e.iconDataUrl
             ? `<img src="${e.iconDataUrl}" alt="">`
             : (e.name ? e.name.slice(0,1).toUpperCase() : '⌬')
-          return '<div class="ext-card ' + (e.enabled ? '' : 'disabled') + '">'
+          return '<div class="ext-card ' + (e.enabled ? '' : 'disabled') + '"'
+            +   ' data-ext-id="' + escape(e.id) + '"'
+            +   ' data-enabled="' + (e.enabled ? 'true' : 'false') + '"'
+            +   ' data-loaded="' + (e.loaded ? 'true' : 'false') + '"'
+            +   ' data-loaded-sessions="' + (e.loadedSessions ?? 0) + '/' + (e.totalSessions ?? 0) + '">'
             + '<div class="ext-head">'
             +   '<div class="ext-icon">' + icon + '</div>'
             +   '<div class="ext-info">'
             +     '<div class="ext-name">' + escape(e.name) + '</div>'
             +     '<div class="ext-version">v' + escape(e.version) + '</div>'
             +   '</div>'
+            +   statusPill(e)
             +   '<div class="toggle ' + (e.enabled ? 'on' : '') + '" data-toggle="' + e.id + '" title="' + (e.enabled ? '비활성화' : '활성화') + '"></div>'
             + '</div>'
             + (e.description ? '<div class="desc">' + escape(e.description) + '</div>' : '')
+            + sessionChips(e)
+            + failBox(e)
             + '<div class="id-line">' + escape(e.id) + '</div>'
             + '<div class="actions">'
             +   (e.hasAction ? '<button class="btn" data-action="' + e.id + '">▶ 실행</button>' : '')
@@ -186,15 +297,109 @@
         })
       }
 
+      // ===== 설치 전 동의 화면(묶음 J 항목 3) =====
+      // installFromCrx/installFromUrl/importLocal 은 이제 곧바로 설치하지 않고 unpack 만 해서
+      // { pending } 미리보기를 돌려준다 — 사용자가 이 화면에서 확인해야 confirmInstall 로 실제 로드된다.
+
+      // 자주 보이는 권한 키만 한국어 설명을 붙인다. 목록에 없는 키는 원문 그대로 보여준다
+      // (지어내지 않는다 — 모르는 권한을 안다고 말하는 것이 가장 나쁘다).
+      const PERM_KO = {
+        tabs: '열려 있는 탭의 URL·제목 읽기',
+        activeTab: '지금 보고 있는 탭에 한해 접근',
+        storage: '확장 전용 저장 공간 사용',
+        scripting: '페이지에 스크립트 삽입·실행',
+        webRequest: '네트워크 요청 관찰',
+        webRequestBlocking: '네트워크 요청 차단·수정',
+        declarativeNetRequest: '규칙 기반으로 요청 차단·수정',
+        declarativeNetRequestWithHostAccess: '규칙 기반으로 요청 차단·수정(호스트 권한 포함)',
+        declarativeNetRequestFeedback: '차단·수정된 요청 통계 확인',
+        cookies: '쿠키 읽기·쓰기',
+        history: '방문 기록 읽기·수정',
+        bookmarks: '북마크 읽기·수정',
+        downloads: '다운로드 시작·관리',
+        clipboardRead: '클립보드 내용 읽기',
+        clipboardWrite: '클립보드에 쓰기',
+        notifications: '알림 표시',
+        contextMenus: '우클릭 메뉴 항목 추가',
+        geolocation: '위치 정보 접근',
+        management: '다른 확장·앱 목록 및 상태 관리',
+        proxy: '프록시(네트워크 경로) 설정 변경',
+        webNavigation: '페이지 이동 이벤트 관찰',
+        alarms: '주기적인 작업 예약',
+        idle: '기기 유휴 상태 감지',
+        contentSettings: '사이트별 콘텐츠 설정 변경',
+        unlimitedStorage: '저장 공간 제한 없이 사용',
+        sidePanel: '사이드 패널 UI 표시',
+      }
+      function permKo(key) { return PERM_KO[key] || ('권한: ' + key) }
+
+      function hostKo(pattern) {
+        if (pattern === '<all_urls>') return '모든 웹사이트'
+        const m = /^(\*|https?|ftp):\/\/(\*\.)?([^/]+)\//.exec(pattern) || /^(\*|https?|ftp):\/\/(\*\.)?([^/]+)$/.exec(pattern)
+        if (!m) return pattern
+        const host = m[3]
+        if (host === '*') return '모든 웹사이트'
+        return (m[2] ? host + '의 모든 하위 도메인' : host)
+      }
+
+      function permList(items, dangerClass) {
+        if (!items || items.length === 0) return '<div class="consent-none">요청하는 항목이 없습니다.</div>'
+        return '<ul class="consent-perm-list' + (dangerClass ? ' danger' : '') + '">'
+          + items.map((s) => '<li><span class="dot"></span><span>' + escape(s) + '</span></li>').join('')
+          + '</ul>'
+      }
+
+      let pendingResolve = null
+      function openConsent(pending) {
+        document.getElementById('consent-icon').innerHTML = pending.iconDataUrl
+          ? '<img src="' + pending.iconDataUrl + '" alt="">'
+          : (pending.name ? pending.name.slice(0, 1).toUpperCase() : '⌬')
+        document.getElementById('consent-title').textContent = pending.name + ' 설치'
+        document.getElementById('consent-sub').textContent = 'v' + pending.version + ' · ' + pending.id
+        document.getElementById('consent-desc').textContent = pending.description || ''
+        document.getElementById('consent-perms').innerHTML = permList((pending.permissions || []).map(permKo), false)
+        const hosts = (pending.hostPermissions || []).map(hostKo)
+        document.getElementById('consent-hosts').innerHTML = permList(hosts, hosts.some((h) => h === '모든 웹사이트'))
+        document.getElementById('consent-backdrop').classList.add('show')
+        return new Promise((resolve) => { pendingResolve = resolve })
+      }
+      function closeConsent(result) {
+        document.getElementById('consent-backdrop').classList.remove('show')
+        if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(result) }
+      }
+      document.getElementById('consent-cancel').addEventListener('click', () => closeConsent('cancel'))
+      document.getElementById('consent-install').addEventListener('click', () => closeConsent('install'))
+      document.getElementById('consent-backdrop').addEventListener('mousedown', (e) => {
+        if (e.target.dataset.consentBackdrop) closeConsent('cancel')
+      })
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('consent-backdrop').classList.contains('show')) closeConsent('cancel')
+      })
+
+      // { ok, pending, error } 를 받아 동의 화면을 보여주고, 사용자 선택에 따라 confirm/cancel 을 부른다.
+      // 성공 시 설치된 확장의 이름으로 토스트를 띄운다.
+      async function reviewAndInstall(prepareResult) {
+        if (!prepareResult.ok) {
+          if (prepareResult.error !== 'canceled') toast(prepareResult.error || '준비 실패', true)
+          return
+        }
+        const pending = prepareResult.pending
+        if (!pending) { toast('설치 정보를 읽지 못했습니다', true); return }
+        const choice = await openConsent(pending)
+        if (choice !== 'install') {
+          await window.internalAPI.extensions.cancelInstall(pending.token)
+          return
+        }
+        const r = await window.internalAPI.extensions.confirmInstall(pending.token)
+        if (r.ok) toast('설치됨: ' + pending.name)
+        else toast(r.error || '설치 실패', true)
+      }
+
       document.getElementById('btn-crx').addEventListener('click', async () => {
-        const r = await window.internalAPI.extensions.installFromCrx()
-        if (!r.ok && r.error !== 'canceled') toast(r.error || '설치 실패', true)
-        else if (r.ok) toast('설치됨')
+        await reviewAndInstall(await window.internalAPI.extensions.installFromCrx())
       })
       document.getElementById('btn-unpacked').addEventListener('click', async () => {
-        const r = await window.internalAPI.extensions.importLocal()
-        if (!r.ok && r.error !== 'canceled') toast(r.error || '실패', true)
-        else if (r.ok) toast('추가됨')
+        await reviewAndInstall(await window.internalAPI.extensions.importLocal())
       })
       document.getElementById('btn-url').addEventListener('click', async () => {
         const url = document.getElementById('url-input').value.trim()
@@ -203,12 +408,8 @@
         toast('다운로드 중…')
         const r = await window.internalAPI.extensions.installFromUrl(url)
         document.getElementById('btn-url').disabled = false
-        if (r.ok) {
-          toast('설치됨')
-          document.getElementById('url-input').value = ''
-        } else {
-          toast(r.error || '설치 실패', true)
-        }
+        if (r.ok) document.getElementById('url-input').value = ''
+        await reviewAndInstall(r)
       })
 
       const drop = document.getElementById('drop')
@@ -222,9 +423,7 @@
           const p = f.path || ''
           if (!p) continue
           if (!/\.(crx|zip)$/i.test(p)) { toast('CRX 파일만 지원합니다: ' + f.name, true); continue }
-          const r = await window.internalAPI.extensions.installFromCrx(p)
-          if (r.ok) toast('설치됨: ' + f.name)
-          else toast(r.error || '실패: ' + f.name, true)
+          await reviewAndInstall(await window.internalAPI.extensions.installFromCrx(p))
         }
       })
 

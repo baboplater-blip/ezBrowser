@@ -3,6 +3,7 @@ import type { TabSummary, TabGroup, TabGroupColor } from '../../shared/types'
 import faviconFallback from '../assets/favicon-fallback.png'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
 import { Icon } from './Icon'
+import { useI18nT } from '../i18n'
 
 export type TabBarOrientation = 'top' | 'left' | 'right' | 'bottom'
 
@@ -29,7 +30,19 @@ interface MenuState {
 const PREVIEW_DELAY_MS = 500
 const PREVIEW_CLOSE_DELAY_MS = 160
 const PREVIEW_CACHE_MS = 6_000
+const PREVIEW_CACHE_MAX = 20
 const previewCache = new Map<string, { ts: number; dataUrl: string | null }>()
+
+/** LRU 삽입 — 상한(20) 초과 시 가장 오래된(가장 먼저 쓰인) 항목부터 제거. */
+function setPreviewCache(id: string, entry: { ts: number; dataUrl: string | null }): void {
+  if (previewCache.has(id)) previewCache.delete(id)
+  previewCache.set(id, entry)
+  while (previewCache.size > PREVIEW_CACHE_MAX) {
+    const oldestKey = previewCache.keys().next().value
+    if (oldestKey === undefined) break
+    previewCache.delete(oldestKey)
+  }
+}
 
 const GROUP_COLORS: TabGroupColor[] = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'orange', 'gray']
 const GROUP_HEX: Record<TabGroupColor, string> = {
@@ -42,6 +55,7 @@ const GROUP_COLOR_LABEL: Record<TabGroupColor, string> = {
 }
 
 export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
+  const tr = useI18nT()
   const vertical = orientation === 'left' || orientation === 'right'
   const [dragId, setDragId] = useState<string | null>(null)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -50,8 +64,10 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [anchorId, setAnchorId] = useState<string | null>(null)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tabElRefs = useRef(new Map<string, HTMLDivElement>())
 
   // 탭 컨텍스트 메뉴·호버 미리보기 카드는 fixed 오버레이라 콘텐츠 탭 view 아래에 깔리면
   // 완전히 가려진다 — 열려 있는 동안 chrome 을 승격한다.
@@ -114,7 +130,7 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
       }
       setPreview({ tabId: tab.id, dataUrl: null, loading: true, rect })
       void window.browserAPI.tabs.capture(tab.id).then((dataUrl) => {
-        previewCache.set(tab.id, { ts: Date.now(), dataUrl: dataUrl ?? null })
+        setPreviewCache(tab.id, { ts: Date.now(), dataUrl: dataUrl ?? null })
         setPreview((cur) => cur && cur.tabId === tab.id
           ? { ...cur, dataUrl: dataUrl ?? null, loading: false }
           : cur)
@@ -130,6 +146,14 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current)
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
   }, [])
+
+  // 닫힌 탭의 미리보기 캐시를 제거 — 세션이 길어질수록 죽은 항목이 쌓이는 것을 막는다.
+  useEffect(() => {
+    const aliveIds = new Set(tabs.map((t) => t.id))
+    for (const key of previewCache.keys()) {
+      if (!aliveIds.has(key)) previewCache.delete(key)
+    }
+  }, [tabs])
 
   const ordered = useMemo(() => [...tabs].sort((a, b) => a.index - b.index), [tabs])
   const groupsById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups])
@@ -154,6 +178,16 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
     }
     return out
   }, [ordered, groupsById])
+
+  // 키보드 접근성 — roving tabIndex: 탭바 안에는 항상 tabIndex=0 인 요소가 하나뿐이고,
+  // 나머지는 -1 이라 Tab 키로는 탭바에 한 번만 진입하고 그 안은 화살표로 이동한다.
+  const visibleTabIds = useMemo(() => items.filter((it) => it.kind === 'tab').map((it) => (it as { tab: TabSummary }).tab.id), [items])
+  const activeId = useMemo(() => ordered.find((t) => t.active)?.id ?? null, [ordered])
+  const rovingId = useMemo(() => {
+    if (focusedId && visibleTabIds.includes(focusedId)) return focusedId
+    if (activeId && visibleTabIds.includes(activeId)) return activeId
+    return visibleTabIds[0] ?? null
+  }, [focusedId, visibleTabIds, activeId])
 
   const handleDragStart = useCallback((id: string, e: React.DragEvent) => {
     setDragId(id)
@@ -210,8 +244,45 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
       return
     }
     clearSelection()
+    setFocusedId(id)
     activate(id)
   }, [anchorId, ordered, selected, clearSelection, activate])
+
+  const moveFocus = useCallback((id: string | undefined) => {
+    if (!id) return
+    setFocusedId(id)
+    tabElRefs.current.get(id)?.focus()
+  }, [])
+
+  // 탭바 키보드 조작 — 좌/우(수직이면 위/아래) 로 이웃 탭으로, Home/End 로 처음/끝,
+  // Enter/Space 로 활성화, Delete/Backspace 로 닫기.
+  const onTabsKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement
+    if (!target.closest('[role="tab"]')) return
+    if (visibleTabIds.length === 0) return
+    const idx = rovingId ? visibleTabIds.indexOf(rovingId) : -1
+    const forwardKey = vertical ? 'ArrowDown' : 'ArrowRight'
+    const backwardKey = vertical ? 'ArrowUp' : 'ArrowLeft'
+    if (e.key === forwardKey) {
+      e.preventDefault()
+      moveFocus(visibleTabIds[(idx + 1 + visibleTabIds.length) % visibleTabIds.length])
+    } else if (e.key === backwardKey) {
+      e.preventDefault()
+      moveFocus(visibleTabIds[(idx - 1 + visibleTabIds.length) % visibleTabIds.length])
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      moveFocus(visibleTabIds[0])
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      moveFocus(visibleTabIds[visibleTabIds.length - 1])
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (rovingId) { clearSelection(); activate(rovingId) }
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault()
+      if (rovingId) void window.browserAPI.tabs.close(rovingId)
+    }
+  }, [visibleTabIds, rovingId, vertical, moveFocus, clearSelection, activate])
 
   const openTabMenu = useCallback((id: string, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation()
@@ -231,7 +302,12 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
   const newTab = useCallback(() => window.browserAPI.tabs.create(windowId), [windowId])
 
   return (
-    <div className={`tabbar tabbar-${orientation} ${vertical ? 'vertical' : 'horizontal'}`} role="tablist">
+    <div
+      className={`tabbar tabbar-${orientation} ${vertical ? 'vertical' : 'horizontal'}`}
+      role="tablist"
+      aria-orientation={vertical ? 'vertical' : 'horizontal'}
+      onKeyDown={onTabsKeyDown}
+    >
       {items.map((it, i) => {
         if (it.kind === 'header') {
           const g = it.group
@@ -239,11 +315,15 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
           return (
             <div
               key={`h-${g.id}`}
+              data-group-id={g.id}
               className={`tab-group-header ${g.collapsed ? 'collapsed' : ''}`}
               style={{ ['--group-color' as string]: hex }}
               onClick={() => toggleCollapse(g)}
               onContextMenu={(e) => openGroupMenu(g.id, e)}
-              title={`${g.title} — 클릭하면 ${g.collapsed ? '펼치기' : '접기'}, 우클릭 메뉴`}
+              title={tr('ui.tabbar.group.headerTitle', '{title} — 클릭하면 {action}, 우클릭 메뉴', {
+                title: g.title,
+                action: g.collapsed ? tr('ui.tabbar.group.expand', '펼치기') : tr('ui.tabbar.group.collapse', '접기'),
+              })}
             >
               <span className="tg-caret">{g.collapsed ? '▸' : '▾'}</span>
               <span className="tg-dot" style={{ background: hex }} />
@@ -257,8 +337,12 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
         return (
           <div
             key={t.id}
+            ref={(el) => { if (el) tabElRefs.current.set(t.id, el); else tabElRefs.current.delete(t.id) }}
+            data-tab-id={t.id}
             role="tab"
             aria-selected={t.active}
+            aria-label={`${t.title || t.url || tr('ui.tabbar.newTab', '새 탭')}${t.pinned ? tr('ui.tabbar.pinnedSuffix', ' (고정됨)') : ''}${t.muted ? tr('ui.tabbar.mutedSuffix', ' (음소거)') : ''}`}
+            tabIndex={t.id === rovingId ? 0 : -1}
             className={`tab ${t.active ? 'active' : ''} ${t.pinned ? 'pinned' : ''} ${t.discarded ? 'discarded' : ''} ${hoverId === t.id ? 'drop-target' : ''} ${it.group ? 'grouped' : ''} ${selected.has(t.id) ? 'multi-selected' : ''}`}
             style={hex ? { ['--group-color' as string]: hex } : undefined}
             draggable
@@ -268,35 +352,36 @@ export function TabBar({ windowId, tabs, orientation = 'top' }: Props) {
             onDrop={(e) => handleDrop(t.id, e)}
             onDragEnd={() => { setDragId(null); setHoverId(null) }}
             onClick={(e) => onTabClick(t.id, e)}
+            onFocus={() => setFocusedId(t.id)}
             onContextMenu={(e) => openTabMenu(t.id, e)}
             onAuxClick={(e) => { if (e.button === 1) closeTab(t.id, e) }}
             onMouseEnter={(e) => schedulePreview(t, e.currentTarget)}
             onMouseLeave={cancelPreview}
-            title={t.discarded ? `${t.url}\n(잠자는 탭 — 클릭하면 다시 로드)` : t.url}
+            title={t.discarded ? tr('ui.tabbar.discardedTitle', '{url}\n(잠자는 탭 — 클릭하면 다시 로드)', { url: t.url }) : t.url}
           >
             {t.pinned && <span className="tab-pin" aria-hidden><Icon name="pin" size={12} /></span>}
-            {t.discarded && <span className="tab-sleep" aria-hidden title="잠자는 탭"><Icon name="moon" size={12} /></span>}
+            {t.discarded && <span className="tab-sleep" aria-hidden title={tr('ui.tabbar.discardedBadge', '잠자는 탭')}><Icon name="moon" size={12} /></span>}
             {t.favicon && !t.discarded && <img className="tab-favicon" src={t.favicon} alt="" />}
             {!t.favicon && !t.discarded && t.loading && <span className="tab-spinner" aria-hidden />}
             {!t.favicon && !t.discarded && !t.loading && <img className="tab-favicon" src={faviconFallback} alt="" />}
-            <span className="tab-title">{t.title || t.url || '새 탭'}</span>
+            <span className="tab-title">{t.title || t.url || tr('ui.tabbar.newTab', '새 탭')}</span>
             {(t.audible || t.muted) && (
               <button
                 className="tab-audio"
-                aria-label={t.muted ? '음소거 해제' : '음소거'}
-                title={t.muted ? '음소거됨 — 클릭하여 해제' : '소리 재생 중 — 클릭하여 음소거'}
+                aria-label={t.muted ? tr('ui.tabbar.unmute', '음소거 해제') : tr('ui.tabbar.mute', '음소거')}
+                title={t.muted ? tr('ui.tabbar.mutedHint', '음소거됨 — 클릭하여 해제') : tr('ui.tabbar.audibleHint', '소리 재생 중 — 클릭하여 음소거')}
                 onClick={(e) => { e.stopPropagation(); void window.browserAPI.tabs.setMuted(t.id, !t.muted) }}
               >{t.muted ? <Icon name="volume-mute" size={12} /> : <Icon name="volume" size={12} />}</button>
             )}
             {!t.pinned && (
-              <button className="tab-close" aria-label="탭 닫기" onClick={(e) => closeTab(t.id, e)}>
+              <button className="tab-close" aria-label={tr('ui.tabbar.closeTab', '탭 닫기')} onClick={(e) => closeTab(t.id, e)}>
                 <Icon name="close" size={10} />
               </button>
             )}
           </div>
         )
       })}
-      <button className="tab-new" aria-label="새 탭" onClick={newTab}><Icon name="plus" size={14} /></button>
+      <button className="tab-new" aria-label={tr('ui.tabbar.newTab', '새 탭')} onClick={newTab}><Icon name="plus" size={14} /></button>
       {preview && (
         <TabPreviewPopover
           preview={preview}
@@ -331,11 +416,36 @@ function TabContextMenu({ menu, windowId, tabs, groups, selected, onClose, clear
   onClose: () => void
   clearSelection: () => void
 }) {
+  const tr = useI18nT()
   const style: React.CSSProperties = {
     top: Math.min(menu.y, window.innerHeight - 320),
     left: Math.min(menu.x, window.innerWidth - 220),
   }
   const stop = (e: React.MouseEvent) => e.stopPropagation()
+
+  // 그룹 이름 변경 — window.prompt() 는 Electron 에서 지원되지 않아 인라인 입력으로 대체.
+  // Enter 저장 · Esc 취소 · blur 저장. settledRef 로 Enter→blur 이중 커밋을 막는다.
+  const [renamingGroup, setRenamingGroup] = useState(false)
+  const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameSettledRef = useRef(false)
+  useEffect(() => {
+    if (renamingGroup) {
+      renameSettledRef.current = false
+      requestAnimationFrame(() => { renameInputRef.current?.focus(); renameInputRef.current?.select() })
+    }
+  }, [renamingGroup])
+  const commitRename = (group: TabGroup, value: string) => {
+    if (renameSettledRef.current) return
+    renameSettledRef.current = true
+    const name = value.trim()
+    if (name && name !== group.title) void window.browserAPI.groups.update(group.id, { title: name })
+    setRenamingGroup(false)
+    onClose()
+  }
+  const cancelRename = () => {
+    renameSettledRef.current = true
+    setRenamingGroup(false)
+  }
 
   // 다중 선택 + 우클릭한 탭이 선택에 포함 → 일괄 작업 메뉴
   if (menu.kind === 'tab' && selected.size >= 2 && selected.has(menu.id)) {
@@ -345,27 +455,27 @@ function TabContextMenu({ menu, windowId, tabs, groups, selected, onClose, clear
     const after = () => { clearSelection(); onClose() }
     return (
       <div className="tab-ctx" style={style} onClick={stop}>
-        <div className="tab-ctx-label">{n}개 탭 선택됨</div>
+        <div className="tab-ctx-label">{tr('ui.tabbar.ctx.selectedCount', '{count}개 탭 선택됨', { count: n })}</div>
         <button className="tab-ctx-item" onClick={() => { void window.browserAPI.groups.create(windowId, { tabIds: ids }); after() }}>
-          새 그룹으로 묶기
+          {tr('ui.tabbar.ctx.groupSelected', '새 그룹으로 묶기')}
         </button>
         {groups.map((g) => (
           <button key={g.id} className="tab-ctx-item" onClick={() => { void Promise.all(ids.map((id) => window.browserAPI.groups.assignTab(id, g.id))); after() }}>
-            <span className="tg-dot" style={{ background: GROUP_HEX[g.color] }} /> {g.title} 그룹으로
+            <span className="tg-dot" style={{ background: GROUP_HEX[g.color] }} /> {tr('ui.tabbar.ctx.moveToGroup', '{title} 그룹으로', { title: g.title })}
           </button>
         ))}
         <div className="tab-ctx-sep" />
         <button className="tab-ctx-item" onClick={() => { for (const t of sel) void window.browserAPI.bookmarks.add({ url: t.url, title: t.title || t.url }); after() }}>
-          북마크에 추가
+          {tr('ui.tabbar.ctx.addBookmark', '북마크에 추가')}
         </button>
         <button className="tab-ctx-item" onClick={() => { for (const t of sel) void window.browserAPI.readlater.add({ url: t.url, title: t.title, favicon: t.favicon }); after() }}>
-          읽기 목록에 추가
+          {tr('ui.tabbar.ctx.addReadLater', '읽기 목록에 추가')}
         </button>
         <div className="tab-ctx-sep" />
         <button className="tab-ctx-item danger" onClick={() => { for (const id of ids) void window.browserAPI.tabs.close(id); after() }}>
-          {n}개 탭 닫기
+          {tr('ui.tabbar.ctx.closeCount', '{count}개 탭 닫기', { count: n })}
         </button>
-        <button className="tab-ctx-item" onClick={() => { clearSelection(); onClose() }}>선택 해제</button>
+        <button className="tab-ctx-item" onClick={() => { clearSelection(); onClose() }}>{tr('ui.tabbar.ctx.clearSelection', '선택 해제')}</button>
       </div>
     )
   }
@@ -382,43 +492,79 @@ function TabContextMenu({ menu, windowId, tabs, groups, selected, onClose, clear
     const unmuteAll = () => {
       for (const t of tabs) if (t.muted) void window.browserAPI.tabs.setMuted(t.id, false)
     }
+    const tabIdx = tabs.findIndex((t) => t.id === tab.id)
+    const rightIds = tabIdx >= 0 ? tabs.slice(tabIdx + 1).filter((t) => !t.pinned).map((t) => t.id) : []
+    const otherIds = tabs.filter((t) => t.id !== tab.id && !t.pinned).map((t) => t.id)
     return (
       <div className="tab-ctx" style={style} onClick={stop}>
+        <button className="tab-ctx-item" onClick={() => { void window.browserAPI.tabs.reload(tab.id); onClose() }}>
+          {tr('ui.tabbar.ctx.reload', '새로고침')}
+        </button>
+        <button className="tab-ctx-item" onClick={() => { void window.browserAPI.tabs.duplicate(tab.id); onClose() }}>
+          {tr('ui.tabbar.ctx.duplicate', '탭 복제')}
+        </button>
+        <button className="tab-ctx-item" onClick={() => {
+          void window.browserAPI.bookmarks.add({ url: tab.url, title: tab.title || tab.url })
+          onClose()
+        }}>
+          {tr('ui.tabbar.ctx.addThisBookmark', '이 탭 북마크에 추가')}
+        </button>
+        <div className="tab-ctx-sep" />
         <button className="tab-ctx-item" onClick={() => { void window.browserAPI.tabs.pin(tab.id, !tab.pinned); onClose() }}>
-          {tab.pinned ? '핀 고정 해제' : '핀 고정'}
+          {tab.pinned ? tr('ui.tabbar.ctx.unpin', '핀 고정 해제') : tr('ui.tabbar.ctx.pin', '핀 고정')}
         </button>
         {(tab.audible || tab.muted) && (
           <button className="tab-ctx-item" onClick={() => { void window.browserAPI.tabs.setMuted(tab.id, !tab.muted); onClose() }}>
-            {tab.muted ? '음소거 해제' : '탭 음소거'}
+            {tab.muted ? tr('ui.tabbar.unmute', '음소거 해제') : tr('ui.tabbar.ctx.muteTab', '탭 음소거')}
           </button>
         )}
         {othersAudible && (
           <button className="tab-ctx-item" onClick={() => { muteOthers(); onClose() }}>
-            다른 탭 모두 음소거
+            {tr('ui.tabbar.ctx.muteOthers', '다른 탭 모두 음소거')}
           </button>
         )}
         {anyMuted && (
           <button className="tab-ctx-item" onClick={() => { unmuteAll(); onClose() }}>
-            전체 탭 음소거 해제
+            {tr('ui.tabbar.ctx.unmuteAll', '전체 탭 음소거 해제')}
           </button>
         )}
         <div className="tab-ctx-sep" />
         <button className="tab-ctx-item" onClick={() => { void window.browserAPI.groups.create(windowId, { tabIds: [tab.id] }); onClose() }}>
-          새 그룹으로 이동
+          {tr('ui.tabbar.ctx.moveToNewGroup', '새 그룹으로 이동')}
         </button>
         {otherGroups.filter((g) => g.id !== tab.groupId).map((g) => (
           <button key={g.id} className="tab-ctx-item" onClick={() => { void window.browserAPI.groups.assignTab(tab.id, g.id); onClose() }}>
-            <span className="tg-dot" style={{ background: GROUP_HEX[g.color] }} /> {g.title} 그룹으로
+            <span className="tg-dot" style={{ background: GROUP_HEX[g.color] }} /> {tr('ui.tabbar.ctx.moveToGroup', '{title} 그룹으로', { title: g.title })}
           </button>
         ))}
         {tab.groupId && (
           <button className="tab-ctx-item" onClick={() => { void window.browserAPI.groups.assignTab(tab.id, null); onClose() }}>
-            그룹에서 빼기
+            {tr('ui.tabbar.ctx.removeFromGroup', '그룹에서 빼기')}
           </button>
         )}
         <div className="tab-ctx-sep" />
+        <button className="tab-ctx-item" onClick={() => { void window.browserAPI.tabs.restore(windowId); onClose() }}>
+          {tr('ui.tabbar.ctx.reopenClosed', '닫은 탭 다시 열기')}
+        </button>
+        <div className="tab-ctx-sep" />
+        {otherIds.length > 0 && (
+          <button className="tab-ctx-item" onClick={() => {
+            for (const id of otherIds) void window.browserAPI.tabs.close(id)
+            onClose()
+          }}>
+            {tr('ui.tabbar.ctx.closeOthers', '다른 탭 모두 닫기')}
+          </button>
+        )}
+        {rightIds.length > 0 && (
+          <button className="tab-ctx-item" onClick={() => {
+            for (const id of rightIds) void window.browserAPI.tabs.close(id)
+            onClose()
+          }}>
+            {tr('ui.tabbar.ctx.closeRight', '오른쪽 탭 모두 닫기')}
+          </button>
+        )}
         <button className="tab-ctx-item danger" onClick={() => { void window.browserAPI.tabs.close(tab.id); onClose() }}>
-          탭 닫기
+          {tr('ui.tabbar.closeTab', '탭 닫기')}
         </button>
       </div>
     )
@@ -429,13 +575,26 @@ function TabContextMenu({ menu, windowId, tabs, groups, selected, onClose, clear
   if (!group) return null
   return (
     <div className="tab-ctx" style={style} onClick={stop}>
-      <button className="tab-ctx-item" onClick={() => {
-        const name = window.prompt('그룹 이름', group.title)
-        if (name != null) void window.browserAPI.groups.update(group.id, { title: name.trim() || group.title })
-        onClose()
-      }}>이름 변경</button>
+      {renamingGroup ? (
+        <div className="tab-ctx-rename">
+          <input
+            ref={renameInputRef}
+            className="tab-ctx-rename-input"
+            defaultValue={group.title}
+            spellCheck={false}
+            aria-label={tr('ui.tabbar.ctx.groupNameLabel', '그룹 이름')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); commitRename(group, e.currentTarget.value) }
+              else if (e.key === 'Escape') { e.preventDefault(); cancelRename() }
+            }}
+            onBlur={(e) => commitRename(group, e.currentTarget.value)}
+          />
+        </div>
+      ) : (
+        <button className="tab-ctx-item" onClick={() => setRenamingGroup(true)}>{tr('ui.tabbar.ctx.rename', '이름 변경')}</button>
+      )}
       <button className="tab-ctx-item" onClick={() => { void window.browserAPI.groups.setCollapsed(group.id, !group.collapsed); onClose() }}>
-        {group.collapsed ? '펼치기' : '접기'}
+        {group.collapsed ? tr('ui.tabbar.group.expand', '펼치기') : tr('ui.tabbar.group.collapse', '접기')}
       </button>
       <div className="tab-ctx-sep" />
       <div className="tab-ctx-colors">
@@ -444,14 +603,14 @@ function TabContextMenu({ menu, windowId, tabs, groups, selected, onClose, clear
             key={c}
             className={`tab-ctx-swatch ${group.color === c ? 'sel' : ''}`}
             style={{ background: GROUP_HEX[c] }}
-            title={GROUP_COLOR_LABEL[c]}
+            title={tr(`ui.tabbar.group.color.${c}`, GROUP_COLOR_LABEL[c])}
             onClick={() => { void window.browserAPI.groups.update(group.id, { color: c }); onClose() }}
           />
         ))}
       </div>
       <div className="tab-ctx-sep" />
       <button className="tab-ctx-item danger" onClick={() => { void window.browserAPI.groups.remove(group.id); onClose() }}>
-        그룹 해제
+        {tr('ui.tabbar.ctx.ungroup', '그룹 해제')}
       </button>
     </div>
   )
@@ -465,6 +624,7 @@ function TabPreviewPopover({ preview, tab, orientation, onMouseEnter, onMouseLea
   onMouseLeave: () => void
   onClosed: () => void
 }) {
+  const tr = useI18nT()
   if (!tab) return null
   const PREVIEW_W = 280
   const PREVIEW_H = 170
@@ -487,29 +647,29 @@ function TabPreviewPopover({ preview, tab, orientation, onMouseEnter, onMouseLea
         {preview.dataUrl
           ? <img src={preview.dataUrl} alt="" />
           : (preview.loading
-            ? <div className="tab-preview-loading">캡처 중…</div>
-            : <div className="tab-preview-loading">미리보기 없음</div>)}
+            ? <div className="tab-preview-loading">{tr('ui.tabbar.preview.capturing', '캡처 중…')}</div>
+            : <div className="tab-preview-loading">{tr('ui.tabbar.preview.none', '미리보기 없음')}</div>)}
       </div>
       <div className="tab-preview-meta">
         {tab.favicon && <img className="tab-preview-favicon" src={tab.favicon} alt="" />}
         <div className="tab-preview-text">
-          <div className="tab-preview-title">{tab.title || '새 탭'}</div>
+          <div className="tab-preview-title">{tab.title || tr('ui.tabbar.newTab', '새 탭')}</div>
           <div className="tab-preview-url">{tab.url}</div>
         </div>
         <div className="tab-preview-actions">
           {(tab.audible || tab.muted) && (
             <button
               className="tab-preview-btn"
-              title={tab.muted ? '음소거 해제' : '음소거'}
-              aria-label={tab.muted ? '음소거 해제' : '음소거'}
+              title={tab.muted ? tr('ui.tabbar.unmute', '음소거 해제') : tr('ui.tabbar.mute', '음소거')}
+              aria-label={tab.muted ? tr('ui.tabbar.unmute', '음소거 해제') : tr('ui.tabbar.mute', '음소거')}
               onClick={() => void window.browserAPI.tabs.setMuted(tab.id, !tab.muted)}
             >{tab.muted ? <Icon name="volume-mute" size={13} /> : <Icon name="volume" size={13} />}</button>
           )}
           {!tab.pinned && (
             <button
               className="tab-preview-btn danger"
-              title="탭 닫기"
-              aria-label="탭 닫기"
+              title={tr('ui.tabbar.closeTab', '탭 닫기')}
+              aria-label={tr('ui.tabbar.closeTab', '탭 닫기')}
               onClick={() => { void window.browserAPI.tabs.close(tab.id); onClosed() }}
             ><Icon name="close" size={12} /></button>
           )}

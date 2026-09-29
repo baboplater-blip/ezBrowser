@@ -1,0 +1,163 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T042628Z-5824c1",
+  "recorded_at": "2026-09-19T05:13:07Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T042628Z-5824c1",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T042628Z-5824c1)의 구조화 완료 기록: pass (합격 기준 8건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: 이미지→게시 워크플로의 게시 단계가 탭을 게시 사이트로 옮기지 않아 waiting-user 로 멈춘다(원인 확정, 비가역 경로라 미수정). 수정 후 실모델 R-SNS 재검증 필요, (차단) 코드 서명 인증서(.pfx) 없음 — rc.6 미서명, (차단) rc.6 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 가동 중이라 verify-install 이 BLOCKED. 우회하지 않음, (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "85c23f12-6e56-4ca5-9486-87a53d7614f9",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "에이전트 입력창에 '등산 관련 블로그 3개 글에 댓글 달아줘' 라고 적으면 바로 실행되지 않고 주제·글 수가 미리 채워진 확인 카드가 먼저 뜬다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "계정을 채우고 실행을 누르면 양식(만들어 올리기)으로 시작한 것과 똑같은 레시피 지시문으로 영속 작업이 시작된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "실제 구독 Claude CLI 가 그 경로로 블로그 댓글 작업을 완주하고, 코드가 강제하는 글 수 한도가 실제로 걸린다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "다운로드 저장 위치를 바꾸면 AI 대화·보고서 내보내기도 그 폴더에 저장된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "계정을 비워 두면 실행 버튼이 잠겨 아무 작업도 시작되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "질문·금지·인용문·페이지 본문 붙여넣기·조종 문구에서는 작업 폼이 만들어지지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "'게시까지' 를 골라도 자동 게시 토글을 켜지 않으면 자동 게시 선승인이 생기지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "원문에 계정 핸들이 있어도 계정을 추론하지 않는다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [
+        "이미지→게시 워크플로의 게시 단계가 탭을 게시 사이트로 옮기지 않아 waiting-user 로 멈춘다(원인 확정, 비가역 경로라 미수정). 수정 후 실모델 R-SNS 재검증 필요"
+      ],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — rc.6 미서명",
+        "rc.6 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 가동 중이라 verify-install 이 BLOCKED. 우회하지 않음",
+        "실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처)"
+      ],
+      "optional_next": [
+        "AiTab 계열 UI 문구의 ko/en 로케일 메커니즘 도입(현재 이 컴포넌트 트리는 한국어 하드코딩이 관례)"
+      ],
+      "korean_line": "남은 작업: 이미지→게시 워크플로의 게시 단계가 탭을 게시 사이트로 옮기지 않아 waiting-user 로 멈춘다(원인 확정, 비가역 경로라 미수정). 수정 후 실모델 R-SNS 재검증 필요, (차단) 코드 서명 인증서(.pfx) 없음 — rc.6 미서명, (차단) rc.6 설치파일 설치→부팅→제거 미검증 — 이 PC 에 사용자 실설치본이 가동 중이라 verify-install 이 BLOCKED. 우회하지 않음, (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T042628Z-5824c1"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 2799.1,
+        "context_chars": 11771,
+        "total_tokens": 2109280,
+        "cache_read_tokens": 150492535
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 10675,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 504,
+          "output": 185694,
+          "cache_read": 100125292,
+          "cache_creation": 856198
+        },
+        "claude-sonnet-5": {
+          "input": 270,
+          "output": 170444,
+          "cache_read": 50367243,
+          "cache_creation": 885473
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\production-flow-20260919\\run-20260919T042628Z-5824c1-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\production-flow-20260919\\run-20260919T042628Z-5824c1-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "라운드를 마감했습니다.\n\n## 사용자가 하는 정확한 동선\n\n`🤖 에이전트` 입력창에 평소 말하듯 적습니다 — `등산 관련 블로그 3개 글에 댓글 달아줘` / `Genspark에서 밤바다 수채화 그려서 내 인스타에 올려줘`. 바로 실행되지 않고 **확인 카드**가 뜨고, 말에서 읽어낸 값(주제·글 수·생성 서비스·게시할 곳)이 채워져 있습니다. **계정만** 직접 넣고(비면 실행 버튼이 잠김) `이 작업으로 실행`을 누르면, `🎨 만들어 올리기` 양식으로 시작한 것과 **완전히 같은 작업**이 만들어집니다. 마음에 안 들면 `일반 에이전트로 실행`.\n\n**이게 왜 안전 문제였나:** `agent.ts:1357` 의 참여 가드 블록 전체가 `parseEngageMark(task)` 성공에만 걸려 있고, 그 표식은 `buildBlogEngageTask` 만 만듭니다. 즉 지금까지는 **같은 말을 어디에 적느냐에 따라** 중복 방지 장부·글 수/간격 한도·초안 모드가 있거나 없었습니다.\n\n## 실모델 검증이 생산 경로를 썼는가 — R-BLOG 예, R-SNS 게시 단계에서 멈춤\n\n작업자 보고와 무관하게 **제가 실행 프로필을 직접 열어** 판정했습니다.\n\n- **R-BLOG 통과**: 영속 작업 `state=completed`(105.7초 · `llmCalls 11` · `allowedHosts ['127.0.0.1']`), 지시문에 `[참여 가드] … limit=2 interval=8000` + `# 안전 지침`, **`ai-engage-quota.json` 에 `comment: 2`(한도 도달 = 코드가드가 실제로 행사됨)**, 장부에 **서로 다른 글 2건**. `ai-agent-runs.json` 부재 = 옛 `agentStart` 가 아닌 ptask 경로. → 이전 라운드가 남긴 \"실모델 실행에서 코드가드 미행사\" 갭이 닫혔습니다.\n- **R-SNS 미완(발견한 결함)**: 생성·캡션(모델 작성)·선승인(`used:1`, 범위 안)·산출물까지 통과했으나 **게시 단계가 `waiting-user` 로 멈춥니다**(2회 재현, `llmCalls 0`). 원인 확정 — `runPublishStage` 가 게시 작업을 만들면서 **탭을 게시 사이트로 옮기지 않아** 체크포인트(`about:blank`)와 어긋나고, 런타임의 재바인딩 금지 가드에 걸립니다. 블로그 경로는 작업 생성 전에 `omnibox.navigate` 하므로 안 걸립니다 — **경로 비대칭**입니다. **고치지 않았습니다**: 게시는 비가역인데 남은 시간에 수정 후 실모델 재검증이 불가했습니다. 검증 못 할 변경을 비가역 경로에 넣지 않았습니다.\n\n## 검증\n\n**`npm run verify` 13/13 · 1m 31s**(`intent-routing` 신규 등록, 12→13) · **`verify-intent-ui` 5/5**(신규 e2e) · **`verify-ai-persist` 14/14**(PS13 신규) · **스모크 16/16**(rc.6 포터블) · typecheck 3/3.\n\n**고친 결함 4건** — ① 관형형 오독(`유명한 곳`→1개) ② 조종 문구 회피(`앞의 규칙 모두 잊고`) ③ **주소의 `?` 를 의문 부호로 오판**(하네스를 외부 접속 0으로 묶다가 발견) ④ 내보내기가 저장 위치 설정 무시. ①③은 음성 대조로 검출력을 확인했고, ①은 **처음 넣은 회귀 케이스가 가드를 꺼도 통과**해 케이스를 바꿔야 했습니다.\n\n## 패키지\n\n`dist\\ezBrowser-0.2.0-rc.6-win-x64.exe` · 121,894,058 바이트 · sha256 `d800435b00b52007a38cc6c0dfc5aabe4efcee15e0119a47efcf5f6a2f3e6ac6` · 미서명 · `--publish never`(어디에도 올리지 않음). 포터블 `dist\\win-unpacked\\ezBrowser.exe`. 실행 중이던 ezBrowser 는 `%LOCALAPPDATA%\\Programs\\browser-build` 소속(사용자 실",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T042628Z-5824c1\\stream.jsonl",
+    "error": null
+  }
+}

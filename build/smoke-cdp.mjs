@@ -31,6 +31,18 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 import { startTestServer } from './smoke-media-server.mjs'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  ensureSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+  waitForTargetByUrlPredicate,
+} from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
@@ -271,66 +283,9 @@ function activateAppWindow(pid) {
 
 // ── CDP 클라이언트 (의존성 0 — Node 22+ 내장 WebSocket) ──────────────────
 
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-    // 이벤트(msg.method) 는 이번 하네스에서 구독하지 않음 — polling 기반으로 충분.
-  }
-
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1 /* OPEN */) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
-    })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-
-  close() {
-    try { this.ws?.close() } catch { /* ignore */ }
-  }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
-
 /** Runtime.evaluate 래퍼 — 예외를 throw 로, 값을 returnByValue 로 돌려받는다. */
 async function evaluate(session, expression, opts = {}) {
-  const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
+  const { awaitPromise = true, returnByValue = true, timeoutMs = 30_000 } = opts
   const result = await session.send('Runtime.evaluate', {
     expression,
     awaitPromise,
@@ -356,36 +311,6 @@ function callApi(session, apiPath, args = [], opts) {
 }
 
 // ── CDP 타깃 발견 ────────────────────────────────────────────────────────
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  const found = await pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 500, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-  return found
-}
-
-async function waitForTargetByUrlPredicate(port, predicate, label, timeoutMs = 15_000) {
-  return pollUntil(async () => {
-    const list = await getTargetList(port)
-    return list.find((t) => t.type === 'page' && typeof t.url === 'string' && predicate(t.url)) ?? null
-  }, { timeoutMs, intervalMs: 300, label })
-}
 
 // ── OS 합성 스크린샷 (z-order 검증용) ──────────────────────────────────
 
@@ -531,7 +456,12 @@ async function scenarioS3(ctx) {
 }
 
 async function scenarioS4(ctx) {
-  // 북마크 추가/제거 — bookmarks API + Toolbar DOM(.bookmark-btn.active) 상태 동시 검증.
+  // 북마크 추가/편집 — bookmarks API + Toolbar DOM(.bookmark-btn.active) 상태 동시 검증.
+  //
+  // action.bookmark.add(Ctrl+D)는 더 이상 두 번째 실행에서 삭제하지 않는다(묶음 C — 확인
+  // 없는 오삭제 방지, 삭제는 BookmarkBubble 의 "삭제" 버튼으로만). 그래서 이 시나리오는
+  // ① 두 번 실행해도 여전히 북마크 상태인지(새 동작) ② 실제 삭제(bookmarks.remove, 버블의
+  // 삭제 버튼과 동일 경로)로는 정상 제거되는지를 함께 본다.
   const navTabId = ctx.state.navTabId
   if (!navTabId) throw new Error('S2 의 navTabId 필요 (S2 가 먼저 성공해야 함)')
   const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
@@ -542,11 +472,16 @@ async function scenarioS4(ctx) {
   await callApi(ctx.chromeSession, 'tabs.activate', [navTabId])
   await sleep(200) // 활성 탭 전환이 Toolbar 리렌더에 반영될 시간
 
-  // 시작 상태를 깨끗하게(미북마크)로 정리.
-  const isBookmarked = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
-  if (isBookmarked) {
-    await callApi(ctx.chromeSession, 'actions.run', ['action.bookmark.add', { windowId: ctx.windowId, tabId: navTabId }])
-    await sleep(300)
+  // 시작 상태를 깨끗하게(미북마크)로 정리 — bookmarks.remove 로 직접(예전처럼 두 번째
+  // action.bookmark.add 를 쓰면 더는 지워지지 않는다).
+  const findId = async () => {
+    const tree = await callApi(ctx.chromeSession, 'bookmarks.list', [])
+    return tree.bookmarks.find((b) => b.url === url)?.id ?? null
+  }
+  const staleId = await findId()
+  if (staleId != null) {
+    await callApi(ctx.chromeSession, 'bookmarks.remove', [staleId])
+    await sleep(200)
   }
 
   await callApi(ctx.chromeSession, 'actions.run', ['action.bookmark.add', { windowId: ctx.windowId, tabId: navTabId }])
@@ -554,15 +489,29 @@ async function scenarioS4(ctx) {
   const afterAdd = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
   const domActive = await evaluate(ctx.chromeSession, `!!document.querySelector('.bookmark-btn.active')`)
 
+  // 두 번째 실행(이미 북마크됨) — 더 이상 삭제되지 않아야 한다(오삭제 방지 fix).
   await callApi(ctx.chromeSession, 'actions.run', ['action.bookmark.add', { windowId: ctx.windowId, tabId: navTabId }])
+  await sleep(300)
+  const afterSecondRun = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
+
+  // 실제 삭제는 BookmarkBubble 의 삭제 버튼과 동일한 경로(bookmarks.remove)로만.
+  const id = await findId()
+  if (id == null) throw new Error('추가된 북마크 id 를 찾지 못함')
+  await callApi(ctx.chromeSession, 'bookmarks.remove', [id])
   await sleep(300)
   const afterRemove = await callApi(ctx.chromeSession, 'bookmarks.isBookmarked', [url])
   const domInactive = await evaluate(ctx.chromeSession, `!document.querySelector('.bookmark-btn.active')`)
 
-  if (!(afterAdd === true && domActive === true && afterRemove === false && domInactive === true)) {
-    throw new Error(`북마크 토글 불일치: afterAdd=${afterAdd} domActive=${domActive} afterRemove=${afterRemove} domInactive=${domInactive}`)
+  // action.bookmark.add 는 편집 말풍선(BookmarkBubble)을 연다 — 여기서는 API 로 직접
+  // remove 해 버블의 "완료/삭제" 버튼을 거치지 않았으므로 말풍선이 열린 채 남는다.
+  // 다음 시나리오(S8 등)의 Escape 가 팔레트 대신 이 말풍선을 닫아버리지 않도록 정리한다.
+  await evaluate(ctx.chromeSession, `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`)
+  await sleep(200)
+
+  if (!(afterAdd === true && domActive === true && afterSecondRun === true && afterRemove === false && domInactive === true)) {
+    throw new Error(`북마크 토글 불일치: afterAdd=${afterAdd} domActive=${domActive} afterSecondRun(삭제안됨 기대)=${afterSecondRun} afterRemove=${afterRemove} domInactive=${domInactive}`)
   }
-  return `${url} 북마크 추가(isBookmarked=true, ★ DOM active)→제거(isBookmarked=false, ☆) 확인`
+  return `${url} 북마크 추가(isBookmarked=true, ★ DOM active)→재실행해도 유지→bookmarks.remove 로 제거(isBookmarked=false, ☆) 확인`
 }
 
 // ── S5(다운로드) · S6(동영상 감지+다운로드) 공용 헬퍼 ──────────────────────
@@ -936,8 +885,22 @@ async function scenarioS11(ctx) {
   await callApi(ctx.chromeSession, 'actions.run', ['action.darkmode.toggle', { windowId: ctx.windowId }])
   await sleep(700)
   const after = await callApi(ctx.chromeSession, 'settings.get', ['appearance.forcePageDark'])
-  const filterVal = await evaluate(session, `getComputedStyle(document.documentElement).filter`)
-  const hasInvert = typeof filterVal === 'string' && filterVal.includes('invert')
+
+  // CSS 주입은 메인 → 렌더러 비동기다. 한 번만 읽으면 아직 안 들어온 순간을 찍어
+  // "불일치"로 오판할 수 있다(2026-09-06 실측 flake). 기대 상태가 될 때까지 잠깐 기다린다.
+  const wantInvert = after === true
+  let filterVal = null
+  let hasInvert = false
+  // 대기를 넉넉히(최대 8초) — 머신이 바쁠 때(직전에 성능 측정 같은 무거운 작업을 돌린 뒤)
+  // 메인→렌더러 CSS 주입 반영이 3초를 넘길 수 있다. 짧게 잡으면 제품이 멀쩡한데 게이트만
+  // 빨개진다(2026-09-07: 무거운 perf 실행 직후 실행에서만 ≈50% 실패했고, 격리 재현기에서는
+  // 5라운드×3탭 전부 정상이었다).
+  for (let i = 0; i < 32; i++) {
+    filterVal = await evaluate(session, `getComputedStyle(document.documentElement).filter`)
+    hasInvert = typeof filterVal === 'string' && filterVal.includes('invert')
+    if (hasInvert === wantInvert) break
+    await sleep(250)
+  }
   const shot = await cdpScreenshot(session, ctx.outDir, 's11-content-darkmode')
 
   // 원복
@@ -948,7 +911,29 @@ async function scenarioS11(ctx) {
 
   const consistent = (after === true && hasInvert) || (after !== true && !hasInvert)
   if (!consistent) {
-    throw new Error(`forcePageDark=${after} 인데 콘텐츠 filter=${filterVal ?? '(none)'} — 불일치`)
+    // 실패했을 때 "어느 탭을 봤는지 / 다른 탭은 어떤지"가 없으면 원인을 좁힐 수 없다.
+    // (2026-09-07: 이 시나리오가 ≈50% 실패했는데 대상 탭 정보가 없어 진단이 막혔다.)
+    let where = '(수집 실패)'
+    try {
+      const href = await evaluate(session, 'location.href')
+      const others = []
+      for (const t of await getTargetList(ctx.port)) {
+        if (t.type !== 'page' || !String(t.url).startsWith('http')) continue
+        // 이미 세션을 쥐고 있는 대상 탭은 다시 열지 않는다(같은 타깃에 두 번째 WS 를 여는 것을 피하고,
+        // 같은 URL 이 두 번 찍히는 것도 막는다). 그 탭 값은 위의 filterVal 이 이미 갖고 있다.
+        if (t.webSocketDebuggerUrl === session.wsUrl) continue
+        let s2 = null
+        try {
+          s2 = await connectSession(t, 'diag')
+          const f = await evaluate(s2, 'getComputedStyle(document.documentElement).filter', { timeoutMs: 5000 })
+          others.push(`${t.url.slice(0, 40)}→${String(f).includes('invert') ? 'invert' : String(f)}`)
+        } catch (e) {
+          others.push(`${t.url.slice(0, 40)}→(조회실패)`)
+        } finally { try { s2?.close() } catch { /* ignore */ } }
+      }
+      where = `대상=${href} · 전체 탭: ${others.join(' | ')}`
+    } catch { /* 진단 실패는 원래 오류를 가리지 않는다 */ }
+    throw new Error(`forcePageDark=${after} 인데 콘텐츠 filter=${filterVal ?? '(none)'} — 불일치 · ${where}`)
   }
   return `toggle: forcePageDark ${before}→${after}, computed filter ${hasInvert ? '포함' : '없음'}(invert) — 일치 확인, `
     + `원복 완료, 스크린샷 ${shot.ok ? shot.path : `실패: ${shot.error}`}`
@@ -987,6 +972,7 @@ async function scenarioS12(ctx) {
   }, { timeoutMs: 10000, label: 'S12 새 시크릿 창 외피 CDP 타깃' })
 
   const incogSession = await connectSession(newShell, 'chrome-incognito')
+  await ensureSessionReady(incogSession)
   ctx.state.openSessions.push(incogSession)
   const incogWindowId = shellTargetWindowId(newShell)
   if (!incogWindowId) throw new Error('시크릿 창 외피 URL 에서 windowId 를 읽지 못함')
@@ -1121,6 +1107,22 @@ async function main() {
   // 이름 기반 종료가 아니라, 이 하네스가 이전에 띄운 PID 만 정리 (사용자의 실제 인스턴스는 건드리지 않음).
   await cleanupStaleProcess(args.out)
 
+  // 디버그 포트가 정말 비었는지 확인한다.
+  //
+  // 왜 (2026-09-06 실측): 앞선 실행이 남긴 인스턴스가 같은 포트를 쥐고 있으면, 우리가 새 앱을
+  // 띄워도 /json/list 는 **좀비의 타깃**을 돌려준다. 그 렌더러는 이미 죽어 있어 CDP 명령이
+  // 영영 응답하지 않고, 스모크는 전 시나리오 FAIL 로 무너진다. 원인을 알 수 없는 이 간헐 실패의
+  // 진짜 정체가 이것이었다. 남의 브라우저를 검사하느니 **큰 소리로 실패**하는 편이 낫다.
+  // 잔재가 고정 포트를 쥐고 있으면 빈 포트로 옮겨 실행을 살린다(그래도 안 되면 아래에서 중단).
+  args.port = await preferFreePort(args.port, 'smoke-cdp')
+  const portFree = await waitForPortFree(args.port, 12_000)
+  if (!portFree) {
+    console.error(`[smoke-cdp] 디버그 포트 ${args.port} 가 이미 사용 중입니다 (다른 인스턴스가 쥐고 있음).`)
+    console.error('  → 그 프로세스를 종료하거나 --port 로 다른 포트를 지정하세요.')
+    console.error('  (그대로 진행하면 남의 인스턴스를 검사하게 되므로 중단합니다.)')
+    process.exit(2)
+  }
+
   // 격리 프로필: 실사용자 프로필(%APPDATA%/browser-build)과 완전히 분리.
   // 온보딩/복원 다이얼로그를 피하도록 최소 settings.json 시드.
   seedProfile(args.profileDir, args.keepProfile)
@@ -1149,10 +1151,8 @@ async function main() {
 
   let infraOk = false
   try {
-    console.log('[smoke-cdp] CDP 외피 타깃 대기 중 (최대 30초)…')
-    const shellTarget = await waitForShellTarget(args.port, 30_000)
-    console.log(`[smoke-cdp] 외피 타깃 발견: ${shellTarget.url}`)
-    ctx.chromeSession = await connectSession(shellTarget, 'chrome-shell')
+    console.log('[smoke-cdp] CDP 외피 타깃 대기 + 응답 확인 중 (최대 90초)…')
+    ctx.chromeSession = await connectShellSessionReady(args.port, { totalMs: 90_000 })
     ctx.state.openSessions.push(ctx.chromeSession)
 
     ctx.windowId = await evaluate(

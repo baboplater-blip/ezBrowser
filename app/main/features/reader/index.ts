@@ -1,4 +1,5 @@
 import { app, type WebContents } from 'electron'
+import { tMain } from '../../i18n'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -63,7 +64,7 @@ function buildEnterScript(libCode: string): string {
     html += '.bb-reader-bar button{margin-left:auto;border:1px solid currentColor;background:transparent;'
     html += 'color:inherit;padding:3px 10px;border-radius:11px;cursor:pointer;font-size:11px;}'
     html += '</style></head><body>'
-    html += '<div class="bb-reader-bar">📖 리더 모드 · <button onclick="window.__bbExitReader()">원본 보기</button></div>'
+    html += '<div class="bb-reader-bar">📖 ' + tMain('main.reader.badge', '리더 모드') + ' · <button onclick="window.__bbExitReader()">' + tMain('main.reader.originalView', '원본 보기') + '</button></div>'
     html += '<article class="bb-reader">'
     html += '<h1>' + (title || '') + '</h1>'
     if (byline) html += '<p class="byline">' + byline + '</p>'

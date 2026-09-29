@@ -1,4 +1,5 @@
 import { BrowserWindow, clipboard, dialog, ipcMain } from 'electron'
+import { tMain } from '../i18n'
 import { IPC } from '../../shared/ipc-channels'
 import {
   cancelDownload, clearFinishedDownloads, getDownloadMeta, listDownloads, openDownloadFile,
@@ -28,7 +29,7 @@ export function registerDownloadsIpc(): void {
     if (!isTrustedSender(e)) return { canceled: true }
     const win = BrowserWindow.fromWebContents(e.sender)
     const r = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
-      title: '기본 다운로드 폴더 선택',
+      title: tMain('main.downloads.pickFolderTitle', '기본 다운로드 폴더 선택'),
       properties: ['openDirectory'],
     })
     if (r.canceled || r.filePaths.length === 0) return { canceled: true }

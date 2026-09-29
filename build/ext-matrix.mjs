@@ -23,13 +23,23 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+} from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 
 const DEFAULTS = {
   exe: path.join(REPO_ROOT, 'dist', 'win-unpacked', 'ezBrowser.exe'),
-  out: 'C:\\Users\\molma\\AppData\\Local\\Temp\\claude\\c--Users-molma-Desktop-----browser-build\\9385582e-821e-4490-88cc-bb0c7fda225a\\scratchpad\\ext-matrix',
+  out: path.join(REPO_ROOT, 'verify-out', 'ext-matrix'),
   port: 9232,
   keepAlive: false,
 }
@@ -216,58 +226,6 @@ function seedProfile(profileDir) {
 
 // ── CDP 클라이언트 (의존성 0 — Node 22+ 내장 WebSocket) ──────────────────
 
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-  }
-
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }) })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-
-  close() { try { this.ws?.close() } catch { /* ignore */ } }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
-
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
   const result = await session.send('Runtime.evaluate', {
@@ -286,29 +244,6 @@ function argToLiteral(a) { return a === undefined ? 'undefined' : JSON.stringify
 function callApi(session, apiPath, args = [], opts) {
   const argStr = args.map(argToLiteral).join(', ')
   return evaluate(session, `window.browserAPI.${apiPath}(${argStr})`, opts)
-}
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-async function waitForShellTarget(port, timeoutMs = 30_000) {
-  let lastList = []
-  const found = await pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 500, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-  return found
 }
 
 async function cdpScreenshot(session, outDir, name) {
@@ -391,41 +326,44 @@ function record(entry) {
 
 // ── 메인 검증 루틴 ───────────────────────────────────────────────────────
 
+// 묶음 J(항목 3, 설치 전 동의) 이후: installFromUrl 은 더 이상 곧바로 로드하지 않고
+// unpack 만 해서 { pending: { token, id, ... } } 를 돌려준다. 이 하네스는 실제 UI 클릭이 아니라
+// IPC 를 직접 두드리므로, 사용자가 "설치" 버튼을 누르는 것과 같은 뜻으로 confirmInstall 을
+// 이어서 부른다(취소 화면 자체는 verify-extension-ux-cdp.mjs U1~U4 가 이미 검증한다 — 여기서는
+// "실제 웹스토어 확장이 동의 뒤에도 여전히 정상 동작하는가"만 본다).
 async function installExtension(ctx, ext) {
   const webstoreUrl = `https://chromewebstore.google.com/detail/x/${ext.id}`
   try {
-    const res = await callApi(ctx.chromeSession, 'extensions.installFromUrl', [webstoreUrl], { timeoutMs: 45_000 })
-    return res
+    const staged = await callApi(ctx.chromeSession, 'extensions.installFromUrl', [webstoreUrl], { timeoutMs: 45_000 })
+    if (!staged || staged.ok !== true || !staged.pending?.token) {
+      return { ok: false, id: staged?.pending?.id, error: staged?.error ?? '동의 미리보기(pending)를 받지 못함' }
+    }
+    const confirmed = await callApi(ctx.chromeSession, 'extensions.confirmInstall', [staged.pending.token], { timeoutMs: 20_000 })
+    return confirmed
   } catch (err) {
     return { ok: false, error: `IPC/CDP 예외: ${err.message}` }
   }
 }
 
 async function checkActionRenders(ctx, realId) {
-  // browserAPI.extensions.invokeAction 은 popup(또는 옵션 페이지)을 새 탭으로 연다
-  // (app/main/extensions/adapter.ts invokeExtensionAction — 정식 팝업 창 미구현, 새 탭 폴백).
-  // 실사용자가 툴바 아이콘을 누르는 것과 동일한 코드 경로.
-  const before = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
-  const beforeIds = new Set(before.map((t) => t.id))
+  // 묶음 J(항목 1) 이후: browserAPI.extensions.invokeAction 은 popup 이 있으면 **탭이 아니라
+  // 앵커된 별도 창**으로 연다(app/main/extensions/popup.ts). popup 이 없는 확장은 여전히
+  // 옵션 페이지를 새 **탭**으로 연다(openExtensionOptions — 이 경로는 그대로다). 그래서 먼저
+  // CDP 타깃 목록에서 새 팝업 창을 찾고, 없으면 탭 목록에서 새 탭(옵션 폴백)을 찾는다.
+  const beforeTargetIds = new Set((await getTargetList(ctx.port)).map((t) => t.id))
+  const beforeTabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
+  const beforeTabIds = new Set(beforeTabs.map((t) => t.id))
   const res = await callApi(ctx.chromeSession, 'extensions.invokeAction', [realId], { timeoutMs: 10_000 })
   if (!res || res.ok !== true) return { rendered: false, note: `invokeAction 실패: ${res?.error ?? '(unknown)'}` }
 
   try {
-    const tab = await pollUntil(async () => {
-      const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
-      return tabs.find((t) => !beforeIds.has(t.id) && typeof t.url === 'string' && t.url.startsWith(`chrome-extension://${realId}/`)) ?? null
-    }, { timeoutMs: 6000, label: 'action popup/options 탭' })
-
-    await pollUntil(async () => {
-      const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
-      const t = tabs.find((x) => x.id === tab.id)
-      return t && !t.loading
-    }, { timeoutMs: 8000, label: '액션 탭 로드 완료' })
-
     const target = await pollUntil(async () => {
       const list = await getTargetList(ctx.port)
-      return list.find((x) => x.url === tab.url) ?? null
-    }, { timeoutMs: 5000, label: '액션 탭 CDP 타깃' })
+      return list.find((t) => !beforeTargetIds.has(t.id) && typeof t.url === 'string'
+        && t.url.startsWith(`chrome-extension://${realId}/`)) ?? null
+    }, { timeoutMs: 8000, label: 'action popup 창(또는 옵션 탭)' })
+
+    await new Promise((r) => setTimeout(r, 500)) // 팝업 리사이즈·로드 여유(popup.ts 의 220ms 재측정 뒤)
 
     const session = await connectSession(target, `ext-action:${realId}`)
     ctx.openSessions.push(session)
@@ -433,11 +371,22 @@ async function checkActionRenders(ctx, realId) {
     const htmlLen = await evaluate(session, 'document.documentElement ? document.documentElement.outerHTML.length : -1').catch(() => -1)
     const isChromeError = await evaluate(session, `document.documentElement && document.documentElement.getAttribute('data-bb-href') === 'chrome-error://chromewebdata/'`).catch(() => false)
     const readyState = await evaluate(session, 'document.readyState').catch(() => 'unknown')
-    await callApi(ctx.chromeSession, 'tabs.close', [tab.id]).catch(() => {})
+
+    // 정리: 옵션 탭이면 tabs.close, 팝업 창이면 같은 액션을 다시 "눌러" 토글로 닫는다.
+    const isNewTab = !beforeTabIds.has(target.id) && (await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId]))
+      .some((t) => t.url === target.url && !beforeTabIds.has(t.id))
+    if (isNewTab) {
+      const tabs = await callApi(ctx.chromeSession, 'tabs.list', [ctx.windowId])
+      const tab = tabs.find((t) => t.url === target.url && !beforeTabIds.has(t.id))
+      if (tab) await callApi(ctx.chromeSession, 'tabs.close', [tab.id]).catch(() => {})
+    } else {
+      await callApi(ctx.chromeSession, 'extensions.invokeAction', [realId]).catch(() => {})
+    }
+
     // bodyLen>=0 만으로는 빈 chrome-error 페이지(로드 "성공"으로 보이는 실패)를 오탐한다 —
     // 실제 컨텐츠가 있어야(문서 HTML 이 최소한의 크기를 넘어야) "렌더됨"으로 판정한다.
     const rendered = readyState === 'complete' && !isChromeError && (bodyLen > 0 || htmlLen > 200)
-    return { rendered, note: `readyState=${readyState}, bodyTextLen=${bodyLen}, htmlLen=${htmlLen}, isChromeError=${isChromeError}, url=${tab.url}` }
+    return { rendered, note: `readyState=${readyState}, bodyTextLen=${bodyLen}, htmlLen=${htmlLen}, isChromeError=${isChromeError}, url=${target.url}, isNewTab=${isNewTab}` }
   } catch (err) {
     return { rendered: false, note: `팝업/옵션 탭 확인 실패: ${err.message}` }
   }
@@ -553,6 +502,18 @@ async function main() {
   await cleanupStaleProcess(args.out)
   seedProfile(profileDir)
 
+  // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+  args.port = await preferFreePort(args.port, 'ext-matrix.mjs')
+  if (!(await waitForPortFree(args.port))) {
+
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+
+    throw new Error(`디버그 포트 ${args.port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+
+  }
+
   const { child } = launchApp(args.exe, args.out, args.port, profileDir)
 
   const ctx = {
@@ -566,8 +527,10 @@ async function main() {
   let infraOk = false
   try {
     console.log('[ext-matrix] CDP 외피 타깃 대기 중 (최대 30초)…')
-    const shellTarget = await waitForShellTarget(args.port, 30_000)
-    ctx.chromeSession = await connectSession(shellTarget, 'chrome-shell')
+    ctx.chromeSession = await connectShellSessionReady(args.port, {
+      label: 'chrome-shell',
+      log: (msg) => console.log(`[ext-matrix] ${msg}`),
+    })
     ctx.openSessions.push(ctx.chromeSession)
     ctx.windowId = await evaluate(ctx.chromeSession, `new URL(location.href).searchParams.get('windowId')`)
     if (!ctx.windowId) throw new Error('외피 URL 에서 windowId 를 읽지 못함')
@@ -653,6 +616,29 @@ async function main() {
       // 해시 기반이라(manifest 에 "key" 없는 한) 이 두 id 가 다를 수 있다. storedIdLiveInCdp=false 면
       // browser://extensions 의 "▶ 실행"/"⚙ 옵션"/삭제/토글이 잘못된 id 를 참조하게 되는 근거.
       entry.storedIdLiveInCdp = own.length > 0
+    }
+
+    // ===== DNR 동작 확인 (임무 36) =====
+    // "로드 성공" 만으로는 착시다 — uBO Lite 같은 MV3 차단기는 declarativeNetRequest 로만 막는데,
+    // 그 API 가 죽어 있으면 로드는 되고 **아무것도 막지 못한다**(임무 34 에서 실제로 그랬다).
+    // 확장이 룰셋을 선언했는데 우리가 적용한 룰이 0 개면 그 확장은 무력하다.
+    for (const entry of report.matrix) {
+      if (!entry.realId) continue
+      const dir = path.join(args.out, 'profile', 'extensions', entry.realId)
+      let declares = 0
+      try {
+        const mf = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'))
+        const res = mf?.declarative_net_request?.rule_resources
+        declares = Array.isArray(res) ? res.filter((r) => r?.enabled !== false).length : 0
+      } catch { declares = 0 }
+      entry.dnrDeclaredRulesets = declares
+      const fromList = (Array.isArray(list) ? list : []).find((x) => x?.id === entry.realId)
+      entry.dnrAppliedRules = Number(fromList?.dnrRules ?? 0)
+      entry.dnrWorking = declares === 0 ? null : entry.dnrAppliedRules > 0
+      if (declares > 0) {
+        console.log(`[dnr] ${entry.name}: 선언 룰셋 ${declares}개 → 적용 룰 ${entry.dnrAppliedRules}개`
+          + (entry.dnrWorking ? '' : '  ← 로드는 됐지만 차단이 동작하지 않는다'))
+      }
     }
 
     // 액션(popup/options) 렌더 확인 — hasAction 인 것만.

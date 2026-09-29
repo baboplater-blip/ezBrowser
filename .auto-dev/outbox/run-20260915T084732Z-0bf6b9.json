@@ -1,0 +1,27 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260915T084732Z-0bf6b9",
+  "recorded_at": "2026-09-15T09:18:38Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260915T084732Z-0bf6b9",
+    "project_id": "browser-build-36466a626d",
+    "status": "unclear",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "e85ca038-efde-4238-a4e8-ce193ac7c0fd",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "summary": "Done. Final state confirmed: no leftover breakage in source, both target suites fully green.\n\n## 요약\n\n두 하네스는 이미 있었고 겉보기엔 초록이었는데, **둘 다 자기가 주장하는 것을 검사하지 않고 있었다.** `PS2` 는 없는 필드(`steps` vs `stepCount`)를 읽어 늘 `단계 0개` 였지만 판정식이 `A && B || C` 라 뒤의 느슨한 조건으로 통과했고, `PS4` 는 `running` 인 실행이 하나도 없는 상태에서 \"running 이 없다\"를 확인하는 빈 검사였다.\n\n그걸 고치는 과정에서 **제품 결함 1건**이 나왔다: `chrome.tabs.query` 가 항상 빈 배열이었다. 배선을 넣자 앱 로그가 원인을 지목했다 — 라이브러리는 어댑터 세션과 webContents 세션이 다르면 TypeError 를 던지는데, 어댑터는 `defaultSession` 하나로 만들어져 있고 **우리 탭은 전부 워크스페이스 partition** 에 있다(회귀 #11/#12/#13 과 같은 세션 불일치 계열). 어댑터를 세션마다 만들도록 고쳤다. 부수적으로 `chrome.scripting` 도 살아났는데 — 처음엔 \"라이브러리에 구현이 없어서 미지원\"이라고 GAP 사유를 적었다가 관찰된 문구만 싣도록 바꿨고, 실제 원인은 탭 0개였다. 그대로 뒀다면 **없는 미지원 사항을 문서에 박을 뻔했다.**\n\n**수정 파일 9개**: 제품 3(`extensions/adapter.ts`, `index.ts`, `tabs/tab-service.ts`), 하네스 3(`verify-ai-persist-cdp.mjs`, `verify-extension-behavior-cdp.mjs`, `verify-all.mjs`), 문서 1(`.agents/.../SKILL.md`), 자동기록 1(`status.md`), 보고 1(`.auto-dev/result.md`).\n\n**검사 수**: ai-persist 4 → **7/7**, extension-behavior 9+1GAP → **12/12 · GAP 0**(3회 연속). `npm run verify` **8/8**(스모크 16/16), `ext-matrix` **PASS**. 음성 대조로 결함 5개를 한 빌드에 심어 **새·수정 검사 6개가 전부 실패**하고 **나머지는 움직이지 않음**을 확인했다.\n\n**남은 제한**: ① `.claude/skills/.../SKILL.md` 수정이 권한 거부돼 `.agents/` 사본만 갱신 — 두 파일이 이제 다르다 ② X13 은 \"SW 중 하나라도 탭을 본다\" 판정(세션별 개별 확인은 아님) ③ SW 순회로 바꾼 뒤의 음성 대조는 재측정 아닌 **추론** ④ 단계 상한 120 은 미검사 ⑤ **관찰만 하고 안 고친 것 — 확장이 모든 세션에 로드돼 `chrome.storage` 가 워크스페이스마다 갈린다** ⑥ 모델·토큰은 계측 원장이 없어 **미계측**(추정치 미기재).",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260915T084732Z-0bf6b9\\stream.jsonl",
+    "error": null
+  }
+}

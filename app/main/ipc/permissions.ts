@@ -5,6 +5,7 @@ import {
   type PermDecision,
 } from '../storage/permissions'
 import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
+import { resolvePermissionPrompt } from '../session-bootstrap'
 import { isTrustedSender } from './trust'
 
 export function registerPermissionsIpc(): void {
@@ -26,6 +27,12 @@ export function registerPermissionsIpc(): void {
   ipcMain.handle(IPC.permissions.clearAll, (e) => {
     if (!isTrustedSender(e)) return
     clearAllPermissions()
+  })
+
+  // 외피의 PermissionPrompt.tsx 가 사용자의 허용/차단(+기억 여부)을 알려준다.
+  ipcMain.handle(IPC.permissions.promptRespond, (e, args: { promptId: string; allow: boolean; remember: boolean }) => {
+    if (!isTrustedSender(e)) return
+    resolvePermissionPrompt(args.promptId, args.allow, args.remember)
   })
 
   permissionEvents.on('changed', () => {

@@ -17,7 +17,10 @@ function broadcast(channel: string, payload?: unknown): void {
 }
 
 export function registerAdblockIpc(): void {
-  ipcMain.handle(IPC.adblock.stats, () => getAdblockStats())
+  ipcMain.handle(IPC.adblock.stats, (e) => {
+    if (!isTrustedSender(e)) return null
+    return getAdblockStats()
+  })
   ipcMain.handle(IPC.adblock.setLevel, (e, { level }: { level: 'lite' | 'standard' | 'strict' | 'custom' }) => {
     if (!isTrustedSender(e)) return
     return setAdblockLevel(level)

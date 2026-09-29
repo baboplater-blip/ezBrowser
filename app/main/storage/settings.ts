@@ -1,4 +1,4 @@
-import Store from 'electron-store'
+import { createStore } from './safe-store'
 
 export interface AppSettings {
   appearance: {
@@ -20,6 +20,9 @@ export interface AppSettings {
   privacy: {
     historyRetention: 'unlimited' | '1w' | '1m' | '3m' | '1y'
     blockThirdPartyCookies: boolean
+    // 패스키 자동 요청(mediation: conditional). 크롬은 자동완성 목록에 조용히 넣지만 우리는 그 UI 가 없어 OS 창이 튀어나온다 →
+    // 'block'(기본): 조건부 요청만 거부(명시적 "패스키로 로그인" 은 그대로) · 'allow': 크롬과 다르게 OS 창이 뜨더라도 통과.
+    passkeyAutoPrompt: 'block' | 'allow'
   }
   adblock: {
     enabled: boolean
@@ -40,6 +43,7 @@ export interface AppSettings {
     accelerator: boolean
     torrentDht: boolean
     torrentMaxSeedRatio: number
+    ytdlpAutoUpdate: boolean
   }
   freedom: {
     userChromeCss: boolean
@@ -58,6 +62,9 @@ export interface AppSettings {
     sidepanelRightOpen: boolean
     tabbarOrientation: 'top' | 'left' | 'right'
     workspaceRailOpen: boolean
+    // 'auto' = OS 로케일로 판정(app.getLocale()/navigator.language) — ko*→ko, vi*→vi, 그 외 en.
+    // 명시값이면 그 언어를 강제. resolveLocale()(app/shared/i18n-core.ts) 단일 출처로 판정.
+    language: 'auto' | 'ko' | 'en' | 'vi'
   }
   performance: {
     tabSleepEnabled: boolean
@@ -87,6 +94,7 @@ export interface AppSettings {
     fxBase: string
     fxSymbols: string
     readLaterEnabled: boolean
+    buddyEnabled: boolean
   }
   setup: {
     completed: boolean
@@ -116,7 +124,23 @@ export interface AppSettings {
     agentFilesDir: string   // 에이전트가 업로드에 쓸 수 있는 자료 폴더(이 폴더 안 파일만 접근 허용)
     agentMaxSteps: number   // 에이전트 한 작업의 최대 단계 수(복잡한 작업일수록 크게)
     agentVision: 'auto' | 'always' | 'off'  // 화면 인식 — auto=스마트(화면 변화·막힘 때만 캡처, 한도 절약)·always=매 단계·off. 비전 지원 제공자/모델에서만
+    agentAutoApprove: boolean  // true 면 결제·삭제·게시 등 민감 동작도 확인 없이 자동 진행(무인 실행). 위험 — 신뢰하는 작업에만.
+    agentHumanInput: boolean   // true(기본): 실제 마우스 이동·클릭·키 입력(trusted)으로 조작 — 인스타·페북 봇 탐지 회피. false: 빠른 합성 이벤트.
+    // 조작 속도 — 'auto'(기본): 봇 탐지가 실제로 도는 사이트(인스타·틱톡 등)에서만 사람 흉내 타이밍을
+    // 전부 쓰고, 그 외 사이트에서는 같은 실제 입력 이벤트를 빠른 간격으로 보낸다(작업이 몇 배 빨라짐).
+    // 'human': 항상 사람 속도(가장 안전, 느림). 'fast': 항상 빠르게.
+    agentInputMode: 'auto' | 'human' | 'fast'
+    // CLI 제공자(claude-code·codex)에서 에이전트 작업 하나에 프로세스 하나를 유지(스텝을 이어 보냄 — 부팅 고정비·
+    // 캐시 손실 제거로 스텝당 지연이 크게 준다). false 면 예전처럼 스텝마다 새로 띄운다(문제 시 폴백 스위치).
+    cliSession: boolean
+    // 에이전트 실행 중 다운로드·동영상 도크와 좌측 사이드패널을 접어 콘텐츠 영역을 넓힌다(끝나면 복구). 큰 대화상자가 잘리는 것 방지.
+    agentCollapsePanels: boolean
     webhookUrl: string      // 수집 데이터 연동 — 이 URL 로 JSON POST(Zapier·Make·구글시트 Apps Script 등)
+    // ===== 영속 작업(task-runtime) — 구간 단위로 이어가는 장기 에이전트 작업 =====
+    taskLongMaxHours: number        // 장시간 기본 최대 시간 (기본 24)
+    taskSegmentSteps: number        // 구간당 단계 (기본 12, 범위 4~40)
+    taskLongMaxSteps: number        // 장시간 총 단계 예산 (기본 2000)
+    taskLongMaxLlmCalls: number     // 장시간 모델 호출 상한 (기본 1500)
   }
 }
 
@@ -127,7 +151,7 @@ const DEFAULTS: AppSettings = {
   },
   startup: { mode: 'newtab', urls: [] },
   search: { defaultEngine: 'google', suggestEnabled: true, bangsEnabled: true },
-  privacy: { historyRetention: '1y', blockThirdPartyCookies: true },
+  privacy: { historyRetention: '1y', blockThirdPartyCookies: true, passkeyAutoPrompt: 'block' },
   adblock: {
     enabled: true, level: 'standard',
     filters: {
@@ -142,6 +166,7 @@ const DEFAULTS: AppSettings = {
     accelerator: true,
     torrentDht: false,
     torrentMaxSeedRatio: 2.0,
+    ytdlpAutoUpdate: true,
   },
   freedom: {
     userChromeCss: true,
@@ -160,6 +185,7 @@ const DEFAULTS: AppSettings = {
     sidepanelRightOpen: false,
     tabbarOrientation: 'top',
     workspaceRailOpen: true,
+    language: 'auto',
   },
   performance: {
     tabSleepEnabled: true,
@@ -189,6 +215,7 @@ const DEFAULTS: AppSettings = {
     fxBase: 'USD',
     fxSymbols: 'KRW,JPY,EUR,CNY',
     readLaterEnabled: true,
+    buddyEnabled: true,
   },
   setup: {
     completed: false,
@@ -216,13 +243,22 @@ const DEFAULTS: AppSettings = {
     agentFilesDir: '',
     agentMaxSteps: 25,
     agentVision: 'auto',
+    agentAutoApprove: false,
+    agentHumanInput: true,
+    agentInputMode: 'auto',
+    cliSession: true,
+    agentCollapsePanels: true,
     webhookUrl: '',
+    taskLongMaxHours: 24,
+    taskSegmentSteps: 12,
+    taskLongMaxSteps: 2000,
+    taskLongMaxLlmCalls: 1500,
   },
 }
 
 // clearInvalidConfig: 손상된 settings.json(예: BOM·잘림)이 있어도 throw 대신 기본값으로 리셋 —
 // 설정 파일 하나가 메인 프로세스 전체를 죽이지 않도록 방어.
-const store = new Store<AppSettings>({ name: 'settings', defaults: DEFAULTS, clearInvalidConfig: true })
+const store = createStore<AppSettings>({ name: 'settings', defaults: DEFAULTS })
 
 export function getSettings(): AppSettings {
   return store.store as AppSettings

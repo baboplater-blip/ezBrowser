@@ -80,6 +80,16 @@ export function isBookmarked(url: string): boolean {
 }
 
 export function addBookmark(input: { url: string; title: string; folderId?: number | null }): Bookmark {
+  // 호출자(내부 페이지·액션)가 보낸 값을 타입까지 확인한다 — 숫자·객체가 그대로 저장되면
+  // 북마크 바가 `new URL(값)` 에서 터진다. (2026-09-07 임무 19 계열)
+  if (!input || typeof input !== 'object' || typeof input.url !== 'string' || !input.url.trim()) {
+    throw new Error('북마크 주소가 올바르지 않습니다')
+  }
+  input = {
+    url: input.url.trim(),
+    title: typeof input.title === 'string' && input.title.trim() ? input.title.trim() : input.url.trim(),
+    folderId: typeof input.folderId === 'number' ? input.folderId : null,
+  }
   const { db, scheduleFlush } = getDb()
   const now = Date.now()
   const folderId = input.folderId ?? null
@@ -158,6 +168,10 @@ export function moveBookmark(id: number, folderId: number | null, position: numb
 }
 
 export function createFolder(input: { name: string; parentId?: number | null }): BookmarkFolder {
+  if (!input || typeof input !== 'object' || typeof input.name !== 'string' || !input.name.trim()) {
+    throw new Error('폴더 이름이 올바르지 않습니다')
+  }
+  input = { name: input.name.trim(), parentId: typeof input.parentId === 'number' ? input.parentId : null }
   const { db, scheduleFlush } = getDb()
   const parentId = input.parentId ?? null
   const posRow = db.exec('SELECT COALESCE(MAX(position), -1) + 1 FROM folders WHERE parent_id IS ?', [parentId as never])

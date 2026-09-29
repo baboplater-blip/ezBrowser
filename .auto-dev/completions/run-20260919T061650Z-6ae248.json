@@ -1,0 +1,71 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260919T061650Z-6ae248",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-19T06:46:43Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "올리는 중에 브라우저가 꺼져도, 다시 켜면 '올라갔는지 확인되지 않음'으로 표시되고 이어가기가 막혀 같은 글이 두 번 올라가지 않는다",
+      "check": "verify-recovery-cdp.mjs R3 — www.instagram.com 을 --host-resolver-rules 로 127.0.0.1 HTTPS 픽스처에 묶고(실제 서비스 접속 0건), 픽스처가 POST /sns/publish 를 state 에 기록한 뒤 응답을 보내지 않도록(holdPublish) 한 상태에서 앱 밖 서버의 publishes 가 1건이 된 것을 관측한 직후 Electron PID 를 taskkill /T /F → 같은 격리 프로필로 재기동. 실측: publishUncertain=true, recovery.kind=publish-uncertain, ptaskStart 3회·socialApprove 2회 모두 거부, 서버 게시 1건 그대로",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "negative",
+      "behavior": "게시 요청이 나가기 전에 멈춘 경우에는 유령 게시가 생기지 않는다",
+      "check": "R3-NEG — 게시 클릭 확인 대기(waiting-user)에서 승인하지 않고 강제 종료 후 재기동. 실측: 서버 게시 추가 0건(킬 직전 1 → 재시작 후 1)",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "악성 페이지가 모델에게 글을 쓰라고 시켜도 '게시 여부 확인'(읽기 전용)에서는 차단되고, 확실한 근거가 없으면 완료로 처리하지 않는다",
+      "check": "R3-RO — 읽기 전용 확인 작업이 type·upload_file 을 실제로 시도하게 각본을 짜고 결과를 대조. 실측: 추가 게시 0건, 표지 없는 결론은 publishUncertain=true 유지(완료 아님), '게시됨:' 표지가 있을 때만 stage=done+영수증",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "positive",
+      "behavior": "정상적으로 끝난 게시는 정확히 1건 올라가고 완료로 확정된다(막기만 하는 것이 아니다)",
+      "check": "R3-POS — holdPublish 를 끄고 같은 경로를 완주. 실측: 서버 게시 1 → 2(추가 정확히 1건), stage=done, receipt='발행 완료 신호 확인', publishUncertain 없음",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "이번에 고친 제품 결함이 실제로 결함이었음을 같은 검사로 확인했다",
+      "check": "고치기 전 빌드에서 같은 R3 를 돌린 실측: 서버에 게시 1건이 실제로 저장됐는데 재시작 후 publishUncertain=false · recovery=(없음) — 아무 경고 없이 stage=publish 로 남았다(reconcilePublish 의 if(!t) return 이 조용히 물러남). 고친 뒤 같은 검사가 PASS",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "기존 복구 검사(R1·R2)가 이번 제품 수정으로 깨지지 않았다",
+      "check": "verify-recovery-cdp.mjs 전체 실행 — 6/6 PASS · 종료코드 0(R1 생성물 sha=34e9e6be10a7, R2 recovery 힌트 있음)",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [
+      "실제 구독 Claude CLI 로 한 번 돌리는 '로컬 격리 읽기검증 복구' 스모크 — 이번 라운드의 R3 는 전부 결정론 fake-LLM 각본으로 돌렸다(실모델 미사용)"
+    ],
+    "blockers": [],
+    "optional_next": [
+      "게시 작업 기록이 ai-tasks.json 에 남지 않은 원인 규명(저장 디바운스 400ms·강제저장 2s 로는 설명이 덜 된다 — 이번 수정은 원인과 무관하게 안전한 쪽으로 떨어지게 한 안전망)"
+    ],
+    "korean_line": "남은 작업: 실제 구독 Claude CLI 로 한 번 돌리는 '로컬 격리 읽기검증 복구' 스모크 — 이번 라운드의 R3 는 전부 결정론 fake-LLM 각본으로 돌렸다(실모델 미사용); 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "node build/verify-recovery-cdp.mjs && npm run verify",
+    "passed": 19,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "앱 데이터 파일을 손으로 편집해 가짜 상태를 만들지 않았다 — publishUncertain·recovery·resumeBlock 은 전부 제품이 실제 게시 경로에서 스스로 세운 값이고, 판정 근거는 앱 밖 픽스처 서버의 게시 건수다. 실제 인스타그램 접속 0건. 앱 소스가 바뀌어 0.2.0-rc.9 로 버전을 맞추고 설치파일을 다시 빌드했다(설치는 하지 않았다 — 사용자 실설치본 무접촉)."
+}

@@ -1,0 +1,23 @@
+{
+  "main": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\recovery-flow-20260919\\dist-before\\main\\index.js",
+  "results": [
+    {
+      "id": "R1",
+      "name": "이미지 기준선이 재시작을 못 넘긴다(capture.ts 의 baselines Map — in-memory, 재시작으로 소실)",
+      "status": "FAIL",
+      "detail": "저장 산출물 1개 · sha=ea16c8042eff → 미끼(버그 재현) (생성물=34e9e6be10a7, 미끼=ea16c8042eff) · 치수=900x900 · 1차구간상태=running · 재시작직후상태=interrupted(waitReason=\"재시작으로 중단됐습니다 — 이어서 진행할 수 있습니다.\") · 최종상태=needs-verify"
+    },
+    {
+      "id": "R2",
+      "name": "캡션 작성 중 종료되면 아무 안내 없이 멈춘다(review 단계는 taskEvents 로 재시도되지 않는다)",
+      "status": "FAIL",
+      "detail": "킬 직전 상태={\"stage\":\"review\"} · 재시작 직후={\"stage\":\"review\"} · 재시작 2초 후={\"stage\":\"review\"} · caption있음=false captionError있음=false recovery힌트있음=false"
+    },
+    {
+      "id": "R3",
+      "name": "게시 도중 종료되면 중복 게시 위험이 남는다",
+      "status": "SKIP",
+      "detail": "시간 제약으로 이번 라운드는 미구현(뼈대·조사 내용만 코드 주석에 남김). openssl 가용 — 다음 라운드에 --host-resolver-rules 격리로 구현 가능."
+    }
+  ]
+}

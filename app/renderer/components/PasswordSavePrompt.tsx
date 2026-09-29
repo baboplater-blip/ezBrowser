@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 interface Prompt {
   promptId: string
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function PasswordSavePrompt({ windowId }: Props): JSX.Element | null {
+  const tr = useI18nT()
   const [queue, setQueue] = useState<Prompt[]>([])
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export function PasswordSavePrompt({ windowId }: Props): JSX.Element | null {
         <div className="pw-prompt-icon">🔐</div>
         <div className="pw-prompt-text">
           <div className="pw-prompt-title">
-            {current.isUpdate ? '비밀번호를 업데이트할까요?' : '비밀번호를 저장할까요?'}
+            {current.isUpdate ? tr('ui.pwPrompt.updateTitle', '비밀번호를 업데이트할까요?') : tr('ui.pwPrompt.saveTitle', '비밀번호를 저장할까요?')}
           </div>
           <div className="pw-prompt-meta">
             <span className="pw-prompt-origin">{originLabel}</span>
@@ -59,14 +61,14 @@ export function PasswordSavePrompt({ windowId }: Props): JSX.Element | null {
         </div>
         <div className="pw-prompt-actions">
           <button className="pw-prompt-btn primary" onClick={() => handle('save')}>
-            {current.isUpdate ? '업데이트' : '저장'}
+            {current.isUpdate ? tr('ui.pwPrompt.update', '업데이트') : tr('ui.pwPrompt.save', '저장')}
           </button>
-          <button className="pw-prompt-btn" onClick={() => handle('discard')}>이번엔 안 함</button>
-          <button className="pw-prompt-btn ghost" onClick={() => handle('never')}>이 사이트는 안 함</button>
+          <button className="pw-prompt-btn" onClick={() => handle('discard')}>{tr('ui.pwPrompt.discard', '이번엔 안 함')}</button>
+          <button className="pw-prompt-btn ghost" onClick={() => handle('never')}>{tr('ui.pwPrompt.never', '이 사이트는 안 함')}</button>
         </div>
       </div>
       {queue.length > 1 && (
-        <div className="pw-prompt-queue">대기 {queue.length - 1}건 더 있음</div>
+        <div className="pw-prompt-queue">{tr('ui.pwPrompt.queueMore', '대기 {count}건 더 있음', { count: queue.length - 1 })}</div>
       )}
     </div>
   )

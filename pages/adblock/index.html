@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>광고 차단</title>
     <style>
       :root { color-scheme: light dark;
@@ -66,62 +68,62 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>광고 차단</h1>
-      <div class="lead">광고차단 통계와 사이트별·필터별 설정.</div>
+      <h1 data-i18n="page.adblock.a1">광고 차단</h1>
+      <div class="lead" data-i18n="page.adblock.a2">광고차단 통계와 사이트별·필터별 설정.</div>
 
       <div class="stat-grid">
         <div class="stat-card">
           <div class="stat-value" id="stat-total">0</div>
-          <div class="stat-label">차단된 요청</div>
+          <div class="stat-label" data-i18n="page.adblock.a3">차단된 요청</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-hosts">0</div>
-          <div class="stat-label">차단 도메인 수</div>
+          <div class="stat-label" data-i18n="page.adblock.a4">차단 도메인 수</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-allowed">0</div>
-          <div class="stat-label">허용 사이트 수</div>
+          <div class="stat-label" data-i18n="page.adblock.a5">허용 사이트 수</div>
         </div>
       </div>
 
       <div class="section">
         <div class="row">
-          <div class="label">광고 차단 사용</div>
+          <div class="label" data-i18n="page.adblock.a6">광고 차단 사용</div>
           <div class="toggle" id="enabled-toggle"></div>
         </div>
         <div class="row">
           <div class="label">차단 강도
-            <div class="help">사전 정의된 필터 묶음 — Custom 은 아래 필터 토글에 따름</div>
+            <div class="help" data-i18n="page.adblock.a7">사전 정의된 필터 묶음 — Custom 은 아래 필터 토글에 따름</div>
           </div>
           <select id="level-select">
-            <option value="lite">가벼움 (EasyList)</option>
-            <option value="standard">표준 (EasyList + Privacy + KR)</option>
-            <option value="strict">엄격 (+ Annoyance + Social)</option>
-            <option value="custom">사용자 정의</option>
+            <option value="lite" data-i18n="page.adblock.a8">가벼움 (EasyList)</option>
+            <option value="standard" data-i18n="page.adblock.a9">표준 (EasyList + Privacy + KR)</option>
+            <option value="strict" data-i18n="page.adblock.a10">엄격 (+ Annoyance + Social)</option>
+            <option value="custom" data-i18n="page.adblock.a11">사용자 정의</option>
           </select>
         </div>
       </div>
 
-      <h2>필터 (Custom 모드에서 개별 적용)</h2>
+      <h2 data-i18n="page.adblock.a12">필터 (Custom 모드에서 개별 적용)</h2>
       <div class="section" id="filters"></div>
 
-      <h2>차단 통계 — 도메인 TOP 20</h2>
+      <h2 data-i18n="page.adblock.a13">차단 통계 — 도메인 TOP 20</h2>
       <div class="section" id="top-hosts-section">
-        <div class="empty-state">아직 차단된 요청이 없습니다.</div>
+        <div class="empty-state" data-i18n="page.adblock.a14">아직 차단된 요청이 없습니다.</div>
       </div>
 
-      <h2>허용 사이트 (광고차단 끄기)</h2>
+      <h2 data-i18n="page.adblock.a15">허용 사이트 (광고차단 끄기)</h2>
       <div class="section">
         <div id="allowed-list"></div>
         <div class="site-input">
           <input id="site-input" placeholder="example.com 또는 sub.example.com" />
-          <button class="btn" id="site-add">+ 허용 추가</button>
+          <button class="btn" id="site-add" data-i18n="page.adblock.a16">+ 허용 추가</button>
         </div>
       </div>
 
-      <h2>최근 차단된 요청 (최대 50개)</h2>
+      <h2 data-i18n="page.adblock.a17">최근 차단된 요청 (최대 50개)</h2>
       <div class="section" id="recent-section">
-        <div class="empty-state">최근 차단 기록이 없습니다.</div>
+        <div class="empty-state" data-i18n="page.adblock.a18">최근 차단 기록이 없습니다.</div>
       </div>
     </div>
     <script>

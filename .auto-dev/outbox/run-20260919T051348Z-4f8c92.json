@@ -1,0 +1,150 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T051348Z-4f8c92",
+  "recorded_at": "2026-09-19T05:43:47Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T051348Z-4f8c92",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T051348Z-4f8c92)의 구조화 완료 기록: pass (합격 기준 7건 전건 통과, 부정 사례 4건, 선언된 잔여 작업 없음) / 남은 작업: rc.7 설치파일 설치→부팅→제거 검증(사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED — 우회하지 않음), (차단) 코드 서명 인증서(.pfx) 없음 — rc.7 미서명, (차단) 실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "b680fde4-1bef-4e45-a43f-30cc7ae82c8f",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "'그림 만들어 인스타에 올려줘' 를 끝까지 맡기면, 브라우저가 스스로 탭을 게시 사이트로 옮긴 뒤 올리고 게시 영수증까지 간다 (전에는 여기서 '작업할 탭을 열어주세요' 로 멈췄다)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "올라간 파일이 내가 만든 그림 그대로이고, 캡션도 AI 가 쓴 것이 해시태그와 함께 올라간다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "게시는 내가 허용한 사이트에서만 일어나고, 같은 창·같은 스페이스라 로그인 상태가 유지된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "탭을 옮기는 도중 취소하거나 자동 게시 선승인을 거두면 아무것도 올라가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "승인 버튼을 두 번 눌러도, 앱이 꺼졌다 켜져도 같은 그림이 두 번 올라가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "게시 사이트가 아닌 곳(로그인 리다이렉트 등)에 도착하면 거기서 진행하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "이 수정이 기존 동작을 깨지 않는다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [
+        "rc.7 설치파일 설치→부팅→제거 검증(사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED — 우회하지 않음)"
+      ],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — rc.7 미서명",
+        "실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처)"
+      ],
+      "optional_next": [
+        "이미지 생성 단계에도 같은 앱-주도 탭 이동 적용 여부 판단(현재는 '보던 페이지에서 시작' 전제 — 창에 http 탭이 없으면 생성 단계가 같은 가드로 멈춘다)",
+        "R-BLOG 실모델 재확인(이번엔 직전 통과라 SKIP)"
+      ],
+      "korean_line": "남은 작업: rc.7 설치파일 설치→부팅→제거 검증(사용자 실설치본 가동 중이라 verify-install 이 스스로 BLOCKED — 우회하지 않음), (차단) 코드 서명 인증서(.pfx) 없음 — rc.7 미서명, (차단) 실제 인스타그램·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정·크레딧 필요(검증은 전부 로컬 픽스처); 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T051348Z-4f8c92"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 1798.8,
+        "context_chars": 10381,
+        "total_tokens": 531330,
+        "cache_read_tokens": 47782694
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9569,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 252,
+          "output": 77388,
+          "cache_read": 47782694,
+          "cache_creation": 444099
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\production-flow-20260919\\run-20260919T051348Z-4f8c92-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\production-flow-20260919\\run-20260919T051348Z-4f8c92-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "All green. Here is the round report.\n\n## 무엇이 문제였나\n\n`runPublishStage` 가 게시 작업을 만들면서 **탭을 게시 사이트로 옮기지 않았다.** 대신 레시피 지시문에 \"인스타그램이 아니면 이동하세요\" 라고 적어 모델에게 맡겼다. 그런데 영속 작업 런타임은 **첫 모델 호출 전에** 체크포인트 페이지(`about:blank`)와 실제 탭이 어긋나면 조용히 재바인딩하지 않고 사용자에게 묻는다. 그래서 게시 단계가 모델을 **한 번도 부르지 못한 채**(`llmCalls=0`) `waiting-user` 로 멈췄다. 블로그 경로는 작업 생성 **전에** 앱이 `navigate` 하므로 안 걸렸다 — **경로 비대칭**이 원인이었다.\n\n## 어떻게 고쳤나 — 단계 전환은 앱의 책임\n\n`runPublishStage` 를 세 구간으로 나눴다. 지시문에 기대지 않고 **앱이 옮긴다.**\n\n1. **선점(동기)** — `stage='publish'` + 시도 번호 발급. 이 순간부터 `approveAndPublish`·`maybeAutoPublish` 가 둘 다 거부된다. 아직 작업은 없다.\n2. **탭 이동(비동기)** — 원래 탭을 `loadURL` 하고 **로드 완료까지 기다린다**(체크포인트가 리다이렉트 이후 **최종 URL** 이어야 재개 때 같은 페이지에 붙는다). 탭이 닫혔으면 **생성 작업과 같은 `workspaceId`** 에만 새 탭을 연다 — 워크스페이스가 곧 세션이라 다른 곳에 열면 로그인 계정이 조용히 바뀐다. 모르면 **열지 않고 중단**.\n3. **작업 생성·시작(동기)** — 재확인 통과 후에만.\n\n**경합은 2번에서만 생기고 그 구간엔 아직 작업이 없다** → 어떤 경합이 와도 결과는 게시 0건. 3번 직전에 다시 본다: 시도 번호 · 단계 · 게시작업/영수증 없음 · (자동 경로면) 선승인 유효 · **도착 호스트가 허용 목록 안**(판정은 에이전트가 쓰는 `hostAllowed` 그대로 — 넓히지 않았다). 재시작 경합은 복원 시점에 막는다: `publish` 인데 게시작업이 없으면 `failed` 로 되돌리고 \"게시는 진행되지 않았습니다\" 를 남긴다.\n\n## 실모델 재검증 — 생산 UI/IPC/워크플로 경로 그대로\n\n**R-SNS PASS** (실제 구독 Claude CLI · 94초):\n\n| 항목 | 관측 |\n|---|---|\n| 게시 작업이 붙은 탭 | `https://www.instagram.com/` — 호스트 일치 (**수정 전 `about:blank`**) |\n| 게시 단계 모델 호출 | **7회** (**수정 전 0회**) |\n| 업로드 바이트 | 산출물 sha256 = 업로드 sha256 — 완전 일치 |\n| 캡션 | 모델 작성 한국어 + `#test` (하네스가 대신 쓰지 않음) |\n| 게시 건수 / 범위 밖 호스트 | **1건** / **0건** · `autoPublished=true`, 수동 승인 없음 |\n\n격리: `--host-resolver-rules` 로 `www.instagram.com` 만 loopback — 실제 인터넷 패킷 0, 실계정 게시 0.\n\n## 검증\n\n`verify-auto-publish` **51/51**(33→18종 추가: 탭 이동·체크포인트 일치·허용목록 불변·이동 중 취소/철회/기한만료/중복승인·리다이렉트·탭 소멸 후 같은 세션 재개·세션 불명 거부·재시작 복원) · `npm run verify` **13/13(53s)** · rc.7 포터블 스모크 **16/16** · typecheck 3/3.\n**수정 전 빌드에서 신규 검사 중 12종이 실패**하는 것을 먼저 확인했다(검출력 확인).\n\n## 산출물\n\n`dist\\ezBrowser-0.2.0-rc.7-win-x64.exe` · 121,896,663 바이트 · sha256 `b2c5f7bbb1e739c66e8cc5044c91477226326e76391f81dba55e0ccb40c07ddf` · 미서명 · `--publish never`. 포터블 `di",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T051348Z-4f8c92\\stream.jsonl",
+    "error": null
+  }
+}

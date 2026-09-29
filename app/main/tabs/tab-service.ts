@@ -1,28 +1,45 @@
-import { WebContentsView, app } from 'electron'
+import { WebContentsView, app, dialog } from 'electron'
 import path from 'node:path'
 import { EventEmitter } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import { DEFAULT_SESSION, NEW_TAB_URL } from '../../shared/constants'
 import { IPC } from '../../shared/ipc-channels'
 import type { TabSummary, TabGroup, TabGroupColor } from '../../shared/types'
 import {
-  bringChromeToFront, getWindow, getTabBounds, onWindowResize, routeWindowOpen,
-  setShellInsetsHook, windowEvents, type BrowserWindowContext,
+  bringChromeToFront, getWindow, getChromeSize, getTabBounds, onWindowResize, routeWindowOpen,
+  setShellInsetsHook, windowEvents, type BrowserWindowContext, type ShellInsets,
 } from '../windows/window-service'
 import {
   getActiveWorkspaceId, getActivePartition, getWorkspace, workspaceEvents,
 } from '../features/workspace'
 import { setupSessionByPartition } from '../session-bootstrap'
 import { getFavicon, recordFavicon } from '../features/favicon'
+import { trackPageErrors, thumbnailDataUrl } from '../features/page-errors'
+import { tMain } from '../i18n'
 
 type TabHook = (tab: { id: string; webContentsId: number }) => void
 const onTabCreatedHooks: TabHook[] = []
 const onTabClosedHooks: Array<(id: string) => void> = []
 
+const onTabActivatedHooks: Array<(id: string) => void> = []
+
 export function onTabCreated(cb: TabHook): void { onTabCreatedHooks.push(cb) }
 export function onTabClosed(cb: (id: string) => void): void { onTabClosedHooks.push(cb) }
+/** 활성 탭이 바뀔 때 — 확장 시스템의 `chrome.tabs.query({ active: true })` 가 이 신호를 쓴다. */
+export function onTabActivated(cb: (id: string) => void): void { onTabActivatedHooks.push(cb) }
 
 interface TabRecord {
   id: string
+  /**
+   * **복원을 넘어 살아남는 탭의 정체성.**
+   *
+   * `id`(`tab-N`)는 프로세스마다 1부터 다시 세므로 크래시 복원 뒤의 `tab-3` 은 종료 전의 `tab-3`
+   * 과 아무 관계가 없다. 그래서 내구 자동화 작업은 예전에 "창 id + URL 호스트" 로 대상을 다시
+   * 찾았고, 같은 사이트 탭이 여러 개면 **엉뚱한 탭**을 집을 수 있었다(발행·결제면 사고다).
+   * 이 키는 세션 스냅샷에 함께 저장돼 복원 시 그대로 되살아나므로, "사용자가 보기에 바로 그 탭"
+   * 을 기계가 확정할 수 있는 유일한 값이다.
+   */
+  restoreKey: string
   windowId: string
   workspaceId: string
   view: WebContentsView
@@ -39,6 +56,13 @@ interface TabRecord {
   // 슬립/세션복원 전 내비게이션 히스토리(뒤로·앞으로 + 스크롤·폼 상태) — 깨우거나 복원할 때 재생
   discardedHistory?: NavigationEntrySnap[]
   discardedIndex?: number
+  // 슬립 직전에 찍어 둔 화면 미리보기(320px 폭 JPEG data URL). about:blank 로 언로드된 뒤에도
+  // captureTab() 이 "마지막 모습"을 대신 돌려줄 수 있게 해 준다.
+  discardedThumbnail?: string
+  // 로드를 요청했지만 아직 커밋되지 않은 URL. webContents.getURL() 은 첫 커밋 전까지 빈 문자열이라,
+  // 그 사이에 세션 스냅샷을 뜨면 **갓 만든 탭이 통째로 빠진다**(크래시 시 그 탭이 사라진다).
+  // 커밋 후에는 getURL() 이 항상 우선하므로 이 값은 그 공백 구간에서만 쓰인다.
+  pendingUrl?: string
 }
 
 // ===== 내비게이션 히스토리 스냅샷 (뒤로/앞으로 + 스크롤 + 폼 상태) =====
@@ -77,8 +101,14 @@ function restoreNavigation(wc: Electron.WebContents, entries: NavigationEntrySna
   try {
     const restorable = entries.map((e) => ({ url: e.url, title: e.title, pageState: e.pageState })) as Electron.NavigationEntry[]
     void wc.navigationHistory.restore({ entries: restorable, index: safeIdx })
-      .catch(() => { void wc.loadURL(fallbackUrl) })
-  } catch {
+      // 폴백은 **조용히** 하면 안 된다 — 이 경로로 떨어지면 URL 만 맞고 스크롤·폼은 사라진다.
+      // (2026-09-15: 잠든 복원 탭을 깨울 때 여기로 떨어지는 것을 이 로그로 확인했다.)
+      .catch((err: unknown) => {
+        console.warn(`[tabs] navigationHistory.restore 실패 → 평문 로드로 폴백(스크롤·폼 유실): ${String(err)}`)
+        void wc.loadURL(fallbackUrl)
+      })
+  } catch (err) {
+    console.warn(`[tabs] navigationHistory.restore 예외 → 평문 로드로 폴백(스크롤·폼 유실): ${String(err)}`)
     void wc.loadURL(fallbackUrl)
   }
 }
@@ -93,10 +123,23 @@ let closedCounter = 0
 const resizeBound = new WeakSet<BrowserWindowContext>()
 let counter = 0
 
+// ===== HTML5 전체화면(enter/leave-html-full-screen) =====
+// 진입 시 그 탭의 view 가 창 전체(insets 0)를 덮어 외피를 가리고, 다른 탭/pane 은 잠시 숨긴다.
+// 종료 시 원래 insets 를 복원하고 reapplyLayout() 으로 분할·다른 탭 가시성을 정상대로 되돌린다.
+const fullscreenByWindow = new Map<string, { insets: ShellInsets; tabId: string }>()
+
 // ===== 탭 그룹 (색상 그룹핑 · 접기) =====
 const groups = new Map<string, TabGroup>()
 let groupCounter = 0
 const GROUP_COLORS: TabGroupColor[] = ['blue', 'red', 'green', 'yellow', 'purple', 'pink', 'orange', 'gray']
+
+// 그룹 색은 세션 스냅샷에 영속되고 외피가 CSS 변수(--group-color)로 쓴다.
+// 렌더러가 보낸 값을 팔레트와 대조해 **아는 색일 때만** 받는다.
+// (2026-09-07 임무 19: 워크스페이스에 같은 결함이 있어 객체 `{}` 가 색으로 저장됐다.
+//  여기는 truthy 검사뿐이라 같은 값이 통과한다.)
+function validGroupColor(v: unknown): TabGroupColor | null {
+  return typeof v === 'string' && (GROUP_COLORS as string[]).includes(v) ? (v as TabGroupColor) : null
+}
 
 interface Pane { tabId: string | null }
 export type SplitDirection = 'h' | 'v'
@@ -241,14 +284,30 @@ function emitTabList(windowId: string): void {
   tabEvents.emit('list', windowId)
 }
 
+/**
+ * `view.webContents` 가 지금 실제로 쓸 수 있는 상태인지. WebContentsView 의 타입은 항상
+ * WebContents 지만, 실제로는 close({waitForBeforeUnload:true}) 로 파괴되는 도중 —
+ * **'destroyed' 이벤트를 우리보다 먼저 등록한 다른 리스너(예: 확장 어댑터)가 실행되는 바로 그
+ * 찰나** — undefined 를 돌려줄 수 있다(2026-09-28 실측: did-fail-load 직후 재현, tabs.list
+ * 전체가 죽었다). 그 찰나에도 이 탭은 아직 `tabs` 맵에 남아 있으므로, 순회하는 모든 함수가
+ * 이 상태를 견뎌야 한다.
+ */
+function wcAlive(wc: Electron.WebContents | undefined | null): wc is Electron.WebContents {
+  if (!wc) return false
+  try { return !wc.isDestroyed() } catch { return false }
+}
+
 function summary(tab: TabRecord): TabSummary {
   const wc = tab.view.webContents
+  const alive = wcAlive(wc)
   const activeInWorkspace = getLayout(tab.windowId, tab.workspaceId)
   // 슬립된 탭은 원본 URL/제목 노출 (외피가 사용자에게 원본 정보 보여줌)
-  const url = tab.discarded ? (tab.discardedUrl ?? wc.getURL()) : wc.getURL()
+  const url = tab.discarded
+    ? (tab.discardedUrl ?? (alive ? wc.getURL() : ''))
+    : (alive ? wc.getURL() : (tab.pendingUrl ?? ''))
   const title = tab.discarded
     ? (tab.discardedTitle || tab.discardedUrl || '잠자는 탭')
-    : (wc.getTitle() || wc.getURL() || '새 탭')
+    : (alive ? (wc.getTitle() || wc.getURL() || '새 탭') : (url || '탭'))
   return {
     id: tab.id,
     windowId: tab.windowId,
@@ -257,11 +316,11 @@ function summary(tab: TabRecord): TabSummary {
     title,
     favicon: getFavicon(url),
     pinned: tab.pinned,
-    audible: wc.isCurrentlyAudible(),
-    muted: wc.isAudioMuted(),
-    loading: tab.discarded ? false : wc.isLoading(),
-    canGoBack: wc.navigationHistory.canGoBack(),
-    canGoForward: wc.navigationHistory.canGoForward(),
+    audible: alive ? wc.isCurrentlyAudible() : false,
+    muted: alive ? wc.isAudioMuted() : false,
+    loading: (tab.discarded || !alive) ? false : wc.isLoading(),
+    canGoBack: alive ? wc.navigationHistory.canGoBack() : false,
+    canGoForward: alive ? wc.navigationHistory.canGoForward() : false,
     groupId: tab.groupId,
     active: getActivePane(activeInWorkspace).tabId === tab.id,
     index: tab.index,
@@ -273,6 +332,11 @@ function bindWindowResize(ctx: BrowserWindowContext): void {
   if (resizeBound.has(ctx)) return
   resizeBound.add(ctx)
   onWindowResize(ctx, () => reapplyLayout(ctx.id))
+  // 안전망 — HTML5 전체화면이 leave-html-full-screen 없이 종료되는 경로(OS 단축키 등)에서도
+  // insets/가시성이 계속 "전체화면 중" 상태로 남지 않도록.
+  ctx.win.on('leave-full-screen', () => {
+    if (fullscreenByWindow.has(ctx.id)) leaveTabFullscreen(ctx.id)
+  })
 }
 
 setShellInsetsHook((windowId) => reapplyLayout(windowId))
@@ -320,6 +384,57 @@ function bindWebContentsEvents(tab: TabRecord): void {
     }
   })
   wc.on('audio-state-changed', () => emitTabUpdate(tab))
+
+  wc.on('enter-html-full-screen', () => enterTabFullscreen(tab))
+  wc.on('leave-html-full-screen', () => leaveTabFullscreen(tab.windowId))
+
+  trackPageErrors(wc, {
+    onUnresponsive: () => {
+      const ctx = getWindow(tab.windowId)
+      ctx?.chrome.webContents.send('toast:show', { message: '페이지가 응답하지 않습니다…', ts: Date.now() })
+    },
+  })
+}
+
+/** HTML5 전체화면 진입 — 그 탭의 view 를 창 전체로 키우고 외피·다른 탭을 가린다. */
+function enterTabFullscreen(tab: TabRecord): void {
+  const ctx = getWindow(tab.windowId)
+  if (!ctx) return
+  if (fullscreenByWindow.has(tab.windowId)) return // 이미 전체화면 중(중복 진입 무시)
+  fullscreenByWindow.set(tab.windowId, { insets: { ...ctx.insets }, tabId: tab.id })
+  try { ctx.win.setFullScreen(true) } catch (err) { console.warn('[tabs] setFullScreen(true) 실패', err) }
+  ctx.insets = { top: 0, right: 0, bottom: 0, left: 0 }
+  const { width, height } = getChromeSize(ctx)
+  tab.view.setBounds({ x: 0, y: 0, width, height })
+  tab.view.setVisible(true)
+  // 같은 창의 다른 탭(분할된 pane 포함)은 전체화면 중 잠시 숨김 — leaveTabFullscreen 에서 reapplyLayout 이 복원
+  for (const t of tabs.values()) {
+    if (t.windowId === tab.windowId && t.id !== tab.id) t.view.setVisible(false)
+  }
+  // Electron 은 `//chrome` 브라우저 UI 계층이 없어(이 앱이 그 역할) Esc 로 HTML 전체화면을
+  // 자동으로 빠져나가지 않는다 — 페이지 자신의 keydown 리스너로 직접 처리한다(document.exitFullscreen()
+  // 이 호출되면 우리가 이미 구독 중인 leave-html-full-screen 이 정상적으로 뒤따라온다).
+  void tab.view.webContents.executeJavaScript(`(function(){
+    if (window.__bbFsEscBound) return;
+    window.__bbFsEscBound = true;
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.fullscreenElement) {
+        document.exitFullscreen().catch(function () {});
+      }
+    }, true);
+  })()`).catch(() => { /* 주입 실패는 무시 — OS/브라우저 자체 처리에 맡긴다 */ })
+}
+
+/** HTML5 전체화면 종료 — insets 복원 + reapplyLayout 으로 분할·가시성을 정상 상태로 되돌린다. */
+function leaveTabFullscreen(windowId: string): void {
+  const saved = fullscreenByWindow.get(windowId)
+  if (!saved) return
+  fullscreenByWindow.delete(windowId)
+  const ctx = getWindow(windowId)
+  if (!ctx) return
+  try { ctx.win.setFullScreen(false) } catch (err) { console.warn('[tabs] setFullScreen(false) 실패', err) }
+  ctx.insets = saved.insets
+  reapplyLayout(windowId)
 }
 
 type NavigateHook = (info: { id: string; url: string; title: string }) => void
@@ -335,6 +450,55 @@ type InPageNavHook = (info: { id: string; url: string }) => void
 const onInPageNavHooks: InPageNavHook[] = []
 export function onTabInPageNavigated(cb: InPageNavHook): void { onInPageNavHooks.push(cb) }
 
+// ===== 팝업(window.open) — OAuth 로그인·PG 결제·본인인증처럼 window.opener·postMessage 가 필요한 창 =====
+// 크기 지정이 있는(=명시적으로 작은 팝업을 요구하는) window.open 만 실제 자식 BrowserWindow 로 허용한다.
+// 일반 target=_blank(크기 지정 없음)는 기존대로 새 탭으로 — Chrome 의 기본 동작과 같다.
+const POPUP_OK_SCHEMES = new Set(['', 'about:', 'http:', 'https:', 'data:', 'blob:'])
+
+function parsePopupFeatures(features: string): { width?: number; height?: number } {
+  const out: { width?: number; height?: number } = {}
+  for (const part of (features || '').split(/[,;]/)) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    const key = part.slice(0, eq).trim().toLowerCase()
+    const val = Number(part.slice(eq + 1).trim())
+    if (!Number.isFinite(val) || val <= 0) continue
+    if (key === 'width' || key === 'innerwidth') out.width = Math.round(val)
+    if (key === 'height' || key === 'innerheight') out.height = Math.round(val)
+  }
+  return out
+}
+
+function shouldAllowPopupWindow(details: Electron.HandlerDetails): boolean {
+  if (details.disposition === 'new-window') return true
+  const feats = parsePopupFeatures(details.features)
+  return feats.width !== undefined || feats.height !== undefined
+}
+
+function buildPopupWindowOptions(
+  details: Electron.HandlerDetails, partition: string,
+): Electron.BrowserWindowConstructorOptions | null {
+  let scheme = ''
+  try { scheme = new URL(details.url).protocol } catch { scheme = '' }
+  if (!POPUP_OK_SCHEMES.has(scheme)) return null
+  const { width, height } = parsePopupFeatures(details.features)
+  return {
+    width: width ?? 480,
+    height: height ?? 640,
+    title: '',
+    autoHideMenuBar: true,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      // 부모 탭과 같은 세션 — 로그인 쿠키·adblock·policy·권한 정책이 그대로 이어진다.
+      partition,
+    },
+  }
+}
+
 export function createTab(opts: {
   windowId: string
   url?: string
@@ -349,6 +513,8 @@ export function createTab(opts: {
   restoreHistoryIndex?: number
   // 세션 복원용: 소속 탭 그룹
   groupId?: string
+  /** 세션 복원 전용: 종료 전 그 탭이 쓰던 안정 키를 그대로 물려준다(없으면 새로 발급). */
+  restoreKey?: string
 }): TabSummary {
   const ctx = getWindow(opts.windowId)
   if (!ctx) throw new Error(`window ${opts.windowId} not found`)
@@ -357,6 +523,9 @@ export function createTab(opts: {
 
   counter += 1
   const id = `tab-${counter}`
+  const restoreKey = (typeof opts.restoreKey === 'string' && opts.restoreKey.trim())
+    ? opts.restoreKey.trim().slice(0, 100)
+    : `tk-${randomUUID()}`
   const initialUrl = opts.url ?? NEW_TAB_URL
   const preloadName = initialUrl.startsWith('browser:') ? 'internal.js' : 'content.js'
   // 시크릿 창은 전역 워크스페이스와 무관한 고정 워크스페이스에 속한다 — 메인 창 워크스페이스 전환/삭제에
@@ -391,19 +560,30 @@ export function createTab(opts: {
   ctx.win.contentView.addChildView(view)
   view.setBounds(getTabBounds(ctx))
 
-  view.webContents.setWindowOpenHandler(({ url }) => {
-    routeWindowOpen(opts.windowId, url, { sourceTabId: id })
+  view.webContents.setWindowOpenHandler((details) => {
+    if (shouldAllowPopupWindow(details)) {
+      const popupOptions = buildPopupWindowOptions(details, partition)
+      if (popupOptions) return { action: 'allow', overrideBrowserWindowOptions: popupOptions }
+    }
+    routeWindowOpen(opts.windowId, details.url, { sourceTabId: id })
     return { action: 'deny' }
+  })
+  // action:'allow' 로 실제 자식 창이 만들어지면 여기로 통지된다 — 오류 페이지 처리만 최소로 붙인다
+  // (adblock·policy·권한은 partition 이 같은 세션이라 session-bootstrap 이 이미 커버한다).
+  view.webContents.on('did-create-window', (childWindow) => {
+    try { trackPageErrors(childWindow.webContents) } catch (err) { console.warn('[tabs] popup trackPageErrors 실패', err) }
   })
 
   const existingInWorkspace = listAllTabsInWindow(opts.windowId).filter((t) => t.workspaceId === workspaceId)
   const index = existingInWorkspace.length
 
   const tab: TabRecord = {
-    id, windowId: opts.windowId, workspaceId, view,
+    id, restoreKey, windowId: opts.windowId, workspaceId, view,
     partition,
     pinned: false, index,
     createdAt: Date.now(), lastActiveAt: Date.now(), discarded: false,
+    // 커밋 전 공백 구간에도 세션 스냅샷이 이 탭을 놓치지 않도록 요청한 URL 을 들고 있는다.
+    pendingUrl: initialUrl,
   }
   if (opts.groupId && groups.has(opts.groupId)) tab.groupId = opts.groupId
   tabs.set(id, tab)
@@ -422,8 +602,14 @@ export function createTab(opts: {
     if (opts.restoreHistory && opts.restoreHistory.length > 0) {
       tab.discardedHistory = opts.restoreHistory
       tab.discardedIndex = opts.restoreHistoryIndex
+      // ⚠ 여기서 about:blank 를 **커밋하지 않는다**. 갓 만든 WebContentsView 는 이미 빈 문서라
+      //   메모리상 차이가 없는데, about:blank 를 한 번 커밋해 버리면 나중에 깨울 때
+      //   `navigationHistory.restore()` 가 **성공은 하지만 pageState(스크롤·폼)가 적용되지 않는다**
+      //   (2026-09-15 실측: 복원 실패 로그 없이 scrollY=0·폼 빈 값. Electron 35·42 동일).
+      //   히스토리가 없는 경우에만 예전처럼 비워 둔다.
+    } else {
+      void view.webContents.loadURL('about:blank')
     }
-    void view.webContents.loadURL('about:blank')
   } else if (opts.restoreHistory && opts.restoreHistory.length > 0) {
     // 즉시 로드 대상 복원 탭: 히스토리 재생(뒤로/앞으로 + 스크롤/폼 복원)
     restoreNavigation(view.webContents, opts.restoreHistory, opts.restoreHistoryIndex)
@@ -473,6 +659,7 @@ function activateTabInternal(tab: TabRecord): void {
     reapplyLayout(tab.windowId)
   }
   emitTabList(tab.windowId)
+  for (const cb of onTabActivatedHooks) { try { cb(tab.id) } catch { /* 훅 하나가 활성화를 막지 않도록 */ } }
 }
 
 export function activateTab(tabId: string): void {
@@ -481,14 +668,132 @@ export function activateTab(tabId: string): void {
   activateTabInternal(tab)
 }
 
+// closeTab() 은 사용자에게 보이는 순간부터 완결처럼 느껴지지만, beforeunload 확인이 끼면 실제 정리는
+// 비동기(사용자가 다이얼로그에 응답한 뒤)로 미뤄진다. 같은 탭에 중복으로 closeTab 이 들어와도(더블클릭 등)
+// 다이얼로그가 두 번 뜨지 않도록 진행 중인 탭 id 를 추적한다.
+const closingTabs = new Set<string>()
+
+interface ClosedTabInfo { url: string; title: string }
+
+/** webContents 가 아직 살아 있을 때(=닫기 시작 시점) URL/제목을 미리 캡처. destroy 후엔 접근할 수 없다. */
+function captureClosedInfo(tab: TabRecord): ClosedTabInfo {
+  const wc = tab.view.webContents
+  try {
+    const url = tab.discarded ? (tab.discardedUrl ?? wc.getURL()) : wc.getURL()
+    const title = tab.discarded ? (tab.discardedTitle ?? url) : (wc.getTitle() || url)
+    return { url, title }
+  } catch {
+    return { url: tab.discardedUrl ?? '', title: tab.discardedTitle ?? '' }
+  }
+}
+
+/**
+ * beforeunload 를 물어본다. 페이지에 unload 를 막으려는 핸들러가 없으면(대다수) 즉시 true 로 끝난다.
+ * 있으면 네이티브 확인 다이얼로그를 띄우고, "머무르기" 를 고르면 false(탭 유지) — Chrome 과 동일한 흐름.
+ */
+function confirmBeforeUnload(tab: TabRecord): Promise<boolean> {
+  return new Promise((resolve) => {
+    const wc = tab.view.webContents
+    let settled = false
+
+    const onDestroyed = (): void => {
+      if (settled) return
+      settled = true
+      wc.removeListener('will-prevent-unload', onPrevent)
+      resolve(true)
+    }
+    // 비동기 다이얼로그를 쓴다 — showMessageBoxSync 는 메인 JS 스레드를 통째로 멈춰
+    // 다른 창·탭·IPC·자동화까지 전부 얼렸다(탭 하나의 확인 창이 브라우저 전체를 세운다).
+    // 흐름: preventDefault 를 하지 않으면 이번 닫기는 취소되고 탭이 그대로 남는다 →
+    // 사용자가 "나가기" 를 고르면 beforeunload 없이 다시 닫는다(close() 기본값은 즉시 파괴).
+    const onPrevent = (): void => {
+      wc.removeListener('will-prevent-unload', onPrevent)
+      const ctx = getWindow(tab.windowId)
+      const boxOptions: Electron.MessageBoxOptions = {
+        type: 'question',
+        buttons: [
+          tMain('main.tabs.beforeUnload.stay', '머무르기'),
+          tMain('main.tabs.beforeUnload.leave', '나가기'),
+        ],
+        defaultId: 0,
+        cancelId: 0,
+        title: tMain('main.tabs.beforeUnload.title', '사이트에서 나가시겠습니까?'),
+        message: tMain('main.tabs.beforeUnload.message', '변경한 내용이 저장되지 않을 수 있습니다.'),
+      }
+      const shown = ctx ? dialog.showMessageBox(ctx.win, boxOptions) : dialog.showMessageBox(boxOptions)
+      shown.then(({ response }) => response === 1, (err) => {
+        console.warn('[tabs] beforeunload 확인 다이얼로그 실패 — 나가기로 처리', err)
+        return true
+      }).then((leave) => {
+        if (settled) return
+        if (!leave || wc.isDestroyed()) {
+          wc.removeListener('destroyed', onDestroyed)
+          settled = true
+          resolve(leave)
+          return
+        }
+        try {
+          wc.close() // beforeunload 를 다시 묻지 않고 파괴 → onDestroyed 가 resolve(true)
+        } catch (err) {
+          console.warn('[tabs] webContents.close 실패 — 닫힌 것으로 처리', err)
+          wc.removeListener('destroyed', onDestroyed)
+          settled = true
+          resolve(true)
+        }
+      })
+    }
+
+    wc.once('destroyed', onDestroyed)
+    wc.on('will-prevent-unload', onPrevent)
+    try {
+      wc.close({ waitForBeforeUnload: true })
+    } catch (err) {
+      console.warn('[tabs] webContents.close 실패 — 강제로 닫힌 것으로 처리', err)
+      wc.removeListener('will-prevent-unload', onPrevent)
+      wc.removeListener('destroyed', onDestroyed)
+      if (!settled) { settled = true; resolve(true) }
+    }
+  })
+}
+
 export function closeTab(tabId: string): void {
+  void closeTabAsync(tabId)
+}
+
+async function closeTabAsync(tabId: string): Promise<void> {
   const tab = tabs.get(tabId)
   if (!tab) return
+  if (closingTabs.has(tabId)) return
+  closingTabs.add(tabId)
+  try {
+    const wc = tab.view.webContents
+    const closedInfo = captureClosedInfo(tab) // webContents 가 살아있는 지금 캡처
+    if (wc.isDestroyed()) {
+      finishCloseTab(tab, closedInfo)
+      return
+    }
+    if (tab.discarded) {
+      // 슬립(about:blank) 탭엔 beforeunload 를 물을 이유가 없다 — 바로 닫는다.
+      try { wc.close() } catch { /* ignore */ }
+      finishCloseTab(tab, closedInfo)
+      return
+    }
+    const proceed = await confirmBeforeUnload(tab)
+    if (!proceed) return // "머무르기" 선택 — 탭을 그대로 둔다(정리 로직 실행 안 함)
+    finishCloseTab(tab, closedInfo)
+  } finally {
+    closingTabs.delete(tabId)
+  }
+}
+
+function finishCloseTab(tab: TabRecord, closedInfo: ClosedTabInfo): void {
+  const tabId = tab.id
+  // 이 탭이 전체화면 중이었다면 창을 정상 상태로 되돌려 두고 닫는다(안 그러면 insets 가 0 인 채로 남는다).
+  if (fullscreenByWindow.get(tab.windowId)?.tabId === tabId) leaveTabFullscreen(tab.windowId)
   const ctx = getWindow(tab.windowId)
-  if (ctx) ctx.win.contentView.removeChildView(tab.view)
-  // 슬립(discarded) 탭은 webContents 가 about:blank 이므로 원본 URL/제목 사용
-  const closedUrl = tab.discarded ? (tab.discardedUrl ?? tab.view.webContents.getURL()) : tab.view.webContents.getURL()
-  const closedTitle = tab.discarded ? (tab.discardedTitle ?? closedUrl) : (tab.view.webContents.getTitle() || closedUrl)
+  if (ctx) { try { ctx.win.contentView.removeChildView(tab.view) } catch { /* ignore */ } }
+  const closedUrl = closedInfo.url
+  const closedTitle = closedInfo.title
   // 시크릿 탭은 "최근 닫은 탭" 스택에도 남기지 않는다 — 다른(비시크릿) 탭에서 Ctrl+Shift+T 로 복원되면 안 됨.
   if (!tab.partition.startsWith('incognito')
     && /^https?:|^browser:/i.test(closedUrl) && !/^browser:\/\/newtab/i.test(closedUrl)) {
@@ -499,7 +804,6 @@ export function closeTab(tabId: string): void {
     })
     if (closedStack.length > 50) closedStack.shift()
   }
-  tab.view.webContents.close()
   const closedGroupId = tab.groupId
   tabs.delete(tabId)
   for (const hook of onTabClosedHooks) {
@@ -799,6 +1103,25 @@ export function getAllTabs(): TabSummary[] {
   return Array.from(tabs.values()).map(summary)
 }
 
+/** 이 탭의 복원 안정 키. 탭이 없으면 null. */
+export function getTabRestoreKey(tabId: string): string | null {
+  return tabs.get(tabId)?.restoreKey ?? null
+}
+
+/**
+ * 안정 키로 지금 살아 있는 탭을 찾는다 — **복원을 건너 같은 탭을 가리키는 유일한 방법**이다.
+ * 못 찾으면 null 을 돌려줄 뿐, 비슷한 탭을 대신 찾아 주지 않는다(그 추측이 바로 사고의 원인이었다).
+ */
+export function findTabByRestoreKey(key: string): { id: string; windowId: string; workspaceId: string } | null {
+  if (!key) return null
+  for (const t of tabs.values()) {
+    if (t.restoreKey !== key) continue
+    if (t.view.webContents.isDestroyed()) return null
+    return { id: t.id, windowId: t.windowId, workspaceId: t.workspaceId }
+  }
+  return null
+}
+
 export function getWebContentsByTabId(tabId: string): Electron.WebContents | null {
   return tabs.get(tabId)?.view.webContents ?? null
 }
@@ -810,6 +1133,7 @@ export function getTabPartition(tabId: string): string | undefined {
 
 export function findTabIdByWebContentsId(wcId: number): { tabId: string; windowId: string } | null {
   for (const t of tabs.values()) {
+    if (!wcAlive(t.view.webContents)) continue
     if (t.view.webContents.id === wcId) {
       return { tabId: t.id, windowId: t.windowId }
     }
@@ -876,8 +1200,9 @@ export function createGroup(
   if (!ctx) return null
   groupCounter += 1
   const id = `group-${groupCounter}`
-  const color = opts?.color ?? GROUP_COLORS[groupCounter % GROUP_COLORS.length]!
-  const group: TabGroup = { id, windowId, title: opts?.title ?? '새 그룹', color, collapsed: false }
+  const color = validGroupColor(opts?.color) ?? GROUP_COLORS[groupCounter % GROUP_COLORS.length]!
+  const title = typeof opts?.title === 'string' && opts.title ? opts.title : '새 그룹'
+  const group: TabGroup = { id, windowId, title, color, collapsed: false }
   groups.set(id, group)
   let wsForReindex: string | undefined
   if (opts?.tabIds) {
@@ -896,7 +1221,8 @@ export function updateGroup(groupId: string, patch: { title?: string; color?: Ta
   const g = groups.get(groupId)
   if (!g) return
   if (typeof patch.title === 'string') g.title = patch.title
-  if (patch.color) g.color = patch.color
+  const color = validGroupColor(patch.color)
+  if (color) g.color = color
   emitGroups(g.windowId)
   emitTabList(g.windowId)
 }
@@ -978,11 +1304,37 @@ export function duplicateTab(tabId: string): TabSummary | null {
   return createTab({ windowId: t.windowId, url })
 }
 
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * capturePage() 는 그 탭이 방금 보이게 됐거나(compositor 프레임이 아직 준비되지 않음) 다른 창에
+ * 가려진(occluded) 직후엔 "Current display surface not available for capture" 로 실패할 수 있다
+ * (2026-09-28 실측, 전형적으로 일시적) — 짧게 두어 번 재시도한다.
+ */
+async function capturePageWithRetry(wc: Electron.WebContents, attempts = 3): Promise<Electron.NativeImage | null> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await wc.capturePage()
+    } catch (err) {
+      if (i === attempts - 1) { console.warn('[tabs] capturePage 실패(재시도 소진)', err); return null }
+      await sleepMs(150 * (i + 1))
+    }
+  }
+  return null
+}
+
 export async function captureTab(tabId: string): Promise<string | null> {
-  const wc = tabs.get(tabId)?.view.webContents
-  if (!wc) return null
-  const img = await wc.capturePage()
-  return img.toDataURL()
+  const tab = tabs.get(tabId)
+  if (!tab) return null
+  // 잠든(discarded) 탭은 실제로 about:blank 라 지금 찍어봐야 빈 화면이다 — 슬립 직전에 남겨둔
+  // "마지막 모습" 썸네일을 대신 돌려준다(없으면 아직 한 번도 잠든 적 없는 세션 복원 탭 등 — null).
+  if (tab.discarded) return tab.discardedThumbnail ?? null
+  const wc = tab.view.webContents
+  if (!wcAlive(wc)) return null
+  const img = await capturePageWithRetry(wc)
+  return img ? thumbnailDataUrl(img) : null
 }
 
 // ===== 백그라운드 탭 슬립 =====
@@ -997,7 +1349,7 @@ export interface SleepTabSnapshot {
 }
 
 export function getAllTabRecordsForSleep(): SleepTabSnapshot[] {
-  return Array.from(tabs.values()).filter((t) => !t.view.webContents.isDestroyed()).map((t) => ({
+  return Array.from(tabs.values()).filter((t) => wcAlive(t.view.webContents)).map((t) => ({
     id: t.id,
     url: t.view.webContents.getURL(),
     title: t.view.webContents.getTitle(),
@@ -1031,8 +1383,18 @@ export function discardTab(tabId: string): boolean {
   const hist = captureHistory(wc)
   if (hist) { tab.discardedHistory = hist.entries; tab.discardedIndex = hist.index }
   tab.discarded = true
-  void wc.loadURL('about:blank')
   emitTabUpdate(tab)
+  // 언로드(about:blank) 전에 화면을 찍어 TabBar 미리보기에 "마지막 모습"을 남긴다.
+  // 순서가 중요하다 — capturePage() 보다 loadURL 이 먼저 끝나면 about:blank 가 찍힌다.
+  capturePageWithRetry(wc)
+    .then((img) => {
+      const t = tabs.get(tabId)
+      if (t && img) t.discardedThumbnail = thumbnailDataUrl(img) ?? undefined
+    })
+    .catch((err) => console.warn('[tabs] 슬립 썸네일 캡처 실패', err))
+    .finally(() => {
+      if (!wc.isDestroyed()) void wc.loadURL('about:blank')
+    })
   return true
 }
 
@@ -1047,6 +1409,7 @@ export function undiscardTab(tabId: string): boolean {
   tab.discardedTitle = undefined
   tab.discardedHistory = undefined
   tab.discardedIndex = undefined
+  tab.discardedThumbnail = undefined
   if (history && history.length > 0) restoreNavigation(tab.view.webContents, history, idx)
   else if (url) void tab.view.webContents.loadURL(url)
   emitTabUpdate(tab)
@@ -1066,6 +1429,11 @@ export function getTotalTabCount(): number {
 // ===== 세션 스냅샷 (저장/복원용) =====
 
 export interface SessionTabSnap {
+  /**
+   * 복원을 넘어 유지되는 탭 정체성(`TabRecord.restoreKey`). 옛 스냅샷에는 없다 — 그때는
+   * 복원된 탭이 새 키를 받고, 그 탭에 매여 있던 작업은 추측하지 않고 사용자에게 대상을 묻는다.
+   */
+  restoreKey?: string
   url: string
   title: string
   pinned: boolean
@@ -1080,7 +1448,10 @@ export interface SessionTabSnap {
 
 export interface SessionWindowSnap {
   windowId: string
-  bounds: Electron.Rectangle
+  /** 복원을 넘어 유지되는 창 정체성(`BrowserWindowContext.restoreKey`). 옛 스냅샷에는 없다. */
+  restoreKey?: string
+  // 디스크에서 읽은 스냅샷은 손상돼 있을 수 있다 — 검증을 통과하지 못한 bounds 는 빠진 채로 들어온다.
+  bounds?: Electron.Rectangle
   activeTabId: string | null
   tabs: SessionTabSnap[]
   // 워크스페이스별 분할 화면 레이아웃 (없으면 단일 pane)
@@ -1093,10 +1464,11 @@ export interface SessionWindowSnap {
 export function collectSession(): SessionWindowSnap[] {
   const byWindow = new Map<string, SessionWindowSnap>()
   for (const t of tabs.values()) {
-    if (t.view.webContents.isDestroyed()) continue
+    if (!wcAlive(t.view.webContents)) continue
     if (t.partition.startsWith('incognito')) continue
     const wc = t.view.webContents
-    const url = t.discarded ? (t.discardedUrl ?? '') : wc.getURL()
+    // 아직 커밋되지 않은 탭은 getURL() 이 비어 있다 — 요청한 URL 로 메워 새 탭이 스냅샷에서 빠지지 않게 한다.
+    const url = t.discarded ? (t.discardedUrl ?? '') : (wc.getURL() || t.pendingUrl || '')
     if (!url || /^about:blank$/i.test(url)) continue
     if (!/^https?:|^browser:/i.test(url)) continue
     let snap = byWindow.get(t.windowId)
@@ -1105,6 +1477,7 @@ export function collectSession(): SessionWindowSnap[] {
       if (!ctx) continue
       snap = {
         windowId: t.windowId,
+        restoreKey: ctx.restoreKey,
         bounds: ctx.win.getBounds(),
         activeTabId: getActiveTabId(t.windowId),
         tabs: [],
@@ -1127,6 +1500,7 @@ export function collectSession(): SessionWindowSnap[] {
       if (cap) { history = cap.entries; historyIndex = cap.index }
     }
     snap.tabs.push({
+      restoreKey: t.restoreKey,
       url,
       title,
       pinned: t.pinned,

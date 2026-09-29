@@ -1,0 +1,15 @@
+/* userChrome.css — 외피 CSS 주입
+ * 안전 셀렉터:
+ *   .tabbar, .tab, .tab.active, .tab.pinned
+ *   .toolbar, .omnibox, .omnibox-suggestions
+ *   .sidepanel.left, .sidepanel.right
+ *   .command-palette
+ * 안전 변수:
+ *   --color-bg-base / --color-bg-elevated / --color-bg-sunken
+ *   --color-text-primary / --color-accent-primary
+ *   --tab-active-bg / --tab-inactive-bg
+ *   --density-tabbar-h / --density-toolbar-h
+ *
+ * 예시 — 활성 탭을 두껍게 강조:
+ * .tab.active { font-weight: 700; border-bottom: 2px solid var(--color-accent-primary); }
+ */

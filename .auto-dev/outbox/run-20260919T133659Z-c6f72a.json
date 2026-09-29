@@ -1,0 +1,209 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T133659Z-c6f72a",
+  "recorded_at": "2026-09-19T14:37:07Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T133659Z-c6f72a",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T133659Z-c6f72a)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 6건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "11c86ffa-de40-46c6-95f7-a27455bc35e3",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "댓글·좋아요 버튼을 누르는 그 순간, '이 글엔 이미 했다'는 기록이 이미 디스크에 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "중단 뒤 다시 켜도 같은 글에 댓글을 또 달지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "'이 작업에서 N건까지' 한도가 재시작을 넘어 유지되고, 초과분이 실제로 막힌다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "읽기 전용 작업이 일시적 연결 오류를 만나도 알아서 회복한다(재시도를 끄지 않았다)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "되돌릴 수 없는 일을 아직 하지 않았다면, 같은 오류에서도 그대로 재시도해 진행한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "로그인 때문에 멈춘 작업은 다시 켜도 '로그인이 필요하다'고 말하고, 갈 곳 버튼이 남아 있다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "재시작 뒤 사용자가 화면의 이어가기 버튼을 눌러도, 게시 여부가 불확실하면 다시 멈춰 묻는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "버튼 이름이 '공유' 한 단어여도 발행으로 알아본다(원장·발행금지 하드블록이 걸린다)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "AI 서버 연결이 끊기면 2·8·30초로 세 번 다시 시도한다(10초 한 번이 아니라)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "서버에는 올라갔는데 응답만 유실된 뒤 오류가 나면, 자동으로 다시 시도하지 않고 사람에게 묻는다 — 추가 게시 0",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "재시도를 기다리는 중에 중단하면 백오프가 끝나도 되살아나지 않고, 그 사이 모델을 부르지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "결제처럼 승인이 필요했던 동작은 재시작·이어가기로 자동 승인되지 않는다 — 결제 실행 0",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c13",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "기록을 저장하지 못하면 댓글·좋아요를 아예 누르지 않고, 어느 파일이 막혔는지 알려 준다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c14",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "발행 판정이 넓어지지 않았다 — 파일 선택 버튼·메뉴 이름·사용자가 친 값은 발행이 아니다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c15",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "사유를 모르는 옛 저장본과 그냥 돌다 끊긴 작업은 화면이 예전과 똑같다(회귀 없음)",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "세션/탭 복원 하위계통 관찰: 강제 종료 뒤 두 번째 탭이 last-session 복원으로 살아나지 않는 경우(하네스가 실측). task-runtime 결함이 아니라 session/index.ts·tab-service.ts 영역이라 이번 범위에서 손대지 않았다",
+        "engageGuard 없이 도는 일반 에이전트 작업의 댓글·좋아요는 여전히 장부 보호 밖(참여 레시피로 만든 작업만 보호)",
+        "PUBLISH_RE 의 upload$ 갈래는 클릭 라벨에 대해 여전히 닿지 않는다 — 초안 모드의 파일 첨부를 막지 않기 위해 알면서 뒀다",
+        "체크포인트(구간 진행요약)는 여전히 디바운스 — 크래시 시 그 구간의 읽기를 다시 한다(비가역은 원장이 막으므로 손실은 시간뿐)"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T133659Z-c6f72a"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 3607.8,
+        "context_chars": 11951,
+        "total_tokens": 2098999,
+        "cache_read_tokens": 146914777
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9388,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 378,
+          "output": 149584,
+          "cache_read": 80110629,
+          "cache_creation": 530057
+        },
+        "claude-sonnet-5": {
+          "input": 316,
+          "output": 204604,
+          "cache_read": 66804148,
+          "cache_creation": 1204650
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\interruption-recovery-20260919\\run-20260919T133659Z-c6f72a-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\interruption-recovery-20260919\\run-20260919T133659Z-c6f72a-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "**중단 복구 라운드 완료.** 추측으로 리팩터링하지 않고, **먼저 재현한 결함 7종**만 고쳤습니다.\n\n## 찾아서 고친 것\n\n의심하던 2건으로 시작했는데, 검증이 5건을 더 끄집어냈습니다.\n\n| | 결함 | 사용자에게 보이던 피해 |\n|---|---|---|\n| D1 | 댓글·좋아요 장부가 **클릭 시점에 디스크에 없었다**(300ms 디바운스). `flushEngageLedger` 는 **아무도 부르지 않았다** | 중단되면 같은 글에 또 달림. 좋아요는 다시 눌러 **취소** |\n| D2 | 일반 작업의 발행 원장에도 같은 창(게시 워크플로에만 경계가 있었다) | 발행 직후 강제 종료 → 이어가기가 다시 올릴 수 있음 |\n| D3 | 재시작이 **대기 사유를 덮어썼다** | 로그인 대기·**결제 승인 대기**·그냥 중단이 전부 같은 한 줄 |\n| D4 | 미확인 발행이 있어도 \"재시도 중\"으로 표시 | 진행 중처럼 보이며 백오프만 태움 |\n| **D5** | 정상 한도 파일이 **매 부팅 \"손상\"으로 격리**(쓰는 쪽은 객체 맵, 읽는 쪽은 배열만 허용) | `N건까지` 한도가 재시작을 **한 번도 넘지 못했다** |\n| **D6** | 버튼 이름이 `공유` 한 단어면 발행으로 **인식 못 함**(정규식 끝 고정이 실제 라벨 `클릭 \"공유\"` 와 어긋남) | 중복 보호도, **초안 모드 하드블록도 그냥 지나감** |\n| **D7** | 제품 자신의 연결 실패 문구를 분류기가 못 알아봄 | network(2·8·30초 3회) 대신 **10초 1회**에 포기 |\n\n물러서지 않은 지점: **재시도를 통째로 끄지 않았습니다.** 갈림길은 오류 종류가 아니라 \"되돌릴 수 없는 것을 이미 했는가\"이고, 양성 대조(IR1·IR4)로 고정했습니다. **\"정확히 한 번\"은 주장하지 않습니다** — 원격이 확인해 주지 않는 한 불확실을 없애는 대신 **보존해 사람에게 넘깁니다**.\n\n## 검증 (전부 실측)\n\n- **`npm run verify` 18/18 · 57s** → 패키징 → **그 산출물로 스모크 16/16**\n- 신규 **`verify-interruption-recovery` 7/7**(실제 앱 · 강제 종료 3회 · **실제 화면 버튼으로 이어가기** · 판정 근거는 격리 HTTPS 서버가 센 게시 건수)\n- 신규 **`verify-engage-durability` 6/6**, **`verify-agent-gate` R9 신설**(양성 8 · 부정 16)\n- **수정 전 빌드 재현**: 구버전은 게시 1건이 서버에 들어간 뒤에도 그냥 `retrying`, 재시작 후 🔐 사유 완전 소실\n- **음성 대조**: 옛 판정으로 R9 를 돌리면 `클릭 \"공유\"` 등 **5건 미탐 · 오탐 0**\n\n검증이 제 기대를 한 번 바로잡았습니다 — `업로드`까지 발행으로 잡으려다, 그러면 **초안 모드가 파일 첨부조차 못 하게** 된다는 걸 테스트가 잡아내 범위를 좁혔습니다.\n\n## 산출물\n\n`dist\\ezBrowser-0.2.0-rc.15-win-x64.exe` · 121,937,250 B · SHA256 `9dc636abcea9330a8d7497a718af9287eadb46f651a148e9b0c0c42257fac553` · `--publish never`(GitHub 릴리스 **무변경**).\n\n기록: [interruption-recovery-20260919-final.md](.auto-dev/interruption-recovery-20260919-final.md) · QUICKSTART `rc.15` 절 · 칸반 6장 · 효율 기록 · 완료 기록(기준 15건, 부정 6건).\n\n## 정직하게 남은 것\n\n이번 범위의 필수 잔여는 **없습니다**. 다만 **이번 범위와 분리해 보고해야 할 이월 제한**이 넷:\n\n- **코드 서명 없음** — `.pfx` 가 필요합니다(SmartScreen 경고).\n- **설치파일의 설치→제거 미검증** — 이 PC 에 실설치본이 가동 중이라 무인 설치가 그것을 덮어씁니다. **우회하지 않았습니",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T133659Z-c6f72a\\stream.jsonl",
+    "error": null
+  }
+}

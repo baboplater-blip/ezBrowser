@@ -1,9 +1,10 @@
 import { ipcMain, dialog, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { tMain } from '../i18n'
 import { IPC } from '../../shared/ipc-channels'
 import {
   extensionEvents, importLocalUnpackedDir, installFromCrx, installFromUrl,
   invokeExtensionAction, listExtensions, openExtensionOptions, removeExtension,
-  setExtensionEnabled,
+  setExtensionEnabled, confirmPendingInstall, cancelPendingInstall,
 } from '../extensions/adapter'
 import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
 import { isTrustedSender } from './trust'
@@ -28,7 +29,10 @@ function resolveWindowId(e: IpcMainInvokeEvent, fallback: string | null = null):
 }
 
 export function registerExtensionsIpc(): void {
-  ipcMain.handle(IPC.extensions.list, () => listExtensions())
+  ipcMain.handle(IPC.extensions.list, (e) => {
+    if (!isTrustedSender(e)) return []
+    return listExtensions()
+  })
 
   ipcMain.handle(IPC.extensions.installFromCrx, async (e, args: { path?: string } = {}) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
@@ -36,7 +40,7 @@ export function registerExtensionsIpc(): void {
     if (!filePath) {
       const win = BrowserWindow.fromWebContents(e.sender)
       const r = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
-        title: '확장(.crx) 선택',
+        title: tMain('main.extensions.pickCrxTitle', '확장(.crx) 선택'),
         filters: [{ name: 'Chrome Extension', extensions: ['crx', 'zip'] }],
         properties: ['openFile'],
       })
@@ -51,6 +55,20 @@ export function registerExtensionsIpc(): void {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     if (!args?.url) return { ok: false, error: 'missing url' }
     return installFromUrl(args.url)
+  })
+
+  // 설치 전 동의 화면(묶음 J 항목 3) — installFromCrx/installFromUrl/importLocal 은 이제 준비만
+  // 하고(unpack + 권한 목록 추출) 실제 로드는 이 둘 중 하나를 불러야 일어난다.
+  ipcMain.handle(IPC.extensions.confirmInstall, (e, args: { token: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
+    if (!args?.token) return { ok: false, error: 'missing token' }
+    return confirmPendingInstall(args.token)
+  })
+
+  ipcMain.handle(IPC.extensions.cancelInstall, (e, args: { token: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
+    if (!args?.token) return { ok: false, error: 'missing token' }
+    return cancelPendingInstall(args.token)
   })
 
   ipcMain.handle(IPC.extensions.remove, (e, args: { id: string }) => {
@@ -70,18 +88,20 @@ export function registerExtensionsIpc(): void {
     return openExtensionOptions(args.id, wid)
   })
 
-  ipcMain.handle(IPC.extensions.invokeAction, (e, args: { id: string; windowId?: string }) => {
+  ipcMain.handle(IPC.extensions.invokeAction, (
+    e, args: { id: string; windowId?: string; anchorRect?: { x: number; y: number; width: number; height: number } },
+  ) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     const wid = args.windowId ?? resolveWindowId(e)
     if (!wid) return { ok: false, error: 'no window' }
-    return invokeExtensionAction(args.id, wid)
+    return invokeExtensionAction(args.id, wid, args.anchorRect)
   })
 
   ipcMain.handle(IPC.extensions.importLocal, async (e) => {
     if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
     const win = BrowserWindow.fromWebContents(e.sender)
     const r = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
-      title: 'unpacked 확장 폴더 선택',
+      title: tMain('main.extensions.pickUnpackedTitle', 'unpacked 확장 폴더 선택'),
       properties: ['openDirectory'],
     })
     if (r.canceled || r.filePaths.length === 0) return { ok: false, error: 'canceled' }

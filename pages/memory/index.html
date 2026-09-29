@@ -2,8 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
-    <title>메모리·성능</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <title data-i18n="page.memory.docTitle">메모리·성능</title>
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <style>
       :root { color-scheme: light dark;
         --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
@@ -45,6 +47,9 @@
       h3 { font-size: 14px; margin: 0 0 8px; }
       .info-line { font-size: 11px; color: var(--muted); }
       code { background: var(--hover); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+      .hint { margin: 0 0 10px; padding: 8px 12px; font-size: 12px; line-height: 1.6;
+        color: var(--muted); background: var(--bg-alt, rgba(127,127,127,.08)); border-radius: 8px; }
+      .hint code { font-family: ui-monospace, monospace; }
       .budget-line { display: flex; justify-content: space-between; padding: 6px 12px;
         background: var(--card); border: 1px solid var(--border); border-radius: 6px;
         margin-bottom: 4px; font-size: 12px; }
@@ -61,73 +66,99 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>📊 메모리·성능</h1>
-      <div class="sub">실시간 프로세스별 메모리·CPU 와 백그라운드 탭 슬립 상태. 1초마다 갱신.</div>
-      <div id="content"><div class="info-line">로딩 중…</div></div>
+      <h1 data-i18n="page.memory.title">📊 메모리·성능</h1>
+      <div class="sub" data-i18n="page.memory.subtitle">실시간 프로세스별 메모리·CPU 와 백그라운드 탭 슬립 상태. 1초마다 갱신.</div>
+      <div id="content"><div class="info-line" data-i18n="page.memory.loading">로딩 중…</div></div>
     </div>
     <script>
       let timer = null
+      let lastMetrics = null
+      // browser://shared/i18n.js 가 window.t 를 심는다 — 전역 함수를 't' 로 재선언하면
+      // 자기 자신을 호출해 무한 재귀가 나므로 다른 이름을 쓴다(docs/i18n.md 참고).
+      function trSafe(key, fallback, vars) { return typeof window.t === 'function' ? window.t(key, fallback, vars) : fallback }
 
       function fmtMs(ms) {
         if (ms < 1000) return ms + 'ms'
         const s = Math.floor(ms / 1000)
-        if (s < 60) return s + '초'
+        if (s < 60) return trSafe('page.memory.fmt.seconds', '{s}초', { s })
         const m = Math.floor(s / 60)
-        if (m < 60) return m + '분 ' + (s % 60) + '초'
+        if (m < 60) return trSafe('page.memory.fmt.minSec', '{m}분 {s}초', { m, s: s % 60 })
         const h = Math.floor(m / 60)
-        return h + '시간 ' + (m % 60) + '분'
+        return trSafe('page.memory.fmt.hourMin', '{h}시간 {m}분', { h, m: m % 60 })
       }
 
       function escape(s) { return String(s ?? '').replace(/</g, '&lt;') }
 
       async function reload() {
         if (!window.internalAPI) {
-          document.getElementById('content').innerHTML = '<div class="info-line">internalAPI 미주입</div>'
+          document.getElementById('content').innerHTML = '<div class="info-line">' + trSafe('page.memory.internalApiMissing', 'internalAPI 미주입') + '</div>'
           return
         }
         const m = await window.internalAPI.system.metrics()
         if (!m) return
+        lastMetrics = m
         render(m)
       }
 
+      if (typeof window.onI18nChanged === 'function') {
+        window.onI18nChanged(() => { try { if (lastMetrics) render(lastMetrics) } catch (e) {} })
+      }
+
       function render(m) {
-        const memBudget = 250  // CLAUDE.md 의 빈 창 RSS 한도 250MB
-        const memClass = m.totals.memoryMB <= memBudget ? 'budget-ok'
-                       : m.totals.memoryMB <= memBudget * 2 ? 'budget-warn' : 'budget-over'
+        // 이 페이지의 '전체 메모리'는 Electron getAppMetrics().workingSetSize 합이라
+        // 프로세스 간 공유 페이지를 중복 집계한다(CLAUDE.md: 실제 물리 사용량의 5~7배).
+        // 예산(250MB)은 private working set 기준이므로 **둘을 직접 비교하면 항상 초과로 보인다.**
+        // → workingSet 합에는 예산 색을 칠하지 않고, 정확한 값(메인 private)만 예산과 견준다.
+        const mainPriv = m.totals.mainPrivateMB ?? 0
+        const unitCount = trSafe('page.memory.unit.count', '개')
+        const unitMin = trSafe('page.memory.unit.minutes', '분')
         const html = ''
           + '<div class="grid">'
-          + statBox('전체 메모리', m.totals.memoryMB.toLocaleString(), 'MB', memClass)
-          + statBox('프로세스', m.totals.processCount, '개')
-          + statBox('평균 CPU', m.totals.avgCpu, '%')
-          + statBox('가동 시간', fmtMs(m.uptime.appMs), '')
+          + statBox(trSafe('page.memory.stat.mainPrivate', '메인 프로세스 (private bytes)'), mainPriv.toLocaleString(), 'MB')
+          + statBox(trSafe('page.memory.stat.workingSetAll', '전체 WorkingSet (참고·과대)'), m.totals.memoryMB.toLocaleString(), 'MB')
+          + statBox(trSafe('page.memory.stat.processes', '프로세스'), m.totals.processCount, unitCount)
+          + statBox(trSafe('page.memory.stat.avgCpu', '평균 CPU'), m.totals.avgCpu, '%')
+          + statBox(trSafe('page.memory.stat.uptime', '가동 시간'), fmtMs(m.uptime.appMs), '')
           + '</div>'
 
           + '<div class="grid">'
-          + statBox('탭 (총)', m.tabs.total, '개')
-          + statBox('활성', m.tabs.active, '개')
-          + statBox('💤 슬립', m.tabs.discarded, '개')
-          + statBox('슬립 임계', Math.round(m.sleep.thresholdMs / 60000), '분')
+          + statBox(trSafe('page.memory.stat.tabsTotal', '탭 (총)'), m.tabs.total, unitCount)
+          + statBox(trSafe('page.memory.stat.tabsAwake', '깨어 있음'), m.tabs.active, unitCount)  // = 총 − 슬립. '활성 탭'(포커스)과 혼동 방지
+          + statBox(trSafe('page.memory.stat.tabsSleep', '💤 슬립'), m.tabs.discarded, unitCount)
+          + statBox(trSafe('page.memory.stat.sleepThreshold', '슬립 임계'), Math.round(m.sleep.thresholdMs / 60000), unitMin)
           + '</div>'
 
           + '<div class="row">'
-          + '<button class="btn primary" id="sweep">💤 지금 비활성 탭 슬립</button>'
-          + '<button class="btn" id="refresh">↻ 새로고침</button>'
+          + '<button class="btn primary" id="sweep">' + trSafe('page.memory.sweepBtn', '💤 지금 비활성 탭 슬립') + '</button>'
+          + '<button class="btn" id="refresh">' + trSafe('page.memory.refreshBtn', '↻ 새로고침') + '</button>'
           + (m.sleep.enabled
-              ? '<span class="info-line" style="align-self:center;">자동 슬립 ON (' + Math.round(m.sleep.thresholdMs / 60000) + '분)</span>'
-              : '<span class="info-line" style="align-self:center;color:var(--warn);">자동 슬립 OFF — 설정에서 활성화</span>')
+              ? '<span class="info-line" style="align-self:center;">' + trSafe('page.memory.sleepOn', '자동 슬립 ON ({min}분)', { min: Math.round(m.sleep.thresholdMs / 60000) }) + '</span>'
+              : '<span class="info-line" style="align-self:center;color:var(--warn);">' + trSafe('page.memory.sleepOff', '자동 슬립 OFF — 설정에서 활성화') + '</span>')
           + '</div>'
 
           + '<div class="section">'
-          + '<h3>1원칙 #1 — 가벼움 예산 (CLAUDE.md)</h3>'
-          + budgetLine('빈 창 RSS', '≤ 250MB', m.totals.memoryMB + ' MB', m.totals.memoryMB <= 250)
-          + budgetLine('휴식 시 CPU', '≤ 0.5%', m.totals.avgCpu + ' %', m.totals.avgCpu <= 0.5)
-          + budgetLine('백그라운드 슬립', '30분 비활성 → discard', m.sleep.enabled ? '✓ 활성' : '✗ 비활성', m.sleep.enabled)
+          + '<h3>' + trSafe('page.memory.budgetSectionTitle', '1원칙 #1 — 가벼움 예산 (CLAUDE.md)') + '</h3>'
+          + '<p class="hint">' + trSafe('page.memory.hint1',
+              '빈 창 RSS 는 <b>private working set</b> 기준이라 이 페이지에서 정확히 잴 수 없습니다'
+              + ' (Electron 자체 집계는 공유 페이지를 중복 포함). 정확한 판정은 <code>npm run verify:full</code> 의'
+              + ' perf 단계(WMI 측정)가 합니다. 아래는 <b>기준선</b>과 마지막 실측값입니다.') + '</p>'
+          + '<p class="hint">' + trSafe('page.memory.hint2',
+              '위 카드의 <b>private bytes</b> 는 Electron 이 주는 <i>커밋 기준</i> 값이라'
+              + ' 예산에 쓰는 WMI <i>private working set</i> 과 다릅니다(보통 더 큼). 지표를 섞어 비교하지 마세요.') + '</p>'
+          + budgetRows(m.perfBaseline)
+          + budgetLine(trSafe('page.memory.budget.mainPrivNowLabel', '메인 프로세스 private bytes (지금)'), trSafe('page.memory.budget.refLabel', '참고 지표'), mainPriv + ' MB', true)
+          + (function () {
+              // CPU 예산도 주입된 단일 출처 값을 쓴다(없으면 문서상 기본 0.5%).
+              const cpuBudget = (m.perfBaseline && m.perfBaseline.budgets && m.perfBaseline.budgets.idleCpuPercent) || 0.5
+              return budgetLine(trSafe('page.memory.budget.cpuLabel', '휴식 시 CPU'), '≤ ' + cpuBudget + '%', m.totals.avgCpu + ' %', m.totals.avgCpu <= cpuBudget)
+            })()
+          + budgetLine(trSafe('page.memory.budget.sleepLabel', '백그라운드 슬립'), trSafe('page.memory.budget.sleepTarget', '30분 비활성 → discard'), m.sleep.enabled ? trSafe('page.memory.budget.sleepOnMark', '✓ 활성') : trSafe('page.memory.budget.sleepOffMark', '✗ 비활성'), m.sleep.enabled)
           + '</div>'
 
           + '<div class="section">'
-          + '<h3>프로세스별 (' + m.processes.length + '개)</h3>'
+          + '<h3>' + trSafe('page.memory.processSectionTitle', '프로세스별 ({n}개)', { n: m.processes.length }) + '</h3>'
           + '<table>'
-          + '<thead><tr><th>PID</th><th>타입</th><th class="num">메모리 (MB)</th><th class="num">CPU %</th></tr></thead>'
+          + '<thead><tr><th>' + trSafe('page.memory.table.pid', 'PID') + '</th><th>' + trSafe('page.memory.table.type', '타입') + '</th><th class="num">' + trSafe('page.memory.table.memoryMb', '메모리 (MB)') + '</th><th class="num">' + trSafe('page.memory.table.cpuPercent', 'CPU %') + '</th></tr></thead>'
           + '<tbody>'
           + m.processes.map((p) =>
               '<tr><td>' + p.pid + '</td><td>' + escape(p.type) + (p.name ? ' · ' + escape(p.name) : '') + '</td>'
@@ -137,19 +168,19 @@
           + '</tbody></table></div>'
 
           + '<div class="section">'
-          + '<h3>환경</h3>'
+          + '<h3>' + trSafe('page.memory.envSectionTitle', '환경') + '</h3>'
           + '<table><tbody>'
-          + envRow('앱 버전', m.app.version)
+          + envRow(trSafe('page.memory.env.appVersion', '앱 버전'), m.app.version)
           + envRow('Electron', m.app.electronVersion)
           + envRow('Chromium', m.app.chromeVersion)
           + envRow('Node', m.app.nodeVersion)
-          + envRow('플랫폼', m.app.platform + ' ' + m.app.arch)
+          + envRow(trSafe('page.memory.env.platform', '플랫폼'), m.app.platform + ' ' + m.app.arch)
           + '</tbody></table></div>'
 
         document.getElementById('content').innerHTML = html
         document.getElementById('sweep').addEventListener('click', async () => {
           const r = await window.internalAPI.system.sweepTabSleep()
-          alert('비활성 탭 ' + r.discarded + '개 슬립 (스킵: ' + r.skipped + '개)')
+          alert(trSafe('page.memory.alert.sweepResult', '비활성 탭 {discarded}개 슬립 (스킵: {skipped}개)', { discarded: r.discarded, skipped: r.skipped }))
           reload()
         })
         document.getElementById('refresh').addEventListener('click', reload)
@@ -162,9 +193,39 @@
           + '</div>'
       }
 
+      // 기준선은 빌드 시점에 구운 실측값(build/gen-perf-baseline.mjs)을 쓴다.
+      // 하드코딩된 숫자는 시간이 지나면 낡고, 낡은 숫자는 없는 것만 못하다.
+      function budgetRows(b) {
+        if (!b || !b.latest) {
+          return budgetLine(trSafe('page.memory.budget.emptyLabel', '빈 창 RSS 기준선'), trSafe('page.memory.budget.emptyTarget', '측정 필요'),
+            trSafe('page.memory.budget.emptyCurrent', 'npm run verify:full 로 측정하면 여기에 실측값이 표시됩니다'), false)
+        }
+        const L = b.latest, M = b.medianOfRecent || {}, B = b.budgets || {}
+        const locale = (typeof window.getI18nLocale === 'function' ? window.getI18nLocale() : 'ko')
+        const intlLocale = locale === 'en' ? 'en-US' : locale === 'vi' ? 'vi-VN' : 'ko-KR'
+        const when = L.at ? new Date(L.at).toLocaleString(intlLocale) : trSafe('page.memory.budget.timeUnknown', '시각 미상')
+        const noAd = (L.noAdblockMB != null)
+          ? L.noAdblockMB + ' MB' + (M.noAdblockMB != null ? trSafe('page.memory.budget.medianSuffix', ' (최근 {n}회 중앙값 {v})', { n: M.samples, v: M.noAdblockMB }) : '')
+          : trSafe('page.memory.budget.noAdMissing', '미측정 — 다음 verify:full 부터 기록됩니다')
+        const total = (L.totalMB != null)
+          ? L.totalMB + ' MB'
+            + (L.adblockCostMB != null ? trSafe('page.memory.budget.adblockCostSuffix', ' · 그중 adblock {v}MB', { v: L.adblockCostMB }) : '')
+            + (M.totalMB != null ? trSafe('page.memory.budget.medianSuffix', ' (최근 {n}회 중앙값 {v})', { n: M.samples, v: M.totalMB }) : '')
+          : trSafe('page.memory.budget.totalMissing', '미측정')
+        return ''
+          + budgetLine(trSafe('page.memory.budget.noAdblockLabel', '빈 창 RSS — adblock 제외 (판정 1순위)'), '≤ ' + (B.noAdblockMB ?? 155) + ' MB',
+              noAd, L.noAdblockMB == null ? true : L.noAdblockMB <= (B.noAdblockMB ?? 155))
+          + budgetLine(trSafe('page.memory.budget.totalLabel', '빈 창 RSS — 총계 (참고·추세)'), '≤ ' + (B.totalMB ?? 250) + ' MB',
+              total, L.totalMB == null ? true : L.totalMB <= (B.totalMB ?? 250))
+          + (L.coldStartMs != null
+              ? budgetLine(trSafe('page.memory.budget.coldStartLabel', '콜드 스타트 (마지막 실측)'), '≤ 2000 ms', L.coldStartMs + ' ms', L.coldStartMs <= 2000)
+              : '')
+          + '<p class="hint">' + trSafe('page.memory.budget.footnote', '위 세 줄은 <b>{when}</b> 의 하네스 실측값입니다 (빌드 시점에 주입 — <code>npm run verify:full</code> 을 돌리면 갱신됩니다).', { when }) + '</p>'
+      }
+
       function budgetLine(name, target, current, met) {
         return '<div class="budget-line">'
-          + '<span>' + name + ' <span class="info-line">— 목표: ' + target + '</span></span>'
+          + '<span>' + name + ' <span class="info-line">— ' + trSafe('page.memory.budget.targetPrefix', '목표: ') + target + '</span></span>'
           + '<span class="' + (met ? 'met' : 'over') + '">' + (met ? '✓ ' : '⚠ ') + current + '</span>'
           + '</div>'
       }

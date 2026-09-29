@@ -2,8 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import './external-features'
 import type {
-  ActionDescriptor, AdblockStats, Bookmark, BookmarkFolder, BookmarkTree, DownloadItem,
-  ExtensionSummary, HistoryEntry, KeyBinding,
+  ActionDescriptor, AdblockStats, AiConnectResult, AiProviderDetection, AiProviderKind, Bookmark, BookmarkFolder, BookmarkTree, DownloadItem,
+  ExtensionInstallPreview, ExtensionSummary, HistoryEntry, KeyBinding,
   Macro, MacroSummary, ModSummary,
   PasswordSummary, PerfMilestones, PerfReport, PolicyRule, PolicyRuleSummary, ReadLaterItem, SearchEngine, TopSite,
   Userscript, UserscriptSummary, Workspace, WorkspaceState,
@@ -51,6 +51,10 @@ const api = {
       ipcRenderer.invoke(IPC.userscript.setEnabled, { id, enabled }),
     onChanged: (cb: (list: UserscriptSummary[]) => void) =>
       on(IPC.userscript.changed, cb),
+    // GM_registerMenuCommand 백엔드 플러밍(item 7) — 아직 어떤 UI 도 소비하지 않는다.
+    menuList: (tabId?: string): Promise<Array<{ id: string; scriptId: string; scriptName: string; label: string; tabId: string }>> =>
+      ipcRenderer.invoke(IPC.userscript.menuList, { tabId }),
+    menuRun: (commandId: string): Promise<boolean> => ipcRenderer.invoke(IPC.userscript.menuRun, { commandId }),
   },
   policy: {
     list: (): Promise<PolicyRuleSummary[]> => ipcRenderer.invoke(IPC.policy.list),
@@ -84,6 +88,12 @@ const api = {
     onChange: (cb: (s: Record<string, unknown>) => void) =>
       on(IPC.settings.changed, cb),
   },
+  i18n: {
+    get: (): Promise<{ locale: string; dict: Record<string, string> }> =>
+      ipcRenderer.invoke(IPC.i18n.get),
+    onChanged: (cb: (p: { locale: string; dict: Record<string, string> }) => void) =>
+      on(IPC.i18n.changed, cb),
+  },
   update: {
     status: (): Promise<unknown> => ipcRenderer.invoke(IPC.update.status),
     check: (): Promise<unknown> => ipcRenderer.invoke(IPC.update.check),
@@ -113,8 +123,25 @@ const api = {
     list: (): Promise<PasswordSummary[]> => ipcRenderer.invoke(IPC.password.list),
     reveal: (id: string): Promise<string | null> => ipcRenderer.invoke(IPC.password.reveal, { id }),
     remove: (id: string): Promise<void> => ipcRenderer.invoke(IPC.password.remove, { id }),
+    // 선등록 CRUD — browser:// 내부 페이지 전용. 외부 사이트가 쓰는 content preload 에는 노출하지 않는다.
+    add: (a: { origin: string; username: string; password: string; autoLoginAllowed?: boolean }):
+      Promise<{ ok: boolean; id?: string; reason?: string; message?: string }> =>
+      ipcRenderer.invoke(IPC.password.add, a),
+    update: (a: { id: string; username?: string; password?: string; autoLoginAllowed?: boolean; preferred?: boolean }):
+      Promise<{ ok: boolean; id?: string; reason?: string; message?: string }> =>
+      ipcRenderer.invoke(IPC.password.update, a),
     onChanged: (cb: (list: PasswordSummary[]) => void) =>
       on(IPC.password.changed, cb),
+    // "이 사이트는 저장 안 함" 목록.
+    neverList: (): Promise<string[]> => ipcRenderer.invoke(IPC.password.neverList),
+    neverRemove: (origin: string): Promise<void> => ipcRenderer.invoke(IPC.password.neverRemove, { origin }),
+    onNeverChanged: (cb: (list: string[]) => void) => on(IPC.password.neverChanged, cb),
+    // 크롬/엣지 호환 CSV — 다이얼로그로 파일 경로를 고르므로 인자 없음.
+    csvExport: (): Promise<{ ok: boolean; canceled?: boolean; path?: string; count?: number; error?: string }> =>
+      ipcRenderer.invoke(IPC.password.csvExport),
+    csvImport: (): Promise<{
+      ok: boolean; canceled?: boolean; imported: number; updated: number; skipped: number; parsed: number; error?: string
+    }> => ipcRenderer.invoke(IPC.password.csvImport),
   },
   workspace: {
     list: (): Promise<Workspace[]> => ipcRenderer.invoke(IPC.workspace.list),
@@ -130,9 +157,21 @@ const api = {
       on(IPC.workspace.changed, cb),
   },
   data: {
-    export: (): Promise<unknown> => ipcRenderer.invoke(IPC.data.export),
-    import: (bundle: unknown): Promise<{ ok: boolean; restored: number; errors: string[] }> =>
-      ipcRenderer.invoke(IPC.data.import, { bundle }),
+    export: (opts?: { backupPassword?: string }): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.data.export, opts),
+    import: (bundle: unknown, opts?: { backupPassword?: string; includeCode?: boolean }): Promise<{
+      ok: boolean
+      restored: number
+      errors: string[]
+      codeItemsSkipped: string[]
+      passwordStatus: 'not-present' | 'skipped-no-password' | 'wrong-password' | 'invalid-passphrase' | 'imported'
+      passwordImported: number
+      passwordUpdated: number
+      passwordSkippedRows: number
+    }> => ipcRenderer.invoke(IPC.data.import, { bundle, ...opts }),
+    // 가져오기 전 "코드 실행 항목"이 있는지 미리 본다(체크박스 없이 기본은 제외).
+    previewCode: (bundle: unknown): Promise<{ codeItems: string[] }> =>
+      ipcRenderer.invoke(IPC.data.previewCode, { bundle }),
   },
   tokens: {
     get: (): Promise<{
@@ -185,6 +224,11 @@ const api = {
     pickFolder: (): Promise<{ canceled: boolean; path?: string }> => ipcRenderer.invoke(IPC.downloads.pickFolder),
     onUpdate: (cb: (list: DownloadItem[]) => void) => on(IPC.downloads.update, cb),
   },
+  video: {
+    ytdlpStatus: (): Promise<{ installed: boolean }> => ipcRenderer.invoke(IPC.video.ytdlpStatus),
+    ytdlpUpdate: (): Promise<{ ok: boolean; result: 'updated' | 'up-to-date' | 'skipped' | 'failed' }> =>
+      ipcRenderer.invoke(IPC.video.ytdlpUpdate),
+  },
   torrent: {
     add: (uri: string): Promise<string | null> => ipcRenderer.invoke(IPC.torrent.add, { uri }),
     pause: (id: string): Promise<void> => ipcRenderer.invoke(IPC.torrent.pause, { id }),
@@ -196,19 +240,25 @@ const api = {
   },
   extensions: {
     list: (): Promise<ExtensionSummary[]> => ipcRenderer.invoke(IPC.extensions.list),
-    installFromCrx: (filePath?: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    installFromCrx: (filePath?: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.installFromCrx, { path: filePath }),
-    installFromUrl: (url: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    installFromUrl: (url: string): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.installFromUrl, { url }),
+    confirmInstall: (token: string): Promise<{ ok: boolean; id?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC.extensions.confirmInstall, { token }),
+    cancelInstall: (token: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke(IPC.extensions.cancelInstall, { token }),
     remove: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.remove, { id }),
     setEnabled: (id: string, enabled: boolean): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.setEnabled, { id, enabled }),
     openOptions: (id: string): Promise<{ ok: boolean; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.openOptions, { id }),
-    invokeAction: (id: string): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke(IPC.extensions.invokeAction, { id }),
-    importLocal: (): Promise<{ ok: boolean; id?: string; error?: string }> =>
+    invokeAction: (
+      id: string, anchorRect?: { x: number; y: number; width: number; height: number },
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.extensions.invokeAction, { id, anchorRect }),
+    importLocal: (): Promise<{ ok: boolean; pending?: ExtensionInstallPreview; error?: string }> =>
       ipcRenderer.invoke(IPC.extensions.importLocal),
     onChanged: (cb: (list: ExtensionSummary[]) => void) => on(IPC.extensions.changed, cb),
   },
@@ -279,12 +329,16 @@ const api = {
   ai: {
     config: (): Promise<{
       enabled: boolean
-      provider: 'anthropic' | 'openai' | 'ollama' | 'google'
+      provider: AiProviderKind
       providerLabel: string
       model: string
       hasKey: boolean
       storageAvailable: boolean
     } | null> => ipcRenderer.invoke(IPC.ai.config),
+    detectProviders: (force?: boolean): Promise<AiProviderDetection | null> =>
+      ipcRenderer.invoke(IPC.ai.detectProviders, { force: !!force }),
+    connectProvider: (provider: AiProviderKind, model?: string): Promise<AiConnectResult> =>
+      ipcRenderer.invoke(IPC.ai.connectProvider, { provider, model }),
     keyStatus: (): Promise<{ anthropic: boolean; openai: boolean; google: boolean; storageAvailable: boolean } | null> =>
       ipcRenderer.invoke(IPC.ai.keyStatus),
     diagnose: (): Promise<{
@@ -323,6 +377,12 @@ const api = {
   },
 }
 
-contextBridge.exposeInMainWorld('internalAPI', api)
+// 탭이 browser:// 로 열린 뒤 외부 사이트로 이동해도 이 preload 스크립트는 새 문서에서
+// 다시 실행된다(탭 생성 시 preload 선택은 최초 URL 기준 1회뿐 — tab-service.ts 참고).
+// internalAPI 는 북마크·이력·비밀번호 등 민감 API 를 담고 있으므로, 신뢰하는 내부
+// 스킴(현재는 browser: 뿐 — session-bootstrap.ts 의 protocol.handle 과 일치)일 때만 노출한다.
+if (window.location.protocol === 'browser:') {
+  contextBridge.exposeInMainWorld('internalAPI', api)
+}
 
 export type InternalAPI = typeof api

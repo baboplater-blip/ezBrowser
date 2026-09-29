@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
+import { useI18nT } from '../i18n'
 
 interface FindBarProps {
   open: boolean
   initialText: string
   tabId: string | undefined
+  stepSignal?: { forward: boolean; nonce: number } | null
   onClose: () => void
 }
 
-export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
+export function FindBar({ open, initialText, tabId, stepSignal, onClose }: FindBarProps) {
+  const tr = useI18nT()
   const [text, setText] = useState('')
   const [matchCase, setMatchCase] = useState(false)
   const [result, setResult] = useState<{ active: number; total: number } | null>(null)
@@ -55,6 +58,15 @@ export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
     void window.browserAPI.find.start(tabId, text, { forward, findNext: true, matchCase })
   }
 
+  // F3/Shift+F3/Ctrl+G — 이미 검색어가 있을 때만 이동(없으면 조용히 무시, 찾기 바를 여는 것만으로 충분).
+  const stepNonceRef = useRef<number>(0)
+  useEffect(() => {
+    if (!stepSignal || stepSignal.nonce === stepNonceRef.current) return
+    stepNonceRef.current = stepSignal.nonce
+    step(stepSignal.forward)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepSignal])
+
   const close = (): void => {
     if (tabId) void window.browserAPI.find.stop(tabId)
     setText('')
@@ -65,8 +77,8 @@ export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
   if (!open) return null
 
   const countLabel = result
-    ? (result.total > 0 ? `${result.active}/${result.total}` : '결과 없음')
-    : (text ? '검색 중…' : '')
+    ? (result.total > 0 ? `${result.active}/${result.total}` : tr('ui.findBar.noResults', '결과 없음'))
+    : (text ? tr('ui.findBar.searching', '검색 중…') : '')
 
   return (
     <div className="findbar" role="search">
@@ -74,7 +86,7 @@ export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
         ref={inputRef}
         className="findbar-input"
         value={text}
-        placeholder="페이지에서 찾기"
+        placeholder={tr('ui.findBar.placeholder', '페이지에서 찾기')}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -91,12 +103,12 @@ export function FindBar({ open, initialText, tabId, onClose }: FindBarProps) {
       </span>
       <button
         className={`findbar-btn${matchCase ? ' findbar-btn--on' : ''}`}
-        title="대소문자 구분"
+        title={tr('ui.findBar.matchCase', '대소문자 구분')}
         onClick={() => setMatchCase((v) => !v)}
       >Aa</button>
-      <button className="findbar-btn" title="이전 (Shift+Enter)" onClick={() => step(false)} disabled={!text}>↑</button>
-      <button className="findbar-btn" title="다음 (Enter)" onClick={() => step(true)} disabled={!text}>↓</button>
-      <button className="findbar-btn" title="닫기 (Esc)" onClick={close}>✕</button>
+      <button className="findbar-btn" title={tr('ui.findBar.prev', '이전 (Shift+Enter)')} onClick={() => step(false)} disabled={!text}>↑</button>
+      <button className="findbar-btn" title={tr('ui.findBar.next', '다음 (Enter)')} onClick={() => step(true)} disabled={!text}>↓</button>
+      <button className="findbar-btn" title={tr('ui.findBar.close', '닫기 (Esc)')} onClick={close}>✕</button>
     </div>
   )
 }

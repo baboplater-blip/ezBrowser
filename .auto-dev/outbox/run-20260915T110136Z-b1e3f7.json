@@ -1,0 +1,27 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260915T110136Z-b1e3f7",
+  "recorded_at": "2026-09-15T11:25:56Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260915T110136Z-b1e3f7",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260915T110136Z-b1e3f7)에 귀속된 판정: pass",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "d7f61dc6-f300-4b67-a8ef-9dcbed0927d7",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "summary": "All four result files postdate the final build (asar 20:19:56). Done — here is the outcome.\n\n## 마감 완료 — VERDICT: pass\n\n**팀장 단독 처리** (신규 작업자·비동기 배정 0건). 남은 것을 타임스탬프로 식별해 직접 끝냈습니다.\n\n### 먼저 밝혀진 것: 앞 실행의 FAIL 2건은 실패가 아니었다\n`extension-behavior` 결과 파일(19:58)이 **빌드(19:59:54)보다 일렀습니다** — 고친 코드가 안 들어간 exe 를 잰 결과였습니다. 최신 빌드로 재니 **X18 은 PASS**, X15 만 GAP 으로 남았습니다.\n\n### 6항목 완료 여부\n| # | 항목 | 상태 |\n|---|---|---|\n| 1 | 저장 직렬화·종료 flush·경합/dirty 유실 | 완료 |\n| 2 | 손상 백업 고유화·정상 항목 복구·무손실 | 완료 |\n| 3 | 2 워크스페이스 + 시크릿 확장 격리 | **부분** — X15 미해결 |\n| 4 | 다세션 on/off/remove·재활성화·재시작 | 완료 |\n| 5 | 세션별 로드 성공/실패 UI | 완료 |\n| 6 | 취소 후 부작용 차단 | 완료 |\n\n### 이번 실행이 실제로 한 일\n**① 고친 줄에 검사가 없던 것을 메웠습니다.** 지적하신 우회가 사실이었습니다 — 하네스가 \"지금 exe 엔 수정이 미반영\"이라며 **일부러 창을 닫지 않고** 있었고, 그 결과 `ipc/workspace.ts` 가드는 어떤 검사에도 안 걸려 있었습니다. X24 로 교체했습니다.\n\n**그런데 첫 X24 는 통과했지만 아무것도 검사하지 못했습니다.** 가드를 빼고 재빌드해도 그대로 통과 → 방아쇠를 바꿔 가며 측정:\n\n| 방아쇠 | 가드 제거 시 |\n|---|---|\n| 창 닫고 전환 1회 | PASS ← 빈 검사 |\n| 닫힘 생애주기 내내 전환 ~1,250회 | PASS ← 여전히 못 잡음 |\n| **창은 살아 있고 외피 webContents 만 파괴** | **FAIL** ← `TypeError: ...reading 'send'` |\n\n정상적인 창 닫기로는 이 결함에 **도달할 수 없습니다**(`'closed'` 가 레지스트리를 지움). 원 보고의 방아쇠 설명은 부정확했지만 **가드 자체는 유효**하고, 실제 증상은 경합이 아니라 **영구 상태**(이후 모든 워크스페이스 전환 실패)였습니다. 복구는 소스가 아니라 컴파일 산출물에서 확인했습니다.\n\n**② 항목 4의 누락**(이미 주입된 DOM 소급복원 한계)을 사용자 화면과 검사 주석에 명시했습니다.\n\n### 최종 검증 (전부 최종 빌드 기준, asar 20:19:56 < 모든 결과 파일)\n`npm run verify` **8/8** · extension-behavior **23P/0F/1GAP** · ai-persist **13/13** · agent-loop **35/35** = **79 PASS · 0 FAIL · 1 GAP**. `verify:full` 미실행.\n\n### 남은 제한\n- **X15 는 미해결 GAP**입니다. 작업자 주장을 직접 확인했고 사실이었습니다 — 라이브러리 메인 구현에 `executeScript` 0건(Electron 내장), 탭 id 가 프로세스 전역 `webContents.id`라 세션 경계를 넘습니다. 통과로 세지 않았고 3항을 \"부분 완료\"로 적었습니다.\n- **그 누출이 시크릿 탭까지 닿는지는 확인하지 않았습니다** — 사용자 영향이 가장 큰 방향이라 다음 라운드 1순위로 남겼습니다.\n- `.claude/skills/...SKILL.md` 는 여전히 권한 거부로 미수정(전역 trust 는 건드리지 않았습니다). 모델·토큰은 계측 원장이 없어 미계측입니다.\n- `~/Downloads/보고서-127.0.0.1-20260915-2000.md` 는 이번 실행보다 이른 시험 부산물이고 프로젝트 밖이라 **삭제하지 않았습니다**.\n\n잔여 프로세스 0개, 사용자 창·설정 무접촉, 패키지/권한/push 변경 없음.",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260915T110136Z-b1e3f7\\stream.jsonl",
+    "error": null
+  }
+}

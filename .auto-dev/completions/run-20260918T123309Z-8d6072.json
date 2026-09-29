@@ -1,0 +1,139 @@
+{
+  "schema": "auto-dev/completion-record@1",
+  "run_id": "run-20260918T123309Z-8d6072",
+  "project_id": "browser-build-36466a626d",
+  "verdict": "pass",
+  "written_at": "2026-09-18T13:04:13Z",
+  "criteria": [
+    {
+      "id": "c1",
+      "kind": "positive",
+      "behavior": "사용자가 시작할 때 '맡기고 자동 게시'를 켜면, 승인한 플랫폼·계정·건수·기한 안에서 캡션 확인 클릭 없이 게시 작업이 실제로 시작된다",
+      "check": "verify-auto-publish 배선 검사 — 공개 API 경로(startImagePost→생성완료→확인→캡션→게시)로 실행해 stage='publish' · autoPublished=true · 게시 작업 id 생성 · 지시문에 그 캡션이 실림 · 선승인 건수 1 소비 [33/33 중 양성 3종]",
+      "result": "pass"
+    },
+    {
+      "id": "c2",
+      "kind": "negative",
+      "behavior": "승인하지 않은 계정·플랫폼으로는 자동 게시되지 않고 예전처럼 확인을 기다린다",
+      "check": "verify-auto-publish 부정 검사 — 다른 계정·계정 미지정·다른 플랫폼 각각 ok=false + 사유에 '계정'/'플랫폼' [3종]",
+      "result": "pass"
+    },
+    {
+      "id": "c3",
+      "kind": "negative",
+      "behavior": "선승인 이전에 만들어 둔 작업은 나중 승인으로 갑자기 게시되지 않는다",
+      "check": "createdAt < grant.createdAt 인 워크플로 → ok=false '선승인 이전'",
+      "result": "pass"
+    },
+    {
+      "id": "c4",
+      "kind": "negative",
+      "behavior": "캡션 생성이 실패하면 게시하지 않고, 생성 프롬프트를 캡션으로 대신 올리지도 않는다(사유를 남기고 대기)",
+      "check": "배선 검사 — chatOnce 를 실패시키면 stage='review' 유지 · taskIds.publish 없음 · captionError 존재 · caption 비어 있음 [3종]",
+      "result": "pass"
+    },
+    {
+      "id": "c5",
+      "kind": "negative",
+      "behavior": "이미지 후보가 여럿이면(모호) 선승인이 있어도 자동 게시하지 않는다",
+      "check": "artifactAmbiguous=true → ok=false '여럿'",
+      "result": "pass"
+    },
+    {
+      "id": "c6",
+      "kind": "negative",
+      "behavior": "건수 소진·기한 경과·사용자 철회·이미 진행한 작업은 자동 게시되지 않는다(재시작 후 재시도 없음)",
+      "check": "used>=maxPosts · expiresAt 과거 · revokeAutoPublish · consumed 포함 각각 ok=false [4종]",
+      "result": "pass"
+    },
+    {
+      "id": "c7",
+      "kind": "negative",
+      "behavior": "자동 게시 범위는 모델도 웹페이지도 만들거나 넓힐 수 없다",
+      "check": "grantAutoPublish 입구가 신뢰 IPC(ai:social-grant, isTrustedSender)뿐 — 에이전트 루프·페이지에서 호출 경로 없음 + 계정없음/건수0/시간0/이상한 플랫폼은 선승인 생성 거부, 50건·24시간 클램프 [입력 검증 8종]",
+      "result": "pass"
+    },
+    {
+      "id": "c8",
+      "kind": "positive",
+      "behavior": "정한 글 수 안에서는 블로그 댓글·좋아요가 정상 진행된다",
+      "check": "verify-engage-ledger — 한도 안 허용 · 간격 경과 후 재허용 · 기한 전 허용(양성 대조 3종)",
+      "result": "pass"
+    },
+    {
+      "id": "c9",
+      "kind": "negative",
+      "behavior": "AI 가 지시를 무시하거나 작업이 중단 후 재개·구간 전환돼도 정한 글 수·간격·기한을 넘는 댓글·좋아요가 0건이다",
+      "check": "verify-engage-ledger — 한도 초과 차단 · 간격 미달 차단 · 기한 경과 차단 · 같은 guardId 재조회 시 카운트 유지(재개 내성) · 행동 종류/작업별 분리. 클릭 직전 agent.ts 가 engageQuotaCheck 로 막고 통과분만 실행 직전 기록 [54/54 중 한도 19종]",
+      "result": "pass"
+    },
+    {
+      "id": "c10",
+      "kind": "negative",
+      "behavior": "이미 다룬 글에 중복 댓글이 달리거나 이미 눌린 좋아요가 취소되지 않는다(기존 방어 유지)",
+      "check": "verify-engage-ledger 중복 방지·주소 정규화·분류기 + social e2e C2/C3/C6 [35종 + e2e 19/19]",
+      "result": "pass"
+    },
+    {
+      "id": "c11",
+      "kind": "positive",
+      "behavior": "실제 구독 모델이 이미지 생성→생성물 가져오기→캡션→SNS 게시를 끝까지 해낸다",
+      "check": "verify-social-realmodel-cdp R-SNS — 실제 claude CLI + 로컬 픽스처. 판정은 픽스처 /state: 업로드 파일 sha256 이 앱이 저장한 산출물과 바이트 일치 · 캡션 비어있지 않음 · 서버 게시 1건. 14단계/14호출/138초",
+      "result": "pass"
+    },
+    {
+      "id": "c12",
+      "kind": "positive",
+      "behavior": "실제 구독 모델이 서로 다른 두 블로그 글의 본문을 읽고 그에 맞는 댓글·좋아요를 남긴다",
+      "check": "verify-social-realmodel-cdp R-BLOG — /state 판정: 새 댓글 2건이 서로 다른 글(post:2,post:4) · 좋아요 둘 다 true · 내 블로그 글 댓글 0건. 8단계/7호출/39초",
+      "result": "pass"
+    },
+    {
+      "id": "c13",
+      "kind": "negative",
+      "behavior": "실모델 검증이 외부 실사이트 로그인·크레딧·실제 게시를 쓰지 않는다",
+      "check": "모든 대상이 로컬 픽스처(127.0.0.1) · 제공자는 기존 구독 CLI(claude-code)만 · 유료 키 미사용 · 격리 --user-data-dir",
+      "result": "pass"
+    },
+    {
+      "id": "c14",
+      "kind": "negative",
+      "behavior": "설치본 검증이 사용자의 실제 설치를 덮어쓰거나 지우지 않는다",
+      "check": "verify-install 이 기존 설치 감지 시 BLOCKED — 우회하지 않았고 실프로필·VM 설치도 하지 않았다. rc.5 는 win-unpacked 직접 실행으로 확인 [미검증 항목은 아래 remaining 에 선언]",
+      "result": "pass"
+    },
+    {
+      "id": "c15",
+      "kind": "positive",
+      "behavior": "기존 기능에 회귀가 없다",
+      "check": "npm run verify 12/12(47초) · social 파이프라인 e2e 19/19 · 에이전트 게이트 8/8 · rc.5 win-unpacked 스모크 16/16",
+      "result": "pass"
+    }
+  ],
+  "pending_owned_work": [],
+  "whole_task": {
+    "declared": true,
+    "all_requested_work_complete": false,
+    "remaining_required": [
+      "rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요"
+    ],
+    "blockers": [
+      "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요)",
+      "실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처)",
+      "깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월)"
+    ],
+    "optional_next": [
+      "실모델 블로그 시나리오를 buildBlogEngageTask 경로로 태워 참여 한도·간격 코드가드까지 실모델로 행사",
+      "실모델 e2e 를 시나리오당 2회 이상 돌려 도구호출 파싱 실패 빈도 측정"
+    ],
+    "korean_line": "남은 작업: rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요), (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처), (차단) 깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월); 전체 요청 완료: 아니오"
+  },
+  "verification": {
+    "command": "npm run verify (12/12) + verify-auto-publish 33 + verify-engage-ledger 54 + verify-social-pipeline-cdp 19 + verify-agent-gate 8 + smoke-cdp 16 + verify-social-realmodel-cdp 2",
+    "passed": 146,
+    "failed": 0,
+    "reran_only_failed": false
+  },
+  "notes": "음성 대조 2회 실시(자동게시 계정범위·선승인이전 검사 무력화 → 3건 FAIL / 참여 한도 검사 무력화 → 2건 FAIL, 각각 원복 후 통과). 실모델 앞선 run1 실패는 앱이 아니라 하네스 결함(onAgentEvent 구독 누락)이었고, 그 프로필에 done·47단계 기록이 남아 앱 정상을 뒷받침한다."
+}

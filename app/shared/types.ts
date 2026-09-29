@@ -65,6 +65,8 @@ export interface OmniboxSuggestion {
   url?: string
   icon?: string
   actionId?: string
+  // source === 'tab' 일 때만 채워짐 — 선택 시 새로 로드하지 않고 그 탭으로 전환한다.
+  tabId?: string
   score: number
 }
 
@@ -185,6 +187,20 @@ export interface TopSite {
 
 export type UserscriptRunAt = 'document-start' | 'document-end' | 'document-idle'
 
+export interface UserscriptResource {
+  name: string
+  url: string
+}
+
+// @resource 캐시 — 저장(설치) 시점에 1회 내려받아 결과를 레코드에 박아 둔다. 주입 시점엔
+// 디스크/네트워크 접근이 전혀 없어야(동기 IPC 로 매 네비게이션마다 호출되므로) 하기 때문.
+export interface UserscriptResourceCacheEntry {
+  mime: string
+  text?: string      // GM_getResourceText — UTF-8 로 디코드 가능했던 경우만
+  dataUrl?: string    // GM_getResourceURL — data: URI (크기 상한 내)
+  error?: string
+}
+
 export interface Userscript {
   id: string
   name: string
@@ -200,6 +216,15 @@ export interface Userscript {
   source: string
   createdAt: number
   updatedAt: number
+  // ===== 묶음 I 확장 =====
+  noframes: boolean
+  connect: string[]              // @connect — GM_xmlhttpRequest 허용 호스트 화이트리스트
+  includePatterns: string[]      // @include — chrome match pattern 또는 /regex/
+  requireUrls: string[]          // @require — https 만 허용
+  requireBundle: string          // 저장 시점에 내려받아 이어붙인 @require 코드(런타임엔 순수 문자열)
+  requireErrors: string[]        // 내려받기 실패한 @require URL (진단용)
+  resources: UserscriptResource[] // @resource name url
+  resourceCache: Record<string, UserscriptResourceCacheEntry>
 }
 
 export interface UserscriptSummary {
@@ -210,6 +235,9 @@ export interface UserscriptSummary {
   enabled: boolean
   match: string[]
   updatedAt: number
+  grant: string[]
+  noframes: boolean
+  requireErrors: string[]
 }
 
 export interface HeaderPair {
@@ -255,6 +283,17 @@ export interface PasswordEntry {
   createdAt: number
   updatedAt: number
   lastUsedAt: number
+  // ===== 자동화 로그인 (계정별 명시 opt-in) =====
+  // 저장되어 있다는 사실만으로는 에이전트가 이 계정으로 로그인하지 않는다. 사용자가 계정마다 켜야 한다
+  // (마이그레이션: 기존 항목은 전부 false). 켜면 "입력 + 로그인 버튼 누르기" 까지 허용된다 —
+  // 자동 제출 권한을 저장과 분리해 달라는 요구를 이 한 플래그의 **명시성**으로 만족시킨다.
+  autoLoginAllowed?: boolean
+  /** 같은 origin 에 허용 계정이 여럿일 때 자동화가 쓸 기본 계정. 없으면 자동화는 사용자에게 고르라고 묻는다. */
+  preferred?: boolean
+  /** 연속 로그인 실패 횟수 — 계정 잠금을 유발하는 무한 재시도를 막는다. 성공하거나 비밀번호를 고치면 0. */
+  autoLoginFailures?: number
+  /** 이 시각(ms)까지 자동 로그인 잠김. 디스크에 남으므로 앱을 재시작해도 유지된다. */
+  autoLoginBlockedUntil?: number
 }
 
 export interface PasswordSummary {
@@ -262,6 +301,11 @@ export interface PasswordSummary {
   origin: string
   username: string
   updatedAt: number
+  autoLoginAllowed: boolean
+  preferred: boolean
+  scheme: 'https' | 'http'
+  autoLoginFailures: number
+  autoLoginBlockedUntil: number
 }
 
 export type WorkspaceColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'gray'
@@ -292,7 +336,7 @@ export interface UserChromeState {
   lastError?: string
 }
 
-export type MacroTriggerType = 'shortcut' | 'url' | 'startup'
+export type MacroTriggerType = 'shortcut' | 'url' | 'startup' | 'interval'
 
 export interface MacroAction {
   type: 'navigate' | 'wait' | 'js' | 'click' | 'screenshot' | 'toast'
@@ -317,6 +361,8 @@ export interface MacroSummary {
   enabled: boolean
   trigger: { type: MacroTriggerType; value: string }
   updatedAt: number
+  // 묶음 G: 단축키 트리거가 다른 매크로·시스템 키맵과 겹치면 true — 매크로 목록 UI 경고 배지용.
+  shortcutConflict?: boolean
 }
 
 export type ModPermission = 'tabs' | 'menu' | 'storage' | 'network' | 'node'
@@ -367,12 +413,62 @@ export interface PerfReport {
   history: PerfMilestones[]
 }
 
-export interface ExtensionSummary {
+/**
+ * 확장이 **어느 세션에서 실제로 로드됐는지**.
+ *
+ * 왜 필요한가: 우리 탭은 워크스페이스마다 다른 partition(`persist:ws-*`)을 쓰고, 확장은 그
+ * 세션들에 각각 로드된다. 그런데 목록은 `defaultSession` 하나만 보고 "켬/끔"만 말해서,
+ * **어떤 워크스페이스에서는 확장이 전혀 안 뜨는데도 화면에는 정상으로 보였다**.
+ * 설정상 켬(`enabled`)과 실제 로드됨(`loaded`)은 다른 것이므로 따로 싣는다.
+ */
+export interface ExtensionSessionLoad {
+  /** partition 문자열. defaultSession 은 빈 문자열. 사용자에게 그대로 보이면 안 된다(label 을 쓸 것). */
+  partition: string
+  /** 사람이 읽는 이름 — '기본' · '워크스페이스: 업무' · '시크릿'. */
+  label: string
+  kind: 'default' | 'workspace' | 'incognito' | 'other'
+  /** 지금 이 세션에 실제로 올라와 있는가(과거 시도 기록이 아니라 현재 상태를 조회한 값). */
+  loaded: boolean
+  /** 실패 원문(영문 메시지 등) — 화면에는 접어서 보여준다. */
+  error?: string
+  /** 실패를 한국어로 요약한 것 — 화면에 먼저 보여준다. */
+  reason?: string
+}
+
+/**
+ * 설치 전 동의 화면에 보여줄 미리보기 — 실제 설치(finalizeInstall)는 아직 일어나지 않은 상태다.
+ * `token` 으로 `extensions.confirmInstall`/`cancelInstall` 을 부른다(10분 방치되면 자동 정리).
+ */
+export interface ExtensionInstallPreview {
+  token: string
   id: string
   name: string
   version: string
   description?: string
+  iconDataUrl?: string
+  /** manifest.json 의 permissions(API 권한). */
+  permissions: string[]
+  /** manifest.json 의 host_permissions(MV3) — 접근 가능한 사이트 범위. */
+  hostPermissions: string[]
+  source: 'crx' | 'unpacked'
+}
+
+export interface ExtensionSummary {
+  /** 이 확장의 declarativeNetRequest 정적 룰 중 우리가 적용 중인 개수(없으면 0). */
+  dnrRules?: number
+  id: string
+  name: string
+  version: string
+  description?: string
+  /** 사용자가 켜 둔 상태인가(설정값). 실제 동작 여부는 `loaded` 를 볼 것. */
   enabled: boolean
+  /** 한 곳 이상의 세션에 실제로 로드돼 있는가. */
+  loaded?: boolean
+  /** 세션별 로드 결과(확장이 로드될 수 있는 세션만 — 시크릿은 제외). */
+  sessions?: ExtensionSessionLoad[]
+  /** 로드에 성공한 세션 수 / 전체 세션 수 — 부분 실패를 한눈에. */
+  loadedSessions?: number
+  totalSessions?: number
   hasOptions: boolean
   hasIcon: boolean
   iconDataUrl?: string
@@ -382,3 +478,92 @@ export interface ExtensionSummary {
   source: 'crx' | 'unpacked' | 'webstore'
 }
 
+
+// ── AI 제공자 탐지·연결 ────────────────────────────────────────────────────────
+// 메인(features/ai/detect.ts)·preload·화면(AiTab·설정·환영)이 같은 모양을 본다.
+
+export type AiProviderKind =
+  | 'anthropic' | 'openai' | 'ollama' | 'google' | 'claude-code' | 'codex' | 'gemini-cli'
+
+/** 지금 이 컴퓨터에서 쓸 수 있는가 / 얼마가 드는가 — 사용자에게 그대로 보여주는 판정. */
+export interface AiProviderCandidate {
+  id: AiProviderKind
+  label: string
+  kind: 'cli' | 'local' | 'key'
+  ready: boolean
+  /** subscription=이미 있는 구독 · free-local=내 컴퓨터 · free-tier=무료 티어 · paid-key=종량 과금 */
+  cost: 'subscription' | 'free-local' | 'free-tier' | 'paid-key'
+  detail: string
+  fix?: string
+  models?: string[]
+}
+
+export interface AiProviderDetection {
+  at: number
+  current: AiProviderKind
+  currentReady: boolean
+  candidates: AiProviderCandidate[]
+  error?: string
+}
+
+export interface AiDiagnosisSummary {
+  ok: boolean
+  provider: string
+  providerLabel: string
+  model: string
+  status: string
+  message: string
+  detail?: string
+  fix?: string
+  latencyMs?: number
+  installedModels?: string[]
+}
+
+export interface AiConnectResult {
+  ok: boolean
+  provider?: AiProviderKind
+  providerLabel?: string
+  diagnosis?: AiDiagnosisSummary
+  error?: string
+}
+
+// ===== 에이전트 입력창 의도 해석 (묶음 INTENT-1) =====
+// 사용자가 직접 친 자연어 요청을 생산 워크플로의 **폼 미리채움**으로 읽은 결과.
+// 이 타입들은 제안값만 담는다 — 게시·참여 권한은 여기서 만들어지지 않는다.
+
+export type WorkflowIntentKind = 'image-post' | 'blog-engage'
+
+export interface ImagePostIntentFields {
+  service: 'genspark' | 'chatgpt' | 'custom'
+  /** 사용자가 그려 달라고 한 내용 */
+  prompt: string
+  /** 못 고르면 null — missing 에 'platform' 이 함께 온다 */
+  platform: 'instagram' | 'youtube' | 'tiktok' | null
+  /** 제안값일 뿐. 실제 게시 여부는 기존 승인 단계가 결정한다. */
+  mode: 'draft' | 'publish'
+  tags: string[]
+}
+
+export interface BlogEngageIntentFields {
+  topic: string
+  /** 원문에 내 블로그 주소가 있을 때만 */
+  myBlogUrl: string
+  actions: ('comment' | 'like')[]
+  mode: 'draft' | 'act'
+  /** 1~20 */
+  maxPosts: number
+  /** 원문에 검색·목록 주소가 있을 때만, 없으면 '' */
+  searchUrl: string
+}
+
+export interface WorkflowIntent {
+  kind: WorkflowIntentKind
+  /** 사용자에게 보여 줄 한 줄 한국어 요약 */
+  summary: string
+  /** 사용자가 한 번 설정해야 하는 것: 'platform' | 'account' | 'prompt' | 'topic' | 'maxPosts' */
+  missing: string[]
+  /** 무엇을 보고 이렇게 판단했는지 — 디버깅·검사용 근거 토큰 */
+  matched: string[]
+  image?: ImagePostIntentFields
+  blog?: BlogEngageIntentFields
+}

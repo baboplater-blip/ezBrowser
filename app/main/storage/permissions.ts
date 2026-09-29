@@ -1,4 +1,4 @@
-import Store from 'electron-store'
+import { createStore } from './safe-store'
 import { EventEmitter } from 'node:events'
 
 // 사이트(origin)별 권한 오버라이드. 기본 동작(화이트리스트)은 session-bootstrap 이 유지하고,
@@ -8,7 +8,7 @@ export interface OriginPerms { [permission: string]: PermDecision }
 
 export const permissionEvents = new EventEmitter()
 
-const store = new Store<{ origins: Record<string, OriginPerms> }>({ name: 'permissions', defaults: { origins: {} } })
+const store = createStore<{ origins: Record<string, OriginPerms> }>({ name: 'permissions', defaults: { origins: {} } })
 const cache = new Map<string, OriginPerms>()
 let loaded = false
 

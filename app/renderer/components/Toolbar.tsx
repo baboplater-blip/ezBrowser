@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { TabSummary } from '../../shared/types'
+import type { OmniboxSuggestion, TabSummary } from '../../shared/types'
 import { OmniboxSuggestions } from './OmniboxSuggestions'
 import { useOmniboxSuggestions } from '../hooks/useOmniboxSuggestions'
 import { ExtensionActions } from './ExtensionActions'
 import { useExtensions } from '../hooks/useExtensions'
 import { Icon, type IconName } from './Icon'
+import { useI18nT } from '../i18n'
 
 function siteIcon(url?: string): IconName {
   if (!url || /^browser:/i.test(url)) return 'gear'
@@ -32,6 +33,7 @@ interface Props {
   onToggleWorkspaceRail: () => void
   onOpenSiteInfo: (anchorX: number, anchorY: number) => void
   onOpenAi: () => void
+  onOpenBookmarkBubble: (anchorX: number, anchorY: number, url: string) => void
 }
 
 export function Toolbar({
@@ -40,15 +42,19 @@ export function Toolbar({
   videoCandidateCount, videoOpen, onToggleVideo,
   leftPanelOpen, rightPanelOpen, workspaceRailOpen,
   onToggleLeftPanel, onToggleRightPanel, onToggleWorkspaceRail,
-  onOpenSiteInfo, onOpenAi,
+  onOpenSiteInfo, onOpenAi, onOpenBookmarkBubble,
 }: Props) {
+  const t = useI18nT()
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const [composing, setComposing] = useState(false)
   const [highlight, setHighlight] = useState(0)
   const [bookmarked, setBookmarked] = useState(false)
   const [readLaterSaved, setReadLaterSaved] = useState(false)
+  const [removedSuggestionIds, setRemovedSuggestionIds] = useState<Set<string>>(new Set())
+  const [zoom, setZoom] = useState<{ level: number; factor: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const bookmarkBtnRef = useRef<HTMLButtonElement>(null)
   const extensions = useExtensions()
 
   useEffect(() => {
@@ -71,6 +77,17 @@ export function Toolbar({
     void window.browserAPI.actions.run('action.bookmark.add', { windowId, tabId: active.id })
   }
 
+  // 별 버튼(또는 Ctrl+D)이 실행되면 메인이 이 탭에 대해 편집 말풍선을 열라고 알려온다 —
+  // 좌표는 렌더러만 아는 정보라 여기서 버튼 위치를 다시 재서 넘긴다.
+  useEffect(() => {
+    const off = window.browserAPI.bookmarks.onBubbleOpen(({ tabId }) => {
+      if (!active || tabId !== active.id || !active.url) return
+      const r = bookmarkBtnRef.current?.getBoundingClientRect()
+      onOpenBookmarkBubble(r?.left ?? 0, r?.bottom ?? 0, active.url)
+    })
+    return off
+  }, [active, onOpenBookmarkBubble])
+
   useEffect(() => {
     let cancelled = false
     const url = active?.url
@@ -87,6 +104,24 @@ export function Toolbar({
     void window.browserAPI.actions.run('action.readlater.add', { windowId, tabId: active.id })
   }
 
+  // 탭 전환 시 그 탭의 현재 배율을 읽어온다.
+  useEffect(() => {
+    let cancelled = false
+    const id = active?.id
+    if (!id) { setZoom(null); return }
+    void window.browserAPI.page.zoomGet(id).then((z) => { if (!cancelled) setZoom(z) })
+    return () => { cancelled = true }
+  }, [active?.id])
+
+  // Ctrl+휠·핀치 줌 또는 다른 곳(단축키·메뉴)에서 배율이 바뀌면 배지 실시간 갱신.
+  useEffect(() => {
+    const off = window.browserAPI.page.onZoomChanged(({ tabId, level, factor }) => {
+      if (tabId !== active?.id) return
+      setZoom({ level, factor })
+    })
+    return off
+  }, [active?.id])
+
   useEffect(() => {
     if (!focused) setValue(active?.url ?? '')
   }, [active, focused])
@@ -99,7 +134,11 @@ export function Toolbar({
     return off
   }, [])
 
-  const suggestions = useOmniboxSuggestions(value, windowId, focused && !composing)
+  // 검색어가 바뀌면 이전 검색에서 삭제한 이력 항목 숨김을 초기화한다.
+  useEffect(() => { setRemovedSuggestionIds(new Set()) }, [value])
+
+  const suggestionsRaw = useOmniboxSuggestions(value, windowId, focused && !composing)
+  const suggestions = suggestionsRaw.filter((s) => !removedSuggestionIds.has(s.id))
 
   useEffect(() => { setHighlight(0) }, [suggestions])
 
@@ -111,7 +150,16 @@ export function Toolbar({
     else window.browserAPI.tabs.reload(active.id)
   }
 
-  async function submit(input?: string) {
+  // Ctrl+Enter: 입력이 공백·스킴 없는 한 단어면 www.<입력>.com 으로 완성(크롬 표준 동작).
+  function ctrlEnterUrl(text: string): string | null {
+    const t = text.trim()
+    if (!t || /\s/.test(t) || /^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return null
+    const bare = t.replace(/^www\./i, '')
+    if (!bare) return null
+    return `https://www.${bare}.com`
+  }
+
+  async function submit(input?: string, newTab?: boolean) {
     const text = (input ?? value).trim()
     if (!text) return
     if (text.startsWith('magnet:?') || /\.torrent(\?|$)/i.test(text)) {
@@ -120,54 +168,73 @@ export function Toolbar({
       setValue(''); inputRef.current?.blur()
       return
     }
-    await window.browserAPI.omnibox.navigate(windowId, active?.id, text)
+    // Alt+Enter: 현재 탭을 놔두고 새 탭에 연다 — tabId 를 안 주면 omnibox.navigate 가 새 탭을 만든다.
+    await window.browserAPI.omnibox.navigate(windowId, newTab ? undefined : active?.id, text)
     setValue('')
     inputRef.current?.blur()
+  }
+
+  function selectSuggestion(target: OmniboxSuggestion, newTab: boolean): void {
+    if (target.source === 'tab' && target.tabId) {
+      // "탭으로 전환" — 다시 불러오지 않고 이미 열려 있는 그 탭으로 이동한다.
+      void window.browserAPI.tabs.activate(target.tabId)
+    } else if (target.actionId) {
+      void window.browserAPI.actions.run(target.actionId, { windowId, tabId: active?.id })
+    } else if (target.url) {
+      if (newTab || !active) void window.browserAPI.tabs.create(windowId, target.url)
+      else void window.browserAPI.tabs.navigate(active.id, target.url)
+    }
+    setValue(''); inputRef.current?.blur()
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (composing) return
     if (e.key === 'Enter') {
       e.preventDefault()
-      const target = suggestions[highlight]
-      if (target?.url) {
-        if (target.actionId) {
-          void window.browserAPI.actions.run(target.actionId, { windowId, tabId: active?.id })
-        } else if (active) {
-          void window.browserAPI.tabs.navigate(active.id, target.url)
-        } else {
-          void window.browserAPI.tabs.create(windowId, target.url)
-        }
-        setValue(''); inputRef.current?.blur()
-      } else {
-        void submit()
+      if (e.ctrlKey && !e.altKey) {
+        const url = ctrlEnterUrl(value)
+        if (url) { void submit(url, false); return }
       }
+      const target = suggestions[highlight]
+      if (target?.url || target?.actionId) selectSuggestion(target, e.altKey)
+      else void submit(undefined, e.altKey)
     } else if (e.key === 'ArrowDown') {
       e.preventDefault()
       setHighlight((h) => Math.min(h + 1, suggestions.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setHighlight((h) => Math.max(h - 1, 0))
+    } else if ((e.key === 'Delete' || e.key === 'Del') && e.shiftKey) {
+      // Shift+Delete — 강조된 이력 제안을 방문 기록에서 삭제(크롬 표준 동작).
+      const target = suggestions[highlight]
+      if (target?.source === 'history' && target.url) {
+        e.preventDefault()
+        void window.browserAPI.history.remove({ url: target.url })
+        setRemovedSuggestionIds((prev) => { const next = new Set(prev); next.add(target.id); return next })
+      }
     } else if (e.key === 'Escape') {
       setValue(active?.url ?? '')
       inputRef.current?.blur()
     }
   }
 
+  // 100% 가 아닐 때만 배지 표시 — 기본 배율에서는 크롬처럼 조용히 숨어 있는다.
+  const zoomPercent = zoom && Math.abs(zoom.factor - 1) > 0.001 ? Math.round(zoom.factor * 100) : null
+
   return (
     <div className="toolbar">
       <div className="toolbar-nav">
         <button
           className={`nav-btn workspace-toggle-btn ${workspaceRailOpen ? 'active' : ''}`}
-          aria-label={workspaceRailOpen ? '워크스페이스 사이드바 접기' : '워크스페이스 사이드바 펼치기'}
-          title={'워크스페이스 사이드바 (좌측) — 색 칩으로 스페이스 전환, + 로 새 스페이스 추가'}
+          aria-label={workspaceRailOpen ? t('ui.toolbar.workspaceRail.collapse', '워크스페이스 사이드바 접기') : t('ui.toolbar.workspaceRail.expand', '워크스페이스 사이드바 펼치기')}
+          title={t('ui.toolbar.workspaceRail.title', '워크스페이스 사이드바 (좌측) — 색 칩으로 스페이스 전환, + 로 새 스페이스 추가')}
           onClick={onToggleWorkspaceRail}
         ><Icon name="grid" size={16} /></button>
-        <button className="nav-btn" aria-label="뒤로" disabled={!active?.canGoBack} onClick={back}><Icon name="back" size={16} /></button>
-        <button className="nav-btn" aria-label="앞으로" disabled={!active?.canGoForward} onClick={forward}><Icon name="forward" size={16} /></button>
+        <button className="nav-btn" aria-label={t('ui.toolbar.nav.back', '뒤로')} disabled={!active?.canGoBack} onClick={back}><Icon name="back" size={16} /></button>
+        <button className="nav-btn" aria-label={t('ui.toolbar.nav.forward', '앞으로')} disabled={!active?.canGoForward} onClick={forward}><Icon name="forward" size={16} /></button>
         <button
           className="nav-btn"
-          aria-label={active?.loading ? '중지' : '새로고침'}
+          aria-label={active?.loading ? t('ui.toolbar.nav.stop', '중지') : t('ui.toolbar.nav.reload', '새로고침')}
           onClick={reloadOrStop}
           disabled={!active}
         >
@@ -175,22 +242,23 @@ export function Toolbar({
         </button>
       </div>
       {incognito && (
-        <span className="incognito-badge" title="시크릿 창 — 방문 기록·비밀번호 자동 저장을 남기지 않습니다">
-          🕶 시크릿
+        <span className="incognito-badge" title={t('ui.toolbar.incognito.title', '시크릿 창 — 방문 기록·비밀번호 자동 저장을 남기지 않습니다')}>
+          {t('ui.toolbar.incognito.label', '🕶 시크릿')}
         </span>
       )}
       <div className="omnibox-wrap">
         <button
           className="site-info-btn"
-          aria-label="사이트 정보"
-          title="사이트 정보 · 권한"
+          aria-label={t('ui.toolbar.siteInfo.label', '사이트 정보')}
+          title={t('ui.toolbar.siteInfo.title', '사이트 정보 · 권한')}
           onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onOpenSiteInfo(r.left, r.bottom) }}
         ><Icon name={siteIcon(active?.url)} size={13} /></button>
         <input
           ref={inputRef}
           className="omnibox"
-          placeholder="검색하거나 URL · 명령 입력 (예: !yt 검색어)"
+          placeholder={t('ui.toolbar.omnibox.placeholder', '검색하거나 URL · 명령 입력 (예: !yt 검색어)')}
           value={value}
+          style={zoomPercent !== null ? { paddingRight: 52 } : undefined}
           onChange={(e) => setValue(e.target.value)}
           onCompositionStart={() => setComposing(true)}
           onCompositionEnd={() => setComposing(false)}
@@ -199,51 +267,55 @@ export function Toolbar({
           onKeyDown={handleKey}
           spellCheck={false}
         />
+        {zoomPercent !== null && (
+          <button
+            className="zoom-badge"
+            aria-label={t('ui.toolbar.zoom.label', '배율 {percent}% — 클릭해서 100%로', { percent: zoomPercent })}
+            title={t('ui.toolbar.zoom.title', '배율 {percent}% — 클릭해서 기본 배율로', { percent: zoomPercent })}
+            onClick={() => {
+              if (!active) return
+              void window.browserAPI.page.zoomSet(active.id, 0).then((z) => setZoom(z))
+            }}
+          >{zoomPercent}%</button>
+        )}
         {focused && suggestions.length > 0 && (
           <OmniboxSuggestions
             items={suggestions}
             highlight={highlight}
-            onSelect={(item) => {
-              if (item.actionId) {
-                void window.browserAPI.actions.run(item.actionId, { windowId, tabId: active?.id })
-              } else if (item.url) {
-                if (active) void window.browserAPI.tabs.navigate(active.id, item.url)
-                else void window.browserAPI.tabs.create(windowId, item.url)
-              }
-              setValue(''); inputRef.current?.blur()
-            }}
+            onSelect={(item) => selectSuggestion(item, false)}
           />
         )}
       </div>
       <div className="toolbar-actions">
         <button
           className="nav-btn ai-btn"
-          aria-label="AI 어시스턴트"
-          title="AI 어시스턴트 (Ctrl+Shift+Space) — 이 페이지 요약·질문"
+          aria-label={t('ui.toolbar.ai.label', 'AI 어시스턴트')}
+          title={t('ui.toolbar.ai.title', 'AI 어시스턴트 (Ctrl+Shift+Space) — 이 페이지 요약·질문')}
           onClick={onOpenAi}
         >
           <Icon name="sparkle" size={16} />
         </button>
         <button
           className={`nav-btn sidepanel-btn ${leftPanelOpen ? 'active' : ''}`}
-          aria-label={leftPanelOpen ? '좌측 사이드 패널 닫기' : '좌측 사이드 패널 열기'}
-          title={'좌측 사이드 패널 (Ctrl+B) — 북마크·이력·메모'}
+          aria-label={leftPanelOpen ? t('ui.toolbar.sidepanel.leftClose', '좌측 사이드 패널 닫기') : t('ui.toolbar.sidepanel.leftOpen', '좌측 사이드 패널 열기')}
+          title={t('ui.toolbar.sidepanel.leftTitle', '좌측 사이드 패널 (Ctrl+B) — 북마크·이력·메모')}
           onClick={onToggleLeftPanel}
         >
           <Icon name="panel-left" size={16} />
         </button>
         <button
           className={`nav-btn sidepanel-btn ${rightPanelOpen ? 'active' : ''}`}
-          aria-label={rightPanelOpen ? '우측 사이드 패널 닫기' : '우측 사이드 패널 열기'}
-          title={'우측 사이드 패널 (Ctrl+Alt+B) — 북마크·이력·메모'}
+          aria-label={rightPanelOpen ? t('ui.toolbar.sidepanel.rightClose', '우측 사이드 패널 닫기') : t('ui.toolbar.sidepanel.rightOpen', '우측 사이드 패널 열기')}
+          title={t('ui.toolbar.sidepanel.rightTitle', '우측 사이드 패널 (Ctrl+Alt+B) — 북마크·이력·메모')}
           onClick={onToggleRightPanel}
         >
           <Icon name="panel-right" size={16} />
         </button>
         <button
+          ref={bookmarkBtnRef}
           className={`nav-btn bookmark-btn ${bookmarked ? 'active' : ''}`}
-          aria-label={bookmarked ? '북마크 제거' : '북마크 추가'}
-          title={bookmarked ? '북마크 제거 (Ctrl+D)' : '북마크에 추가 (Ctrl+D)'}
+          aria-label={bookmarked ? t('ui.toolbar.bookmark.edit', '북마크 편집') : t('ui.toolbar.bookmark.add', '북마크 추가')}
+          title={bookmarked ? t('ui.toolbar.bookmark.editTitle', '북마크 편집 (Ctrl+D)') : t('ui.toolbar.bookmark.addTitle', '북마크에 추가 (Ctrl+D)')}
           onClick={toggleBookmark}
           disabled={!active}
         >
@@ -251,8 +323,8 @@ export function Toolbar({
         </button>
         <button
           className={`nav-btn readlater-btn ${readLaterSaved ? 'active' : ''}`}
-          aria-label={readLaterSaved ? '읽기 목록에서 제거' : '읽기 목록에 추가'}
-          title={readLaterSaved ? '읽기 목록에서 제거' : '읽기 목록에 추가 — 나중에 보기'}
+          aria-label={readLaterSaved ? t('ui.toolbar.readlater.remove', '읽기 목록에서 제거') : t('ui.toolbar.readlater.add', '읽기 목록에 추가')}
+          title={readLaterSaved ? t('ui.toolbar.readlater.remove', '읽기 목록에서 제거') : t('ui.toolbar.readlater.addTitle', '읽기 목록에 추가 — 나중에 보기')}
           onClick={toggleReadLater}
           disabled={!active}
         >
@@ -261,8 +333,8 @@ export function Toolbar({
         {videoCandidateCount > 0 && (
           <button
             className={`nav-btn video-btn ${videoOpen ? 'active' : ''}`}
-            aria-label={videoOpen ? '동영상 사이드바 닫기' : '동영상 사이드바 열기'}
-            title={`감지된 동영상 ${videoCandidateCount}개 — 사이드바 열기/닫기`}
+            aria-label={videoOpen ? t('ui.toolbar.video.close', '동영상 사이드바 닫기') : t('ui.toolbar.video.open', '동영상 사이드바 열기')}
+            title={t('ui.toolbar.video.title', '감지된 동영상 {count}개 — 사이드바 열기/닫기', { count: videoCandidateCount })}
             onClick={onToggleVideo}
           >
             <Icon name="play" size={15} />
@@ -272,8 +344,10 @@ export function Toolbar({
         <ExtensionActions windowId={windowId} extensions={extensions} />
         <button
           className={`nav-btn downloads-btn ${downloadsOpen ? 'active' : ''}`}
-          aria-label={downloadsOpen ? '다운로드 사이드바 닫기' : '다운로드 사이드바 열기'}
-          title="다운로드 (Ctrl+J) — 사이드바 열기/닫기"
+          aria-label={downloadsOpen
+            ? t('ui.toolbar.downloads.labelClose', '다운로드 사이드바 닫기')
+            : t('ui.toolbar.downloads.labelOpen', '다운로드 사이드바 열기')}
+          title={t('ui.toolbar.downloads.title', '다운로드 (Ctrl+J) — 사이드바 열기/닫기')}
           onClick={onToggleDownloads}
         >
           <Icon name="download" size={16} />
@@ -281,8 +355,8 @@ export function Toolbar({
         </button>
         <button
           className="nav-btn"
-          aria-label="명령 팔레트"
-          title="명령 팔레트 (Ctrl+Shift+P)"
+          aria-label={t('ui.toolbar.palette.label', '명령 팔레트')}
+          title={t('ui.toolbar.palette.title', '명령 팔레트 (Ctrl+Shift+P)')}
           onClick={() => window.browserAPI.actions.run('action.palette.open', { windowId, tabId: active?.id })}
         >
           <Icon name="command" size={16} />

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TabBar } from './components/TabBar'
 import { Toolbar } from './components/Toolbar'
 import { SiteInfo } from './components/SiteInfo'
+import { BookmarkBubble } from './components/BookmarkBubble'
 import { CommandPalette } from './components/CommandPalette'
 import { TabSearch } from './components/TabSearch'
 import { RecentlyClosed } from './components/RecentlyClosed'
@@ -16,8 +17,10 @@ import { SidePanel } from './components/SidePanel'
 import { PaneStage, type PaneLayout } from './components/PaneStage'
 import { WorkspaceRail, WORKSPACE_RAIL_WIDTH } from './components/WorkspaceRail'
 import { PasswordSavePrompt } from './components/PasswordSavePrompt'
+import { PermissionPrompt } from './components/PermissionPrompt'
 import { UpdateBanner } from './components/UpdateBanner'
 import { FindBar } from './components/FindBar'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useTabs } from './hooks/useTabs'
 import { useActions } from './hooks/useActions'
 import { useMacros } from './hooks/useMacros'
@@ -26,7 +29,8 @@ import { useDownloads } from './hooks/useDownloads'
 import { useBookmarks } from './hooks/useBookmarks'
 import { useVideoCandidates } from './hooks/useVideoCandidates'
 import { useChromeOverlay } from './hooks/useChromeOverlay'
-import { labels } from './i18n'
+import { useI18nDict, useI18nT, setLocale } from './i18n'
+import type { SupportedLocale } from '../shared/i18n-core'
 import { NEW_TAB_URL } from '../shared/constants'
 
 const BOOKMARK_BAR_KEY = 'browserbuild.bookmark-bar.show'
@@ -71,6 +75,10 @@ function loadBool(key: string, def: boolean): boolean {
 }
 
 export function App() {
+  // 언어 사전(반응형) — 쿼리 `?lang=` 으로 초기값이 이미 맞게 들어와 있고(무깜빡임),
+  // 아래 useEffect 가 설정 변경(browser://settings 의 언어 select)을 구독해 재로드 없이 갱신한다.
+  const labels = useI18nDict()
+  const t = useI18nT()
   const [windowId, setWindowId] = useState<string | null>(() => readWindowIdFromQuery())
   const [incognito] = useState<boolean>(() => readIncognitoFromQuery())
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -78,9 +86,13 @@ export function App() {
   const [recentClosedOpen, setRecentClosedOpen] = useState(false)
   const [siteInfoOpen, setSiteInfoOpen] = useState(false)
   const [siteInfoAnchor, setSiteInfoAnchor] = useState<{ x: number; y: number }>({ x: 80, y: 72 })
+  const [bookmarkBubbleOpen, setBookmarkBubbleOpen] = useState(false)
+  const [bookmarkBubbleAnchor, setBookmarkBubbleAnchor] = useState<{ x: number; y: number }>({ x: 80, y: 72 })
+  const [bookmarkBubbleUrl, setBookmarkBubbleUrl] = useState('')
   const [sidePanelRequest, setSidePanelRequest] = useState<{ side: 'left' | 'right'; tab: 'ai' | 'bookmarks' | 'history' | 'notes' | 'readlater'; nonce: number } | undefined>(undefined)
   const [findOpen, setFindOpen] = useState(false)
   const [findInitialText, setFindInitialText] = useState('')
+  const [findStepSignal, setFindStepSignal] = useState<{ forward: boolean; nonce: number } | null>(null)
   const [panel, setPanel] = useState<Panel>('none')
   const [downloadsOpen, setDownloadsOpen] = useState<boolean>(() => loadBool(DOWNLOADS_OPEN_KEY, false))
   const [videoOpen, setVideoOpen] = useState<boolean>(false)
@@ -96,6 +108,11 @@ export function App() {
     } catch { return 'top' }
   })
   const [chromeHeight, setChromeHeight] = useState(72)
+  // 에이전트 실행 중 도크 자동 접기(설정 ai.agentCollapsePanels, 기본 ON) — 시작 시 다운로드·동영상 도크와 왼쪽 패널을 접고
+  // 끝나면 원래대로. 큰 대화상자(인스타 게시 창)가 잘려 버튼을 못 보던 문제(실사이트 파일럿 2026-09-13) 완화.
+  const collapseEnabledRef = useRef(true)
+  const collapsedSnapRef = useRef<{ reqId: string; downloads: boolean; video: boolean; left: boolean } | null>(null)
+  const panelStateRef = useRef({ downloads: false, video: false, left: false })
   const [paneLayout, setPaneLayout] = useState<PaneLayout>({
     split: null, splitRatio: 0.5, activePaneIdx: 0, panes: [{ tabId: null }],
   })
@@ -140,6 +157,17 @@ export function App() {
     })
   }, [windowId, chromeHeight, leftPanelOpen, rightPanelOpen, downloadsOpen, videoOpen, videoCandidates.length, tabbarOrientation, workspaceRailOpen])
 
+  // 언어 변경 반영 — 초기값은 쿼리(?lang=)로 이미 맞지만, 부팅 후 설정에서 언어를 바꾸면
+  // i18n:changed 브로드캐스트로 재로드 없이 갱신한다. 마운트 시 한 번 더 조회해 쿼리가 없던
+  // 경로(예: 개발 중 수동 새로고침)에서도 정확한 값을 쓰게 한다.
+  useEffect(() => {
+    void window.browserAPI.i18n.get()
+      .then((p) => setLocale(p.locale as SupportedLocale))
+      .catch(() => { /* 쿼리 초기값 유지 */ })
+    const off = window.browserAPI.i18n.onChanged((p) => setLocale(p.locale as SupportedLocale))
+    return off
+  }, [])
+
   // localStorage 는 첫 paint cache 만. 정본은 main settings.ui.*
   useEffect(() => {
     try { localStorage.setItem(BOOKMARK_BAR_KEY, bookmarkBarShow ? '1' : '0') } catch { /* ignore */ }
@@ -168,6 +196,33 @@ export function App() {
     try { localStorage.setItem(WORKSPACE_RAIL_KEY, workspaceRailOpen ? '1' : '0') } catch { /* ignore */ }
     if (hydratedRef.current) void window.browserAPI.settings.set('ui.workspaceRailOpen', workspaceRailOpen)
   }, [workspaceRailOpen])
+
+  useEffect(() => { panelStateRef.current = { downloads: downloadsOpen, video: videoOpen, left: leftPanelOpen } }, [downloadsOpen, videoOpen, leftPanelOpen])
+  useEffect(() => {
+    void window.browserAPI.settings.all().then((s) => { const ai = (s as { ai?: { agentCollapsePanels?: boolean } }).ai; collapseEnabledRef.current = ai?.agentCollapsePanels !== false }).catch(() => { /* 기본값 유지 */ })
+    const offS = window.browserAPI.settings.onChange((all: unknown) => { const ai = (all as { ai?: { agentCollapsePanels?: boolean } } | null)?.ai; if (ai) collapseEnabledRef.current = ai.agentCollapsePanels !== false })
+    const offA = window.browserAPI.ai.onAgentEvent((e) => {
+      if (e.type === 'start') {
+        if (!collapseEnabledRef.current || collapsedSnapRef.current) return
+        const cur = panelStateRef.current
+        if (!cur.downloads && !cur.video && !cur.left) return
+        collapsedSnapRef.current = { reqId: String(e.reqId ?? ''), ...cur }
+        setDownloadsOpen(false); setVideoOpen(false); setLeftPanelOpen(false)
+      } else if (e.type === 'done' || e.type === 'error' || e.type === 'cancelled') {
+        const snap = collapsedSnapRef.current
+        if (!snap) return
+        // 다른 실행(reqId)의 종료로는 복구하지 않는다(같은 창에서 병행 실행 시 조기 복구 방지 — 리뷰).
+        if (snap.reqId && String(e.reqId ?? '') !== snap.reqId) return
+        collapsedSnapRef.current = null
+        // 실행 중 사용자가 직접 연 패널은 그대로 둔다 — 접힌 채(false)로 남아 있는 것만 원상 복구.
+        const cur = panelStateRef.current
+        if (snap.downloads && !cur.downloads) setDownloadsOpen(true)
+        if (snap.left && !cur.left) setLeftPanelOpen(true)
+        if (snap.video && !cur.video) setVideoOpen(true)
+      }
+    })
+    return () => { try { offS?.() } catch { /* ignore */ } try { offA?.() } catch { /* ignore */ } }
+  }, [])
 
   // 부팅 시 settings.ui 로 정정 + 다른 창 동기
   useEffect(() => {
@@ -306,6 +361,15 @@ export function App() {
     return off
   }, [])
 
+  // F3/Shift+F3/Ctrl+G — 찾기 바가 닫혀 있으면 여는 것으로, 열려 있으면 다음/이전 매치로 이동.
+  useEffect(() => {
+    const off = window.browserAPI.find.onStep(({ forward }) => {
+      if (!findOpen) { setFindInitialText(''); setFindOpen(true); return }
+      setFindStepSignal({ forward, nonce: Date.now() })
+    })
+    return off
+  }, [findOpen])
+
   const activeDownloads = downloads.filter((d) => d.state === 'active' || d.state === 'paused').length
 
   // 팔레트·찾기바·플라이아웃 패널(userChrome)·기록삭제 모달 등 오버레이가 열리면 chrome view 를
@@ -319,6 +383,7 @@ export function App() {
   useChromeOverlay(windowId, tabSearchOpen)
   useChromeOverlay(windowId, recentClosedOpen)
   useChromeOverlay(windowId, siteInfoOpen)
+  useChromeOverlay(windowId, bookmarkBubbleOpen)
   useChromeOverlay(windowId, findOpen)
   useChromeOverlay(windowId, clearDataOpen)
   useChromeOverlay(windowId, panel === 'userchrome')
@@ -391,6 +456,7 @@ export function App() {
         setClearDataOpen(true)
       } else if (e.key === 'Escape') {
         if (clearDataOpen) setClearDataOpen(false)
+        else if (bookmarkBubbleOpen) setBookmarkBubbleOpen(false)
         else if (siteInfoOpen) setSiteInfoOpen(false)
         else if (recentClosedOpen) setRecentClosedOpen(false)
         else if (tabSearchOpen) setTabSearchOpen(false)
@@ -400,7 +466,7 @@ export function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [paletteOpen, tabSearchOpen, recentClosedOpen, siteInfoOpen, panel, clearDataOpen])
+  }, [paletteOpen, tabSearchOpen, recentClosedOpen, siteInfoOpen, panel, clearDataOpen, bookmarkBubbleOpen])
 
   return (
     <div className="app">
@@ -428,6 +494,9 @@ export function App() {
               onToggleRightPanel={() => setRightPanelOpen((v) => !v)}
               onToggleWorkspaceRail={() => setWorkspaceRailOpen((v) => !v)}
               onOpenSiteInfo={(x, y) => { setSiteInfoAnchor({ x, y }); setSiteInfoOpen(true) }}
+              onOpenBookmarkBubble={(x, y, url) => {
+                setBookmarkBubbleAnchor({ x, y }); setBookmarkBubbleUrl(url); setBookmarkBubbleOpen(true)
+              }}
               onOpenAi={() => {
                 setRightPanelOpen(true)
                 setSidePanelRequest((prev) => ({ side: 'right', tab: 'ai', nonce: (prev?.nonce ?? 0) + 1 }))
@@ -442,51 +511,59 @@ export function App() {
             {tabbarOrientation === 'left' && (
               <TabBar windowId={windowId} tabs={tabs} orientation="left" />
             )}
-            <SidePanel
-              side="left"
-              open={leftPanelOpen}
-              width={SIDEPANEL_WIDTH}
-              onClose={() => setLeftPanelOpen(false)}
-              windowId={windowId}
-              active={activeTab}
-              tree={bookmarkTree}
-              requestTab={sidePanelRequest}
-              aiSummarizeNonce={aiSummarizeNonce}
-              aiWriteNonce={aiWriteNonce}
-            />
+            <ErrorBoundary scope="ui.errorBoundary.scope.sidePanel" compact>
+              <SidePanel
+                side="left"
+                open={leftPanelOpen}
+                width={SIDEPANEL_WIDTH}
+                onClose={() => setLeftPanelOpen(false)}
+                windowId={windowId}
+                active={activeTab}
+                tree={bookmarkTree}
+                requestTab={sidePanelRequest}
+                aiSummarizeNonce={aiSummarizeNonce}
+                aiWriteNonce={aiWriteNonce}
+              />
+            </ErrorBoundary>
             <PaneStage windowId={windowId} layout={paneLayout} tabs={tabs} />
-            <SidePanel
-              side="right"
-              open={rightPanelOpen}
-              width={SIDEPANEL_WIDTH}
-              onClose={() => setRightPanelOpen(false)}
-              windowId={windowId}
-              active={activeTab}
-              tree={bookmarkTree}
-              requestTab={sidePanelRequest}
-              aiSummarizeNonce={aiSummarizeNonce}
-              aiWriteNonce={aiWriteNonce}
-            />
+            <ErrorBoundary scope="ui.errorBoundary.scope.sidePanel" compact>
+              <SidePanel
+                side="right"
+                open={rightPanelOpen}
+                width={SIDEPANEL_WIDTH}
+                onClose={() => setRightPanelOpen(false)}
+                windowId={windowId}
+                active={activeTab}
+                tree={bookmarkTree}
+                requestTab={sidePanelRequest}
+                aiSummarizeNonce={aiSummarizeNonce}
+                aiWriteNonce={aiWriteNonce}
+              />
+            </ErrorBoundary>
             {tabbarOrientation === 'right' && (
               <TabBar windowId={windowId} tabs={tabs} orientation="right" />
             )}
-            <VideoCandidatePanel
-              open={videoOpen && videoCandidates.length > 0}
-              candidates={videoCandidates}
-              width={VIDEO_PANEL_WIDTH}
-              onClose={() => setVideoOpen(false)}
-            />
-            <DownloadsPanel
-              open={downloadsOpen}
-              width={DOWNLOADS_PANEL_WIDTH}
-              onClose={() => setDownloadsOpen(false)}
-            />
+            <ErrorBoundary scope="ui.errorBoundary.scope.videoPanel" compact>
+              <VideoCandidatePanel
+                open={videoOpen && videoCandidates.length > 0}
+                candidates={videoCandidates}
+                width={VIDEO_PANEL_WIDTH}
+                onClose={() => setVideoOpen(false)}
+              />
+            </ErrorBoundary>
+            <ErrorBoundary scope="ui.errorBoundary.scope.downloadPanel" compact>
+              <DownloadsPanel
+                open={downloadsOpen}
+                width={DOWNLOADS_PANEL_WIDTH}
+                onClose={() => setDownloadsOpen(false)}
+              />
+            </ErrorBoundary>
           </div>
           {activeDownloads > 0 && !downloadsOpen && (
             <button
               className="dl-badge"
               onClick={() => setDownloadsOpen(true)}
-              title={`다운로드 ${activeDownloads}개 진행 중`}
+              title={t('ui.app.downloadsBadge', '다운로드 {count}개 진행 중', { count: activeDownloads })}
             >
               ⬇ {activeDownloads}
             </button>
@@ -495,6 +572,7 @@ export function App() {
             open={findOpen}
             initialText={findInitialText}
             tabId={activeTab?.id}
+            stepSignal={findStepSignal}
             onClose={() => setFindOpen(false)}
           />
           <UserChromePanel open={panel === 'userchrome'} onClose={() => setPanel('none')} />
@@ -528,11 +606,19 @@ export function App() {
             anchor={siteInfoAnchor}
             onClose={() => setSiteInfoOpen(false)}
           />
+          <BookmarkBubble
+            windowId={windowId}
+            open={bookmarkBubbleOpen}
+            url={bookmarkBubbleUrl}
+            anchor={bookmarkBubbleAnchor}
+            onClose={() => setBookmarkBubbleOpen(false)}
+          />
         </>
       )}
       <Toast windowId={windowId} />
       <QrModal windowId={windowId} />
       <PasswordSavePrompt windowId={windowId} />
+      <PermissionPrompt windowId={windowId} />
       <UpdateBanner windowId={windowId} />
     </div>
   )

@@ -1,0 +1,208 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260919T121840Z-b597cd",
+  "recorded_at": "2026-09-19T13:32:04Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260919T121840Z-b597cd",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260919T121840Z-b597cd)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 9건, 선언된 잔여 작업 없음) / 남은 작업: 없음; 전체 요청 완료: 예",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "e1b1c643-258d-44a0-946f-15454332f5d1",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "확인 단계 초안을 카드 버튼→확정 클릭으로 올리면 이미지·캡션을 다시 만들지 않고 그대로 1건이 게시된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "이미 \"초안까지 준비\"로 끝난 작업도 같은 방식으로 올릴 수 있고, 그때까지의 기록이 보존된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "확정 화면을 열거나 취소하는 것만으로는 아무것도 게시되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "계정이 없으면 화면·IPC 양쪽에서 거부하고 초안(캡션·이미지)을 잃지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "확정 버튼 연타·같은 확인 재전송으로도 게시가 1건을 넘지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "확인 뒤 캡션·계정이 바뀌면 옛 확인으로 게시되지 않고, 무엇이 바뀌었는지 알려 준다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "확정 전에 앱이 강제 종료되면 승인이 디스크에 남지 않아 재시작해도 아무것도 나가지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "게시가 나간 뒤 강제 종료되면 \"올라갔는지 모른다\"로 남고 중복 게시하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "게시 중이거나 게시 여부가 불확실한 동안에는 버튼이 보이지 않고 IPC 직접 호출도 거부된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "보관 이미지가 사라졌거나 내용이 바뀌었으면 거부하고 초안은 남는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "손으로 한 건 확정한 것이 자동 게시 선승인으로 번지지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "게시가 시작조차 못 하면 초안이 원래 상태로 되돌아가고 이유가 화면에 남는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c13",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "승격 사실이 재시작을 넘겨 유지돼, 실제 게시가 \"초안\" 영수증으로 잘못 기록되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c14",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "확인 화면이 실제로 올라갈 내용(목적지·계정·이미지 지문·캡션·해시태그)을 한국어와 영어로 함께 보여 준다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c15",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "기존 기능에 회귀 없이 마감 게이트가 통과한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": true,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [
+        "실제 구독 모델로 승격 e2e 1회(이번은 결정론 확보를 위해 가짜 LLM 각본)",
+        "확인 화면에 이미지 미리보기 썸네일 추가(현재는 형식·크기·sha256 앞 12자)",
+        "승격 실패가 탭 이동 실패로 끝난 확인 단계 초안의 단계 처리 재검토(현재 기존 게시 경로와 동일)"
+      ],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 예"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260919T121840Z-b597cd"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 4403.9,
+        "context_chars": 12069,
+        "total_tokens": 2382915,
+        "cache_read_tokens": 182314198
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9418,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 564,
+          "output": 272911,
+          "cache_read": 136447294,
+          "cache_creation": 1063828
+        },
+        "claude-sonnet-5": {
+          "input": 230,
+          "output": 149825,
+          "cache_read": 45866904,
+          "cache_creation": 886117
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\draft-promotion-20260919\\run-20260919T121840Z-b597cd-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\draft-promotion-20260919\\run-20260919T121840Z-b597cd-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "초안 승격 기능을 rc.14로 마감했습니다.\n\n## 만든 것\n\n`초안까지만`으로 만들어 둔 이미지 게시 작업을 **이미지·캡션을 다시 만들지 않고** 한 번의 명시적 확인으로 게시합니다. 확인 단계 초안과 \"초안까지 준비\"로 끝난 작업 둘 다 지원합니다.\n\n카드의 `📤 이 초안을 게시하기 / Publish this draft` → 확정 화면(목적지·계정·이미지 sha256·캡션 전문·해시태그, ko/en 병기) → `게시 확정` 한 곳에서만 게시가 시작됩니다.\n\n**핵심 설계 결정 두 가지**\n- `params.mode`를 뒤집지 않았습니다. 뒤집으면 그 작업이 **자동 게시 선승인 대상으로 들어옵니다** — 손으로 한 건 확정한 것이 \"앞으로 자동으로 나가도 좋다\"로 번지면 안 됩니다. 대신 `promotedAt`을 따로 적고 `effectivePublishMode`로 판정합니다.\n- 확인은 1회용이고 **그 순간의 사실**(플랫폼·계정·산출물·해시·캡션·태그)에 묶입니다. 티켓은 메모리 전용이라 재시작을 넘지 않습니다.\n\n## 검증\n\n- **`npm run verify` 17/17 · 59초** (스모크 16/16)\n- **순수 게이트 80종** — 거부 20경로마다 \"거부 + 초안 보존\"을 함께 확인. 음성 대조 3회로 검출력 확인(바인딩 무력화 시 **바뀐 캡션으로 실제 게시가 나가는 것**을 잡았습니다)\n- **e2e 35종** — 실제 앱·실제 UI 클릭, 로컬 HTTPS 픽스처에 **실제 게시 1건 도착**(sha256 일치), 취소 0건과의 대조가 같은 실행 안에서 성립, 강제 종료 2회 포함. 외부 접속 0줄, 격리 프로필만 사용\n\n산출물: `dist\\ezBrowser-0.2.0-rc.14-win-x64.exe` · 121,932,992 B · sha256 `ddc43a2b8b37cc92bd92a1b6f939ed9217b12d7b9acd3187f089d6f7411116ca` · `--publish never`(GitHub 최신 릴리스는 여전히 `0.1.0`).\n\n## 정직하게 알려 드릴 것\n\n**제 진단이 한 번 틀렸습니다.** 진단 도중 \"파일 첨부가 `change` 이벤트를 쏘지 않는 제품 결함\"이라 판단해 코드를 넣었는데, 음성 대조 결과 **그 코드를 빼도 게시가 정상 도착**했습니다. 되돌렸고 보고서 5.6에 남겼습니다. e2e 실패의 진짜 원인은 전부 하네스 쪽이었습니다(각본이 산출물 id를 하드코딩 — 앱은 작업 격리 경계에 따라 새 id를 부여하고 **정확히 거부**하고 있었습니다).\n\n**하네스 작업자가 결과를 내지 못하고 두 번 종료**했고, 첫 실행은 낡은 패키지를 쟀습니다. 제가 소유를 넘겨받아 직접 진단·수정했습니다.\n\n**`orchestrator.py`가 이 설치본에 없어** 정책이 지시하는 `board update`/`note`/`complete record` CLI를 쓸 수 없었습니다. 우회하지 않고 같은 스키마로만 동작하는 최소 도구를 두고 구조화 완료 기록은 `.auto-dev/completions/`에 직접 썼습니다(합격 기준 15건 · 부정 사례 9건 · pass).\n\n**이번 범위와 분리된 이월 제한** — 코드 서명 인증서 없음(미서명), rc.14 설치파일의 설치→제거 검증은 이 PC에 실설치본이 가동 중이라 `verify-install`이 스스로 BLOCKED(우회하지 않았습니다), 실제 인스타그램·유튜브·틱톡 미검증(모든 게시 검증은 로컬 픽스처), e2e는 결정론 확보를 위해 가짜 LLM 각본입니다.\n\n보고서 `.auto-dev/draft-promotion-20260919-final.md`, `docs/QUICKSTART.md` 사용자 안내 절, 보드 6장 갱신 완료.",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260919T121840Z-b597cd\\stream.jsonl",
+    "error": null
+  }
+}

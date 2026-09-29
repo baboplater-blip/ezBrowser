@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { IPC } from '../../../shared/ipc-channels'
+import { isTrustedSender } from '../../ipc/trust'
 
 interface QRCodeLib {
   toDataURL: (text: string, opts?: Record<string, unknown>) => Promise<string>
@@ -15,7 +16,8 @@ function getQRCode(): QRCodeLib {
 }
 
 export function initQrcode(): void {
-  ipcMain.handle(IPC.qrcode.generate, async (_e, args: { text: string; size?: number }) => {
+  ipcMain.handle(IPC.qrcode.generate, async (e, args: { text: string; size?: number }) => {
+    if (!isTrustedSender(e)) return null
     const text = (args.text ?? '').trim()
     if (!text) return null
     const size = Math.max(128, Math.min(1024, args.size ?? 256))

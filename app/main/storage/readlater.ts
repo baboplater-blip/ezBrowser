@@ -1,4 +1,4 @@
-import Store from 'electron-store'
+import { createStore } from './safe-store'
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import type { ReadLaterItem } from '../../shared/types'
@@ -6,7 +6,7 @@ import type { ReadLaterItem } from '../../shared/types'
 // 읽기 목록(나중에 보기) — 페이지를 저장해두고 탭을 비운 뒤 나중에 다시 방문.
 export const readlaterEvents = new EventEmitter()
 
-const store = new Store<{ items: ReadLaterItem[] }>({ name: 'readlater', defaults: { items: [] } })
+const store = createStore<{ items: ReadLaterItem[] }>({ name: 'readlater', defaults: { items: [] } })
 const MAX_ITEMS = 500
 
 function getItems(): ReadLaterItem[] {

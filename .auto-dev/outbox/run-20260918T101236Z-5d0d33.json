@@ -1,0 +1,79 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T101236Z-5d0d33",
+  "recorded_at": "2026-09-18T11:12:36Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T101236Z-5d0d33",
+    "project_id": "browser-build-36466a626d",
+    "status": "interrupted",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "stream-json 에 result 이벤트가 없음 — 완료 여부 미확정",
+    "exit_code": 1,
+    "timed_out": true,
+    "session_id": "eaf75661-a91e-4140-a270-e1dc6520b484",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "none",
+    "criteria": [],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": false,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T101236Z-5d0d33"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 3600.2,
+        "context_chars": 11651,
+        "total_tokens": null,
+        "cache_read_tokens": null
+      }
+    },
+    "usage": {
+      "measured": false,
+      "by_model": {},
+      "note": "CLI result 이벤트에 modelUsage 없음 — 미계측(0 이 아니다)"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\saved-login-20260918\\run-20260918T101236Z-5d0d33-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\saved-login-20260918\\run-20260918T101236Z-5d0d33-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": null,
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T101236Z-5d0d33\\stream.jsonl",
+    "error": null
+  }
+}

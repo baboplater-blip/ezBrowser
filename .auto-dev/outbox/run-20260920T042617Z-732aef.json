@@ -1,0 +1,98 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260920T042617Z-732aef",
+  "recorded_at": "2026-09-20T04:47:39Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260920T042617Z-732aef",
+    "project_id": "browser-build-36466a626d",
+    "status": "unclear",
+    "verdict": null,
+    "verdict_attributed": false,
+    "verdict_reason": "verification.md 에 VERDICT 표기 없음 — 판정 근거 부재 (구조화 완료 기록 없음 — 레거시 산문 경로)",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "00a8ff68-fbbf-493d-b057-a352dbb98410",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": "정체성 배선을 마치고 작업자 결과를 기다리는 중입니다.",
+    "evidence_source": "none",
+    "criteria": [],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": "정체성 배선을 마치고 작업자 결과를 기다리는 중입니다.",
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": false,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [],
+      "optional_next": [],
+      "korean_line": "남은 작업: 없음; 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260920T042617Z-732aef"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 1282.1,
+        "context_chars": 11955,
+        "total_tokens": 1509294,
+        "cache_read_tokens": 60074381
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9411,
+          "output": 31,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 102,
+          "output": 51563,
+          "cache_read": 16991724,
+          "cache_creation": 363842
+        },
+        "claude-sonnet-5": {
+          "input": 220,
+          "output": 149936,
+          "cache_read": 43082657,
+          "cache_creation": 934189
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\task-tab-recovery-20260920\\run-20260920T042617Z-732aef-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\task-tab-recovery-20260920\\run-20260920T042617Z-732aef-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "정체성 배선을 마치고 작업자 결과를 기다리는 중입니다.\n\n**지금까지 확정·완료된 것**\n\n- **원인 확정**: 복원은 창·탭 id(`win-N`/`tab-N`)를 프로세스마다 1부터 다시 발급하는데, 내구 작업은 `checkpoint.windowId` + URL 호스트로 대상을 되찾는다(`task-runtime.ts:781`). 그래서 재시작 뒤 ⓐ 막다른 길이 되거나 ⓑ **같은 사이트의 엉뚱한 탭**(다른 창의 탭)을 집을 수 있습니다.\n- **복원 안정키 배선(제가 직접)**: `TabRecord.restoreKey` · `BrowserWindowContext.restoreKey` 를 세션 스냅샷에 저장하고 복원 시 **그대로 물려주도록** `tab-service` · `window-service` · `session/index` · `snapshot-schema` 를 고쳤습니다. 조회는 `findTabByRestoreKey` / `findWindowByRestoreKey` — 못 찾으면 **비슷한 탭을 대신 찾아 주지 않습니다**. 옛 스냅샷(키 없음)도 그대로 복원됩니다. main typecheck 0건.\n- **합격 기준을 착수 전에 고정**해 `.auto-dev/verification.md` 에 박았습니다(W1~W10 + T9 강화). 판정은 **로컬 픽스처에 실제로 도착한 동작**으로 하고, 하네스가 사라진 탭을 스스로 열어 복원을 꾸미는 것을 금지했습니다.\n- **재현용 수정 전 빌드**(rc.16)를 `dist/win-unpacked-before` 로 보존했습니다 — 지난 라운드에 제가 재빌드로 재현을 망친 실수를 되풀이하지 않기 위해서입니다.\n- 칸반 카드 `task-tab-recovery-20260920` 진행 중으로 생성.\n\n**돌고 있는 작업자 2명** — ① 재바인딩·대상 선택 IPC·사이드바 UI ② 검증 하네스(먼저 **수정 전 빌드로 재현**).\n\n**범위 밖에서 발견한 것 하나** — `social-workflow.ts` 의 게시 탭 준비(`preparePublishTab`)도 **옛 탭 id 를 그대로 재사용**합니다. 재시작 뒤 그 id 는 무관한 복원 탭을 가리킬 수 있고, 그러면 그 탭을 게시 사이트로 이동시킵니다. 이번 지시가 정한 파일 범위 밖이라 조용히 고치지 않고, 라운드 끝에 재현 여부와 함께 보고하겠습니다.",
+    "summary_truncated": false,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260920T042617Z-732aef\\stream.jsonl",
+    "error": null
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T053054Z-3c840e",
+  "recorded_at": "2026-09-18T06:05:10Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T053054Z-3c840e",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T053054Z-3c840e)의 구조화 완료 기록: pass (합격 기준 7건 전건 통과, 부정 사례 3건, 선언된 잔여 작업 없음) / 남은 작업: (차단) 코드 서명 인증서가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 .pfx 를 제공하면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신을 확인하지 않았다 — 이 개발 PC 에서만 검증했고 했다고 쓰지 않는다(다른 기기 필요); 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "7579a9b2-90bd-4af6-85e8-0ad10bba832f",
+    "model": {
+      "requested": "opus",
+      "resolved": "claude-opus-5",
+      "verified": true
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 열 수 있는 Windows 설치파일과 실행 폴더가 정확한 경로·버전·시각·해시와 함께 존재한다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "설치본으로 첫 실행부터 일상 탐색·재시작 복원까지 이어진다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "검증이 사용자의 실제 프로필과 실행 중인 앱을 건드리지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "AI 를 처음 눌렀을 때 실제로 쓸 수 있는 데까지 간다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "연결이 안 될 때 가짜 성공 대신 원인과 해결책을 보여준다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "밖에서 설정이 바뀌어도 AI 패널이 옛 상태에 머물지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "변경 관련 회귀가 없고 최종 통합 검증을 1회 통과한다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [],
+      "blockers": [
+        "코드 서명 인증서가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 .pfx 를 제공하면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가)",
+        "깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신을 확인하지 않았다 — 이 개발 PC 에서만 검증했고 했다고 쓰지 않는다(다른 기기 필요)"
+      ],
+      "optional_next": [
+        "browser://settings 의 AI 섹션에도 제공자 탐지 목록 노출(현재는 AI 패널·온보딩에만 있고 설정에는 상태 점검 버튼이 있음)",
+        "실제 웹 호환성 관찰 — Chromium 148 에서 실사이트가 어떻게 뜨는지는 로컬 픽스처 하네스가 재지 못한다",
+        "npm run verify:full(32단계·약 10분·화면 점유)은 사용자가 자리를 비울 때 1회 — 이번엔 변경 관련 범위만 targeted 로 돌렸다"
+      ],
+      "korean_line": "남은 작업: (차단) 코드 서명 인증서가 없어 미서명 빌드다 — SmartScreen 경고가 뜬다. 사용자가 .pfx 를 제공하면 CSC_LINK/CSC_KEY_PASSWORD 로 즉시 서명 빌드 가능(자율 해결 불가), (차단) 깨끗한 외부 Windows PC 에서의 설치·실행·자동업데이트 수신을 확인하지 않았다 — 이 개발 PC 에서만 검증했고 했다고 쓰지 않는다(다른 기기 필요); 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T053054Z-3c840e"
+      ],
+      "decision": {
+        "should_roll": false,
+        "code": "no-handoff",
+        "reason": "안전한 체크포인트 인계 문서가 없다 — 실행을 끊고 갈아타지 않는다",
+        "triggers": [],
+        "measured": {
+          "elapsed_seconds": 2055.1,
+          "context_chars": 11318,
+          "total_tokens": 540430,
+          "cache_read_tokens": 42533846
+        },
+        "thresholds": {
+          "elapsed_seconds": null,
+          "context_chars": null,
+          "total_tokens": null,
+          "cache_read_tokens": null,
+          "max_rollovers": 2,
+          "force": false
+        },
+        "handoff_id": null,
+        "rollover_index": null
+      },
+      "measured": {
+        "elapsed_seconds": 2055.1,
+        "context_chars": 11318,
+        "total_tokens": 540430,
+        "cache_read_tokens": 42533846
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 10278,
+          "output": 20,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 238,
+          "output": 96255,
+          "cache_read": 42533846,
+          "cache_creation": 433639
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\usable-windows-20260918\\run-20260918T053054Z-3c840e-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\usable-windows-20260918\\run-20260918T053054Z-3c840e-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "완료했습니다. 최종 보고입니다.\n\n## 무엇이 문제였나 — 먼저 재고 고쳤습니다\n\n기존 하네스 32종은 전부 \"기능이 규격대로 도는가\"를 봅니다. 그런데 제품이 쓸 만한지는 **설명 없이 연결되는가**로 갈립니다. 그래서 첫 설치 사용자의 여정을 그대로 따라가는 진단(`build/audit-firstrun-cdp.mjs`)을 만들어 돌렸습니다.\n\n**탐색은 이미 좋았습니다** — 첫 실행에 온보딩이 뜨고, 새 탭은 날씨·뉴스가 실제로 채워지고, 부팅 로그는 깨끗했습니다.\n\n**AI에서 끊겼습니다.** 기본 제공자가 `anthropic`(API 키 필요)이라 ✨를 처음 누르면 **\"🔑 API 키가 필요합니다\"** 하나만 떴습니다. 정작 같은 PC에 **claude·codex·gemini CLI가 전부 설치돼 있고 Ollama에 모델 11개**가 있었습니다 — **쓸 수 있는 길이 넷인데 제품이 하나도 말해주지 않았습니다.** 온보딩 5단계 어디에도 AI가 없었고요.\n\n## 고친 것\n\n| 전 | 후 |\n|---|---|\n| ✨ 누르면 \"API 키가 필요합니다\" 막다른 안내 | 이 PC에서 **쓸 수 있는 방법 4개**를 찾아 보여주고, 하나 누르면 연결까지 확인 |\n| 비용 안내 없음 | `구독 계정 · 추가 요금 없음` / `내 컴퓨터 · 무료` / `무료 티어` / `사용한 만큼 과금` — **이미 내는 구독이 맨 위** |\n| 온보딩 5단계, AI 없음 | 6단계, **AI 연결 단계 신설**(건너뛰기 가능) |\n| 설정·다른 창에서 연결해도 사이드바는 옛 상태 | `settings.onChange` 구독 — **제품 결함이었고 검증이 잡았습니다** |\n\n탐지는 **요금이 드는 호출을 하지 않습니다**(CLI `--version` · 로컬 `/api/tags` · 키 유무만). 실제 모델 호출은 사용자가 '연결'을 누른 뒤 확인용 한 번뿐입니다.\n\n## 검증 (전부 이번 빌드 실측)\n\n- **verify-ai-connect 신설 → `npm run verify`에 상설 등록** (모델 미호출·8초): 탐지 7종 판정을 **하네스가 같은 사실을 따로 재서 대조**(4종 일치), 막다른 문구 회귀 검사, 알 수 없는 제공자 거부\n- **실제 구독 CLI 왕복 1건**(`--live`): 화면 카드를 **실제로 눌러** Claude Code 연결 → **6.2초 응답** → 대화 화면 전환. **12/12 PASS**\n- **verify-install 확장 → 최종 설치파일로 9/9**: 무인설치 → 설치본 부팅 → 한국어 검색(`날씨`) → 탭 4개 → 뒤로/앞으로 → 북마크 저장 → **껐다 켜니 탭 복원** → 제거 잔재 0\n- **부정 사례**: 사용자 실프로필 **47→47 무변경**, 알 수 없는 제공자 거부(설정 불변), 밖에서 끄면 패널이 따라옴\n- `npm run verify` **9/9 · 42초** · ai-errors 8/8 · settings-welcome 10/10\n\n## 산출물 (`--publish never`, **외부에 올리지 않았습니다**)\n\n| 무엇 | 값 |\n|---|---|\n| 설치파일 | `dist\\ezBrowser-0.1.0-win-x64.exe` · 116.2MB · 2026-09-18 14:53:34 |\n| SHA256 | `5c57081c6dd2f4bfefe7f25a55da7baa92d3779b7e9805b8a1e338b44266689e` |\n| 버전 | 0.1.0 (Electron 42.11.3 · Chromium 148) · **미서명** |\n\n위 설치파일이 install 하네스 9/9를 통과한 바로 그 파일입니다(해시 동일). 사용법은 `docs/QUICKSTART.md`.\n\n## 남은 출시 차단 2건 — 둘 다 이 저장소 안에서 못 풉니다\n\n1. **코드 서명 인증서** — 미서명이라 SmartScreen 경고가 뜹니다. `.pfx`를 주시면 `CSC_LINK`/`CSC_KEY_PASSWORD`로 바로 서명 빌드됩니다.\n2. **깨끗한 외부 Windows PC 검증",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T053054Z-3c840e\\stream.jsonl",
+    "error": null
+  }
+}

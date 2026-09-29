@@ -1,9 +1,11 @@
 import { app, shell, BrowserWindow } from 'electron'
+import { tMain } from '../i18n'
 import { registerAction } from './registry'
+import { IPC } from '../../shared/ipc-channels'
 import {
   activateTab, closeTab, createTab, duplicateTab, focusNextPane, listTabs, pinTab,
   restoreLastClosed, splitWindow, tabBack, tabForward, tabReload, tabStop, unsplitWindow,
-  getTab, getWebContentsByTabId, moveTabToWorkspace, setTabMuted,
+  getTab, getWebContentsByTabId, moveTabToWorkspace, setTabMuted, navigateTab,
 } from '../tabs/tab-service'
 import { clearSiteData } from '../features/sitedata'
 import { createBrowserWindow, getAllWindows, getWindow } from '../windows/window-service'
@@ -11,7 +13,7 @@ import { NEW_TAB_URL } from '../../shared/constants'
 import { reloadUserChrome, openUserChromeInEditor } from '../features/userchrome'
 import { captureViewport } from '../features/screenshot'
 import {
-  addBookmark, isBookmarked, removeBookmarkByUrl,
+  addBookmark, isBookmarked,
 } from '../storage/bookmarks'
 import {
   addReadLater, isReadLaterSaved, removeReadLaterByUrl,
@@ -25,9 +27,9 @@ import { checkForUpdates as checkForUpdatesNow } from '../features/auto-update'
 import { toggleReader } from '../features/reader'
 import { togglePageTranslate } from '../features/translate'
 import {
-  createWorkspace, getActiveWorkspaceId, listWorkspaces, nextWorkspaceId, setActiveWorkspace,
+  createWorkspace, getActiveWorkspace, getActiveWorkspaceId, listWorkspaces, nextWorkspaceId, setActiveWorkspace,
 } from '../features/workspace'
-import { printTab, printTabToPdf, adjustZoom } from '../features/page-tools'
+import { printTab, printTabToPdf, adjustZoom, savePageAs } from '../features/page-tools'
 import { autofillPage } from '../features/ai/page-actions'
 import { getProfile, hasProfileData } from '../features/ai/profile'
 
@@ -48,10 +50,10 @@ export function registerDefaultActions(): void {
     run: ({ windowId, tabId }) => {
       const id = tabId ?? activeTabIdOf(windowId)
       const wc = id ? getWebContentsByTabId(id) : null
-      if (!wc || !/^https?:/i.test(wc.getURL())) { broadcastToast(windowId, '웹 페이지에서만 사용할 수 있습니다'); return }
-      if (!hasProfileData()) { broadcastToast(windowId, '내 정보가 비어 있습니다 — 설정 > AI 에서 입력하세요'); return }
+      if (!wc || !/^https?:/i.test(wc.getURL())) { broadcastToast(windowId, tMain('main.toast.webOnly', '웹 페이지에서만 사용할 수 있습니다')); return }
+      if (!hasProfileData()) { broadcastToast(windowId, tMain('main.toast.profileEmpty', '내 정보가 비어 있습니다 — 설정 > AI 에서 입력하세요')); return }
       void autofillPage(wc, getProfile()).then((r) => {
-        broadcastToast(windowId, r.count > 0 ? `자동 채우기: ${r.count}개 필드 ✍️` : '채울 폼 필드를 못 찾았습니다')
+        broadcastToast(windowId, r.count > 0 ? tMain('main.toast.autofillDone', `자동 채우기: ${r.count}개 필드 ✍️`, { count: r.count }) : tMain('main.toast.autofillNone', '채울 폼 필드를 못 찾았습니다'))
       })
     },
   })
@@ -140,11 +142,59 @@ export function registerDefaultActions(): void {
   })
 
   registerAction({
+    id: 'action.nav.home', category: 'nav', labelKey: 'action.nav.home',
+    defaultKey: 'Alt+Home', when: 'global',
+    run: ({ windowId, tabId }) => {
+      const id = tabId ?? activeTabIdOf(windowId)
+      if (!id) return
+      const home = getActiveWorkspace()?.homeUrl || NEW_TAB_URL
+      navigateTab(id, home)
+    },
+  })
+
+  registerAction({
     id: 'action.page.reload', category: 'nav', labelKey: 'action.page.reload',
     defaultKey: 'Ctrl+R', when: 'global',
     run: ({ windowId, tabId }) => {
       const id = tabId ?? activeTabIdOf(windowId)
       if (id) tabReload(id)
+    },
+  })
+
+  registerAction({
+    id: 'action.page.reloadHard', category: 'nav', labelKey: 'action.page.reloadHard',
+    defaultKey: 'Ctrl+Shift+R', when: 'global',
+    run: ({ windowId, tabId }) => {
+      const id = tabId ?? activeTabIdOf(windowId)
+      if (!id) return
+      const wc = getWebContentsByTabId(id)
+      wc?.reloadIgnoringCache()
+    },
+  })
+
+  registerAction({
+    id: 'action.page.viewSource', category: 'tools', labelKey: 'action.page.viewSource',
+    defaultKey: 'Ctrl+U', when: 'global',
+    run: ({ windowId, tabId }) => {
+      if (!windowId) return
+      const id = tabId ?? activeTabIdOf(windowId)
+      const t = id ? getTab(id) : null
+      const url = t?.url
+      if (!url || !/^https?:|^file:/i.test(url)) return
+      createTab({ windowId, url: `view-source:${url}` })
+    },
+  })
+
+  registerAction({
+    id: 'action.page.save', category: 'tools', labelKey: 'action.page.save',
+    defaultKey: 'Ctrl+S', when: 'global',
+    run: ({ windowId, tabId }) => {
+      const id = tabId ?? activeTabIdOf(windowId)
+      if (!id) return
+      void savePageAs(id).then((r) => {
+        if (r.ok) broadcastToast(windowId, tMain('main.toast.pageSaveOk', '페이지 저장 완료 💾'))
+        else if (r.error !== 'canceled') broadcastToast(windowId, tMain('main.toast.pageSaveFail', '페이지 저장 실패'))
+      })
     },
   })
 
@@ -192,10 +242,10 @@ export function registerDefaultActions(): void {
       if (!tab?.url || !/^https?:/i.test(tab.url)) return
       if (isReadLaterSaved(tab.url)) {
         removeReadLaterByUrl(tab.url)
-        broadcastToast(windowId, '읽기 목록에서 제거됨')
+        broadcastToast(windowId, tMain('main.toast.readLaterRemoved', '읽기 목록에서 제거됨'))
       } else {
         addReadLater({ url: tab.url, title: tab.title, favicon: tab.favicon })
-        broadcastToast(windowId, '읽기 목록에 추가됨 📚')
+        broadcastToast(windowId, tMain('main.toast.readLaterAdded', '읽기 목록에 추가됨 📚'))
       }
     },
   })
@@ -228,6 +278,24 @@ export function registerDefaultActions(): void {
   })
 
   registerAction({
+    id: 'action.find.next', category: 'tools', labelKey: 'action.find.next',
+    defaultKey: 'F3', when: 'global',
+    run: ({ windowId }) => {
+      const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
+      ctx?.chrome.webContents.send(IPC.find.step, { forward: true })
+    },
+  })
+
+  registerAction({
+    id: 'action.find.prev', category: 'tools', labelKey: 'action.find.prev',
+    defaultKey: 'Shift+F3', when: 'global',
+    run: ({ windowId }) => {
+      const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
+      ctx?.chrome.webContents.send(IPC.find.step, { forward: false })
+    },
+  })
+
+  registerAction({
     id: 'action.history.clear', category: 'tools', labelKey: 'action.history.clear',
     defaultKey: 'Ctrl+Shift+Delete', when: 'global',
     run: ({ windowId }) => {
@@ -252,8 +320,8 @@ export function registerDefaultActions(): void {
       const id = tabId ?? activeTabIdOf(windowId)
       if (!id) return
       void printTabToPdf(id).then((r) => {
-        if (r.ok) broadcastToast(windowId, 'PDF 저장 완료 📄')
-        else if (r.error !== 'canceled') broadcastToast(windowId, 'PDF 저장 실패')
+        if (r.ok) broadcastToast(windowId, tMain('main.toast.pdfSaveOk', 'PDF 저장 완료 📄'))
+        else if (r.error !== 'canceled') broadcastToast(windowId, tMain('main.toast.pdfSaveFail', 'PDF 저장 실패'))
       })
     },
   })
@@ -359,18 +427,20 @@ export function registerDefaultActions(): void {
   registerAction({
     id: 'action.bookmark.add', category: 'bookmark', labelKey: 'action.bookmark.add',
     defaultKey: 'Ctrl+D', when: 'global',
+    // 예전엔 이미 북마크된 페이지에서 Ctrl+D 를 누르면 확인 없이 바로 삭제됐다(오삭제 위험) —
+    // 크롬처럼 "추가(없으면) + 항상 편집 말풍선 열기" 로 바꾸고, 실제 삭제는 말풍선의 삭제
+    // 버튼으로만 하도록 이동했다.
     run: ({ windowId, tabId }) => {
       const id = tabId ?? activeTabIdOf(windowId)
       if (!id) return
       const t = getTab(id)
       if (!t || !t.url || /^browser:|^chrome:|^about:/i.test(t.url)) return
-      if (isBookmarked(t.url)) {
-        removeBookmarkByUrl(t.url)
-        broadcastToast(windowId, '북마크에서 제거됨')
-      } else {
+      if (!isBookmarked(t.url)) {
         addBookmark({ url: t.url, title: t.title || t.url })
-        broadcastToast(windowId, '북마크에 추가됨 ★')
+        broadcastToast(windowId, tMain('main.toast.bookmarkAdded', '북마크에 추가됨 ★'))
       }
+      const ctx = windowId ? getWindow(windowId) : getAllWindows()[0]
+      ctx?.chrome.webContents.send(IPC.bookmarks.bubbleOpen, { tabId: id })
     },
   })
 
@@ -455,7 +525,7 @@ export function registerDefaultActions(): void {
       const wc = id ? getWebContentsByTabId(id) : null
       if (!wc) return
       void toggleReader(wc).then((on) => {
-        broadcastToast(windowId, on ? '리더 모드 📖' : '원본 보기')
+        broadcastToast(windowId, on ? tMain('main.toast.readerOn', '리더 모드 📖') : tMain('main.toast.readerOff', '원본 보기'))
       })
     },
   })
@@ -467,13 +537,13 @@ export function registerDefaultActions(): void {
       const id = tabId ?? activeTabIdOf(windowId)
       const wc = id ? getWebContentsByTabId(id) : null
       if (!wc) return
-      broadcastToast(windowId, '번역 중… ⏳')
+      broadcastToast(windowId, tMain('main.toast.translating', '번역 중… ⏳'))
       void togglePageTranslate(wc).then((r) => {
-        if (r.restored) broadcastToast(windowId, '원본 복원')
-        else if (r.started) broadcastToast(windowId, '번역 완료 🌐')
+        if (r.restored) broadcastToast(windowId, tMain('main.toast.translateRestored', '원본 복원'))
+        else if (r.started) broadcastToast(windowId, tMain('main.toast.translateDone', '번역 완료 🌐'))
       }).catch((err) => {
         console.warn('[translate] failed', err)
-        broadcastToast(windowId, '번역 실패')
+        broadcastToast(windowId, tMain('main.toast.translateFail', '번역 실패'))
       })
     },
   })
@@ -573,11 +643,11 @@ export function registerDefaultActions(): void {
     when: 'global',
     run: ({ windowId }) => {
       void checkForUpdatesNow(false).then((s) => {
-        if (s.state === 'available') broadcastToast(windowId, `새 버전 ${s.available} 발견`)
-        else if (s.state === 'not-available') broadcastToast(windowId, '최신 버전입니다 ✓')
-        else if (s.state === 'downloaded') broadcastToast(windowId, '업데이트 준비 완료 — 재시작 시 적용')
-        else if (s.state === 'disabled') broadcastToast(windowId, s.error ?? '자동 업데이트 비활성')
-        else if (s.state === 'error') broadcastToast(windowId, `업데이트 확인 실패: ${s.error}`)
+        if (s.state === 'available') broadcastToast(windowId, tMain('main.toast.updateAvailable', `새 버전 ${s.available} 발견`, { version: String(s.available) }))
+        else if (s.state === 'not-available') broadcastToast(windowId, tMain('main.toast.updateLatest', '최신 버전입니다 ✓'))
+        else if (s.state === 'downloaded') broadcastToast(windowId, tMain('main.toast.updateReady', '업데이트 준비 완료 — 재시작 시 적용'))
+        else if (s.state === 'disabled') broadcastToast(windowId, s.error ?? tMain('main.toast.updateDisabled', '자동 업데이트 비활성'))
+        else if (s.state === 'error') broadcastToast(windowId, tMain('main.toast.updateCheckFail', `업데이트 확인 실패: ${s.error}`, { error: String(s.error) }))
       })
     },
   })
@@ -590,18 +660,18 @@ export function registerDefaultActions(): void {
       const wc = id ? getWebContentsByTabId(id) : null
       const url = wc?.getURL() ?? ''
       if (!url) {
-        broadcastToast(windowId, '현재 탭 URL 을 확인할 수 없습니다')
+        broadcastToast(windowId, tMain('main.toast.noTabUrl', '현재 탭 URL 을 확인할 수 없습니다'))
         return
       }
       void toggleSiteAdblock(url).then(({ host, allowed }) => {
         if (!host) {
-          broadcastToast(windowId, '이 페이지에 광고차단을 적용할 수 없습니다')
+          broadcastToast(windowId, tMain('main.toast.adblockNotApplicable', '이 페이지에 광고차단을 적용할 수 없습니다'))
           return
         }
         // allowed=true → 이 사이트에서 광고차단 "꺼짐"(허용), false → "켜짐"
         broadcastToast(windowId, allowed
-          ? `🛡️ ${host} — 광고차단 꺼짐 · 새로고침 중…`
-          : `🛡️ ${host} — 광고차단 켜짐 · 새로고침 중…`)
+          ? tMain('main.toast.adblockOffReload', `🛡️ ${host} — 광고차단 꺼짐 · 새로고침 중…`, { host })
+          : tMain('main.toast.adblockOnReload', `🛡️ ${host} — 광고차단 켜짐 · 새로고침 중…`, { host }))
         // 변경은 새 요청부터 적용되므로 탭을 새로고침해 결과가 바로 보이게 한다.
         try { wc?.reload() } catch { /* ignore */ }
       })
@@ -634,7 +704,7 @@ export function registerDefaultActions(): void {
       if (next) {
         void setActiveWorkspace(next)
         const ws = listWorkspaces().find((w) => w.id === next)
-        if (ws) broadcastToast(windowId, `스페이스: ${ws.name}`)
+        if (ws) broadcastToast(windowId, tMain('main.toast.workspaceSwitched', `스페이스: ${ws.name}`, { name: ws.name }))
       }
     },
   })
@@ -647,7 +717,7 @@ export function registerDefaultActions(): void {
       if (prev) {
         void setActiveWorkspace(prev)
         const ws = listWorkspaces().find((w) => w.id === prev)
-        if (ws) broadcastToast(windowId, `스페이스: ${ws.name}`)
+        if (ws) broadcastToast(windowId, tMain('main.toast.workspaceSwitched', `스페이스: ${ws.name}`, { name: ws.name }))
       }
     },
   })
@@ -658,7 +728,7 @@ export function registerDefaultActions(): void {
     run: async ({ windowId }) => {
       const ws = await createWorkspace()
       await setActiveWorkspace(ws.id)
-      broadcastToast(windowId, `새 스페이스 ${ws.name} 생성됨`)
+      broadcastToast(windowId, tMain('main.toast.workspaceCreated', `새 스페이스 ${ws.name} 생성됨`, { name: ws.name }))
     },
   })
 
@@ -672,7 +742,7 @@ export function registerDefaultActions(): void {
         const target = list[idx - 1]
         if (target && target.id !== getActiveWorkspaceId()) {
           void setActiveWorkspace(target.id)
-          broadcastToast(windowId, `스페이스: ${target.name}`)
+          broadcastToast(windowId, tMain('main.toast.workspaceSwitched', `스페이스: ${target.name}`, { name: target.name }))
         }
       },
     })
@@ -682,7 +752,7 @@ export function registerDefaultActions(): void {
     if (!windowId) return
     const list = listWorkspaces()
     if (list.length <= 1) {
-      broadcastToast(windowId, '스페이스가 하나뿐입니다')
+      broadcastToast(windowId, tMain('main.toast.workspaceOnlyOne', '스페이스가 하나뿐입니다'))
       return
     }
     const activeWsId = getActiveWorkspaceId()
@@ -694,11 +764,11 @@ export function registerDefaultActions(): void {
     if (!tabId) return
     const result = moveTabToWorkspace(tabId, target.id)
     if (!result.moved) {
-      broadcastToast(windowId, '탭 이동 실패')
+      broadcastToast(windowId, tMain('main.toast.tabMoveFail', '탭 이동 실패'))
       return
     }
-    const suffix = result.needsReload ? ' · 페이지 재로드' : ''
-    broadcastToast(windowId, `탭 이동 → ${target.name}${suffix}`)
+    const suffix = result.needsReload ? tMain('main.toast.reloadSuffix', ' · 페이지 재로드') : ''
+    broadcastToast(windowId, tMain('main.toast.tabMoved', `탭 이동 → ${target.name}${suffix}`, { name: target.name, suffix }))
   }
 
   registerAction({
@@ -733,7 +803,7 @@ export function registerDefaultActions(): void {
     defaultKey: 'Ctrl+Shift+D', when: 'global',
     run: ({ windowId }) => {
       void toggleForcePageDark().then((enabled) => {
-        broadcastToast(windowId, enabled ? '강제 다크 모드 켜짐 🌙' : '강제 다크 모드 꺼짐 ☀')
+        broadcastToast(windowId, enabled ? tMain('main.toast.darkForceOn', '강제 다크 모드 켜짐 🌙') : tMain('main.toast.darkForceOff', '강제 다크 모드 꺼짐 ☀'))
       })
     },
   })
@@ -746,17 +816,17 @@ export function registerDefaultActions(): void {
       const wc = id ? getWebContentsByTabId(id) : null
       const url = wc?.getURL() ?? ''
       if (!url) {
-        broadcastToast(windowId, '현재 탭 URL 을 확인할 수 없습니다')
+        broadcastToast(windowId, tMain('main.toast.noTabUrl', '현재 탭 URL 을 확인할 수 없습니다'))
         return
       }
       void toggleSiteDark(url).then(({ origin, state }) => {
         if (!origin) {
-          broadcastToast(windowId, '이 페이지에는 사이트별 다크 모드를 적용할 수 없습니다')
+          broadcastToast(windowId, tMain('main.toast.darkSiteNotApplicable', '이 페이지에는 사이트별 다크 모드를 적용할 수 없습니다'))
           return
         }
-        const label = state === 'on' ? `사이트 다크 켜짐 🌙 (${origin})`
-          : state === 'off' ? `사이트 다크 꺼짐 ☀ (${origin})`
-          : `사이트 다크 기본값 따름 (${origin})`
+        const label = state === 'on' ? tMain('main.toast.siteDarkOn', `사이트 다크 켜짐 🌙 (${origin})`, { origin })
+          : state === 'off' ? tMain('main.toast.siteDarkOff', `사이트 다크 꺼짐 ☀ (${origin})`, { origin })
+          : tMain('main.toast.siteDarkDefault', `사이트 다크 기본값 따름 (${origin})`, { origin })
         broadcastToast(windowId, label)
       })
     },
@@ -768,7 +838,7 @@ export function registerDefaultActions(): void {
     run: ({ windowId }) => {
       const cur = getSetting('appearance').pageDarkFollowSystem === true
       void setFollowSystemDark(!cur).then(() => {
-        broadcastToast(windowId, !cur ? 'OS 다크 모드 따라가기 켜짐 🌓' : 'OS 다크 모드 따라가기 꺼짐')
+        broadcastToast(windowId, !cur ? tMain('main.toast.followSystemOn', 'OS 다크 모드 따라가기 켜짐 🌓') : tMain('main.toast.followSystemOff', 'OS 다크 모드 따라가기 꺼짐'))
       })
     },
   })
@@ -788,7 +858,7 @@ export function registerDefaultActions(): void {
     run: ({ windowId }) => {
       if (!windowId) return
       splitWindow(windowId, 'h')
-      broadcastToast(windowId, '좌우 분할 ⫾')
+      broadcastToast(windowId, tMain('main.toast.splitH', '좌우 분할 ⫾'))
     },
   })
 
@@ -798,7 +868,7 @@ export function registerDefaultActions(): void {
     run: ({ windowId }) => {
       if (!windowId) return
       splitWindow(windowId, 'v')
-      broadcastToast(windowId, '상하 분할 ⫿')
+      broadcastToast(windowId, tMain('main.toast.splitV', '상하 분할 ⫿'))
     },
   })
 
@@ -808,7 +878,7 @@ export function registerDefaultActions(): void {
     run: ({ windowId }) => {
       if (!windowId) return
       unsplitWindow(windowId)
-      broadcastToast(windowId, '분할 해제')
+      broadcastToast(windowId, tMain('main.toast.unsplit', '분할 해제'))
     },
   })
 
@@ -856,7 +926,7 @@ export function registerDefaultActions(): void {
       const id = tabId ?? activeTabIdOf(windowId)
       let n = 0
       for (const t of listTabs(windowId)) if (t.id !== id && !t.muted) { setTabMuted(t.id, true); n += 1 }
-      broadcastToast(windowId, n > 0 ? `다른 탭 ${n}개 음소거됨 🔇` : '음소거할 다른 탭이 없습니다')
+      broadcastToast(windowId, n > 0 ? tMain('main.toast.muteOthersDone', `다른 탭 ${n}개 음소거됨 🔇`, { count: n }) : tMain('main.toast.muteOthersNone', '음소거할 다른 탭이 없습니다'))
     },
   })
 
@@ -866,7 +936,7 @@ export function registerDefaultActions(): void {
       if (!windowId) return
       let n = 0
       for (const t of listTabs(windowId)) if (t.muted) { setTabMuted(t.id, false); n += 1 }
-      broadcastToast(windowId, n > 0 ? `${n}개 탭 음소거 해제 🔊` : '음소거된 탭이 없습니다')
+      broadcastToast(windowId, n > 0 ? tMain('main.toast.unmuteAllDone', `${n}개 탭 음소거 해제 🔊`, { count: n }) : tMain('main.toast.unmuteAllNone', '음소거된 탭이 없습니다'))
     },
   })
 
@@ -882,11 +952,11 @@ export function registerDefaultActions(): void {
         if (u.protocol === 'http:' || u.protocol === 'https:') origin = u.origin
       } catch { /* invalid url */ }
       if (!origin) {
-        broadcastToast(windowId, '이 페이지의 사이트 데이터는 지울 수 없습니다')
+        broadcastToast(windowId, tMain('main.toast.siteDataNotApplicable', '이 페이지의 사이트 데이터는 지울 수 없습니다'))
         return
       }
       void clearSiteData(origin).then(() => {
-        broadcastToast(windowId, '사이트 데이터 삭제됨 · 새로고침 중… 🗑')
+        broadcastToast(windowId, tMain('main.toast.siteDataCleared', '사이트 데이터 삭제됨 · 새로고침 중… 🗑'))
         try { wc?.reload() } catch { /* ignore */ }
       })
     },

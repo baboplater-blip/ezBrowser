@@ -1,4 +1,4 @@
-import { dialog, ipcMain, net } from 'electron'
+import { BrowserWindow, dialog, ipcMain, net, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import { IPC } from '../../shared/ipc-channels'
 import { isTrustedSender } from './trust'
@@ -9,13 +9,17 @@ import {
   type AiMessage,
 } from '../features/ai'
 import { setAiKey, clearAiKey, type AiSecretProvider } from '../features/ai/keys'
+import { detectProviders, connectProvider } from '../features/ai/detect'
+import type { AiProviderId } from '../features/ai/providers'
 import { runAgentTask, confirmAgentStep, replyAgentAsk, cancelAgentTask, resetAgentSession, runAgentBatch, cancelAgentBatch } from '../features/ai/agent'
-import { startRepeat, stopRepeat, removeRepeat, listRepeats, repeatEvents, type RepeatSummary } from '../features/ai/agent-schedule'
+import { startRepeat, stopRepeat, removeRepeat, listRepeats, repeatEvents, resumeRepeat, type RepeatSummary } from '../features/ai/agent-schedule'
 import { getMemoryText, setMemoryText, clearMemory, memoryEvents } from '../features/ai/memory'
 import { listTriggers, addTrigger, updateTrigger, removeTrigger, setTriggerEnabled, triggerEvents, type AgentTrigger } from '../features/ai/agent-triggers'
-import { getProfile, setProfile, storageAvailable, PROFILE_FIELDS, profileEvents } from '../features/ai/profile'
+import { getProfile, setProfile, storageAvailable, translatedProfileFields, profileEvents } from '../features/ai/profile'
 import { generateBlogDraft, generateSeriesPlan, refineBlogBody, type BlogDraftParams, type SeriesPlanParams, type RefineParams } from '../features/ai/blog-writer'
 import { buildBlogTask, NAVER_WRITE_URL, type BlogTaskParams } from '../features/ai/blog-publish'
+import { buildSnsTask, type SnsTaskParams } from '../features/ai/sns-publish'
+import { detectWorkflowIntent } from '../features/ai/intent'
 import {
   listBlogDrafts, getBlogDraft, saveBlogDraft, removeBlogDraft, blogDraftEvents, type BlogDraftSummary,
 } from '../features/ai/blog-drafts'
@@ -34,10 +38,30 @@ import { buildSiteReportTask, type SiteReportParams } from '../features/ai/site-
 import {
   listSavedTasks, addSavedTask, removeSavedTask, renameSavedTask, touchSavedTask, savedTaskEvents, type SavedAgentTask,
 } from '../features/ai/saved-tasks'
+import { listArtifacts, getArtifact, resolveArtifactPath } from '../features/ai/artifacts'
+import {
+  workflowEvents, listWorkflows, startImagePost, approveAndPublish, chooseArtifact,
+  cancelWorkflow, deleteWorkflow, grantAutoPublish, getAutoPublishGrant, revokeAutoPublish,
+  retryCaption, setCaption, setWorkflowAccount, resolvePublishUncertainty,
+  preparePromotion, confirmPromotion, cancelPromotion,
+  type ImagePostParams, type ImagePostWorkflow, type GrantInput, type PublishResolution,
+} from '../features/ai/social-workflow'
+import { buildBlogEngageTask, listEngagements, clearEngagements, type BlogEngageParams } from '../features/ai/blog-engage'
+import { readFile } from 'node:fs/promises'
 import {
   listAgentRuns, getAgentRun, recordAgentEvent, deleteAgentRun, clearAgentRuns, agentRunEvents, type AgentRunSummary,
 } from '../features/ai/agent-runs'
-import { getAllWindows, broadcastToInternalPages } from '../windows/window-service'
+// 영속 작업 런타임(task-runtime.ts) — 다른 작업자가 같은 라운드에 병행 작성 중인 모듈.
+// design.md §1 에 확정된 export 목록을 그대로 가져다 쓴다. 파일이 아직 없거나 시그니처가
+// 다르면 이 import 부터 tsc 오류가 나는데, 그건 task-runtime.ts 쪽 문제이지 이 파일의 문제가 아니다.
+import {
+  taskEvents, listTasks, getTask, createTask, startTask, pauseTask, resumeTask,
+  cancelTask, deleteTask, confirmTask, answerTask, acceptTaskResult,
+  listTaskTargets, setTaskTarget,
+  type PersistentTask, type TaskSummary, type TaskBudget, type TaskTargetList,
+} from '../features/ai/task-runtime'
+import { getAllWindows, getWindow, broadcastToInternalPages } from '../windows/window-service'
+import { tMain } from '../i18n'
 
 interface SendArgs {
   reqId: string
@@ -67,7 +91,25 @@ export function registerAiIpc(): void {
   ipcMain.handle(IPC.ai.diagnose, async (e) => {
     if (!isTrustedSender(e)) return null
     try { return await diagnoseAi() } catch (err) {
-      return { ok: false, status: 'error', message: '점검 중 오류', detail: err instanceof Error ? err.message : String(err) }
+      return { ok: false, status: 'error', message: tMain('main.ai.ipc.diagCheckError', '점검 중 오류'), detail: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // 이 컴퓨터에서 지금 쓸 수 있는 제공자 탐지 — 요금이 드는 호출은 하지 않는다(CLI --version·로컬 tags·키 유무).
+  ipcMain.handle(IPC.ai.detectProviders, async (e, args: { force?: boolean } = {}) => {
+    if (!isTrustedSender(e)) return null
+    try { return await detectProviders({ force: !!args?.force }) } catch (err) {
+      return { at: Date.now(), current: 'anthropic', currentReady: false, candidates: [], error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // 제공자 연결 — 고른 뒤 실제로 한 번 물어봐서 되는지 확인하고, 안 되면 원인·해결책을 그대로 돌려준다.
+  ipcMain.handle(IPC.ai.connectProvider, async (e, args: { provider: AiProviderId; model?: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: 'untrusted' }
+    const allowed: AiProviderId[] = ['anthropic', 'openai', 'google', 'ollama', 'claude-code', 'codex', 'gemini-cli']
+    if (!args || !allowed.includes(args.provider)) return { ok: false, error: tMain('main.ai.ipc.unknownProvider', '알 수 없는 제공자') }
+    try { return await connectProvider(args.provider, args.model) } catch (err) {
+      return { ok: false, provider: args.provider, error: err instanceof Error ? err.message : String(err) }
     }
   })
 
@@ -90,7 +132,7 @@ export function registerAiIpc(): void {
   // 에이전트 자료 폴더 — 폴더 선택(네이티브) + 현재 폴더/파일 정보
   ipcMain.handle(IPC.ai.pickAgentDir, async (e) => {
     if (!isTrustedSender(e)) return { ok: false }
-    const res = await dialog.showOpenDialog({ title: '에이전트 자료 폴더 선택', properties: ['openDirectory'] })
+    const res = await dialog.showOpenDialog({ title: tMain('main.ai.ipc.pickAgentFilesFolder', '에이전트 자료 폴더 선택'), properties: ['openDirectory'] })
     if (res.canceled || !res.filePaths[0]) return { ok: false, dir: agentFilesDir(), count: listAgentFiles().length }
     setSetting('ai', { ...getSetting('ai'), agentFilesDir: res.filePaths[0] })
     return { ok: true, dir: res.filePaths[0], count: listAgentFiles().length }
@@ -127,7 +169,7 @@ export function registerAiIpc(): void {
           void maybeAutoRemember([...args.messages, { role: 'assistant', content: text }]).then((added) => {
             if (added.length && !sender.isDestroyed()) {
               const more = added.length > 1 ? ` 외 ${added.length - 1}건` : ''
-              sender.send('toast:show', { message: `🧠 기억에 추가됨: ${(added[0] ?? '').slice(0, 24)}${more}`, ts: Date.now() })
+              sender.send('toast:show', { message: tMain('main.ai.ipc.memoryAdded', `🧠 기억에 추가됨: ${(added[0] ?? '').slice(0, 24)}${more}`, { text: (added[0] ?? '').slice(0, 24), more }), ts: Date.now() })
             }
           })
         },
@@ -155,7 +197,7 @@ export function registerAiIpc(): void {
   })
 
   // ===== 에이전트 =====
-  ipcMain.handle(IPC.ai.agentStart, async (e, args: { reqId: string; tabId?: string; task: string; rows?: Array<Record<string, string>>; autoConfirm?: boolean; readOnly?: boolean }) => {
+  ipcMain.handle(IPC.ai.agentStart, async (e, args: { reqId: string; tabId?: string; task: string; rows?: Array<Record<string, string>>; autoConfirm?: boolean; readOnly?: boolean; allowedHosts?: string[] }) => {
     if (!isTrustedSender(e)) return { ok: false }
     if (!args || !args.reqId || !args.task?.trim()) return { ok: false }
     const sender = e.sender
@@ -166,7 +208,7 @@ export function registerAiIpc(): void {
       recordAgentEvent(args.reqId, task, evt) // 실행 이력 영속화(메인 측 — UI 닫혀도 기록)
       // 보고서 자동 저장 알림(대화 내보내기 토스트와 동일 패턴).
       if ((evt as { type?: string }).type === 'report' && typeof (evt as { path?: string }).path === 'string' && !sender.isDestroyed()) {
-        sender.send('toast:show', { message: `보고서 저장됨 ⤓ ${path.basename(String((evt as { path?: string }).path))}`, ts: Date.now() })
+        sender.send('toast:show', { message: tMain('main.ai.ipc.reportSaved', `보고서 저장됨 ⤓ ${path.basename(String((evt as { path?: string }).path))}`, { filename: path.basename(String((evt as { path?: string }).path)) }), ts: Date.now() })
       }
       if (!sender.isDestroyed()) sender.send(IPC.ai.agentEvent, { reqId: args.reqId, ...evt })
     }
@@ -174,7 +216,15 @@ export function registerAiIpc(): void {
     if (Array.isArray(args.rows) && args.rows.length) {
       void runAgentBatch({ reqId: args.reqId, tabId: args.tabId, task, rows: args.rows, autoConfirm: !!args.autoConfirm }, forward)
     } else {
-      void runAgentTask({ reqId: args.reqId, tabId: args.tabId, task, readOnly: !!args.readOnly }, forward)
+      // 허용 사이트 — 호스트 형태만 통과시킨다(경로·스킴이 섞인 값이 그대로 들어가면 규칙이 무력해진다).
+      const allowedHosts = Array.isArray(args.allowedHosts)
+        ? args.allowedHosts.map((h) => String(h ?? '').trim().toLowerCase().replace(/^\*\./, ''))
+          .filter((h) => /^[a-z0-9.-]+$/.test(h)).slice(0, 30)
+        : undefined
+      void runAgentTask({
+        reqId: args.reqId, tabId: args.tabId, task, readOnly: !!args.readOnly,
+        ...(allowedHosts && allowedHosts.length ? { allowedHosts } : {}),
+      }, forward)
     }
     return { ok: true }
   })
@@ -269,8 +319,8 @@ export function registerAiIpc(): void {
 
   // ===== 스마트 폼필 프로필 (내 정보) =====
   ipcMain.handle(IPC.ai.profileGet, (e) => {
-    if (!isTrustedSender(e)) return { fields: PROFILE_FIELDS, values: {}, storageAvailable: false }
-    return { fields: PROFILE_FIELDS, values: getProfile(), storageAvailable: storageAvailable() }
+    if (!isTrustedSender(e)) return { fields: translatedProfileFields(), values: {}, storageAvailable: false }
+    return { fields: translatedProfileFields(), values: getProfile(), storageAvailable: storageAvailable() }
   })
   ipcMain.handle(IPC.ai.profileSet, (e, values: Record<string, string>) => {
     if (!isTrustedSender(e)) return { ok: false }
@@ -283,19 +333,19 @@ export function registerAiIpc(): void {
   ipcMain.handle(IPC.ai.exportWebhook, async (e, args: { rows: unknown[]; url?: string }) => {
     if (!isTrustedSender(e)) return { ok: false, detail: '권한 없음' }
     const url = (args?.url || getSetting('ai').webhookUrl || '').trim()
-    if (!/^https?:\/\//i.test(url)) return { ok: false, detail: '웹훅 URL 이 설정되지 않았습니다(설정 > AI).' }
+    if (!/^https?:\/\//i.test(url)) return { ok: false, detail: tMain('main.ai.ipc.webhookUrlMissing', '웹훅 URL 이 설정되지 않았습니다(설정 > AI).') }
     const rows = Array.isArray(args?.rows) ? args.rows.slice(0, 5000) : []
     const body = JSON.stringify({ source: 'ezBrowser', count: rows.length, rows, at: Date.now() })
     return await new Promise<{ ok: boolean; detail: string }>((resolve) => {
       try {
         const req = net.request({ url, method: 'POST' })
         req.setHeader('content-type', 'application/json')
-        const timer = setTimeout(() => { try { req.abort() } catch { /* ignore */ }; resolve({ ok: false, detail: '시간 초과' }) }, 20000)
+        const timer = setTimeout(() => { try { req.abort() } catch { /* ignore */ }; resolve({ ok: false, detail: tMain('main.ai.ipc.webhookTimeout', '시간 초과') }) }, 20000)
         req.on('response', (resp) => {
           const status = resp.statusCode ?? 0
           resp.on('data', () => { /* drain */ })
           resp.on('end', () => { clearTimeout(timer); resolve(status >= 200 && status < 400 ? { ok: true, detail: `전송됨 (${status})` } : { ok: false, detail: `실패 (${status})` }) })
-          resp.on('error', () => { clearTimeout(timer); resolve({ ok: false, detail: '응답 오류' }) })
+          resp.on('error', () => { clearTimeout(timer); resolve({ ok: false, detail: tMain('main.ai.ipc.webhookResponseError', '응답 오류') }) })
         })
         req.on('error', (err) => { clearTimeout(timer); resolve({ ok: false, detail: err.message }) })
         req.write(body); req.end()
@@ -306,7 +356,7 @@ export function registerAiIpc(): void {
   // ===== 블로그 글쓰기 스튜디오 — 주제·옵션 → 구조화 초안 생성(발행은 사용자가 트리거) =====
   ipcMain.handle(IPC.ai.blogGenerate, async (e, params: BlogDraftParams) => {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
-    if (!params?.topic?.trim()) return { ok: false, error: '주제를 입력하세요.' }
+    if (!params?.topic?.trim()) return { ok: false, error: tMain('main.ai.ipc.topicRequired', '주제를 입력하세요.') }
     try {
       const draft = await generateBlogDraft(params)
       return { ok: true, draft }
@@ -324,6 +374,17 @@ export function registerAiIpc(): void {
       tags: Array.isArray(params?.tags) ? params.tags : [], autoOpen: !!params?.autoOpen,
     })
     return { task, naverWriteUrl: NAVER_WRITE_URL }
+  })
+
+  // SNS 게시(인스타·유튜브·틱톡) 레시피 태스크 빌드 — 완료 신호 표식 포함
+  ipcMain.handle(IPC.ai.snsBuildTask, (e, params: SnsTaskParams) => {
+    if (!isTrustedSender(e)) return { task: '', openUrl: '' }
+    const platform = params?.platform === 'youtube' ? 'youtube' : params?.platform === 'tiktok' ? 'tiktok' : 'instagram'
+    return buildSnsTask({
+      platform, mode: params?.mode === 'publish' ? 'publish' : 'draft',
+      file: String(params?.file ?? '').slice(0, 300), caption: String(params?.caption ?? '').slice(0, 5000), title: typeof params?.title === 'string' ? params.title.slice(0, 200) : undefined,
+      tags: Array.isArray(params?.tags) ? params.tags.map(String) : [], autoOpen: !!params?.autoOpen,
+    })
   })
 
   // 사이트 분석 보고서 — 원클릭 태스크(읽기 전용) 빌드
@@ -344,7 +405,7 @@ export function registerAiIpc(): void {
     const base = safeFileName(String(p?.title ?? '보고서') || '보고서')
     const res = await writeDownloadMd(base, md)
     if (res.ok && res.path && !e.sender.isDestroyed()) {
-      e.sender.send('toast:show', { message: `보고서 저장됨 ⤓ ${path.basename(res.path)}`, ts: Date.now() })
+      e.sender.send('toast:show', { message: tMain('main.ai.ipc.reportSaved', `보고서 저장됨 ⤓ ${path.basename(res.path)}`, { filename: path.basename(res.path) }), ts: Date.now() })
     }
     return res
   })
@@ -352,7 +413,7 @@ export function registerAiIpc(): void {
   // 블로그 글 다듬기(부분 개선)
   ipcMain.handle(IPC.ai.blogRefine, async (e, params: RefineParams) => {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
-    if (!params?.body?.trim() || !params?.instruction?.trim()) return { ok: false, error: '본문과 지시가 필요합니다.' }
+    if (!params?.body?.trim() || !params?.instruction?.trim()) return { ok: false, error: tMain('main.ai.ipc.bodyInstructionRequired', '본문과 지시가 필요합니다.') }
     try { return { ok: true, body: await refineBlogBody(params) } }
     catch (err) { return { ok: false, error: err instanceof Error ? err.message : String(err) } }
   })
@@ -360,7 +421,7 @@ export function registerAiIpc(): void {
   // 블로그 시리즈 연재 기획
   ipcMain.handle(IPC.ai.blogSeriesPlan, async (e, params: SeriesPlanParams) => {
     if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
-    if (!params?.topic?.trim()) return { ok: false, error: '주제를 입력하세요.' }
+    if (!params?.topic?.trim()) return { ok: false, error: tMain('main.ai.ipc.topicRequired', '주제를 입력하세요.') }
     try { return { ok: true, plan: await generateSeriesPlan(params) } }
     catch (err) { return { ok: false, error: err instanceof Error ? err.message : String(err) } }
   })
@@ -375,6 +436,149 @@ export function registerAiIpc(): void {
       if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.blogDraftChanged, list)
     }
   })
+
+  // ===== 작업 산출물 (캡처한 이미지·받은 파일) =====
+  // 미리보기는 dataURL 로 준다 — 외피는 file:// 로 임의 경로를 읽지 못하고(읽게 하면 그 자체가 구멍),
+  // 산출물은 크지 않아(수백 KB) 한 번 실어 보내는 편이 안전하다.
+  ipcMain.handle(IPC.ai.artifactList, (e, args: { taskId: string }) => {
+    if (!isTrustedSender(e)) return []
+    const t = String(args?.taskId ?? '').trim()
+    return t ? listArtifacts(t) : []
+  })
+  ipcMain.handle(IPC.ai.artifactData, async (e, args: { taskId: string; id: string }) => {
+    if (!isTrustedSender(e)) return null
+    const t = String(args?.taskId ?? '').trim(); const id = String(args?.id ?? '').trim()
+    if (!t || !id) return null
+    const meta = getArtifact(t, id)
+    const p = resolveArtifactPath(t, id)   // 작업 폴더 밖이면 null — 경계는 여기서 지킨다
+    if (!meta || !p) return null
+    if (meta.bytes > 12 * 1024 * 1024) return { meta, dataUrl: null }  // 미리보기로 싣기엔 큼
+    try {
+      const buf = await readFile(p)
+      return { meta, dataUrl: `data:${meta.mime};base64,${buf.toString('base64')}` }
+    } catch { return { meta, dataUrl: null } }
+  })
+
+  // 입력창 한 줄을 워크플로 폼값으로 읽는다 — **순수 판독 전용**이다.
+  // 어떤 작업도 시작하지 않고 자동 게시 승인(grant)도 만들지 않는다. 승인 입구는 socialGrant 하나뿐.
+  ipcMain.handle(IPC.ai.intentDetect, (e, args: { text?: string }) => {
+    if (!isTrustedSender(e)) return null
+    return detectWorkflowIntent(String(args?.text ?? ''))
+  })
+
+  // ===== 생성→캡션→게시 워크플로 =====
+  // 게시는 되돌릴 수 없으므로 **승인 단계를 코드로 분리**한다 — socialStart 는 생성까지만 하고,
+  // 실제 게시는 사용자가 캡션을 확인한 뒤 socialApprove 를 부를 때만 시작된다.
+  ipcMain.handle(IPC.ai.socialList, (e) => { if (!isTrustedSender(e)) return []; return listWorkflows() })
+  ipcMain.handle(IPC.ai.socialStart, (e, params: ImagePostParams) => {
+    if (!isTrustedSender(e)) return null
+    if (!params || typeof params !== 'object') return null
+    return startImagePost({
+      service: params.service === 'chatgpt' ? 'chatgpt' : params.service === 'custom' ? 'custom' : 'genspark',
+      customUrl: typeof params.customUrl === 'string' ? params.customUrl.slice(0, 500) : undefined,
+      prompt: String(params.prompt ?? '').slice(0, 4000),
+      platform: params.platform === 'youtube' ? 'youtube' : params.platform === 'tiktok' ? 'tiktok' : 'instagram',
+      account: typeof params.account === 'string' ? params.account.slice(0, 120) : undefined,
+      tone: typeof params.tone === 'string' ? params.tone.slice(0, 200) : undefined,
+      tags: Array.isArray(params.tags) ? params.tags.map(String).slice(0, 30) : [],
+      mode: params.mode === 'publish' ? 'publish' : 'draft',   // 기본은 초안 — 실수로 게시되지 않게
+      windowId: typeof params.windowId === 'string' ? params.windowId : null,
+      tabId: String(params.tabId ?? ''),
+    })
+  })
+  ipcMain.handle(IPC.ai.socialApprove, (e, args: { id: string; caption: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return approveAndPublish(String(args?.id ?? ''), String(args?.caption ?? '').slice(0, 5000))
+  })
+  ipcMain.handle(IPC.ai.socialChoose, (e, args: { id: string; artifactId: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return chooseArtifact(String(args?.id ?? ''), String(args?.artifactId ?? ''))
+  })
+  // 이번 작업 한정 자동 게시 선승인 — **사용자의 명시 선택만** 이 입구를 지난다(신뢰 sender 검증).
+  // 모델·페이지는 이 채널에 도달할 수 없으므로 자동 게시 범위를 스스로 만들거나 넓힐 수 없다.
+  ipcMain.handle(IPC.ai.socialGrant, (e, args: GrantInput) => {
+    if (!isTrustedSender(e)) return null
+    if (!args || typeof args !== 'object') return null
+    return grantAutoPublish({
+      platform: args.platform === 'youtube' ? 'youtube' : args.platform === 'tiktok' ? 'tiktok' : 'instagram',
+      accounts: Array.isArray(args.accounts) ? args.accounts.map((a) => String(a).slice(0, 120)) : [],
+      maxPosts: Number(args.maxPosts),
+      minutes: Number(args.minutes),
+    })
+  })
+  ipcMain.handle(IPC.ai.socialGrantGet, (e) => { if (!isTrustedSender(e)) return null; return getAutoPublishGrant() })
+  ipcMain.handle(IPC.ai.socialGrantRevoke, (e) => { if (!isTrustedSender(e)) return; revokeAutoPublish() })
+  // ===== 중단 후 복구 =====
+  // 셋 다 **새 작업을 만들지 않고** 멈춘 그 작업을 이어간다. 특히 게시 해소는 되돌릴 수 없는 결정이라
+  // 선택지를 코드로 제한한다(자유 문자열을 받지 않는다).
+  ipcMain.handle(IPC.ai.socialRetryCaption, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return retryCaption(String(args?.id ?? ''))
+  })
+  ipcMain.handle(IPC.ai.socialSetCaption, (e, args: { id: string; caption: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return setCaption(String(args?.id ?? ''), String(args?.caption ?? '').slice(0, 5000))
+  })
+  ipcMain.handle(IPC.ai.socialSetAccount, (e, args: { id: string; account: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    return setWorkflowAccount(String(args?.id ?? ''), String(args?.account ?? '').slice(0, 200))
+  })
+  ipcMain.handle(IPC.ai.socialResolvePublish, (e, args: { id: string; choice: PublishResolution }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음' }
+    const raw = String(args?.choice ?? '')
+    if (raw !== 'verify' && raw !== 'published' && raw !== 'not-published') {
+      return { ok: false, error: tMain('main.ai.ipc.unknownChoice', '알 수 없는 선택입니다.') }
+    }
+    return resolvePublishUncertainty(String(args?.id ?? ''), raw)
+  })
+  // ===== 초안 승격 =====
+  // 되돌릴 수 없는 게시가 시작되는 입구는 **socialPromoteConfirm 하나뿐**이다. prepare 는 화면에
+  // 보여 줄 내용을 만들 뿐이고(디스크 쓰기 0·작업 생성 0), cancel 은 그 화면을 닫는 것뿐이다.
+  // 셋 다 신뢰 sender 검증 — 모델·페이지는 이 채널에 도달할 수 없다.
+  ipcMain.handle(IPC.ai.socialPromotePrepare, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음', errorEn: 'Not permitted' }
+    return preparePromotion(String(args?.id ?? ''))
+  })
+  ipcMain.handle(IPC.ai.socialPromoteConfirm, (e, args: { id: string; token: string }) => {
+    if (!isTrustedSender(e)) return { ok: false, error: '권한 없음', errorEn: 'Not permitted' }
+    // 토큰은 우리가 발급한 UUID 다 — 길이만 제한하고 내용은 상수 비교로 판정한다(부분 일치 없음).
+    return confirmPromotion(String(args?.id ?? ''), String(args?.token ?? '').slice(0, 200))
+  })
+  ipcMain.handle(IPC.ai.socialPromoteCancel, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return { ok: false }
+    return cancelPromotion(String(args?.id ?? ''))
+  })
+  ipcMain.handle(IPC.ai.socialCancel, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; cancelWorkflow(String(args?.id ?? '')) })
+  ipcMain.handle(IPC.ai.socialDelete, (e, args: { id: string }) => { if (!isTrustedSender(e)) return; deleteWorkflow(String(args?.id ?? '')) })
+  workflowEvents.on('changed', (list: ImagePostWorkflow[]) => {
+    for (const ctx of getAllWindows()) {
+      if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.socialChanged, list)
+    }
+  })
+
+  // ===== 관심 블로그 댓글·좋아요 =====
+  ipcMain.handle(IPC.ai.engageBuildTask, (e, params: BlogEngageParams) => {
+    if (!isTrustedSender(e)) return { task: '', openUrl: '', allowedHosts: [] }
+    return buildBlogEngageTask({
+      myBlogUrl: typeof params?.myBlogUrl === 'string' ? params.myBlogUrl.slice(0, 500) : undefined,
+      topic: typeof params?.topic === 'string' ? params.topic.slice(0, 300) : undefined,
+      searchUrl: typeof params?.searchUrl === 'string' ? params.searchUrl.slice(0, 500) : undefined,
+      account: typeof params?.account === 'string' ? params.account.slice(0, 120) : undefined,
+      maxPosts: Number(params?.maxPosts) || 5,
+      actions: Array.isArray(params?.actions) ? params.actions.filter((a) => a === 'comment' || a === 'like') : ['comment'],
+      mode: params?.mode === 'act' ? 'act' : 'draft',
+      excludeHosts: Array.isArray(params?.excludeHosts) ? params.excludeHosts.map(String).slice(0, 50) : [],
+      minBodyChars: Number(params?.minBodyChars) || undefined,
+      intervalSeconds: typeof params?.intervalSeconds === 'number' ? params.intervalSeconds : undefined,
+      // 기한(epoch ms). 과거 시각을 주면 즉시 한도 소진 상태가 되므로 미래 값만 받는다.
+      until: typeof params?.until === 'number' && params.until > Date.now() ? params.until : undefined,
+    })
+  })
+  ipcMain.handle(IPC.ai.engageLedger, (e, args: { limit?: number }) => {
+    if (!isTrustedSender(e)) return []
+    return listEngagements(Number(args?.limit) || 200)
+  })
+  ipcMain.handle(IPC.ai.engageLedgerClear, (e) => { if (!isTrustedSender(e)) return; clearEngagements() })
 
   // ===== 매일 자동 수집 (피드 수집기) =====
   ipcMain.handle(IPC.ai.collectorList, (e) => { if (!isTrustedSender(e)) return []; return listCollectors() })
@@ -487,7 +691,7 @@ export function registerAiIpc(): void {
     if (!conv) return { ok: false }
     const res = await writeDownloadMd(safeFileName(conv.title || 'conversation'), conversationToMarkdown(conv))
     if (res.ok && res.path && !e.sender.isDestroyed()) {
-      e.sender.send('toast:show', { message: `대화 내보냄 ⤓ ${path.basename(res.path)}`, ts: Date.now() })
+      e.sender.send('toast:show', { message: tMain('main.ai.ipc.conversationExported', `대화 내보냄 ⤓ ${path.basename(res.path)}`, { filename: path.basename(res.path) }), ts: Date.now() })
     }
     return res
   })
@@ -500,7 +704,7 @@ export function registerAiIpc(): void {
     if (convs.length === 0) return { ok: false, count: 0 }
     const res = await writeDownloadMd(safeFileName(`대화모음 ${convs.length}개`), conversationsToMarkdown(convs))
     if (res.ok && res.path && !e.sender.isDestroyed()) {
-      e.sender.send('toast:show', { message: `대화 ${convs.length}개 내보냄 ⤓ ${path.basename(res.path)}`, ts: Date.now() })
+      e.sender.send('toast:show', { message: tMain('main.ai.ipc.conversationsExported', `대화 ${convs.length}개 내보냄 ⤓ ${path.basename(res.path)}`, { count: convs.length, filename: path.basename(res.path) }), ts: Date.now() })
     }
     return { ...res, count: convs.length }
   })
@@ -579,5 +783,173 @@ export function registerAiIpc(): void {
     for (const ctx of getAllWindows()) {
       if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.runChanged, list)
     }
+  })
+
+  // ===== 영속 작업 런타임 =====
+  registerPersistentTaskIpc()
+}
+
+// 보낸 창(webContents)이 어느 BrowserWindowContext 에 속하는지 역추적.
+// extensions.ts 의 resolveWindowId 와 같은 패턴 — 창마다 "외피 webContents" 하나(id)와
+// "그 창의 BaseWindow" 둘 다로 매칭해, 탭/콘텐츠 쪽 webContents 가 잘못 걸리지 않게 한다.
+function resolveSenderWindowId(e: IpcMainInvokeEvent): string | null {
+  const wc = BrowserWindow.fromWebContents(e.sender)
+  for (const ctx of getAllWindows()) {
+    if (ctx.chrome.webContents.id === e.sender.id) return ctx.id
+    if (wc && ctx.win === (wc as unknown as Electron.BaseWindow)) return ctx.id
+  }
+  return null
+}
+
+// 이 작업을 이 창(sender)이 조작해도 되는가.
+// ownerWindowId 가 null 인 작업은 무인 트리거·재시작 복원 등 "특정 창 소유가 아닌" 경우라
+// 창을 가려낼 방법이 없으므로 어느 신뢰 창에서든 조작을 허용한다.
+// null 이 아니면 정확히 그 창에서 온 요청만 통과 — 다른 창·외부 페이지가 남의 작업을
+// 중단·승인·삭제하는 것을 막는 자리.
+function ownsTask(e: IpcMainInvokeEvent, task: PersistentTask): boolean {
+  if (task.ownerWindowId === null) return true
+  return resolveSenderWindowId(e) === task.ownerWindowId
+}
+
+function taskNotFound(): { ok: false; error: string } {
+  return { ok: false, error: tMain('main.ai.ipc.taskNotFound', '작업을 찾을 수 없습니다(이미 삭제되었을 수 있습니다).') }
+}
+
+function taskOwnershipDenied(): { ok: false; error: string } {
+  return { ok: false, error: tMain('main.ai.ipc.taskWrongWindow', '이 작업을 시작한 창에서만 조작할 수 있습니다.') }
+}
+
+const MAX_TASK_INSTRUCTION_LEN = 4000
+
+function clampFiniteNumber(v: unknown, min: number, max: number): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return undefined
+  return Math.min(max, Math.max(min, Math.floor(v)))
+}
+
+// budget 은 사용자가 직접 타이핑하는 값은 아니지만(장기/일반 모드 선택에서 UI 가 계산해 보냄),
+// 검증 없이 그대로 구간 루프에 흘려보내면 0·음수·Infinity·비정상 배열이 예산 계산·allowedHosts
+// 매칭을 깨뜨릴 수 있다 — 이 저장소에서 반복된 "받은 값을 그대로 저장" 결함과 같은 부류.
+function sanitizeTaskBudget(b: unknown): Partial<TaskBudget> | undefined {
+  if (!b || typeof b !== 'object') return undefined
+  const src = b as Partial<TaskBudget>
+  const out: Partial<TaskBudget> = {}
+  const maxSteps = clampFiniteNumber(src.maxSteps, 1, 5000)
+  if (maxSteps !== undefined) out.maxSteps = maxSteps
+  const maxDurationMs = clampFiniteNumber(src.maxDurationMs, 10_000, 172_800_000) // 10초 ~ 48시간
+  if (maxDurationMs !== undefined) out.maxDurationMs = maxDurationMs
+  const maxLlmCalls = clampFiniteNumber(src.maxLlmCalls, 1, 5000)
+  if (maxLlmCalls !== undefined) out.maxLlmCalls = maxLlmCalls
+  if (Array.isArray(src.allowedHosts)) {
+    out.allowedHosts = src.allowedHosts
+      .filter((h): h is string => typeof h === 'string' && h.trim().length > 0 && h.length <= 253)
+      .slice(0, 50)
+      .map((h) => h.trim().toLowerCase())
+  }
+  return out
+}
+
+function registerPersistentTaskIpc(): void {
+  // 목록·조회는 다른 대화·실행 이력 목록과 같은 원칙 — 이 데스크톱 앱엔 창별 데이터 격리가
+  // 없으므로(convList·runList 등도 전역 공개) 소유권 검사 없이 모든 신뢰 창에 보인다.
+  // 상태를 "바꾸는" 채널만 아래에서 ownsTask 로 가린다.
+  ipcMain.handle(IPC.ai.ptaskList, (e) => {
+    if (!isTrustedSender(e)) return []
+    return listTasks()
+  })
+
+  ipcMain.handle(IPC.ai.ptaskGet, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return null
+    return typeof args?.id === 'string' && args.id ? getTask(args.id) : null
+  })
+
+  ipcMain.handle(IPC.ai.ptaskCreate, (e, args: {
+    instruction: string
+    tabId: string
+    mode?: 'normal' | 'long'
+    readOnly?: boolean
+    budget?: Partial<TaskBudget>
+  }) => {
+    if (!isTrustedSender(e)) return null
+    const instruction = typeof args?.instruction === 'string' ? args.instruction.trim() : ''
+    if (!instruction || instruction.length > MAX_TASK_INSTRUCTION_LEN) return null
+    if (typeof args?.tabId !== 'string' || !args.tabId) return null
+    // windowId 는 렌더러가 보낸 값을 쓰지 않는다. 이 값이 그대로 작업의 ownerWindowId 가 되어
+    // 이후 모든 조작 권한의 기준이 되므로, 다른 창 id 를 주장해 소유권을 위조하지 못하도록
+    // 실제 발신 창에서 직접 구한다(호출자가 windowId 를 아예 안 보내도 항상 정확하다).
+    const windowId = resolveSenderWindowId(e)
+    // incognito 도 마찬가지로 클라이언트가 알려주는 값이 아니라 창 자체에서 읽는다.
+    // task-runtime.ts 는 incognito=true 인 작업을 종료 스냅샷에서 제외한다(디스크에 한 줄도
+    // 안 남기는 것이 시크릿 창의 계약) — 이 판정을 렌더러 말을 믿고 하면 그 계약이 깨진다.
+    const incognito = windowId ? (getWindow(windowId)?.incognito ?? false) : false
+    const mode: 'normal' | 'long' = args?.mode === 'long' ? 'long' : 'normal'
+    return createTask({
+      instruction,
+      tabId: args.tabId,
+      windowId,
+      mode,
+      readOnly: !!args?.readOnly,
+      incognito,
+      budget: sanitizeTaskBudget(args?.budget),
+    })
+  })
+
+  const mutate = (
+    channel: string,
+    // 거절을 돌려줄 수 있는 채널은 `{ok:false, error}` 를 반환한다 — 그대로 사용자에게 전한다.
+    // (아무것도 돌려주지 않으면 기존대로 `{ok:true}`.)
+    apply: (
+      task: PersistentTask, e: IpcMainInvokeEvent, args: { id: string; [k: string]: unknown },
+    ) => void | { ok: boolean; error?: string },
+  ): void => {
+    ipcMain.handle(channel, (e, args: { id: string; [k: string]: unknown }) => {
+      if (!isTrustedSender(e)) return taskOwnershipDenied()
+      const task = typeof args?.id === 'string' && args.id ? getTask(args.id) : null
+      if (!task) return taskNotFound()
+      if (!ownsTask(e, task)) return taskOwnershipDenied()
+      const r = apply(task, e, args)
+      if (r && r.ok === false) return { ok: false, error: r.error ?? '요청을 처리할 수 없습니다.' }
+      return { ok: true }
+    })
+  }
+
+  mutate(IPC.ai.ptaskStart, (task) => startTask(task.id))
+  mutate(IPC.ai.ptaskPause, (task) => pauseTask(task.id))
+  mutate(IPC.ai.ptaskResume, (task) => resumeTask(task.id))
+  mutate(IPC.ai.ptaskCancel, (task) => cancelTask(task.id))
+  mutate(IPC.ai.ptaskDelete, (task) => deleteTask(task.id))
+  mutate(IPC.ai.ptaskAccept, (task) => acceptTaskResult(task.id))
+  mutate(IPC.ai.ptaskConfirm, (task, _e, args) => confirmTask(task.id, !!args.approved))
+  mutate(IPC.ai.ptaskAnswer, (task, _e, args) => answerTask(task.id, String(args.answer ?? '')))
+  mutate(IPC.ai.ptaskSetTarget, (task, _e, args) => setTaskTarget(task.id, String(args.tabId ?? '')))
+
+  // 대상 탭 후보 목록 — 다른 조회 채널(ptaskGet 등)과 같은 원칙으로 소유권 검사 없이 신뢰 창이면 허용.
+  // (렌더러가 준 tabId 를 그대로 믿지 않는 실제 검증은 위 ptaskSetTarget → setTaskTarget 안에서 한다.)
+  const emptyTargetList = (reason: string): TaskTargetList => (
+    { ok: false, reason, expected: { url: null, windowLabel: null, workspaceName: null }, tabs: [] }
+  )
+  ipcMain.handle(IPC.ai.ptaskTargets, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return emptyTargetList('권한 없음')
+    return typeof args?.id === 'string' && args.id ? listTaskTargets(args.id) : emptyTargetList('작업을 찾을 수 없습니다.')
+  })
+
+  taskEvents.on('changed', (list: TaskSummary[]) => {
+    for (const ctx of getAllWindows()) {
+      if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.ptaskChanged, list)
+    }
+    broadcastToInternalPages(IPC.ai.ptaskChanged, list)
+  })
+
+  taskEvents.on('event', (evt: { taskId: string; [k: string]: unknown }) => {
+    for (const ctx of getAllWindows()) {
+      if (!ctx.chrome.webContents.isDestroyed()) ctx.chrome.webContents.send(IPC.ai.ptaskEvent, evt)
+    }
+    broadcastToInternalPages(IPC.ai.ptaskEvent, evt)
+  })
+
+  // 반복 예약(agent-schedule) 재개 — 이미 완성된 resumeRepeat() 를 그대로 IPC 로 노출.
+  // 소유권 개념이 없는 기능(repeatStart/Stop 도 동일)이라 owns 검사 없이 신뢰 창이면 허용.
+  ipcMain.handle(IPC.ai.scheduleResume, (e, args: { id: string }) => {
+    if (!isTrustedSender(e)) return null
+    return typeof args?.id === 'string' && args.id ? resumeRepeat(args.id) : null
   })
 }

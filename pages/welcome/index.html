@@ -2,8 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
-    <title>ezBrowser 시작</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <title data-i18n="page.welcome.pageTitle">ezBrowser 시작</title>
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <style>
       :root { color-scheme: light dark;
         --bg: #F7F7F8; --fg: #1A1A1A; --muted: #5F5F66;
@@ -105,6 +107,11 @@
       .src .p { font-size: 12px; color: var(--muted); margin-top: 2px; }
       .src .tags { font-size: 11px; color: var(--muted); }
       .imp-opts { margin-top: 16px; }
+      .ai-done { background: color-mix(in srgb, #22c55e 14%, transparent); border: 1px solid color-mix(in srgb, #22c55e 40%, transparent);
+        border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; text-align: left; }
+      .ai-err { background: color-mix(in srgb, #ef4444 12%, transparent); border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+        border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 1.5; text-align: left; margin-bottom: 10px; }
+      .ai-err .f { color: var(--muted); margin-top: 4px; font-size: 11px; }
       .imp-empty { font-size: 13px; color: var(--muted); padding: 22px; text-align: center;
         border: 1px dashed var(--border); border-radius: 10px; }
       .imp-result { font-size: 13px; padding: 12px 14px; border-radius: 10px; margin-top: 14px; line-height: 1.55; }
@@ -122,7 +129,7 @@
   <body>
     <div class="stage">
       <div class="logo">ezBrowser</div>
-      <div class="tag">가볍고 자유로운 브라우저</div>
+      <div class="tag" data-i18n="page.welcome.tagline">가볍고 자유로운 브라우저</div>
 
       <div class="progress-bar" id="dots"></div>
 
@@ -131,7 +138,7 @@
       <div class="actions" id="actions"></div>
     </div>
     <script>
-      const TOTAL = 5
+      const TOTAL = 6
       let stepIdx = 0
       let state = {
         searchEngine: 'google',
@@ -149,9 +156,17 @@
         importHistory: true,
         importing: false,
         importResult: null,    // { ok, bookmarks, history, errors } 또는 문자열 에러
+        // AI 연결 — 이 컴퓨터에서 지금 쓸 수 있는 방법을 찾아 한 번에 잇는다.
+        aiDetection: null,     // null = 미로드
+        aiConnecting: null,
+        aiResult: null,        // { ok, label, message, fix }
       }
 
       function api() { return window.internalAPI }
+
+      // browser://shared/i18n.js 가 window.t 를 심는다(전역 함수 선언은 전역 스크립트에서
+      // window.t 를 덮어써 무한 재귀를 만들 수 있으므로 이름을 다르게 둔다 — docs/i18n.md 참고).
+      function trSafe(key, fallback, vars) { return typeof window.t === 'function' ? window.t(key, fallback, vars) : fallback }
 
       function renderDots() {
         const el = document.getElementById('dots')
@@ -183,15 +198,18 @@
 
       function renderImport() {
         if (state.importSources === null) {
-          return '<div class="imp-empty">설치된 브라우저를 찾는 중…</div>'
+          return '<div class="imp-empty">' + trSafe('page.welcome.import.loading', '설치된 브라우저를 찾는 중…') + '</div>'
         }
         if (state.importSources.length === 0) {
-          return '<div class="imp-empty">가져올 수 있는 브라우저(크롬·엣지·Brave·웨일)를 찾지 못했어요. 건너뛰어도 됩니다.</div>'
+          return '<div class="imp-empty">' + trSafe('page.welcome.import.notFound', '가져올 수 있는 브라우저(크롬·엣지·Brave·웨일)를 찾지 못했어요. 건너뛰어도 됩니다.') + '</div>'
         }
         let html = '<div class="src-list">'
         for (const s of state.importSources) {
           const sel = state.selectedSource === s.id
-          const tags = [s.hasBookmarks ? '북마크' : null, s.hasHistory ? '방문기록' : null].filter(Boolean).join(' · ')
+          const tags = [
+            s.hasBookmarks ? trSafe('page.welcome.import.tagBookmarks', '북마크') : null,
+            s.hasHistory ? trSafe('page.welcome.import.tagHistory', '방문기록') : null,
+          ].filter(Boolean).join(' · ')
           html += `<div class="src ${sel ? 'selected' : ''}" data-source="${s.id}">
             <div class="info"><div class="b">${s.browser}</div><div class="p">${s.profile}</div></div>
             <div class="tags">${tags}</div></div>`
@@ -200,15 +218,15 @@
         if (state.selectedSource) {
           html += `<div class="imp-opts">
             <div class="toggle-row" style="border:none;padding:8px 0;">
-              <div class="info"><div class="label">북마크 가져오기</div></div>
+              <div class="info"><div class="label">${trSafe('page.welcome.import.optBookmarks', '북마크 가져오기')}</div></div>
               <div class="toggle ${state.importBookmarks ? 'on' : ''}" data-toggle="importBookmarks"></div>
             </div>
             <div class="toggle-row" style="border:none;padding:8px 0;">
-              <div class="info"><div class="label">방문 기록 가져오기</div></div>
+              <div class="info"><div class="label">${trSafe('page.welcome.import.optHistory', '방문 기록 가져오기')}</div></div>
               <div class="toggle ${state.importHistory ? 'on' : ''}" data-toggle="importHistory"></div>
             </div>
             <button class="btn primary" id="runImport" style="margin-top:10px;width:100%;" ${state.importing ? 'disabled' : ''}>
-              ${state.importing ? '가져오는 중…' : '선택한 데이터 가져오기'}</button>
+              ${state.importing ? trSafe('page.welcome.import.running', '가져오는 중…') : trSafe('page.welcome.import.runButton', '선택한 데이터 가져오기')}</button>
           </div>`
         }
         if (state.importResult) {
@@ -218,12 +236,82 @@
           } else if (r.errors && r.errors.length && !r.bookmarks && !r.history) {
             html += `<div class="imp-result err">${r.errors.join(' ')}</div>`
           } else {
-            let msg = `✓ 북마크 ${r.bookmarks}개, 방문 기록 ${r.history}개를 가져왔어요.`
+            let msg = trSafe('page.welcome.import.resultOk', '✓ 북마크 {bookmarks}개, 방문 기록 {history}개를 가져왔어요.', { bookmarks: r.bookmarks, history: r.history })
             if (r.errors && r.errors.length) msg += ' ' + r.errors.join(' ')
             html += `<div class="imp-result ok">${msg}</div>`
           }
         }
         return html
+      }
+
+      // ── AI 연결 단계 ────────────────────────────────────────────────
+      // 언어 전환 시 다시 계산되도록 정적 객체가 아니라 함수로 둔다(trSafe 는 호출 시점의 사전을 읽는다).
+      function aiCostLabel(cost) {
+        const KEY = {
+          subscription: ['page.welcome.ai.costSubscription', '구독 계정 · 추가 요금 없음'],
+          'free-local': ['page.welcome.ai.costFreeLocal', '내 컴퓨터 · 무료'],
+          'free-tier': ['page.welcome.ai.costFreeTier', '무료 티어'],
+          'paid-key': ['page.welcome.ai.costPaidKey', '사용한 만큼 과금'],
+        }
+        const entry = KEY[cost]
+        return entry ? trSafe(entry[0], entry[1]) : ''
+      }
+
+      function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+      }
+
+      function renderAi() {
+        if (state.aiResult && state.aiResult.ok) {
+          return '<div class="ai-done">' + trSafe('page.welcome.ai.connected', '✓ <b>{label}</b> 에 연결됐습니다. 사이드바의 ✨ 버튼으로 바로 쓸 수 있어요.', { label: esc(state.aiResult.label) }) + '</div>'
+        }
+        if (state.aiDetection === null) return '<div class="imp-empty">' + trSafe('page.welcome.ai.loading', '이 컴퓨터에서 쓸 수 있는 AI 를 찾는 중…') + '</div>'
+        const ready = (state.aiDetection.candidates || []).filter((c) => c.ready)
+        let html = ''
+        if (state.aiResult && !state.aiResult.ok) {
+          html += '<div class="ai-err"><b>' + esc(state.aiResult.message) + '</b>'
+            + (state.aiResult.fix ? '<div class="f">' + esc(state.aiResult.fix) + '</div>' : '') + '</div>'
+        }
+        if (ready.length === 0) {
+          html += '<div class="imp-empty">' + trSafe('page.welcome.ai.notFound', '지금 바로 쓸 수 있는 AI 를 찾지 못했어요. 나중에 설정 &gt; AI 에서 연결할 수 있고, 건너뛰어도 브라우저는 그대로 씁니다.') + '</div>'
+          return html
+        }
+        html += '<div class="src-list">'
+        for (const c of ready) {
+          const busy = state.aiConnecting === c.id
+          html += '<div class="src' + (busy ? ' selected' : '') + '" data-ai="' + esc(c.id) + '">'
+            + '<div class="info"><div class="b">' + esc(c.label) + '</div><div class="p">' + esc(busy ? trSafe('page.welcome.ai.connecting', '연결 확인 중…') : c.detail) + '</div></div>'
+            + '<div class="tags">' + esc(aiCostLabel(c.cost)) + '</div></div>'
+        }
+        html += '</div>'
+        return html
+      }
+
+      async function loadAiDetection() {
+        try {
+          const a = api()
+          state.aiDetection = a && a.ai && a.ai.detectProviders ? await a.ai.detectProviders(false) : { candidates: [] }
+        } catch (e) { state.aiDetection = { candidates: [] } }
+        if (state.aiDetection === null) state.aiDetection = { candidates: [] }
+        if (stepIdx === 4) renderStep()
+      }
+
+      async function connectAi(id) {
+        if (state.aiConnecting) return
+        state.aiConnecting = id
+        state.aiResult = null
+        renderStep()
+        try {
+          const r = await api().ai.connectProvider(id)
+          state.aiResult = r && r.ok
+            ? { ok: true, label: (r.providerLabel || id) }
+            : { ok: false, message: (r && r.diagnosis && r.diagnosis.message) || (r && r.error) || trSafe('page.welcome.ai.connectFailed', '연결하지 못했습니다.'),
+                fix: r && r.diagnosis ? r.diagnosis.fix : undefined }
+        } catch (e) {
+          state.aiResult = { ok: false, message: (e && e.message) ? e.message : String(e) }
+        }
+        state.aiConnecting = null
+        renderStep()
       }
 
       async function loadImportSources() {
@@ -248,69 +336,79 @@
             history: state.importHistory,
           })
         } catch (e) {
-          state.importResult = '가져오기에 실패했어요: ' + (e && e.message ? e.message : e)
+          state.importResult = trSafe('page.welcome.import.failed', '가져오기에 실패했어요: {error}', { error: (e && e.message ? e.message : e) })
         }
         state.importing = false
         renderStep()
       }
 
       let importLoadStarted = false
+      let aiLoadStarted = false
       function renderStep() {
         // 가져오기 단계 진입 시 소스 1회 로드
         if (stepIdx === 1 && state.importSources === null && !importLoadStarted) {
           importLoadStarted = true
           void loadImportSources()
         }
+        if (stepIdx === 4 && state.aiDetection === null && !aiLoadStarted) {
+          aiLoadStarted = true
+          void loadAiDetection()
+        }
         const step = document.getElementById('step')
         const actions = document.getElementById('actions')
         if (stepIdx === 0) {
           step.innerHTML = `
-            <h2>기본 검색 엔진</h2>
-            <div class="desc">주소창에서 검색어를 입력했을 때 사용할 검색 엔진을 선택하세요. 나중에 설정에서 바꿀 수 있습니다.</div>
+            <h2>${trSafe('page.welcome.step0.title', '기본 검색 엔진')}</h2>
+            <div class="desc">${trSafe('page.welcome.step0.desc', '주소창에서 검색어를 입력했을 때 사용할 검색 엔진을 선택하세요. 나중에 설정에서 바꿀 수 있습니다.')}</div>
             <div class="choice-grid">
-              ${choice('google', 'Google', '검색·이미지·뉴스', 'searchEngine')}
-              ${choice('naver', 'Naver', '한국어 검색에 강함', 'searchEngine')}
-              ${choice('bing', 'Bing', 'AI 답변 통합', 'searchEngine')}
-              ${choice('ddg', 'DuckDuckGo', '추적 없음', 'searchEngine')}
+              ${choice('google', 'Google', trSafe('page.welcome.step0.google', '검색·이미지·뉴스'), 'searchEngine')}
+              ${choice('naver', 'Naver', trSafe('page.welcome.step0.naver', '한국어 검색에 강함'), 'searchEngine')}
+              ${choice('bing', 'Bing', trSafe('page.welcome.step0.bing', 'AI 답변 통합'), 'searchEngine')}
+              ${choice('ddg', 'DuckDuckGo', trSafe('page.welcome.step0.ddg', '추적 없음'), 'searchEngine')}
             </div>`
         } else if (stepIdx === 1) {
           step.innerHTML = `
-            <h2>데이터 가져오기</h2>
-            <div class="desc">쓰던 브라우저의 북마크와 방문 기록을 그대로 옮겨올 수 있어요. 방문 기록을 가져오려면 해당 브라우저를 먼저 완전히 종료하세요.</div>
+            <h2>${trSafe('page.welcome.step1.title', '데이터 가져오기')}</h2>
+            <div class="desc">${trSafe('page.welcome.step1.desc', '쓰던 브라우저의 북마크와 방문 기록을 그대로 옮겨올 수 있어요. 방문 기록을 가져오려면 해당 브라우저를 먼저 완전히 종료하세요.')}</div>
             ${renderImport()}`
         } else if (stepIdx === 2) {
           step.innerHTML = `
-            <h2>테마</h2>
-            <div class="desc">외피 UI 색상과 페이지 다크 모드를 어떻게 처리할지 선택하세요.</div>
+            <h2>${trSafe('page.welcome.step2.title', '테마')}</h2>
+            <div class="desc">${trSafe('page.welcome.step2.desc', '외피 UI 색상과 페이지 다크 모드를 어떻게 처리할지 선택하세요.')}</div>
             <div class="choice-grid">
-              ${choice('system', '시스템 따름', 'OS 다크/라이트 동기화', 'theme')}
-              ${choice('light', '라이트', '항상 밝게', 'theme')}
-              ${choice('dark', '다크', '항상 어둡게', 'theme')}
-              ${choice('dark-with-page', '다크 + 페이지 다크', '모든 사이트도 강제 다크', 'theme')}
+              ${choice('system', trSafe('page.welcome.step2.systemTitle', '시스템 따름'), trSafe('page.welcome.step2.systemSub', 'OS 다크/라이트 동기화'), 'theme')}
+              ${choice('light', trSafe('page.welcome.step2.lightTitle', '라이트'), trSafe('page.welcome.step2.lightSub', '항상 밝게'), 'theme')}
+              ${choice('dark', trSafe('page.welcome.step2.darkTitle', '다크'), trSafe('page.welcome.step2.darkSub', '항상 어둡게'), 'theme')}
+              ${choice('dark-with-page', trSafe('page.welcome.step2.darkPageTitle', '다크 + 페이지 다크'), trSafe('page.welcome.step2.darkPageSub', '모든 사이트도 강제 다크'), 'theme')}
             </div>`
         } else if (stepIdx === 3) {
           step.innerHTML = `
-            <h2>편리 기능</h2>
-            <div class="desc">기본 ON 권장 — 언제든 끌 수 있습니다.</div>
-            ${toggleRow('adblock', '광고·트래커 차단', 'EasyList + EasyPrivacy + 한국 KR 필터')}
-            ${toggleRow('mouseGestures', '마우스 제스처', '우클릭 드래그 — ← 뒤로, → 앞으로, ↑ 새로고침, ↓ 새 탭')}
-            ${toggleRow('quickSearch', '빠른 검색', '텍스트 선택 시 부유 검색 버튼')}
-            ${toggleRow('hoverTranslate', '호버 단어 번역', 'Alt 누른 채 단어 위 마우스 → 번역 팝업')}`
+            <h2>${trSafe('page.welcome.step3.title', '편리 기능')}</h2>
+            <div class="desc">${trSafe('page.welcome.step3.desc', '기본 ON 권장 — 언제든 끌 수 있습니다.')}</div>
+            ${toggleRow('adblock', trSafe('page.welcome.step3.adblockLabel', '광고·트래커 차단'), trSafe('page.welcome.step3.adblockHelp', 'EasyList + EasyPrivacy + 한국 KR 필터'))}
+            ${toggleRow('mouseGestures', trSafe('page.welcome.step3.gesturesLabel', '마우스 제스처'), trSafe('page.welcome.step3.gesturesHelp', '우클릭 드래그 — ← 뒤로, → 앞으로, ↑ 새로고침, ↓ 새 탭'))}
+            ${toggleRow('quickSearch', trSafe('page.welcome.step3.quickSearchLabel', '빠른 검색'), trSafe('page.welcome.step3.quickSearchHelp', '텍스트 선택 시 부유 검색 버튼'))}
+            ${toggleRow('hoverTranslate', trSafe('page.welcome.step3.hoverTranslateLabel', '호버 단어 번역'), trSafe('page.welcome.step3.hoverTranslateHelp', 'Alt 누른 채 단어 위 마우스 → 번역 팝업'))}`
         } else if (stepIdx === 4) {
           step.innerHTML = `
-            <h2>핵심 단축키</h2>
-            <div class="desc">이 단축키만 외워도 80%는 활용할 수 있습니다. 모든 키는 <code style="background:var(--bg);padding:1px 4px;border-radius:3px;">browser://keymap</code> 에서 재바인딩 가능.</div>
+            <h2>${trSafe('page.welcome.step4.title', 'AI 연결')}</h2>
+            <div class="desc">${trSafe('page.welcome.step4.desc', '이 브라우저의 AI 는 <b>내 계정·내 컴퓨터</b>로 돌아갑니다. 지금 쓸 수 있는 방법을 찾아 뒀어요 — 하나를 고르면 실제로 되는지까지 확인합니다. 나중에 해도 됩니다.')}</div>
+            ${renderAi()}`
+        } else if (stepIdx === 5) {
+          step.innerHTML = `
+            <h2>${trSafe('page.welcome.step5.title', '핵심 단축키')}</h2>
+            <div class="desc">${trSafe('page.welcome.step5.desc', '이 단축키만 외워도 80%는 활용할 수 있습니다. 모든 키는 <code style="background:var(--bg);padding:1px 4px;border-radius:3px;">browser://keymap</code> 에서 재바인딩 가능.')}</div>
             <div class="shortcut-list">
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>T</kbd> <span>새 탭</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>W</kbd> <span>탭 닫기</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>L</kbd> <span>주소창 포커스</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> <span>명령 팔레트</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>\\</kbd> <span>좌우 분할</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>-</kbd> <span>상하 분할</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> <span>확장 관리</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> <span>페이지 다크 토글</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> <span>이 사이트 다크</span></div>
-              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> <span>이 사이트 광고차단</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>T</kbd> <span>${trSafe('page.welcome.shortcut.newTab', '새 탭')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>W</kbd> <span>${trSafe('page.welcome.shortcut.closeTab', '탭 닫기')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>L</kbd> <span>${trSafe('page.welcome.shortcut.focusAddress', '주소창 포커스')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> <span>${trSafe('page.welcome.shortcut.commandPalette', '명령 팔레트')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>\\</kbd> <span>${trSafe('page.welcome.shortcut.splitH', '좌우 분할')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>-</kbd> <span>${trSafe('page.welcome.shortcut.splitV', '상하 분할')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd> <span>${trSafe('page.welcome.shortcut.extensions', '확장 관리')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> <span>${trSafe('page.welcome.shortcut.pageDarkToggle', '페이지 다크 토글')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> <span>${trSafe('page.welcome.shortcut.siteDark', '이 사이트 다크')}</span></div>
+              <div class="shortcut-row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd> <span>${trSafe('page.welcome.shortcut.siteAdblock', '이 사이트 광고차단')}</span></div>
             </div>`
         }
 
@@ -320,10 +418,10 @@
         if (illust) step.innerHTML = `<img class="step-illust" src="${illust}" alt="" />` + step.innerHTML
 
         actions.innerHTML = `
-          <button class="skip" id="skip">건너뛰기</button>
+          <button class="skip" id="skip">${trSafe('page.welcome.nav.skip', '건너뛰기')}</button>
           <div style="display:flex;gap:10px;">
-            ${stepIdx > 0 ? '<button class="btn" id="prev">‹ 이전</button>' : ''}
-            <button class="btn primary" id="next">${stepIdx === TOTAL - 1 ? '✓ 시작하기' : '다음 ›'}</button>
+            ${stepIdx > 0 ? '<button class="btn" id="prev">' + trSafe('page.welcome.nav.prev', '‹ 이전') + '</button>' : ''}
+            <button class="btn primary" id="next">${stepIdx === TOTAL - 1 ? trSafe('page.welcome.nav.start', '✓ 시작하기') : trSafe('page.welcome.nav.next', '다음 ›')}</button>
           </div>`
         bind()
       }
@@ -350,6 +448,9 @@
             state.importResult = null
             renderStep()
           })
+        })
+        document.querySelectorAll('[data-ai]').forEach((el) => {
+          el.addEventListener('click', () => { void connectAi(el.dataset.ai) })
         })
         const runBtn = document.getElementById('runImport')
         if (runBtn) runBtn.addEventListener('click', runImport)
@@ -392,6 +493,12 @@
 
       renderDots()
       renderStep()
+
+      // 정적 data-i18n 요소(타이틀·태그라인)는 shared/i18n.js 가 알아서 갱신한다.
+      // 현재 단계는 전부 JS 템플릿(trSafe)로 그리므로 언어가 바뀌면 다시 그린다.
+      if (typeof window.onI18nChanged === 'function') {
+        window.onI18nChanged(() => { try { renderStep() } catch (e) { /* noop */ } })
+      }
     </script>
   </body>
 </html>

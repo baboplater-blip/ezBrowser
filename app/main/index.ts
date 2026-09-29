@@ -21,14 +21,18 @@ import {
 } from './features/video-download'
 import {
   createTab, navigateTab, onTabCreated, onTabClosed, onTabNavigated, onTabTitleUpdated,
-  onTabInPageNavigated, getTabPartition,
+  onTabInPageNavigated, onTabActivated, getTabPartition,
 } from './tabs/tab-service'
-import { initExtensions } from './extensions/adapter'
+import {
+  initExtensions, trackExtensionTab, untrackExtensionTab, selectExtensionTab,
+} from './extensions/adapter'
 import { buildAppMenu } from './menu/build-menu'
 import { initBookmarks } from './storage/bookmarks'
-import { initHistory, recordVisit, updateVisitTitle } from './storage/history'
+import { initHistory, recordVisit, updateVisitTitle, purgeExpiredHistory } from './storage/history'
+import { getSetting } from './storage/settings'
 import { DEFAULT_SESSION } from '../shared/constants'
 import { bindNativeTheme, trackWebContents as trackDarkMode } from './features/dark-mode'
+import { trackWebContents as trackPasskey } from './features/passkey'
 import { getWebContentsByTabId } from './tabs/tab-service'
 import { initGesture } from './features/gesture'
 import { initQuickSearch } from './features/quick-search'
@@ -53,19 +57,40 @@ import {
 import { startTabSleepLoop } from './features/tab-sleep'
 import { trackFind } from './features/find'
 import { trackContextMenu } from './features/context-menu'
-import { trackZoom } from './features/page-tools'
+import { trackZoom, trackPageShortcuts } from './features/page-tools'
 import { initSessionTracking, maybeRestoreSession } from './features/session'
 import { initAutoUpdate } from './features/auto-update'
 import {
   recordFirstTabLoaded, recordFirstWindowReady, recordWhenReady,
 } from './features/perf'
 import { nudgeGc } from './features/gc-nudge'
+import { captureBrands } from './features/client-hints'
+import { initGlobalPageErrorHandlers } from './features/page-errors'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'browser', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ])
 
 let lastFocusedWindowId: string | null = null
+
+// Electron 기본 UA 에서 앱 이름·Electron 토큰만 걷어내 순정 Chrome UA 로 만든다.
+// 예) "... browser-build/0.1.0 Chrome/134.0.6998.205 Electron/35.7.5 Safari/537.36"
+//   → "... Chrome/134.0.6998.205 Safari/537.36"
+// app.userAgentFallback 에 넣으면 이후 만들어지는 모든 세션·창에 적용된다(창 생성보다 먼저 호출할 것).
+export function cleanUserAgent(raw: string, appName: string): string {
+  return raw
+    .replace(new RegExp(`\\s*${appName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\/[\\d.]+`, 'ig'), '')
+    .replace(/\s*Electron\/[\d.]+/ig, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function applyCleanUserAgent(): void {
+  try {
+    const ua = cleanUserAgent(app.userAgentFallback, app.getName())
+    if (ua && !/Electron\//i.test(ua)) app.userAgentFallback = ua
+  } catch { /* UA 정규화 실패는 치명적이지 않다 — 기본값으로 진행 */ }
+}
 
 // 시크릿 창의 탭인지 — 방문 기록 등 영속 저장을 건너뛸 때 사용.
 // (CLAUDE.md: "시크릿 세션은 메모리에만 보관, 종료 시 삭제")
@@ -107,6 +132,12 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
+  // User-Agent 정규화 — Electron 기본 UA 는 "browser-build/0.1.0 ... Electron/35.7.5" 를 그대로 담는다.
+  // 이건 "일반 브라우저가 아님"을 스스로 밝히는 것과 같아, 봇 탐지에 즉시 걸리고(인스타·페북·틱톡)
+  // 일부 사이트는 아예 다른 페이지를 준다. 앱·Electron 토큰만 제거해 순정 Chrome UA 로 맞춘다.
+  // (Chromium 버전은 실제 런타임 값을 쓰므로 Electron 업그레이드 때 자동으로 따라간다.)
+  applyCleanUserAgent()
+
   app.whenReady().then(async () => {
     recordWhenReady()
     try {
@@ -124,21 +155,34 @@ if (!app.requestSingleInstanceLock()) {
         createTab({ windowId, url, background: opts?.background === true })
       })
       setMagnetHandler((url) => { void addTorrent(url) })
-      await initBookmarks()
-      await initHistory()
-      await initWorkspaces()
+      // 인증서 오류(경고 페이지 + 세션 한정 예외) · HTTP 기본 인증(작은 로그인 창) — 창/세션과 무관한 앱 레벨 이벤트
+      initGlobalPageErrorHandlers()
+      // 부팅 초기화 중 서로 무관한 것들을 Promise.all 로 병렬 실행 — 전부 자기 소유 파일만 읽고
+      // 쓰며, 서로의 완료를 기다릴 필요가 없다(각 init* 함수 본문 확인 완료: 다른 모듈의 상태를
+      // 읽거나 등록에 의존하지 않음). 실제 순서 의존은 이 Promise.all *뒤에* 있다 —
+      // ① 워크스페이스 partition 세션 설정(listWorkspaces 필요) ② 정책 webRequest 룰이
+      // 비어있지 않은 상태로 첫 페이지 로드 전 준비돼야 함(첫 탭은 이 전체 체인의 끝에서
+      // createBrowserWindow/세션 복원으로 생성되므로 안전) ③ 키맵은 창 생성(accelerator 바인딩)
+      // 전에 로드 완료. 이 세 조건 모두 Promise.all 완료 이후에 이어지는 코드가 지킨다.
+      await Promise.all([
+        initBookmarks(),
+        initHistory(),
+        initWorkspaces(),
+        initUserscripts(),
+        initPolicies(),
+        initPasswords(),
+        initDesignTokens(),
+        initAutomation(),
+        initModApi(),
+        loadKeymap(),
+        initUserChrome(),
+      ])
       // 모든 워크스페이스 partition 에 핸들러 install
       for (const ws of listWorkspaces()) setupSessionByPartition(ws.partition)
       // 새 워크스페이스 생성 시 자동 install
       workspaceEvents.on('created', (ws: { partition: string }) => {
         setupSessionByPartition(ws.partition)
       })
-      await initUserscripts()
-      await initPolicies()
-      await initPasswords()
-      await initDesignTokens()
-      await initAutomation()
-      await initModApi()
       registerAllIpc()
       registerDefaultActions()
       initDownloads()
@@ -161,19 +205,25 @@ if (!app.requestSingleInstanceLock()) {
         const wc = getWebContentsByTabId(id)
         if (wc) {
           trackDarkMode(wc)
+          trackPasskey(wc)
           trackUserscripts(wc)
           trackPolicies(wc)
           trackFind(wc, id)
           trackContextMenu(wc, id)
           trackZoom(wc, id)
+          trackPageShortcuts(wc, id)
           wc.once('did-finish-load', () => recordFirstTabLoaded())
         }
+        // 확장에 탭을 알린다 — 등록하지 않으면 chrome.tabs.query 가 늘 빈 배열이다.
+        trackExtensionTab(id)
         dispatchTabCreated({ id, webContentsId })
       })
       onTabClosed((id) => {
         unregisterTabWebContents(id)
+        untrackExtensionTab(id)
         dispatchTabClosed(id)
       })
+      onTabActivated((id) => selectExtensionTab(id))
       // SPA(pushState) 경로 변경 시에도 이전 영상 후보를 비운다 — did-navigate 만으로는 안 불림
       onTabInPageNavigated(({ id }) => clearVideoCandidates(id))
       onTabNavigated(({ id, url, title }) => {
@@ -204,8 +254,7 @@ if (!app.requestSingleInstanceLock()) {
         if (!isIncognitoTab(id)) updateVisitTitle(url, title)
       })
 
-      await loadKeymap()
-      await initUserChrome()
+      // loadKeymap()·initUserChrome() 은 위 Promise.all 에서 이미 완료됨
 
       windowEvents.on('created', (ctx: BrowserWindowContext) => {
         attachAcceleratorsToWindow(ctx)
@@ -235,6 +284,9 @@ if (!app.requestSingleInstanceLock()) {
       // 부팅 시 'startup' 트리거 매크로 실행 (외피 마운트 직후)
       const runStartup = (): void => {
         recordFirstWindowReady()
+        // 클라이언트 힌트(Sec-CH-UA) 헤더에 쓸 브랜드 목록을 실제 렌더러에서 한 번 읽어 캐시한다.
+        // 값을 지어내지 않고 navigator.userAgentData 와 항상 같은 값을 헤더로 내보내기 위함.
+        void captureBrands(ctx.chrome.webContents)
         setTimeout(() => {
           const startupMacros = listStartupMacros()
           for (const macro of startupMacros) {
@@ -271,6 +323,21 @@ if (!app.requestSingleInstanceLock()) {
       // 백그라운드 탭 슬립 루프 — 매 60초마다 비활성 탭 검사
       startTabSleepLoop()
 
+      // privacy.historyRetention 설정 반영 — 창 표시 후 지연 1회 + 이후 하루(24h) 주기로
+      // 보관 기간을 넘은 방문 기록을 삭제. 'unlimited' 면 purgeExpiredHistory 가 즉시 0 반환.
+      const runHistoryPurge = (): void => {
+        try {
+          const removed = purgeExpiredHistory(getSetting('privacy').historyRetention)
+          if (removed > 0) console.info(`[history] retention purge removed ${removed} row(s)`)
+        } catch (err) {
+          console.warn('[main] history retention purge failed', err)
+        }
+      }
+      setTimeout(runHistoryPurge, 5_000)
+      const HISTORY_PURGE_INTERVAL_MS = 24 * 60 * 60 * 1000
+      const historyPurgeInterval = setInterval(runHistoryPurge, HISTORY_PURGE_INTERVAL_MS)
+      if (typeof historyPurgeInterval.unref === 'function') historyPurgeInterval.unref()
+
       // 지난 세션에서 진행 중이던 다운로드 이어받기 (렌더러 마운트 후 토스트·패널이 보이도록 약간 지연)
       setTimeout(() => {
         void resumePendingDownloads().catch((err) => console.warn('[main] resume downloads failed', err))
@@ -290,7 +357,10 @@ if (!app.requestSingleInstanceLock()) {
   process.on('unhandledRejection', (err) => { console.error('[main] unhandled rejection', err) })
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    // 우리 메인 창은 BaseWindow(BrowserWindow 아님) 라 Electron 의 'window-all-closed' 카운트와
+    // 별개일 수 있다 — 팝업(item 1, 실제 BrowserWindow) 하나가 닫힐 때 이 이벤트가 발화해도
+    // getAllWindows() 가 여전히 남아있으면 앱을 끄지 않는다.
+    if (process.platform !== 'darwin' && getAllWindows().length === 0) app.quit()
   })
 
   app.on('activate', () => {

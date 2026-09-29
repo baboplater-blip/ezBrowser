@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Workspace, WorkspaceColor, WorkspaceState } from '../../shared/types'
 import { useChromeOverlay } from '../hooks/useChromeOverlay'
+import { useI18nT } from '../i18n'
 
 const COLOR_HEX: Record<WorkspaceColor, string> = {
   red: '#E5484D',
@@ -44,6 +45,7 @@ interface MenuState {
 }
 
 export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element | null {
+  const tr = useI18nT()
   const [state, setState] = useState<WorkspaceState>({ workspaces: [], activeId: '' })
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
@@ -120,10 +122,10 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
 
   const handleDelete = (w: Workspace) => {
     if (state.workspaces.length <= 1) {
-      alert('마지막 스페이스는 삭제할 수 없습니다.')
+      alert(tr('ui.workspaceRail.alertLastSpace', '마지막 스페이스는 삭제할 수 없습니다.'))
       return
     }
-    if (!confirm(`스페이스 "${w.name}" 를 삭제할까요?\n(이 스페이스의 모든 탭과 세션이 사라집니다.)`)) return
+    if (!confirm(tr('ui.workspaceRail.confirmDelete', '스페이스 "{name}" 를 삭제할까요?\n(이 스페이스의 모든 탭과 세션이 사라집니다.)', { name: w.name }))) return
     void window.browserAPI.workspace.remove(w.id)
     setMenu(null)
   }
@@ -148,7 +150,8 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
       <button
         className="workspace-collapse"
         onClick={onToggle}
-        title="워크스페이스 사이드바 접기"
+        title={tr('ui.toolbar.workspaceRail.collapse', '워크스페이스 사이드바 접기')}
+        aria-label={tr('ui.toolbar.workspaceRail.collapse', '워크스페이스 사이드바 접기')}
       >‹</button>
       {state.workspaces.map((w, idx) => (
         <button
@@ -158,7 +161,9 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
           onClick={() => handleActivate(w.id)}
           onContextMenu={(e) => openContextMenu(e, w)}
           onDoubleClick={() => { setMenu({ workspace: w, x: 56, y: 60 + idx * 44, mode: 'rename' }) }}
-          title={`${w.name}${w.id === state.activeId ? ' (활성)' : ''}\n우클릭 = 메뉴, 더블클릭 = 이름`}
+          title={`${w.name}${w.id === state.activeId ? tr('ui.workspaceRail.activeSuffix', ' (활성)') : ''}${tr('ui.workspaceRail.chipHint', '\n우클릭 = 메뉴, 더블클릭 = 이름')}`}
+          aria-label={tr('ui.workspaceRail.chipAria', '워크스페이스 {name}', { name: w.name })}
+          aria-current={w.id === state.activeId ? 'true' : undefined}
           draggable
           onDragStart={(e) => {
             dragSourceId.current = w.id
@@ -193,7 +198,8 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
       <button
         className="workspace-new"
         onClick={handleNew}
-        title="새 스페이스 (Ctrl+Alt+N)"
+        title={tr('ui.workspaceRail.newTitle', '새 스페이스 (Ctrl+Alt+N)')}
+        aria-label={tr('ui.workspaceRail.newAria', '새 워크스페이스')}
       >+</button>
 
       {menu && (
@@ -205,16 +211,16 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
           <div className="ws-menu-title">{menu.workspace.name}</div>
           {menu.mode === 'main' && (
             <>
-              <button className="ws-menu-item" onClick={() => handleRename(menu.workspace)}>이름 변경…</button>
-              <button className="ws-menu-item" onClick={() => handleHome(menu.workspace)}>시작 페이지 지정…</button>
-              <div className="ws-menu-section">색상</div>
+              <button className="ws-menu-item" onClick={() => handleRename(menu.workspace)}>{tr('ui.workspaceRail.menu.rename', '이름 변경…')}</button>
+              <button className="ws-menu-item" onClick={() => handleHome(menu.workspace)}>{tr('ui.workspaceRail.menu.setHome', '시작 페이지 지정…')}</button>
+              <div className="ws-menu-section">{tr('ui.workspaceRail.menu.colorSection', '색상')}</div>
               <div className="ws-menu-colors">
                 {COLORS.map((c) => (
                   <button
                     key={c}
                     className={`ws-color-chip ${menu.workspace.color === c ? 'active' : ''}`}
                     style={{ background: COLOR_HEX[c] }}
-                    title={COLOR_LABEL[c]}
+                    title={tr(`ui.workspaceRail.color.${c}`, COLOR_LABEL[c])}
                     onClick={() => handleColor(menu.workspace, c)}
                   />
                 ))}
@@ -223,7 +229,7 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
               <button
                 className="ws-menu-item danger"
                 onClick={() => handleDelete(menu.workspace)}
-              >삭제</button>
+              >{tr('ui.workspaceRail.menu.delete', '삭제')}</button>
             </>
           )}
           {(menu.mode === 'rename' || menu.mode === 'home') && (
@@ -237,12 +243,12 @@ export function WorkspaceRail({ windowId, open, onToggle }: Props): JSX.Element 
                   if (e.key === 'Enter') submitInput()
                   if (e.key === 'Escape') setMenu(null)
                 }}
-                placeholder={menu.mode === 'rename' ? '스페이스 이름' : 'https://… (비우면 새 탭)'}
+                placeholder={menu.mode === 'rename' ? tr('ui.workspaceRail.menu.namePlaceholder', '스페이스 이름') : tr('ui.workspaceRail.menu.homePlaceholder', 'https://… (비우면 새 탭)')}
                 spellCheck={false}
               />
               <div className="ws-menu-input-actions">
-                <button className="ws-menu-item" onClick={submitInput}>확인</button>
-                <button className="ws-menu-item" onClick={() => setMenu(null)}>취소</button>
+                <button className="ws-menu-item" onClick={submitInput}>{tr('ui.workspaceRail.menu.confirm', '확인')}</button>
+                <button className="ws-menu-item" onClick={() => setMenu(null)}>{tr('ui.workspaceRail.menu.cancel', '취소')}</button>
               </div>
             </div>
           )}

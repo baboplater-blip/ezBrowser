@@ -1,0 +1,213 @@
+{
+  "schema": "auto-dev/outbox-entry@1",
+  "run_id": "run-20260918T123309Z-8d6072",
+  "recorded_at": "2026-09-18T13:05:04Z",
+  "result": {
+    "schema": "auto-dev/run-result@1",
+    "run_id": "run-20260918T123309Z-8d6072",
+    "project_id": "browser-build-36466a626d",
+    "status": "success",
+    "verdict": "pass",
+    "verdict_attributed": true,
+    "verdict_reason": "이번 실행(run-20260918T123309Z-8d6072)의 구조화 완료 기록: pass (합격 기준 15건 전건 통과, 부정 사례 10건, 선언된 잔여 작업 없음) / 남은 작업: rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요), (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처), (차단) 깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월); 전체 요청 완료: 아니오",
+    "exit_code": 0,
+    "timed_out": false,
+    "session_id": "36a2c48f-2fab-4743-8d66-891ecd6e7fb5",
+    "model": {
+      "requested": "opus",
+      "resolved": null,
+      "verified": false
+    },
+    "pending_background": null,
+    "evidence_source": "structured",
+    "criteria": [
+      {
+        "id": "c1",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "사용자가 시작할 때 '맡기고 자동 게시'를 켜면, 승인한 플랫폼·계정·건수·기한 안에서 캡션 확인 클릭 없이 게시 작업이 실제로 시작된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c2",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "승인하지 않은 계정·플랫폼으로는 자동 게시되지 않고 예전처럼 확인을 기다린다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c3",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "선승인 이전에 만들어 둔 작업은 나중 승인으로 갑자기 게시되지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c4",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "캡션 생성이 실패하면 게시하지 않고, 생성 프롬프트를 캡션으로 대신 올리지도 않는다(사유를 남기고 대기)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c5",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "이미지 후보가 여럿이면(모호) 선승인이 있어도 자동 게시하지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c6",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "건수 소진·기한 경과·사용자 철회·이미 진행한 작업은 자동 게시되지 않는다(재시작 후 재시도 없음)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c7",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "자동 게시 범위는 모델도 웹페이지도 만들거나 넓힐 수 없다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c8",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "정한 글 수 안에서는 블로그 댓글·좋아요가 정상 진행된다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c9",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "AI 가 지시를 무시하거나 작업이 중단 후 재개·구간 전환돼도 정한 글 수·간격·기한을 넘는 댓글·좋아요가 0건이다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c10",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "이미 다룬 글에 중복 댓글이 달리거나 이미 눌린 좋아요가 취소되지 않는다(기존 방어 유지)",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c11",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "실제 구독 모델이 이미지 생성→생성물 가져오기→캡션→SNS 게시를 끝까지 해낸다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c12",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "실제 구독 모델이 서로 다른 두 블로그 글의 본문을 읽고 그에 맞는 댓글·좋아요를 남긴다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c13",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "실모델 검증이 외부 실사이트 로그인·크레딧·실제 게시를 쓰지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c14",
+        "kind": "negative",
+        "result": "pass",
+        "behavior": "설치본 검증이 사용자의 실제 설치를 덮어쓰거나 지우지 않는다",
+        "behavior_truncated": false
+      },
+      {
+        "id": "c15",
+        "kind": "positive",
+        "result": "pass",
+        "behavior": "기존 기능에 회귀가 없다",
+        "behavior_truncated": false
+      }
+    ],
+    "missing_work": {
+      "pending_owned_work": [],
+      "pending_background_prose": null,
+      "criteria_failed": []
+    },
+    "whole_task": {
+      "declared": true,
+      "all_requested_work_complete": false,
+      "remaining_required": [
+        "rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요"
+      ],
+      "blockers": [
+        "코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요)",
+        "실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처)",
+        "깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월)"
+      ],
+      "optional_next": [
+        "실모델 블로그 시나리오를 buildBlogEngageTask 경로로 태워 참여 한도·간격 코드가드까지 실모델로 행사",
+        "실모델 e2e 를 시나리오당 2회 이상 돌려 도구호출 파싱 실패 빈도 측정"
+      ],
+      "korean_line": "남은 작업: rc.5 설치파일의 설치→부팅→제거 검증 — 이 PC 에 사용자 실설치본이 등록돼 있어 verify-install 이 BLOCKED. 우회하지 않았다. 다른 PC/VM 필요, (차단) 코드 서명 인증서(.pfx) 없음 — 미서명 빌드라 SmartScreen 경고(이월, 사용자 제공 필요), (차단) 실제 SNS·실제 블로그·Genspark/ChatGPT 실화면 미검증 — 실계정 로그인·크레딧·게시가 필요해 자율 범위 밖(검증은 전부 로컬 픽스처), (차단) 깨끗한 외부 Windows PC 에서의 설치·자동업데이트 수신 미검증(다른 기기 필요, 이월); 전체 요청 완료: 아니오"
+    },
+    "continuation": {
+      "rollovers": 0,
+      "runs": [
+        "run-20260918T123309Z-8d6072"
+      ],
+      "decision": null,
+      "measured": {
+        "elapsed_seconds": 1914.6,
+        "context_chars": 10753,
+        "total_tokens": 1409336,
+        "cache_read_tokens": 69417390
+      }
+    },
+    "usage": {
+      "measured": true,
+      "by_model": {
+        "claude-haiku-4-5-20251001": {
+          "input": 9912,
+          "output": 22,
+          "cache_read": 0,
+          "cache_creation": 0
+        },
+        "claude-opus-5": {
+          "input": 270,
+          "output": 99605,
+          "cache_read": 51238551,
+          "cache_creation": 452974
+        },
+        "claude-sonnet-5": {
+          "input": 108,
+          "output": 58521,
+          "cache_read": 18178839,
+          "cache_creation": 787924
+        }
+      },
+      "note": "cli-result-json.modelUsage — 캐시 읽기/생성은 새 입력 토큰과 별개다"
+    },
+    "gpt_snapshots": [
+      {
+        "kind": "start",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\social-workflows-20260918\\run-20260918T123309Z-8d6072-start.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "작업 시작 경계 — 이 시점까지의 세션 누적값. 이후 턴은 포함되지 않는다"
+      },
+      {
+        "kind": "end",
+        "path": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\snapshots\\social-workflows-20260918\\run-20260918T123309Z-8d6072-end.json",
+        "session_id": "01a0a5be-7929-71d3-bf83-c9ae8354e44a",
+        "scope": "런처 종료 경계 — 자식 실행이 끝난 시점의 세션 누적값. **부모(Astra)의 최종 응답은 포함되지 않으며**, 부모가 대기하는 동안 낡는다"
+      }
+    ],
+    "remediation": {
+      "kind": "none",
+      "command": null,
+      "note": ""
+    },
+    "summary": "모든 프로세스 정리 확인(잔여 electron 0). 마감합니다.\n\n## 요청하신 3점만 마감했습니다\n\n**① 자동 게시 선승인 — 무인 작업을 확인 단계로 축소하지 않게**\n\n`publish` 모드가 무조건 캡션 확인에서 멈추던 것을, **사용자가 시작할 때 직접 켠 이번 작업 한정 선승인** 범위 안에서는 확인 클릭 없이 게시까지 가도록 했습니다. 범위는 **플랫폼·계정·건수·기한**에 묶이고 입구는 신뢰 IPC 하나뿐이라 **모델도 페이지도 만들거나 넓힐 수 없습니다.** 기본값은 그대로 꺼짐입니다.\n\n자동으로 넘어가지 **않는** 경우를 코드로 고정했습니다: 초안 모드 · 다른 계정/플랫폼 · **선승인 이전에 만든 작업** · 이미지 후보 모호 · 캡션 실패 · 건수 소진 · 기한 경과 · 철회 · 이미 진행한 작업. 재시작 뒤에는 자동 재시도하지 않습니다(소비 기록·영수증이 정본).\n\n그 과정에서 **실제 결함 하나**를 고쳤습니다 — 캡션 생성이 실패하면 **이미지 생성 프롬프트를 캡션으로 대체**하고 있었습니다. 사용자가 쓰지 않은 글이 계정에 올라가는 경로였습니다. 이제 사유를 남기고 대기합니다.\n\n**② 블로그 한도·간격·기한 — 지시문에서 코드로**\n\n작업별 영속 카운터(`ai-engage-quota.json`)를 두고 **클릭 직전에** 막습니다. 모델이 무시하든, 중단 후 재개하든, 구간이 바뀌든 초과가 성립하지 않습니다. 기존 방어(중복 댓글·좋아요 취소·초안 모드)는 앞단에 그대로 있습니다. UI에 기한 입력도 노출하고, \"코드로 강제되지 않는다\"던 안내 문구를 정정했습니다.\n\n**③ 실제 구독 모델 검증 — 각본이 아니라 진짜 플래너로**\n\n`claude` 구독 CLI + 로컬 픽스처. 판정은 모델의 말이 아니라 **픽스처 서버가 관측한 `/state`** 입니다. **2/2 PASS**:\n- **R-SNS** 14단계/14호출/138초 — 업로드 파일 **sha256 바이트 일치**, 모델이 쓴 캡션, 서버 게시 1건. `mark_baseline`·`capture_image`·`upload_file(artifact)`·`wait_for` 를 실제로 썼습니다.\n- **R-BLOG** 8단계/7호출/39초 — 서로 다른 2글(post:2·post:4)에 댓글+좋아요, 중복 0, 내 글 0.\n\n**검증**: `npm run verify` **12/12**(47초) · 신규 auto-publish **33/33** · engage-ledger **54/54** · social e2e **19/19** · rc.5 스모크 **16/16**. **음성 대조 2회**로 검출력 확인(검사를 무력화하니 각각 3건·2건 FAIL → 원복).\n\n**빌드**: `dist\\ezBrowser-0.2.0-rc.5-win-x64.exe` · 121,885,617바이트 · SHA256 `eefe7f1a…07daf2` · `--publish never`.\n\n## 정직하게 남는 것\n\n- **설치파일 설치/제거는 검증하지 않았습니다.** 이 PC에 쓰시는 ezBrowser가 등록돼 있어 검사가 스스로 BLOCKED 했고 **우회하지 않았습니다**(실프로필·VM 설치도 안 함). rc.5는 `win-unpacked` 직접 실행으로 확인했습니다.\n- **실제 SNS·블로그·Genspark/ChatGPT 화면은 미검증** — 전부 로컬 픽스처입니다.\n- 실모델 확인은 **시나리오당 1회**입니다. 앞선 시도에서 도구 호출 파싱 실패가 1회 관측됐습니다(그 실행의 중단 자체는 앱이 아니라 **하네스 결함**이었고, 같은 프로필에 `done·47단계` 기록이 남아 앱이 정상이었음을 보여 줍니다).\n- 실모델 블로그 시나리오는 `buildBlogEngageTask` 경로를 타지 않아 **②의 코드가드를 실모델로 행사하지는 못했습니다**(그건 54/54 + 각본 e2e가 담당).\n- 코드 서명·외부 PC는 이월된 차단입니다. 다운로드 폴더 기존 결함은 이번 소유가 아니라 그대로 두었고 사용자 파일은 지우지 않았습니다.\n\n커밋 3건(",
+    "summary_truncated": true,
+    "log": "C:\\Users\\molma\\Desktop\\하네스\\browser-build\\.auto-dev\\runs\\run-20260918T123309Z-8d6072\\stream.jsonl",
+    "error": null
+  }
+}

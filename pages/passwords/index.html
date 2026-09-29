@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>비밀번호 관리</title>
     <style>
       :root { color-scheme: light dark;
@@ -17,9 +19,15 @@
       html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); color: var(--fg);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 'Apple SD Gothic Neo', sans-serif; }
       .wrap { max-width: 880px; margin: 0 auto; padding: 24px; }
-      header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+      header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
       header h1 { font-size: 22px; margin: 0; flex: 1; font-weight: 600; }
       header .hint { font-size: 11px; color: var(--muted); }
+
+      .hero-desc {
+        font-size: 12px; color: var(--muted); line-height: 1.6;
+        margin: 0 0 16px; padding: 10px 14px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      }
 
       .search-box {
         width: 100%; box-sizing: border-box;
@@ -37,30 +45,91 @@
         color: var(--warn);
       }
 
+      /* ===== 계정 추가 ===== */
+      .add-account { margin-bottom: 16px; }
+      .add-form {
+        margin-top: 10px; padding: 14px 16px;
+        background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .add-field { display: flex; flex-direction: column; gap: 4px; }
+      .add-field label { font-size: 12px; color: var(--muted); }
+      .add-field input[type=text], .add-field input[type=password] {
+        padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--bg); color: inherit; font-size: 13px; font-family: inherit;
+        box-sizing: border-box;
+      }
+      .add-field input:focus { outline: none; border-color: var(--accent); }
+      .pw-input-row { display: flex; gap: 6px; }
+      .pw-input-row input { flex: 1; min-width: 0; }
+      .add-hint { font-size: 11px; color: var(--muted); line-height: 1.6; }
+      .add-checkbox-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+      .add-checkbox-row input { margin-top: 3px; }
+      .add-error {
+        font-size: 12px; color: var(--danger);
+        padding: 7px 10px; background: rgba(200,42,56,0.08); border-radius: 6px;
+      }
+      .add-form-actions { display: flex; gap: 8px; }
+
       .list {
         background: var(--card); border: 1px solid var(--border); border-radius: 10px;
         overflow: hidden;
       }
       .item {
-        display: grid;
-        grid-template-columns: 1fr 1fr auto auto auto;
-        gap: 12px;
-        align-items: center;
+        display: flex; flex-direction: column; gap: 8px;
         padding: 12px 16px;
         border-bottom: 1px solid var(--border);
         font-size: 13px;
       }
       .item:last-child { border-bottom: none; }
       .item:hover { background: var(--hover); }
-      .item .origin { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .item .username { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .item .pw { font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px; color: var(--accent); min-width: 100px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+      .item-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .item-main .origin { font-weight: 500; flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .item-main .username { color: var(--muted); flex: 1 1 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .item-main .pw { font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 12px; color: var(--accent); min-width: 90px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+      .item-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+
+      .item-extra { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+      .autologin-row { display: flex; align-items: center; gap: 6px; cursor: default; }
+
+      .badge { font-size: 10px; padding: 2px 8px; border-radius: 8px; background: var(--hover); color: var(--muted); }
+      .badge.preferred { background: var(--accent); color: white; }
+      .badge.locked { background: rgba(200,42,56,0.12); color: var(--danger); line-height: 1.5; }
+
+      .pw-edit-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .pw-edit-row input {
+        padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+        background: var(--bg); color: inherit; font-size: 12px;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      }
+      .pw-edit-row .add-error { padding: 4px 8px; }
+
+      /* 행 단위 소형 토글 (설정 페이지의 .toggle 과 동일 시각 언어) */
+      .toggle-sm {
+        position: relative; width: 34px; height: 19px; flex-shrink: 0;
+        background: var(--border); border-radius: 10px; cursor: pointer;
+        transition: background 0.18s;
+      }
+      .toggle-sm::after {
+        content: ''; position: absolute; top: 2px; left: 2px;
+        width: 15px; height: 15px; border-radius: 50%; background: white;
+        transition: transform 0.18s cubic-bezier(0.23, 1, 0.32, 1);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      }
+      .toggle-sm.on { background: var(--accent); }
+      .toggle-sm.on::after { transform: translateX(15px); }
+      .toggle-sm.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
       .btn {
         padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
         background: var(--bg); color: inherit; cursor: pointer; font-size: 11px;
       }
       .btn:hover { border-color: var(--accent); color: var(--accent); }
+      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .btn:disabled:hover { border-color: var(--border); color: inherit; }
+      .btn.primary { background: var(--accent); color: white; border-color: transparent; }
+      .btn.primary:hover { color: white; }
       .btn.danger { color: var(--danger); }
       .btn.danger:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
@@ -71,7 +140,7 @@
         font-size: 13px;
       }
       .empty code { background: var(--card); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; }
-    
+
       /* ===== Emil 모션 폴리시 (emilkowalski/skills · emil-design-eng) ===== */
       button:not(.toggle):not(:disabled) { transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1); }
       button:not(.toggle):not(:disabled):active { transform: scale(0.97); }
@@ -83,16 +152,84 @@
   <body>
     <div class="wrap">
       <header>
-        <h1>비밀번호 관리</h1>
-        <span class="hint">safeStorage 로 OS 단위 암호화 (Windows DPAPI · macOS Keychain · Linux libsecret)</span>
+        <h1 data-i18n="page.passwords.a1">비밀번호 관리</h1>
+        <span class="hint" data-i18n="page.passwords.a2">safeStorage 로 OS 단위 암호화 (Windows DPAPI · macOS Keychain · Linux libsecret)</span>
       </header>
+      <div class="hero-desc" data-i18n="page.passwords.a3">여기에 미리 등록한 계정으로 에이전트가 로그인 화면을 스스로 통과할 수 있습니다. 비밀번호는 OS 암호화(safeStorage)로만 저장되고, AI 모델이나 페이지 스크립트에 전달되지 않습니다.</div>
       <div id="alert"></div>
-      <input class="search-box" id="search" placeholder="도메인 또는 사용자명 검색…" />
-      <div id="list" class="list"><div class="empty">로딩 중…</div></div>
+
+      <div class="add-account">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn primary" id="addToggleBtn" type="button" data-i18n="page.passwords.a4">＋ 계정 추가</button>
+          <button class="btn" id="genToggleBtn" type="button" data-i18n="page.passwords.a5">🎲 비밀번호 생성</button>
+          <button class="btn" id="csvExportBtn" type="button" data-i18n="page.passwords.a6">⬇ CSV로 내보내기</button>
+          <button class="btn" id="csvImportBtn" type="button" data-i18n="page.passwords.a7">⬆ CSV 가져오기</button>
+        </div>
+        <div id="csvResult" class="add-hint" style="margin-top:6px;"></div>
+
+        <div class="add-form" id="genForm" style="display:none;">
+          <div class="add-field">
+            <label>길이: <span id="genLenLabel">16</span>자</label>
+            <input type="range" id="genLen" min="8" max="64" value="16" />
+          </div>
+          <label class="add-checkbox-row"><input type="checkbox" id="genUpper" checked /> <span data-i18n="page.passwords.a8">대문자 (A-Z)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genLower" checked /> <span data-i18n="page.passwords.a9">소문자 (a-z)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genNumbers" checked /> <span data-i18n="page.passwords.a10">숫자 (0-9)</span></label>
+          <label class="add-checkbox-row"><input type="checkbox" id="genSymbols" checked /> <span data-i18n="page.passwords.a11">기호 (!@#$…)</span></label>
+          <div class="pw-input-row">
+            <input type="text" id="genOutput" readonly autocomplete="off" style="font-family:'Consolas','Monaco','Courier New',monospace;" />
+            <button class="btn" id="genRegenBtn" type="button" data-i18n="page.passwords.a12">다시 생성</button>
+            <button class="btn" id="genCopyBtn" type="button">복사</button>
+          </div>
+          <div class="add-error" id="genError" style="display:none;"></div>
+          <div class="add-hint" data-i18n="page.passwords.a14">브라우저 내장 암호학적 난수(Web Crypto)로 생성합니다 — 서버로 전송되지 않습니다.</div>
+        </div>
+
+        <div class="add-form" id="addForm" style="display:none;">
+          <div class="add-field">
+            <label data-i18n="page.passwords.a15">사이트 주소</label>
+            <input type="text" id="addOrigin" placeholder="https://example.com" autocomplete="off" />
+            <div class="add-hint" data-i18n="page.passwords.a16">https 사이트만 등록할 수 있습니다.</div>
+          </div>
+          <div class="add-field">
+            <label data-i18n="page.passwords.a17">사용자명(아이디)</label>
+            <input type="text" id="addUsername" autocomplete="off" />
+          </div>
+          <div class="add-field">
+            <label data-i18n="page.passwords.a18">비밀번호</label>
+            <div class="pw-input-row">
+              <input type="password" id="addPassword" autocomplete="new-password" />
+              <button class="btn" id="addPwToggle" type="button">보기</button>
+            </div>
+          </div>
+          <label class="add-checkbox-row">
+            <input type="checkbox" id="addAutoLogin" />
+            <span data-i18n="page.passwords.a20">이 계정으로 자동 로그인 허용</span>
+          </label>
+          <div class="add-hint" data-i18n="page.passwords.a21">켜면 에이전트가 이 사이트의 로그인 화면에서 이 계정으로 직접 입력하고 로그인 버튼까지 누릅니다. 비밀번호는 AI 모델에게 전달되지 않습니다. 기본은 꺼짐이며, 저장만으로는 켜지지 않습니다.</div>
+          <div class="add-error" id="addError" style="display:none;"></div>
+          <div class="add-form-actions">
+            <button class="btn primary" id="addSaveBtn" type="button" data-i18n="page.passwords.a22">저장</button>
+            <button class="btn" id="addCancelBtn" type="button" data-i18n="page.passwords.a23">취소</button>
+          </div>
+        </div>
+      </div>
+
+      <input class="search-box" id="search" placeholder="도메인 또는 사용자명 검색…" data-i18n-attr="placeholder:page.passwords.a27" />
+      <div id="list" class="list"><div class="empty" data-i18n="page.passwords.a24">로딩 중…</div></div>
+
+      <div class="never-section" id="neverSection" style="display:none;">
+        <h3 style="font-size:13px;margin:20px 0 8px;color:var(--muted);" data-i18n="page.passwords.a25">저장 제안을 끈 사이트</h3>
+        <div class="add-hint" style="margin-bottom:8px;" data-i18n="page.passwords.a26">"이 사이트는 안 함"을 선택한 사이트입니다. 여기서 해제하면 다음 방문 때 다시 저장을 제안합니다.</div>
+        <div id="neverList" class="list"></div>
+      </div>
     </div>
     <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
       let entries = []
+      let neverEntries = []
       let revealed = new Set()
+      let pwEditing = new Set()
       let query = ''
 
       function escape(s) { return String(s ?? '').replace(/</g, '&lt;') }
@@ -109,16 +246,55 @@
         } else {
           alertEl.innerHTML = ''
         }
+        const addToggleBtn = document.getElementById('addToggleBtn')
+        if (addToggleBtn) addToggleBtn.disabled = !available
         entries = await window.internalAPI.password.list()
         render()
+        neverEntries = await window.internalAPI.password.neverList()
+        renderNever()
+      }
+
+      function renderNever() {
+        const section = document.getElementById('neverSection')
+        const list = document.getElementById('neverList')
+        if (neverEntries.length === 0) {
+          section.style.display = 'none'
+          return
+        }
+        section.style.display = ''
+        list.innerHTML = neverEntries.map(function(origin) {
+          return '<div class="item"><div class="item-main">'
+            + '<div class="origin">' + escape(origin) + '</div>'
+            + '<div class="item-actions"><button class="btn" data-never-remove="' + escape(origin) + '">해제</button></div>'
+            + '</div></div>'
+        }).join('')
+        list.querySelectorAll('[data-never-remove]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            await window.internalAPI.password.neverRemove(btn.dataset.neverRemove)
+          })
+        })
       }
 
       function filtered() {
-        if (!query.trim()) return entries
-        const q = query.toLowerCase()
-        return entries.filter((e) =>
-          e.origin.toLowerCase().includes(q) || e.username.toLowerCase().includes(q),
-        )
+        let items = entries
+        if (query.trim()) {
+          const q = query.toLowerCase()
+          items = items.filter((e) =>
+            e.origin.toLowerCase().includes(q) || e.username.toLowerCase().includes(q),
+          )
+        }
+        return items.slice().sort(function(a, b) {
+          if (a.origin !== b.origin) return a.origin.localeCompare(b.origin)
+          return a.username.localeCompare(b.username)
+        })
+      }
+
+      function autoLoginCountsByOrigin() {
+        const m = {}
+        for (const e of entries) {
+          if (e.autoLoginAllowed) m[e.origin] = (m[e.origin] || 0) + 1
+        }
+        return m
       }
 
       function render() {
@@ -126,25 +302,69 @@
         const items = filtered()
         if (items.length === 0) {
           list.innerHTML = entries.length === 0
-            ? '<div class="empty">저장된 비밀번호가 없습니다.<br/>웹사이트에서 로그인하면 자동으로 저장됩니다.</div>'
+            ? '<div class="empty">저장된 비밀번호가 없습니다.<br/>위 "＋ 계정 추가" 로 미리 등록하거나, 웹사이트에서 로그인하면 자동으로 저장됩니다.</div>'
             : '<div class="empty">검색 결과 없음</div>'
           return
         }
+        const multiCounts = autoLoginCountsByOrigin()
+        const now = Date.now()
         list.innerHTML = items.map(function(e) {
           const isRevealed = revealed.has(e.id)
           const pwCell = isRevealed
             ? '<span class="pw" id="pw-' + e.id + '">…</span>'
             : '<span class="pw">••••••••</span>'
+          const isHttp = e.scheme === 'http'
+          const blocked = !!e.autoLoginBlockedUntil && e.autoLoginBlockedUntil > now
+          const showPreferred = !!e.autoLoginAllowed && (multiCounts[e.origin] || 0) >= 2
+
+          let extra = '<div class="item-extra">'
+          extra += '<label class="autologin-row"' + (isHttp ? ' title="자동 로그인은 https 사이트에서만 지원합니다"' : '') + '>'
+            + '<div class="toggle-sm ' + (e.autoLoginAllowed ? 'on' : '') + (isHttp ? ' disabled' : '') + '"'
+            + (isHttp ? '' : ' data-toggle-autologin="' + e.id + '"') + '></div>'
+            + '<span>자동 로그인 허용</span>'
+            + '</label>'
+          if (showPreferred) {
+            extra += e.preferred
+              ? '<span class="badge preferred">기본 계정</span>'
+              : '<button class="btn" data-set-preferred="' + e.id + '">기본으로</button>'
+          }
+          if (!pwEditing.has(e.id)) {
+            extra += '<button class="btn" data-pw-edit="' + e.id + '">비밀번호 변경</button>'
+          }
+          if (blocked) {
+            extra += '<span class="badge locked">🔒 자동 로그인 잠김 (로그인 실패 ' + (e.autoLoginFailures || 0) + '회) — 비밀번호를 고치면 다시 시도합니다</span>'
+          }
+          extra += '</div>'
+
+          if (pwEditing.has(e.id)) {
+            extra += '<div class="pw-edit-row">'
+              + '<input type="password" id="pwedit-' + e.id + '" placeholder="새 비밀번호" autocomplete="new-password" />'
+              + '<button class="btn primary" data-pw-save="' + e.id + '">저장</button>'
+              + '<button class="btn" data-pw-cancel="' + e.id + '">취소</button>'
+              + '<span class="add-error" id="pwedit-error-' + e.id + '" style="display:none;"></span>'
+              + '</div>'
+          }
+
           return '<div class="item">'
-            + '<div class="origin">' + escape(e.origin) + '</div>'
-            + '<div class="username">' + escape(e.username) + '</div>'
-            + pwCell
-            + '<button class="btn" data-reveal="' + e.id + '">' + (isRevealed ? '숨기기' : '보기') + '</button>'
-            + '<button class="btn" data-copy="' + e.id + '">복사</button>'
-            + '<button class="btn danger" data-remove="' + e.id + '">삭제</button>'
+            + '<div class="item-main">'
+            +   '<div class="origin">' + escape(e.origin) + '</div>'
+            +   '<div class="username">' + escape(e.username) + '</div>'
+            +   pwCell
+            +   '<div class="item-actions">'
+            +     '<button class="btn" data-reveal="' + e.id + '">' + (isRevealed ? '숨기기' : '보기') + '</button>'
+            +     '<button class="btn" data-copy="' + e.id + '">복사</button>'
+            +     '<button class="btn danger" data-remove="' + e.id + '">삭제</button>'
+            +   '</div>'
+            + '</div>'
+            + extra
             + '</div>'
         }).join('')
 
+        bindItemHandlers()
+      }
+
+      function bindItemHandlers() {
+        const list = document.getElementById('list')
         list.querySelectorAll('[data-reveal]').forEach(function(btn) {
           btn.addEventListener('click', async function() {
             const id = btn.dataset.reveal
@@ -155,7 +375,7 @@
             }
             const plain = await window.internalAPI.password.reveal(id)
             if (plain === null) {
-              alert('복호화에 실패했습니다.')
+              alert(trSafe('page.passwords.d1', '복호화에 실패했습니다.'))
               return
             }
             revealed.add(id)
@@ -168,14 +388,14 @@
           btn.addEventListener('click', async function() {
             const id = btn.dataset.copy
             const plain = await window.internalAPI.password.reveal(id)
-            if (plain === null) { alert('복호화 실패'); return }
+            if (plain === null) { alert(trSafe('page.passwords.d2', '복호화 실패')); return }
             try {
               await navigator.clipboard.writeText(plain)
               const orig = btn.textContent
-              btn.textContent = '복사됨 ✓'
+              btn.textContent = trSafe('page.passwords.t6', '복사됨 ✓')
               setTimeout(function() { btn.textContent = orig }, 1200)
             } catch (e) {
-              alert('클립보드 접근 실패')
+              alert(trSafe('page.passwords.d3', '클립보드 접근 실패'))
             }
           })
         })
@@ -188,6 +408,250 @@
             await window.internalAPI.password.remove(id)
           })
         })
+        list.querySelectorAll('[data-toggle-autologin]').forEach(function(el) {
+          el.addEventListener('click', async function() {
+            const id = el.dataset.toggleAutologin
+            const e = entries.find(function(x) { return x.id === id })
+            if (!e) return
+            const r = await window.internalAPI.password.update({ id: id, autoLoginAllowed: !e.autoLoginAllowed })
+            if (!r.ok) alert(r.message || '변경에 실패했습니다.')
+          })
+        })
+        list.querySelectorAll('[data-set-preferred]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            const id = btn.dataset.setPreferred
+            const r = await window.internalAPI.password.update({ id: id, preferred: true })
+            if (!r.ok) alert(r.message || '변경에 실패했습니다.')
+          })
+        })
+        list.querySelectorAll('[data-pw-edit]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const id = btn.dataset.pwEdit
+            pwEditing.add(id)
+            render()
+            const input = document.getElementById('pwedit-' + id)
+            if (input) input.focus()
+          })
+        })
+        list.querySelectorAll('[data-pw-cancel]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const id = btn.dataset.pwCancel
+            pwEditing.delete(id)
+            render()
+          })
+        })
+        list.querySelectorAll('[data-pw-save]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            const id = btn.dataset.pwSave
+            const input = document.getElementById('pwedit-' + id)
+            const errEl = document.getElementById('pwedit-error-' + id)
+            if (!input) return
+            const password = input.value
+            if (!password) {
+              if (errEl) { errEl.textContent = trSafe('page.passwords.t7', '비밀번호를 입력하세요.'); errEl.style.display = '' }
+              return
+            }
+            btn.disabled = true
+            try {
+              const r = await window.internalAPI.password.update({ id: id, password: password })
+              if (!r.ok) {
+                if (errEl) { errEl.textContent = r.message || '변경에 실패했습니다.'; errEl.style.display = '' }
+                return
+              }
+              // 성공 시에만 즉시 비운다 — 실패 시엔 사용자가 고쳐 재시도할 수 있게 값 유지
+              input.value = ''
+              pwEditing.delete(id)
+              render()
+            } finally {
+              btn.disabled = false
+            }
+          })
+        })
+      }
+
+      function bindAddForm() {
+        const toggleBtn = document.getElementById('addToggleBtn')
+        const form = document.getElementById('addForm')
+        const originInput = document.getElementById('addOrigin')
+        const usernameInput = document.getElementById('addUsername')
+        const passwordInput = document.getElementById('addPassword')
+        const pwToggleBtn = document.getElementById('addPwToggle')
+        const autoLoginCheckbox = document.getElementById('addAutoLogin')
+        const errorEl = document.getElementById('addError')
+        const saveBtn = document.getElementById('addSaveBtn')
+        const cancelBtn = document.getElementById('addCancelBtn')
+
+        function resetForm() {
+          originInput.value = ''
+          usernameInput.value = ''
+          passwordInput.value = ''
+          passwordInput.type = 'password'
+          pwToggleBtn.textContent = trSafe('page.passwords.t8', '보기')
+          autoLoginCheckbox.checked = false
+          errorEl.style.display = 'none'
+          errorEl.textContent = ''
+        }
+
+        toggleBtn.addEventListener('click', function() {
+          const opening = form.style.display === 'none'
+          form.style.display = opening ? '' : 'none'
+          if (opening) originInput.focus()
+          else resetForm()
+        })
+
+        pwToggleBtn.addEventListener('click', function() {
+          const show = passwordInput.type === 'password'
+          passwordInput.type = show ? 'text' : 'password'
+          pwToggleBtn.textContent = show ? '숨기기' : '보기'
+        })
+
+        cancelBtn.addEventListener('click', function() {
+          form.style.display = 'none'
+          resetForm()
+        })
+
+        saveBtn.addEventListener('click', async function() {
+          const origin = originInput.value.trim()
+          const username = usernameInput.value.trim()
+          const password = passwordInput.value
+          errorEl.style.display = 'none'
+          if (!origin || !username || !password) {
+            errorEl.textContent = trSafe('page.passwords.t9', '사이트 주소·사용자명·비밀번호를 모두 입력하세요.')
+            errorEl.style.display = ''
+            return
+          }
+          saveBtn.disabled = true
+          try {
+            const r = await window.internalAPI.password.add({
+              origin: origin,
+              username: username,
+              password: password,
+              autoLoginAllowed: !!autoLoginCheckbox.checked,
+            })
+            if (!r.ok) {
+              errorEl.textContent = r.message || '저장에 실패했습니다.'
+              errorEl.style.display = ''
+              return
+            }
+            form.style.display = 'none'
+            resetForm()
+          } finally {
+            saveBtn.disabled = false
+          }
+        })
+      }
+
+      // ===== 비밀번호 생성기 (순수 클라이언트 — Web Crypto, 서버로 전송되지 않음) =====
+      function generatePassword(length, useUpper, useLower, useNumbers, useSymbols) {
+        const sets = []
+        if (useUpper) sets.push('ABCDEFGHJKLMNPQRSTUVWXYZ')
+        if (useLower) sets.push('abcdefghijkmnopqrstuvwxyz')
+        if (useNumbers) sets.push('23456789')
+        if (useSymbols) sets.push('!@#$%^&*()-_=+[]{}?')
+        if (sets.length === 0) return null
+        const all = sets.join('')
+        const bytes = new Uint32Array(length)
+        crypto.getRandomValues(bytes)
+        let out = ''
+        for (let i = 0; i < length; i++) {
+          out += all[bytes[i] % all.length]
+        }
+        // 각 카테고리가 최소 1자 포함되도록 보정(짧은 길이에서 카테고리가 통째로 빠지는 것 방지)
+        const catBytes = new Uint32Array(sets.length)
+        crypto.getRandomValues(catBytes)
+        const chars = out.split('')
+        for (let i = 0; i < sets.length && i < chars.length; i++) {
+          const set = sets[i]
+          chars[i] = set[catBytes[i] % set.length]
+        }
+        // 순서를 다시 섞는다(앞쪽에 카테고리가 몰리지 않도록)
+        for (let i = chars.length - 1; i > 0; i--) {
+          const j = bytes[i] % (i + 1)
+          const tmp = chars[i]; chars[i] = chars[j]; chars[j] = tmp
+        }
+        return chars.join('')
+      }
+
+      function bindGenerator() {
+        const toggleBtn = document.getElementById('genToggleBtn')
+        const form = document.getElementById('genForm')
+        const lenInput = document.getElementById('genLen')
+        const lenLabel = document.getElementById('genLenLabel')
+        const upper = document.getElementById('genUpper')
+        const lower = document.getElementById('genLower')
+        const numbers = document.getElementById('genNumbers')
+        const symbols = document.getElementById('genSymbols')
+        const output = document.getElementById('genOutput')
+        const regenBtn = document.getElementById('genRegenBtn')
+        const copyBtn = document.getElementById('genCopyBtn')
+        const errorEl = document.getElementById('genError')
+
+        function regen() {
+          const length = Number(lenInput.value) || 16
+          const pw = generatePassword(length, upper.checked, lower.checked, numbers.checked, symbols.checked)
+          if (pw === null) {
+            errorEl.textContent = trSafe('page.passwords.t10', '최소 한 종류는 선택해야 합니다.')
+            errorEl.style.display = ''
+            output.value = ''
+            return
+          }
+          errorEl.style.display = 'none'
+          output.value = pw
+        }
+
+        toggleBtn.addEventListener('click', function() {
+          const opening = form.style.display === 'none'
+          form.style.display = opening ? '' : 'none'
+          if (opening) regen()
+        })
+        lenInput.addEventListener('input', function() {
+          lenLabel.textContent = lenInput.value
+          regen()
+        })
+        ;[upper, lower, numbers, symbols].forEach(function(cb) {
+          cb.addEventListener('change', regen)
+        })
+        regenBtn.addEventListener('click', regen)
+        copyBtn.addEventListener('click', async function() {
+          if (!output.value) return
+          try {
+            await navigator.clipboard.writeText(output.value)
+            const orig = copyBtn.textContent
+            copyBtn.textContent = trSafe('page.passwords.t11', '복사됨 ✓')
+            setTimeout(function() { copyBtn.textContent = orig }, 1200)
+          } catch (e) { alert(trSafe('page.passwords.d4', '클립보드 접근 실패')) }
+        })
+      }
+
+      // ===== CSV (크롬/엣지 호환) =====
+      function bindCsv() {
+        const exportBtn = document.getElementById('csvExportBtn')
+        const importBtn = document.getElementById('csvImportBtn')
+        const resultEl = document.getElementById('csvResult')
+
+        exportBtn.addEventListener('click', async function() {
+          resultEl.textContent = ''
+          const r = await window.internalAPI.password.csvExport()
+          if (r.canceled) return
+          if (!r.ok) {
+            resultEl.textContent = '⚠ 내보내기 실패: ' + (r.error || '알 수 없는 오류')
+            return
+          }
+          resultEl.textContent = '✓ ' + r.count + '개 계정을 CSV로 저장했습니다. 이 파일은 평문입니다 — 안전한 곳에 보관하고 다 쓰면 삭제하세요.'
+        })
+
+        importBtn.addEventListener('click', async function() {
+          resultEl.textContent = ''
+          if (!confirm(trSafe('page.passwords.d5', 'CSV 파일의 계정을 가져올까요? 같은 사이트·사용자명이 이미 있으면 CSV 값으로 덮어씁니다.'))) return
+          const r = await window.internalAPI.password.csvImport()
+          if (r.canceled) return
+          if (!r.ok) {
+            resultEl.textContent = '⚠ 가져오기 실패: ' + (r.error || '알 수 없는 오류')
+            return
+          }
+          resultEl.textContent = '✓ 가져오기 완료 — 신규 ' + r.imported + '개, 갱신 ' + r.updated + '개'
+            + (r.skipped ? (', 건너뜀 ' + r.skipped + '개(https 아니거나 형식 오류)') : '')
+        })
       }
 
       document.getElementById('search').addEventListener('input', function(e) {
@@ -195,13 +659,22 @@
         render()
       })
 
+      bindAddForm()
+      bindGenerator()
+      bindCsv()
+
       if (window.internalAPI) {
         window.internalAPI.password.onChanged(function(list) {
           entries = list
-          // revealed 셋의 무효 항목 제거
+          // revealed / pwEditing 셋의 무효 항목 제거
           const ids = new Set(list.map(function(e) { return e.id }))
           revealed = new Set(Array.from(revealed).filter(function(id) { return ids.has(id) }))
+          pwEditing = new Set(Array.from(pwEditing).filter(function(id) { return ids.has(id) }))
           render()
+        })
+        window.internalAPI.password.onNeverChanged(function(list) {
+          neverEntries = list
+          renderNever()
         })
       }
       reload()

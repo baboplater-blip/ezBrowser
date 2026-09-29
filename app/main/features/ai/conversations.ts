@@ -1,12 +1,17 @@
 import { app } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
-import { writeFile, mkdir, rename } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { writeFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import { createJsonStore, loadJsonObject } from './json-store'
+// 부작용 없는 경로 해석기만 가져온다(downloads/index 를 통째로 끌어오면 세션·종료 훅까지 딸려 온다).
+import { defaultDownloadDir } from '../downloads/dir'
 
 // AI 챗 대화 영속화 — 재시작해도 대화가 남고, 여러 스레드를 오가며 이어갈 수 있게 한다.
-// userData/ai-chats.json 하나에 모든 대화를 담고, 원자적(tmp+rename) 디바운스 저장.
+// userData/ai-chats.json 하나에 모든 대화를 담는다.
+// 저장 기전(디바운스·원자적 쓰기·손상 복구)은 json-store.ts 가 맡는다 — 그 파일의 머리말에
+// 왜 그런 구조인지(dirty 유실·tmp 경로 공유·종료 경합) 적어 두었다.
 
 export interface StoredMessage { role: 'user' | 'assistant'; content: string }
 
@@ -47,15 +52,18 @@ const MAX_MESSAGES = 200
 const MAX_TAGS = 8
 const MAX_TAG_LEN = 24
 
+const FILE_NAME = 'ai-chats.json'
+
 let cache: Conversation[] | null = null
 let folderCache: ChatFolder[] | null = null
-let writeTimer: NodeJS.Timeout | null = null
-let dirty = false
 let quitHooked = false
 
-function filePath(): string {
-  return path.join(app.getPath('userData'), 'ai-chats.json')
-}
+const store = createJsonStore({
+  fileName: FILE_NAME,
+  label: '대화',
+  debounceMs: 300,
+  snapshot: () => ({ version: 1, conversations: all(), folders: allFolders() }),
+})
 
 function isValidConv(c: unknown): c is Conversation {
   if (!c || typeof c !== 'object') return false
@@ -73,32 +81,31 @@ export function initConversations(): void {
   // 종료 시 디바운스 대기 중이던 저장을 동기 flush(정상 종료 데이터 손실 방지).
   if (!quitHooked) { quitHooked = true; try { app.on('before-quit', flushConversations) } catch { /* ignore */ } }
   if (cache !== null) return
-  try {
-    if (existsSync(filePath())) {
-      const raw = JSON.parse(readFileSync(filePath(), 'utf-8')) as { conversations?: unknown; folders?: unknown }
-      cache = Array.isArray(raw?.conversations) ? raw.conversations.filter(isValidConv) : []
-      folderCache = Array.isArray(raw?.folders)
-        ? raw.folders.filter(isValidFolder).map((f) => {
-            const o = f as { color?: unknown; emoji?: unknown }
-            return {
-              ...f,
-              color: isFolderColor(o.color) ? o.color : 'gray',
-              emoji: typeof o.emoji === 'string' && o.emoji ? o.emoji : undefined,
-            }
-          })
-        : []
-    } else {
-      cache = []
-      folderCache = []
+
+  // 파일을 통째로 못 읽으면 loadJsonObject 가 고유 이름 백업을 남기고 null 을 준다(빈 상태로 시작).
+  const raw = loadJsonObject(FILE_NAME, '대화', 'conversations')
+  if (!raw) { cache = []; folderCache = []; return }
+
+  // 파싱은 됐지만 일부 항목이 망가진 경우 — 정상 항목은 **복구**하고, 버린 개수를 알린다.
+  // (조용히 버리면 사용자는 몇 개가 사라졌는지 알 수 없다.)
+  const rawConvs = Array.isArray(raw.conversations) ? raw.conversations : []
+  cache = rawConvs.filter(isValidConv)
+
+  const foldersOk = Array.isArray(raw.folders)
+  const rawFolders = foldersOk ? (raw.folders as unknown[]) : []
+  folderCache = rawFolders.filter(isValidFolder).map((f) => {
+    const o = f as { color?: unknown; emoji?: unknown }
+    return {
+      ...f,
+      color: isFolderColor(o.color) ? o.color : 'gray',
+      emoji: typeof o.emoji === 'string' && o.emoji ? o.emoji : undefined,
     }
-  } catch (err) {
-    console.warn('[ai] conversations load failed', err)
-    // 손상 파일을 .bak 으로 보존한 뒤 빈 상태로 시작한다 — 다음 저장이 원본을 영구히 덮어써
-    // 복구 불가능해지는 것을 막는다.
-    try { if (existsSync(filePath())) renameSync(filePath(), filePath() + '.corrupt.bak') } catch { /* ignore */ }
-    cache = []
-    folderCache = []
-  }
+  })
+
+  const dropped = (rawConvs.length - cache.length)
+    + (rawFolders.length - folderCache.length)
+    + (raw.folders !== undefined && !foldersOk ? 1 : 0)
+  store.reportDropped(dropped, cache.length + folderCache.length)
 }
 
 function all(): Conversation[] {
@@ -112,37 +119,12 @@ function allFolders(): ChatFolder[] {
 }
 
 function schedulePersist(): void {
-  dirty = true
-  if (writeTimer) clearTimeout(writeTimer)
-  writeTimer = setTimeout(() => { void persist() }, 300)
-}
-
-async function persist(): Promise<void> {
-  try {
-    await mkdir(path.dirname(filePath()), { recursive: true })
-    const tmp = filePath() + '.tmp'
-    await writeFile(tmp, JSON.stringify({ version: 1, conversations: all(), folders: allFolders() }), 'utf-8')
-    await rename(tmp, filePath())
-    dirty = false
-  } catch (err) {
-    console.warn('[ai] conversations persist failed', err)
-  }
+  store.markDirty()
 }
 
 // 종료 시 동기 저장 — 디바운스 대기 중이던 마지막 대화가 유실되지 않도록.
 export function flushConversations(): void {
-  if (writeTimer) { clearTimeout(writeTimer); writeTimer = null }
-  if (!dirty) return
-  try {
-    mkdirSync(path.dirname(filePath()), { recursive: true })
-    // 원자적 쓰기(tmp+rename) — 종료 중 프로세스가 죽어도 ai-chats.json 이 잘려 전체 대화가 날아가지 않도록.
-    const tmp = filePath() + '.tmp'
-    writeFileSync(tmp, JSON.stringify({ version: 1, conversations: all(), folders: allFolders() }), 'utf-8')
-    renameSync(tmp, filePath())
-    dirty = false
-  } catch (err) {
-    console.warn('[ai] conversations flush failed', err)
-  }
+  store.flush()
 }
 
 function summaryOf(c: Conversation): ConversationSummary {
@@ -315,9 +297,13 @@ export function safeFileName(name: string): string {
 }
 
 // 다운로드 폴더에 마크다운 파일을 충돌 없이 기록(대화·보고서 내보내기 공용 — 다이얼로그/블롭 우회).
+//
+// 저장 위치는 **다운로드와 같은 규칙**(설정의 downloads.defaultPath 우선 → 없으면 OS 기본)을 따른다.
+// 전에는 app.getPath('downloads') 로 고정돼 있어, 사용자가 저장 위치를 바꿔 놔도 AI 보고서·대화
+// 내보내기만 OS Downloads 폴더로 샜다(검증 하네스도 그래서 사용자의 실제 폴더를 건드렸다).
 export async function writeDownloadMd(base: string, md: string): Promise<{ ok: boolean; path?: string }> {
   try {
-    const dir = app.getPath('downloads')
+    const dir = defaultDownloadDir()
     await mkdir(dir, { recursive: true })
     let file = path.join(dir, `${base}.md`)
     let n = 1

@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="ko">
 <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI 기억</title>
@@ -38,15 +41,15 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>🧠 AI 기억</h1>
-    <p class="desc">
+    <h1 data-i18n="page.ai-memory.a1">🧠 AI 기억</h1>
+    <p class="desc" data-i18n="page.ai-memory.a2">
       AI 가 당신에 대해 기억하는 내용입니다. 챗·에이전트가 답할 때 이 내용을 참고하므로, 매번 다시 설명할 필요가 없습니다.
       자유롭게 편집하세요 — 마크다운으로 저장됩니다. 모든 내용은 이 기기에만 저장됩니다.
     </p>
     <textarea id="mem" placeholder="예:&#10;- 내 이름은 홍길동&#10;- 나는 개발자이고 TypeScript 를 주로 씀&#10;- 답변은 존댓말로, 간결하게 선호"></textarea>
     <div class="bar">
-      <button class="btn primary" id="save">저장</button>
-      <button class="btn danger" id="clear">전체 지우기</button>
+      <button class="btn primary" id="save" data-i18n="page.ai-memory.a3">저장</button>
+      <button class="btn danger" id="clear" data-i18n="page.ai-memory.a4">전체 지우기</button>
       <span class="status" id="status"></span>
     </div>
     <p class="hint">
@@ -54,13 +57,14 @@
     </p>
   </div>
   <script>
+      function trSafe(key, fallback) { return typeof window.t === 'function' ? window.t(key, fallback) : fallback }
     const ta = document.getElementById('mem')
     const statusEl = document.getElementById('status')
     let saved = ''
     function setStatus(t) { statusEl.textContent = t; if (t) setTimeout(() => { if (statusEl.textContent === t) statusEl.textContent = '' }, 2000) }
 
     async function load() {
-      if (!window.internalAPI || !window.internalAPI.ai) { statusEl.textContent = 'internalAPI 미주입'; return }
+      if (!window.internalAPI || !window.internalAPI.ai) { statusEl.textContent = trSafe('page.ai-memory.t2', 'internalAPI 미주입'); return }
       saved = (await window.internalAPI.ai.memoryGet()) || ''
       ta.value = saved
     }
@@ -70,7 +74,7 @@
       setStatus('저장됨 ✓')
     })
     document.getElementById('clear').addEventListener('click', async () => {
-      if (!confirm('AI 가 기억하는 내용을 모두 지울까요?')) return
+      if (!confirm(trSafe('page.ai-memory.d1', 'AI 가 기억하는 내용을 모두 지울까요?'))) return
       await window.internalAPI.ai.memoryClear()
       ta.value = ''; saved = ''
       setStatus('지웠습니다')

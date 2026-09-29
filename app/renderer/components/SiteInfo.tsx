@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { TabSummary } from '../../shared/types'
+import { useI18nT } from '../i18n'
 
 interface Props {
   windowId: string
@@ -14,6 +15,8 @@ const PERMS = [
   { key: 'geolocation', label: '위치' },
   { key: 'notifications', label: '알림' },
   { key: 'clipboard-read', label: '클립보드' },
+  // 의사권한 — 패스키(WebAuthn) 자동 요청. 기본=조건부 요청만 차단(OS 창 방지), 허용=크롬처럼 두되 OS 창이 뜰 수 있음, 차단=패스키 전부 거부.
+  { key: 'passkey', label: '패스키 로그인 창' },
 ] as const
 
 function originOf(url: string): string | null {
@@ -28,6 +31,7 @@ function hostOf(url: string): string {
 }
 
 export function SiteInfo({ windowId, open, active, anchor, onClose }: Props) {
+  const tr = useI18nT()
   const url = active?.url ?? ''
   const origin = originOf(url)
   const [perms, setPerms] = useState<Record<string, 'allow' | 'deny'>>({})
@@ -102,56 +106,56 @@ export function SiteInfo({ windowId, open, active, anchor, onClose }: Props) {
         <div className="si-head">
           <span className="si-lock">{internal ? '⚙' : secure ? '🔒' : '⚠'}</span>
           <div className="si-head-text">
-            <div className="si-title">{internal ? '내부 페이지' : (secure ? '보안 연결' : '보안되지 않은 연결')}</div>
+            <div className="si-title">{internal ? tr('ui.siteinfo.internalPage', '내부 페이지') : (secure ? tr('ui.siteinfo.secure', '보안 연결') : tr('ui.siteinfo.insecure', '보안되지 않은 연결'))}</div>
             <div className="si-origin">{internal ? (url || '—') : hostOf(url)}</div>
           </div>
         </div>
 
         {internal ? (
-          <div className="si-empty">이 페이지에는 사이트 권한 설정이 없습니다.</div>
+          <div className="si-empty">{tr('ui.siteinfo.internalEmpty', '이 페이지에는 사이트 권한 설정이 없습니다.')}</div>
         ) : (
           <>
-            <div className="si-section-title">권한</div>
+            <div className="si-section-title">{tr('ui.siteinfo.permissionsTitle', '권한')}</div>
             {PERMS.map((p) => (
               <div className="si-row" key={p.key}>
-                <span className="si-row-label">{p.label}</span>
+                <span className="si-row-label">{tr(`ui.siteinfo.perm.${p.key}`, p.label)}</span>
                 <select
                   className="si-select"
                   value={perms[p.key] ?? 'default'}
                   onChange={(e) => setPerm(p.key, e.target.value as 'allow' | 'deny' | 'default')}
                 >
-                  <option value="default">기본</option>
-                  <option value="allow">허용</option>
-                  <option value="deny">차단</option>
+                  <option value="default">{tr('ui.siteinfo.permDefault', '기본')}</option>
+                  <option value="allow">{tr('ui.siteinfo.permAllow', '허용')}</option>
+                  <option value="deny">{tr('ui.siteinfo.permDeny', '차단')}</option>
                 </select>
               </div>
             ))}
             <div className="si-row">
-              <span className="si-row-label">이 사이트 광고 차단</span>
+              <span className="si-row-label">{tr('ui.siteinfo.adblockSite', '이 사이트 광고 차단')}</span>
               <button className={`si-toggle ${adblockOn ? 'on' : ''}`} onClick={toggleAdblock} aria-pressed={adblockOn} />
             </div>
 
-            <div className="si-section-title">사이트 데이터</div>
+            <div className="si-section-title">{tr('ui.siteinfo.dataTitle', '사이트 데이터')}</div>
             <div className="si-row">
               <span className="si-row-label">
-                {cleared ? '삭제됨' : siteData === null ? '확인 중…' : `쿠키 ${siteData.cookies}개`}
+                {cleared ? tr('ui.siteinfo.dataCleared', '삭제됨') : siteData === null ? tr('ui.siteinfo.dataChecking', '확인 중…') : tr('ui.siteinfo.cookieCount', '쿠키 {count}개', { count: siteData.cookies })}
               </span>
               <button
                 className="si-clear-btn"
                 onClick={clearSiteData}
                 disabled={clearing || cleared}
-                title="이 사이트의 쿠키·로컬 저장소·캐시를 삭제합니다"
+                title={tr('ui.siteinfo.clearDataTitle', '이 사이트의 쿠키·로컬 저장소·캐시를 삭제합니다')}
               >
-                {clearing ? '삭제 중…' : cleared ? '✓ 완료' : '데이터 삭제'}
+                {clearing ? tr('ui.siteinfo.clearing', '삭제 중…') : cleared ? tr('ui.siteinfo.clearedDone', '✓ 완료') : tr('ui.siteinfo.clearDataBtn', '데이터 삭제')}
               </button>
             </div>
-            <div className="si-hint">쿠키·로컬스토리지·IndexedDB·서비스워커·캐시를 모두 지우고 페이지를 새로고침합니다. 로그인이 풀릴 수 있습니다.</div>
+            <div className="si-hint">{tr('ui.siteinfo.clearHint', '쿠키·로컬스토리지·IndexedDB·서비스워커·캐시를 모두 지우고 페이지를 새로고침합니다. 로그인이 풀릴 수 있습니다.')}</div>
           </>
         )}
 
         <div className="si-foot">
           <button className="si-link" onMouseDown={(e) => { e.preventDefault(); void window.browserAPI.tabs.create(windowId, 'browser://settings'); onClose() }}>
-            사이트 권한 전체 관리 →
+            {tr('ui.siteinfo.manageAll', '사이트 권한 전체 관리 →')}
           </button>
         </div>
       </div>

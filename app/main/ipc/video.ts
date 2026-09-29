@@ -1,11 +1,13 @@
-import { ipcMain } from 'electron'
 import { IPC } from '../../shared/ipc-channels'
 import type { MediaCandidate } from '../../shared/types'
 import {
   downloadMedia, downloadStream, downloadWithYtDlp, ensureYtDlp, getCandidates, isYtDlpInstalled,
+  maybeUpdateYtDlp,
 } from '../features/video-download'
 import { getAllWindows, getWindow } from '../windows/window-service'
 import { getTab } from '../tabs/tab-service'
+import { handleTrusted } from './trust'
+import { tMain } from '../i18n'
 
 // tabId 가 있으면 그 탭이 속한 창을 우선 — 없거나 못 찾으면 첫 창으로 폴백.
 function notifyDownloadStarted(message: string, tabId?: string): void {
@@ -18,16 +20,16 @@ function notifyDownloadStarted(message: string, tabId?: string): void {
 }
 
 export function registerVideoIpc(): void {
-  ipcMain.handle(IPC.video.candidates, (_e, { tabId }: { tabId: string }) => getCandidates(tabId))
+  handleTrusted(IPC.video.candidates, (_e, { tabId }: { tabId: string }) => getCandidates(tabId))
 
-  ipcMain.handle(IPC.video.download, async (_e, { candidate }: { candidate: MediaCandidate }) => {
+  handleTrusted(IPC.video.download, async (_e, { candidate }: { candidate: MediaCandidate }) => {
     // 감지된 후보는 pageUrl 이 비어 있으므로 탭에서 실제 URL·제목을 보강(referer·파일명용)
     const tab = candidate.tabId ? getTab(candidate.tabId) : null
     const pageUrl = candidate.pageUrl || tab?.url || ''
     const title = tab?.title ?? ''
     // site 후보(YouTube 등 지원 호스트 · MSE blob 감지) → 페이지 URL 로 yt-dlp 직행.
     if (candidate.kind === 'site') {
-      notifyDownloadStarted('동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)', candidate.tabId)
+      notifyDownloadStarted(tMain('main.video.extractingYtdlpShort', '동영상 추출 중… (yt-dlp, 진행률은 다운로드 패널)'), candidate.tabId)
       await downloadWithYtDlp(candidate.url || pageUrl, pageUrl, { title, tabId: candidate.tabId })
       return { ok: true, kind: 'ytdlp' as const }
     }
@@ -43,15 +45,25 @@ export function registerVideoIpc(): void {
       await downloadMedia(candidate.url, pageUrl, candidate.tabId, title)
       return { ok: true, kind: 'direct' as const }
     }
-    notifyDownloadStarted('동영상 다운로드 준비 중…', candidate.tabId)
+    notifyDownloadStarted(tMain('main.video.preparingDownload', '동영상 다운로드 준비 중…'), candidate.tabId)
     await downloadMedia(pageUrl, pageUrl, candidate.tabId, title)
     return { ok: true, kind: 'direct' as const }
   })
 
-  ipcMain.handle(IPC.video.ytdlpStatus, () => ({ installed: isYtDlpInstalled() }))
+  handleTrusted(IPC.video.ytdlpStatus, () => ({ installed: isYtDlpInstalled() }))
 
-  ipcMain.handle(IPC.video.ytdlpEnsure, async () => {
+  handleTrusted(IPC.video.ytdlpEnsure, async () => {
     const p = await ensureYtDlp()
     return { ok: !!p, path: p }
+  })
+
+  // 지금 최신화 — 미설치면 최신을 받고(사용자 동의 다이얼로그), 설치돼 있으면 강제 최신 확인·교체.
+  handleTrusted(IPC.video.ytdlpUpdate, async () => {
+    if (!isYtDlpInstalled()) {
+      const p = await ensureYtDlp()
+      return { ok: !!p, result: p ? ('updated' as const) : ('failed' as const) }
+    }
+    const result = await maybeUpdateYtDlp({ force: true })
+    return { ok: result !== 'failed', result }
   })
 }

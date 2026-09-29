@@ -2,7 +2,9 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' browser://shared; img-src 'self' data: https:;" />
+    <!-- 다국어 로더(app/shared/i18n-core.ts 규약) — docs/i18n.md 참고 -->
+    <script src="browser://shared/i18n.js"></script>
     <title>Mod 관리</title>
     <style>
       :root { color-scheme: light dark;
@@ -61,8 +63,8 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>Mod (실험적)</h1>
-      <div class="lead">확장보다 깊은 후킹 — 메뉴·탭 lifecycle·스토리지를 직접 제어합니다.
+      <h1 data-i18n="page.mods.a1">Mod (실험적)</h1>
+      <div class="lead" data-i18n="page.mods.a2">확장보다 깊은 후킹 — 메뉴·탭 lifecycle·스토리지를 직접 제어합니다.
         Mod 는 신뢰된 코드만 활성화하세요.</div>
       <div class="warn-banner">⚠ Mod 는 메인 프로세스에서 실행됩니다. 알 수 없는 출처의 코드는 절대 활성화하지 마세요.
         설치: <code>%APPDATA%/browser-build/mods/&lt;id&gt;/</code> 에 <code>manifest.json</code> + <code>index.js</code> 배치 후 페이지 새로고침.</div>

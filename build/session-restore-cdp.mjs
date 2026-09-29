@@ -16,13 +16,24 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 import http from 'node:http'
+import {
+  CDPSession,
+  connectSession,
+  connectShellSessionReady,
+  getTargetList,
+  isShellTarget,
+  waitForPortFree,
+  waitForShellTarget,
+  waitForTargetByUrlPredicate,
+} from './lib/cdp.mjs'
+import { preferFreePort } from './lib/ports.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..')
 
 const DEFAULTS = {
   exe: path.join(REPO_ROOT, 'dist', 'win-unpacked', 'ezBrowser.exe'),
-  out: 'C:\\Users\\molma\\AppData\\Local\\Temp\\claude\\c--Users-molma-Desktop-----browser-build\\9385582e-821e-4490-88cc-bb0c7fda225a\\scratchpad\\restore',
+  out: path.join(REPO_ROOT, 'verify-out', 'restore'),
   port: 9226,
 }
 
@@ -283,54 +294,6 @@ function startProbeServer() {
 
 // ── CDP 클라이언트 (의존성 0) ────────────────────────────────────────────
 
-class CDPSession {
-  constructor(wsUrl, label) {
-    this.wsUrl = wsUrl
-    this.label = label
-    this.ws = null
-    this._id = 0
-    this.pending = new Map()
-  }
-  async connect(timeoutMs = 10_000) {
-    this.ws = new WebSocket(this.wsUrl)
-    await withTimeout(new Promise((resolve, reject) => {
-      this.ws.addEventListener('open', () => resolve())
-      this.ws.addEventListener('error', (e) => reject(new Error(`ws error: ${e?.message ?? 'unknown'}`)))
-    }), timeoutMs, `CDP ws connect (${this.label})`)
-    this.ws.addEventListener('message', (ev) => this._onMessage(ev))
-    this.ws.addEventListener('close', () => {
-      for (const [, p] of this.pending) p.reject(new Error('ws closed before response'))
-      this.pending.clear()
-    })
-  }
-  _onMessage(ev) {
-    let msg
-    try { msg = JSON.parse(ev.data) } catch { return }
-    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
-      const { resolve, reject } = this.pending.get(msg.id)
-      this.pending.delete(msg.id)
-      if (msg.error) reject(new Error(`CDP error [${msg.error.code}]: ${msg.error.message}`))
-      else resolve(msg.result)
-    }
-  }
-  send(method, params = {}, timeoutMs = 15_000) {
-    if (!this.ws || this.ws.readyState !== 1) {
-      return Promise.reject(new Error(`CDP session not open (${this.label}) — method=${method}`))
-    }
-    const id = (this._id += 1)
-    const p = new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }) })
-    this.ws.send(JSON.stringify({ id, method, params }))
-    return withTimeout(p, timeoutMs, `CDP ${method} (${this.label})`)
-  }
-  close() { try { this.ws?.close() } catch { /* ignore */ } }
-}
-
-async function connectSession(target, label) {
-  const session = new CDPSession(target.webSocketDebuggerUrl, label ?? target.id)
-  await session.connect()
-  return session
-}
-
 async function evaluate(session, expression, opts = {}) {
   const { awaitPromise = true, returnByValue = true, timeoutMs = 15_000 } = opts
   const result = await session.send('Runtime.evaluate', { expression, awaitPromise, returnByValue, userGesture: true }, timeoutMs)
@@ -347,35 +310,6 @@ function argToLiteral(a) { return a === undefined ? 'undefined' : JSON.stringify
 function callApi(session, apiPath, args = [], opts) {
   const argStr = args.map(argToLiteral).join(', ')
   return evaluate(session, `window.browserAPI.${apiPath}(${argStr})`, opts)
-}
-
-async function getTargetList(port) {
-  const res = await fetch(`http://127.0.0.1:${port}/json/list`)
-  if (!res.ok) throw new Error(`/json/list HTTP ${res.status}`)
-  return res.json()
-}
-
-function isShellTarget(t) {
-  return t.type === 'page' && typeof t.url === 'string'
-    && t.url.startsWith('file://') && t.url.includes('index.html') && t.url.includes('windowId=')
-}
-
-async function waitForShellTarget(port, timeoutMs = 40_000) {
-  let lastList = []
-  return pollUntil(async () => {
-    lastList = await getTargetList(port)
-    return lastList.find(isShellTarget) ?? null
-  }, { timeoutMs, intervalMs: 500, label: 'shell CDP target' }).catch((err) => {
-    const summary = lastList.map((t) => `${t.type}:${t.url}`).join('\n  ')
-    throw new Error(`${err.message}\n마지막 타깃 목록:\n  ${summary || '(없음)'}`)
-  })
-}
-
-async function waitForTargetByUrlPredicate(port, predicate, label, timeoutMs = 15_000) {
-  return pollUntil(async () => {
-    const list = await getTargetList(port)
-    return list.find((t) => t.type === 'page' && typeof t.url === 'string' && predicate(t.url)) ?? null
-  }, { timeoutMs, intervalMs: 300, label })
 }
 
 // ── 시나리오 상태 ────────────────────────────────────────────────────────
@@ -398,14 +332,23 @@ async function waitTabLoaded(chromeSession, windowId, tabId, urlPrefix, timeoutM
 
 async function phase1(args, probe) {
   console.log('\n===== PHASE 1: 상태 셋업 =====')
+  // 고정 포트가 앞선 실행의 잔재에 물려 있으면 빈 포트로 대체한다(실행이 통째로 죽지 않게).
+  args.port = await preferFreePort(args.port, 'session-restore-cdp.mjs')
+  if (!(await waitForPortFree(args.port))) {
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+    throw new Error(`디버그 포트 ${args.port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+  }
   const { child } = launchApp(args.exe, args.out, args.port, args.profileDir, 'phase1')
   const openSessions = []
   let expected = null
   let appPid = child.pid
 
   try {
-    const shellTarget = await waitForShellTarget(args.port, 30_000)
-    const chromeSession = await connectSession(shellTarget, 'chrome-shell-p1')
+    const chromeSession = await connectShellSessionReady(args.port, {
+      label: 'chrome-shell-p1',
+      log: (msg) => console.log(`[session-restore-cdp] ${msg}`),
+    })
     openSessions.push(chromeSession)
     const windowId = await evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`)
     if (!windowId) throw new Error('외피 URL 에서 windowId 를 읽지 못함')
@@ -486,6 +429,7 @@ async function phase1(args, probe) {
     console.log(`[phase1] input value set → ${expectedInputValue}`)
 
     // 스크롤/폼 변경이 Chromium 내부 히스토리 상태에 반영될 시간
+    const interactionAt = Date.now()
     await sleep(2000)
 
     // 트리거 탭(T7) — tabEvents 'list' 를 발생시켜 scheduleSaveSoon(1s 디바운스) 유발.
@@ -496,16 +440,28 @@ async function phase1(args, probe) {
 
     // sessions/current.json 이 T7 생성 이후(즉 scroll/form 설정 이후)의 상태로 flush 됐는지
     // 파일을 직접 폴링해 확인 — 디바운스 타이밍을 추측하지 않고 결정적으로 기다린다.
+    //
+    // ⚠ 2026-09-20: 조건에 **savedAt 하한**을 넣었다. 예전에는 "탭 목록에 T7 과 scroll 이 있는가" 만
+    //   봤는데, 그건 제품이 **언제** 그 스냅샷을 떴는지를 전혀 제약하지 못한다.
+    //   스크롤 위치·폼 값은 메인 프로세스에 이벤트를 내지 않고, Chromium 이 그 값을
+    //   내비게이션 항목(pageState)에 반영하는 데도 몇 초가 걸린다. 그래서 탭 목록만 맞는
+    //   **이른 스냅샷**은 pageState 가 아직 낡아 있다(실측: 상호작용 +3초 스냅샷은 scrollY=0,
+    //   +7초 스냅샷은 scrollY=4000 — 같은 빌드에서).
+    //   예전에는 저장이 활동 5초 뒤 **한 번만** 일어나 이 조건이 우연히 충족됐을 뿐이고,
+    //   저장이 더 자주 일어나게 되자 그 우연이 깨졌다. 이제 의도를 조건에 직접 적는다:
+    //   **상호작용이 가라앉은 뒤에 떠진 스냅샷**을 기다린다.
+    const SETTLE_MS = 7000 // 제품의 정착 저장(활동 후 5초) + 여유
     const curPath = currentSessionPath(args.profileDir)
     const flushed = await pollUntil(() => {
       const snap = readJsonSafe(curPath)
       if (!snap || !Array.isArray(snap.windows)) return null
+      if (!(typeof snap.savedAt === 'number' && snap.savedAt >= interactionAt + SETTLE_MS)) return null
       const win = snap.windows.find((w) => w.windowId === windowId)
       if (!win) return null
       const hasT7 = win.tabs.some((t) => t.url === probe.plainUrl(7))
       const hasScroll = win.tabs.some((t) => t.url === probe.scrollUrl)
       return (hasT7 && hasScroll) ? snap : null
-    }, { timeoutMs: 25_000, intervalMs: 500, label: 'sessions/current.json 에 T7+scroll 탭 flush' })
+    }, { timeoutMs: 40_000, intervalMs: 500, label: 'sessions/current.json 에 정착 후 스냅샷(T7+scroll) flush' })
     const flushedWin = flushed.windows.find((w) => w.windowId === windowId)
     const flushedScrollTab = flushedWin.tabs.find((t) => t.url === probe.scrollUrl)
     const pageStateLen = flushedScrollTab?.history?.find((h) => h.url === probe.scrollUrl)?.pageState?.length ?? 0
@@ -530,11 +486,31 @@ async function phase1(args, probe) {
         id: group.id, title: group.title, color: group.color,
         memberUrls: tabsExpected.filter((t) => t.groupId === group.id).map((t) => t.url).sort(),
       },
-      split: {
-        split: layoutEvent.split, splitRatio: layoutEvent.splitRatio, activePaneIdx: layoutEvent.activePaneIdx,
-        pane0Url: idToUrl.get(pane0TabId) ?? null,
-        pane1Url: idToUrl.get(pane1TabId) ?? null,
-      },
+      // ⚠ pane 의 탭은 **스냅샷에서** 읽는다 — 복원이 실제로 쓰는 바로 그 값이다.
+      //
+      // 2026-09-15 수정: 예전에는 분할 직후의 `layoutChanged` 이벤트(pane0TabId)를 그대로 기대값으로
+      // 썼다. 그런데 그 뒤 T7 을 **전면(foreground)으로** 만들면 `createTab` 이 활성 pane 의 탭을
+      // 교체한다(설계된 동작). 즉 kill 시점의 pane0 은 /scroll 이 아니라 plain?n=7 인데, 기대값만
+      // 옛날 그대로여서 "pane0 콘텐츠 타깃 없음" 으로 **제품과 무관하게** 실패했다.
+      // (같은 실패가 Electron 35.7.5·42.11.3 양쪽에서 동일하게 재현돼 엔진 무관임을 확인했다.)
+      split: (() => {
+        const snapLayout = (flushedWin.layouts ?? [])[0] ?? null
+        const idxToUrl = new Map((flushedWin.tabs ?? []).map((t) => [t.index, t.url]))
+        const paneUrl = (i) => {
+          const ti = snapLayout?.panes?.[i]?.tabIndex
+          return (typeof ti === 'number' ? idxToUrl.get(ti) : null) ?? null
+        }
+        const s = {
+          split: snapLayout?.split ?? layoutEvent.split,
+          splitRatio: snapLayout?.splitRatio ?? layoutEvent.splitRatio,
+          activePaneIdx: snapLayout?.activePaneIdx ?? layoutEvent.activePaneIdx,
+          pane0Url: paneUrl(0), pane1Url: paneUrl(1),
+        }
+        console.log(`[phase1] 스냅샷 layout 에서 읽은 pane: ${JSON.stringify(s)}`
+          + ` (분할 직후 이벤트의 pane0=${idToUrl.get(pane0TabId) ?? '(모름)'},`
+          + ` pane1=${idToUrl.get(pane1TabId) ?? '(모름)'} — 이후 전면 탭 생성으로 바뀔 수 있다)`)
+        return s
+      })(),
       scrollUrl: probe.scrollUrl,
       scrollY: expectedScrollY,
       inputValue: expectedInputValue,
@@ -567,12 +543,20 @@ async function phase1(args, probe) {
 async function phase2(args, probe, setup) {
   console.log('\n===== PHASE 2: 재기동 + 복원 검증 =====')
   await sleep(1000) // 강제 kill 직후 파일 핸들 해제 버퍼
+  if (!(await waitForPortFree(args.port))) {
+    // 좀비 인스턴스가 디버그 포트를 쥐고 있으면 /json/list 가 죽은 타깃을 돌려준다.
+    // 남의(또는 시체의) 브라우저를 검사하느니 큰 소리로 실패한다.
+    throw new Error(`디버그 포트 ${args.port} 가 이미 사용 중입니다 — 남은 인스턴스를 종료하거나 다른 포트를 지정하세요.`)
+  }
   const { child } = launchApp(args.exe, args.out, args.port, args.profileDir, 'phase2')
   const openSessions = []
+  let recoveryAfterRestore = null
 
   try {
-    const shellTarget = await waitForShellTarget(args.port, 45_000)
-    const chromeSession = await connectSession(shellTarget, 'chrome-shell-p2')
+    const chromeSession = await connectShellSessionReady(args.port, {
+      label: 'chrome-shell-p2',
+      log: (msg) => console.log(`[session-restore-cdp] ${msg}`),
+    })
     openSessions.push(chromeSession)
     const windowId = await evaluate(chromeSession, `new URL(location.href).searchParams.get('windowId')`)
     if (!windowId) throw new Error('복원 후 외피 URL 에서 windowId 를 읽지 못함')
@@ -594,6 +578,13 @@ async function phase2(args, probe, setup) {
       tabsActual = await callApi(chromeSession, 'tabs.list', [windowId]).catch(() => [])
       record('탭 개수', 'FAIL', expected.tabCount, tabsActual.length, err.message)
     }
+
+    // 복원이 끝난 **바로 그 순간** 디스크에 복구 자료가 남아 있는지 본다.
+    // 2026-09-20 이전에는 maybeRestoreSession 이 복원 직후 current.json 을 지웠고,
+    // 그래서 "복원 직후 다시 크래시" 구간에는 디스크에 복구 자료가 하나도 없었다(세션 통째 손실).
+    // ⚠ 이 측정은 반드시 정상 종료 **전에** 해야 한다 — 종료 후에 보면 before-quit 이 지운 뒤라
+    //   무엇을 확인하든 항상 "없음" 이 나온다(예전 판정이 실제로 그랬다).
+    recoveryAfterRestore = readJsonSafe(currentSessionPath(args.profileDir))
 
     if (tabsActual.length > 0) {
       console.log('[phase2] DIAG tabsActual:', JSON.stringify(tabsActual.map((t) => ({
@@ -649,7 +640,21 @@ async function phase2(args, probe, setup) {
     }
 
     // 스크롤 위치 검증
+    //
+    // 2026-09-15 수정: 복원은 **활성 탭 + 핀 + 마지막 5개**만 즉시 로드하고 나머지는 잠재운다
+    // (가벼움 예산). 이 시나리오의 /scroll 탭은 index 1 이라 잠든 채로 복원되며 — 잠든 탭은
+    // about:blank 이므로 CDP 에 그 URL 의 타깃이 **아예 없다**. 예전 코드는 그 타깃을 20초 기다리다
+    // 타임아웃으로 실패했다(제품이 아니라 검사의 문제 — 엔진 35·42 양쪽에서 동일 재현).
+    //
+    // 사용자가 그 탭을 실제로 보는 유일한 경로는 **깨우는 것**이다. 그래서 깨운 뒤에 잰다.
+    // 이건 기준 완화가 아니다 — 깨웠는데 스크롤·폼이 안 돌아오면 그대로 FAIL 이고,
+    // 오히려 잠든 탭의 내비게이션 히스토리 재생(undiscardTab)까지 함께 검증된다.
     try {
+      const sleeping = tabsActual.find((t) => t.url === expected.scrollUrl && t.discarded)
+      if (sleeping) {
+        console.log(`[phase2] /scroll 탭이 잠들어 있음(index=${sleeping.index}) → 활성화해서 깨운다`)
+        await callApi(chromeSession, 'tabs.activate', [sleeping.id])
+      }
       const scrollTarget = await waitForTargetByUrlPredicate(args.port, (u) => u.startsWith(expected.scrollUrl), 'scroll 콘텐츠 타깃(복원)', 20000)
       const scrollSession = await connectSession(scrollTarget, 'content:scroll-p2')
       openSessions.push(scrollSession)
@@ -670,7 +675,7 @@ async function phase2(args, probe, setup) {
     const shellHtmlLen = await evaluate(chromeSession, `document.body ? document.body.innerHTML.length : 0`).catch(() => 0)
     record('외피 흰 화면 아님', shellHtmlLen > 200 ? 'PASS' : 'FAIL', '> 200 chars', shellHtmlLen)
 
-    return { windowId, tabsActual, groupsActual }
+    return { windowId, tabsActual, groupsActual, recoveryAfterRestore }
   } finally {
     for (const s of openSessions) s.close()
     await gracefulThenForceKill(child, args.port, args.out)
@@ -716,12 +721,30 @@ async function main() {
       false, setup.lastStableExistsAfterKill, 'true 면 graceful(before-quit) 경로가 어딘가에서 실행됐다는 뜻 — 강제 kill 이 진짜 크래시가 아니었을 가능성')
     record('current.json 존재(kill 직후, 다음 부팅의 복원 소스)', setup.currentExistsAfterKill ? 'PASS' : 'FAIL', true, setup.currentExistsAfterKill)
 
-    await phase2(args, probe, setup)
+    const p2 = await phase2(args, probe, setup)
 
-    // 복원 후 current.json 이 정리(safeUnlink)됐는지 — maybeRestoreSession 이 정상적으로
-    // "current 소비 후 삭제" 경로를 탔다는 증거.
-    const currentAfterRestore = fs.existsSync(currentSessionPath(args.profileDir))
-    record('복원 후 current.json 정리됨', !currentAfterRestore ? 'PASS' : 'FAIL', false, currentAfterRestore)
+    // 복원 직후(정상 종료 전)에 디스크에 복구 자료가 남아 있어야 한다 — 그 자리에서 다시 크래시해도
+    // 같은 세션을 한 번 더 복원할 수 있어야 하기 때문이다.
+    // "파일이 있다" 만 보면 빈 파일로도 통과하므로 **복원한 탭 URL 을 실제로 담고 있는지**까지 본다.
+    const rec = p2?.recoveryAfterRestore ?? null
+    const recUrls = rec && Array.isArray(rec.windows)
+      ? rec.windows.flatMap((w) => (w.tabs ?? []).map((t) => t.url))
+      : []
+    const missing = (setup.expected?.urls ?? []).filter((u) => !recUrls.includes(u))
+    record('복원 직후 복구 자료가 디스크에 남아 있다(재크래시 대비)',
+      rec && missing.length === 0 ? 'PASS' : 'FAIL',
+      `${(setup.expected?.urls ?? []).length}개 URL 전부`,
+      rec ? `${recUrls.length}개 (빠진 것: ${missing.length})` : 'current.json 없음',
+      missing.slice(0, 3).join(' | '))
+
+    // 정상 종료(before-quit)가 끝난 뒤에는 current.json 이 정리돼 있어야 한다 —
+    // 다음 부팅이 "지난 세션 복원" 을 다시 묻지 않는 근거.
+    const currentAfterQuit = fs.existsSync(currentSessionPath(args.profileDir))
+    const lastStableAfterQuit = fs.existsSync(lastStableSessionPath(args.profileDir))
+    record('정상 종료 후 current.json 정리 + last-stable 기록',
+      (!currentAfterQuit && lastStableAfterQuit) ? 'PASS' : 'FAIL',
+      'current 없음 + last-stable 있음',
+      `current=${currentAfterQuit} last-stable=${lastStableAfterQuit}`)
 
     // stdout 로그 스캔 (did-fail-load / preload-error)
     for (const tag of ['phase1', 'phase2']) {

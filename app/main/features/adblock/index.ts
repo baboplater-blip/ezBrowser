@@ -6,8 +6,12 @@ import path from 'node:path'
 import type { AdblockRecentBlock, AdblockStats } from '../../../shared/types'
 import { getSetting, setNestedSetting } from '../../storage/settings'
 import { addSessionInitHook, forEachInstalledSession } from '../../session-bootstrap'
-import { applyToResponseHeaders } from '../policy'
+import { reclaimWebRequestDispatcher, setAdblockProviders } from '../web-request-dispatcher'
 import { nudgeGc } from '../gc-nudge'
+
+// perHost 통계는 사이트 수가 무한정 늘어날 수 있어(끝없는 브라우징) 상한을 둔다 — 넘으면
+// 가장 적게 차단된 host 부터 제거(최근 차단 목록 `recent` 는 별도 RECENT_LIMIT 으로 이미 상한).
+const PER_HOST_LIMIT = 500
 
 // @ghostery 코스메틱/scriptlet 주입용 content preload 경로. enableBlockingInSession 이 첫 세션에
 // 전역 ipc 핸들러를 등록하면(blocker 단위라 1회로 충분), 나머지 세션엔 이 preload 만 등록하면
@@ -197,62 +201,57 @@ function recordBlock(details: { url: string }, sourceUrl: string): void {
   let sourceHost: string | undefined
   try { if (sourceUrl) sourceHost = new URL(sourceUrl).hostname } catch { /* ignore */ }
   stats.totalBlocked += 1
-  if (host) stats.perHost[host] = (stats.perHost[host] ?? 0) + 1
+  if (host) {
+    if (stats.perHost[host] === undefined && Object.keys(stats.perHost).length >= PER_HOST_LIMIT) {
+      // 상한 도달 — 가장 적게 차단된(오래돼 잊혀졌을 가능성이 큰) host 부터 하나 제거하고 자리를 만든다.
+      let minHost: string | null = null
+      let minCount = Infinity
+      for (const [h, c] of Object.entries(stats.perHost)) {
+        if (c < minCount) { minCount = c; minHost = h }
+      }
+      if (minHost !== null) delete stats.perHost[minHost]
+    }
+    stats.perHost[host] = (stats.perHost[host] ?? 0) + 1
+  }
   recent.unshift({ ts: Date.now(), url: details.url, host, sourceHost })
   if (recent.length > RECENT_LIMIT) recent.length = RECENT_LIMIT
 }
 
-function attachOverridingListeners(ses: Session, b: BlockerInstance): void {
-  ses.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
-    // 영상 unbreak: 일부 사이트가 Bunny Stream 영상을 player.mediadelivery.net 으로 embed 하는데
-    // 그 서브도메인은 404 다(정상은 iframe.mediadelivery.net). http→http 리라이트로 영상 복구.
-    const u = details.url
-    if (u.indexOf('player.mediadelivery.net/embed/') !== -1) {
-      callback({ redirectURL: u.replace('//player.mediadelivery.net/', '//iframe.mediadelivery.net/') })
-      return
+// 2026-09-28(묶음 B): 실제 webRequest 등록은 features/web-request-dispatcher.ts 로 옮겼다
+// (세션당 onBeforeRequest/onHeadersReceived 리스너는 하나만 유효하다는 제약 때문에, policy·adblock이
+// 각자 따로 등록하던 걸 단일 소유자로 통합 — 항목 3). 여기서는 **판정 함수만** 만들어
+// setAdblockProviders() 로 등록한다. 동영상 URL 리라이트·확장 DNR·클라이언트 힌트·3자 쿠키·
+// 사용자 정책은 전부 디스패처가 먼저 처리한 뒤(요청 헤더는 최종까지) 이 판정 함수를 부른다.
+
+function adblockRequestProvider(
+  details: Electron.OnBeforeRequestListenerDetails,
+  callback: (response: Electron.CallbackResponse) => void,
+): void {
+  if (!blocker) { callback({}); return }
+  const sourceUrl = frameUrlOf(details)
+  if (isSiteAllowlisted(sourceUrl)) {
+    callback({})
+    return
+  }
+  blocker.onBeforeRequest(details, (response) => {
+    if (response.cancel === true || response.redirectURL) {
+      recordBlock({ url: details.url }, sourceUrl)
     }
-    const sourceUrl = frameUrlOf(details)
-    if (isSiteAllowlisted(sourceUrl)) {
-      callback({})
-      return
-    }
-    b.onBeforeRequest(details, (response) => {
-      if (response.cancel === true || response.redirectURL) {
-        recordBlock({ url: details.url }, sourceUrl)
-      }
-      callback(response)
-    })
-  })
-  ses.webRequest.onHeadersReceived({ urls: ['<all_urls>'] }, (details, callback) => {
-    const sourceUrl = frameUrlOf(details)
-    // policy 응답헤더 변형은 adblock allowlist 와 무관하게 항상 적용 — 세션당 리스너 1개뿐이라 여기서 팬아웃.
-    const applyPolicy = (
-      headers: Record<string, string | string[]> | undefined,
-    ): Record<string, string | string[]> | undefined => {
-      try { return applyToResponseHeaders(details.url, headers) } catch { return headers }
-    }
-    if (isSiteAllowlisted(sourceUrl)) {
-      callback({ responseHeaders: applyPolicy(details.responseHeaders) })
-      return
-    }
-    b.onHeadersReceived(details, (response) => {
-      if (response.cancel === true) { callback(response); return }
-      callback({
-        ...response,
-        responseHeaders: applyPolicy(response.responseHeaders ?? details.responseHeaders),
-      })
-    })
+    callback(response)
   })
 }
 
-function clearListeners(ses: Session): void {
-  ses.webRequest.onBeforeRequest(null)
-  // null 로 두면 policy 응답헤더 룰까지 죽는다(policy installOn 은 WeakSet 가드로 재설치 안 됨)
-  // → adblock 없이도 policy 만 적용하는 리스너로 교체
-  ses.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, cb) => {
-    try { cb({ cancel: false, responseHeaders: applyToResponseHeaders(details.url, details.responseHeaders) }) }
-    catch { cb({ cancel: false, responseHeaders: details.responseHeaders }) }
-  })
+function adblockHeadersProvider(
+  details: Electron.OnHeadersReceivedListenerDetails,
+  callback: (response: Electron.HeadersReceivedResponse) => void,
+): void {
+  if (!blocker) { callback({}); return }
+  const sourceUrl = frameUrlOf(details)
+  if (isSiteAllowlisted(sourceUrl)) {
+    callback({})
+    return
+  }
+  blocker.onHeadersReceived(details, callback)
 }
 
 async function buildBlocker(): Promise<BlockerInstance | null> {
@@ -303,7 +302,7 @@ function enableOnSession(ses: Session): void {
   if (!blocker) return
   if (!cosmeticGlobalSession && ses !== session.defaultSession) {
     try {
-      // 첫 탭 세션: 전역 cosmetic ipc 핸들러 + 이 세션 preload + (임시 webRequest, 아래서 덮어씀)
+      // 첫 탭 세션: 전역 cosmetic ipc 핸들러 + 이 세션 preload
       blocker.enableBlockingInSession(ses)
       cosmeticGlobalSession = ses
     } catch (err) {
@@ -318,11 +317,13 @@ function enableOnSession(ses: Session): void {
       console.warn('[adblock] cosmetic preload register failed', err)
     }
   }
-  // 네트워크 차단 + allowlist + 통계 — 모든 세션. enableBlockingInSession 의 webRequest 도 여기서 덮어씀.
+  // enableBlockingInSession 이 이 세션의 webRequest 리스너를 자기 것으로 덮어썼을 수 있다
+  // (세션당 리스너 1개 제약) — 디스패처가 소유권을 되찾는다. 네트워크 차단 판정 자체는
+  // setAdblockProviders 로 이미 등록돼 있으므로 여기선 재등록만 하면 된다.
   try {
-    attachOverridingListeners(ses, blocker)
+    reclaimWebRequestDispatcher(ses)
   } catch (err) {
-    console.warn('[adblock] attach listeners failed', err)
+    console.warn('[adblock] reclaim dispatcher failed', err)
   }
 }
 
@@ -335,18 +336,26 @@ function disableOnAllSessions(): void {
     try { (ses as PreloadSession).unregisterPreloadScript(id) } catch { /* ignore */ }
   }
   cosmeticPreloadIds.clear()
-  forEachInstalledSession(clearListeners)
+  setAdblockProviders(null, null)
 }
 
 let hookRegistered = false
 
 export async function initAdblock(): Promise<void> {
-  // 기존 정리 — 모든 세션에서 해제
+  // 기존 정리 — 코스메틱 해제 + 판정 제공자 해제(모든 세션에 영향, 세션별로 반복할 필요 없음 —
+  // web-request-dispatcher 는 세션마다 이미 설치돼 있고 provider 만 global 하게 갈아 끼운다).
   if (blocker) {
     disableOnAllSessions()
     blocker = null
-  } else {
-    forEachInstalledSession(clearListeners)
+  }
+
+  // 코스메틱(요소 숨김) 설정은 **blocker 가 있을 때만** 필요하다 — 네트워크 차단(DNR·확장·
+  // 서드파티 쿠키·정책)은 web-request-dispatcher 가 모든 세션에 always-on 으로 걸어 두므로
+  // (session-bootstrap.setupSession), 여기서 adblock on/off 에 맞춰 별도로 신경 쓸 필요가 없다
+  // — 예전엔 이 훅이 DNR-only 리스너 재등록까지 겸했었지만 그 책임이 디스패처로 옮겨갔다.
+  if (!hookRegistered) {
+    hookRegistered = true
+    addSessionInitHook((ses) => { if (blocker) enableOnSession(ses) })
   }
 
   const settings = getSetting('adblock')
@@ -358,16 +367,13 @@ export async function initAdblock(): Promise<void> {
   const b = await buildBlocker()
   if (!b) return
   blocker = b
+  // 판정 함수를 디스패처에 등록 — 리스너는 걸지 않는다(세션당 1개 제약, 디스패처가 이미 소유).
+  setAdblockProviders(adblockRequestProvider, adblockHeadersProvider)
 
-  // 모든 partition 세션(persist:default·워크스페이스 ws-* 포함)에 적용 — 탭은 defaultSession 을 쓰지 않는다.
-  if (!hookRegistered) {
-    hookRegistered = true
-    // 등록 즉시 기존 세션 전부에 적용 + 이후 새로 생성되는 세션에도 자동 적용
-    addSessionInitHook((ses) => { if (blocker) enableOnSession(ses) })
-  } else {
-    // 재초기화(설정 변경) — 기존 세션에 다시 적용
-    forEachInstalledSession(enableOnSession)
-  }
+  // 훅은 위에서 이미 등록됐으므로(최초 호출이든 재초기화든) 여기서는 **이미 설치된** 세션에만
+  // 코스메틱을 직접 적용한다(새 세션은 위 훅이 담당) — 모든 partition 세션(persist:default·
+  // 워크스페이스 ws-* 포함)에 적용, 탭은 defaultSession 을 쓰지 않는다.
+  forEachInstalledSession(enableOnSession)
   console.log(`[adblock] initialized (${settings.level}, filters=${resolveFilterUrls().length}, all sessions)`)
   adblockEvents.emit('changed')
 }

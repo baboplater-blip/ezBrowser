@@ -1,0 +1,8 @@
+{
+  "schema": "auto-dev/completion-ack@1",
+  "run_id": "run-20260920T073021Z-f71b41",
+  "acked_at": "2026-09-20T08:22:08Z",
+  "result_status": "failed",
+  "verdict": null,
+  "note": "receiver 가 부모 전달 성공 후 기록"
+}

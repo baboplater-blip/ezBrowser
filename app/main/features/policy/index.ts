@@ -1,10 +1,9 @@
-import { app, session, type Session, type WebContents } from 'electron'
+import { app, type Session, type WebContents } from 'electron'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { HeaderPair, PolicyRule, PolicyRuleSummary } from '../../../shared/types'
-import { DEFAULT_SESSION } from '../../../shared/constants'
 
 const policies = new Map<string, PolicyRule>()
 let loaded = false
@@ -241,14 +240,26 @@ async function loadAll(): Promise<void> {
   loaded = true
 }
 
+
+// id 는 그대로 파일 이름이 된다. `../..` 같은 값이 오면 프로필 **밖**에 쓰거나 지운다.
+// 파일을 만지는 두 함수에서 막는다 — 어느 호출자를 거쳐도 새지 않게.
+// (2026-09-07 임무 19: 데이터 가져오기에는 같은 방어가 있었는데 여기엔 없었다.)
+function safeId(id: unknown): string | null {
+  return typeof id === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(id) && !id.includes('..') ? id : null
+}
+
 async function persist(r: PolicyRule): Promise<void> {
+  const safe = safeId(r.id)
+  if (!safe) throw new Error('저장 id 가 올바르지 않습니다')
   await ensureDir()
-  const p = path.join(dir(), `${r.id}.json`)
+  const p = path.join(dir(), `${safe}.json`)
   await writeFile(p, JSON.stringify(r, null, 2), 'utf-8')
 }
 
 async function removeFile(id: string): Promise<void> {
-  const p = path.join(dir(), `${id}.json`)
+  const safe = safeId(id)
+  if (!safe) return
+  const p = path.join(dir(), `${safe}.json`)
   if (existsSync(p)) await unlink(p)
 }
 
@@ -271,11 +282,18 @@ export function getPolicy(id: string): PolicyRule | null {
 }
 
 export async function savePolicy(input: Partial<PolicyRule>): Promise<PolicyRule> {
+  // 객체가 아닌 입력(null·숫자·문자열·배열)은 거부한다. 빈 객체는 "새 룰 만들기" 흐름이라 허용.
+  // (2026-09-07 임무 19 실측: 검증이 없어 `42`·`'string'`·`[]` 가 정책으로 저장됐다.)
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('정책 형식이 올바르지 않습니다 — 객체여야 합니다')
+  }
   const existing = input.id ? policies.get(input.id) : null
   const merged = existing
     ? { ...existing, ...input, createdAt: existing.createdAt, updatedAt: Date.now() }
     : { ...input, createdAt: Date.now(), updatedAt: Date.now() }
   const r = normalizeRule(merged, existing?.id ?? input.id, Date.now())
+  // 파일 이름이 될 수 없는 id 면 거부 대신 새로 발급한다 — 사용자에겐 "새 룰" 과 같은 결과.
+  if (!safeId(r.id)) r.id = nextId()
   policies.set(r.id, r)
   await persist(r)
   policyEvents.emit('changed')
@@ -327,7 +345,7 @@ function setHeader(headers: Record<string, string | string[]>, name: string, val
   headers[name] = value
 }
 
-function applyToRequestHeaders(
+export function applyToRequestHeaders(
   url: string, requestHeaders: Record<string, string | string[]>,
 ): Record<string, string | string[]> {
   const rules = activeRulesFor(url)
@@ -372,33 +390,14 @@ export function applyToResponseHeaders(
   return next
 }
 
-const installedSessions = new WeakSet<Session>()
-
-export function installPolicyOn(ses: Session): void {
-  installOn(ses)
-}
-
-function installOn(ses: Session): void {
-  if (installedSessions.has(ses)) return
-  installedSessions.add(ses)
-  ses.webRequest.onBeforeSendHeaders({ urls: ['*://*/*'] }, (details, cb) => {
-    try {
-      const next = applyToRequestHeaders(details.url, details.requestHeaders)
-      cb({ cancel: false, requestHeaders: next })
-    } catch (err) {
-      console.warn('[policy] onBeforeSendHeaders error', err)
-      cb({ cancel: false, requestHeaders: details.requestHeaders })
-    }
-  })
-  ses.webRequest.onHeadersReceived({ urls: ['*://*/*'] }, (details, cb) => {
-    try {
-      const next = applyToResponseHeaders(details.url, details.responseHeaders)
-      cb({ cancel: false, responseHeaders: next })
-    } catch (err) {
-      console.warn('[policy] onHeadersReceived error', err)
-      cb({ cancel: false, responseHeaders: details.responseHeaders })
-    }
-  })
+// 2026-09-28(묶음 B): webRequest 리스너(onBeforeSendHeaders/onHeadersReceived)의 등록은
+// features/web-request-dispatcher.ts 로 이전했다 — 세션당 리스너 1개 제약 때문에 policy·adblock 이
+// 각자 따로 등록하던 것을 단일 소유자로 통합(항목 3). 정책 적용 자체는 여전히 이 파일의
+// applyToRequestHeaders/applyToResponseHeaders(순수 함수)가 맡고, 디스패처가 그걸 호출한다.
+// installPolicyOn 은 main/index.ts 가 여전히 `addSessionInitHook` 으로 호출하므로(부팅 흐름
+// 담당 라인은 건드리지 않는다) 하위 호환을 위해 이름만 남기고 아무 것도 하지 않는 no-op 으로 둔다.
+export function installPolicyOn(_ses: Session): void {
+  // no-op — 실제 webRequest 등록은 session-bootstrap.setupSession() 이 dispatcher 로 처리한다.
 }
 
 export async function initPolicies(): Promise<void> {

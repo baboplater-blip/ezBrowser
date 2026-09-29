@@ -6,6 +6,15 @@ description: 가벼움 예산 측정 — 시작 시간, 메모리, 번들 크기
 
 가벼움 예산을 측정하고 회귀 여부를 보고한다.
 
+> **먼저 이걸 보라 (2026-09-07)**: 이제 예산 측정은 통합 러너가 한다.
+> - 라운드 종결: **`npm run verify:full`** (전 하네스 11단계, 약 10분 — perf 포함)
+> - 성능만: **`node build/perf-measure.mjs`** (dual 기본 — adblock ON/OFF 두 baseline)
+> - 기여도 비교: **`node build/perf-breakdown.mjs --ab --runs 4 --a-... --b-...`**
+>
+> **판정은 2축**이다: ① adblock 제외 ≤155MB(1순위) ② 총계 250MB(참고·추세).
+> 결과 이력은 `perf-out/perf-history.json` 에 누적되고, 과거 중앙값 대비 delta 가 출력된다.
+> 아래 표는 예산의 근거·측정 방법 설명으로 읽되, **실행은 위 명령으로** 한다.
+
 ## 측정 항목 (CLAUDE.md 의 가벼움 예산)
 
 | 항목 | 한도 | 측정 |
